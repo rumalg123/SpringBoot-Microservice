@@ -7,8 +7,9 @@ FROM node:20-alpine AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+COPY env/frontend.env /app/env/frontend.env
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
+RUN set -a; . /app/env/frontend.env; set +a; npm run build
 
 FROM node:20-alpine AS runner
 WORKDIR /app

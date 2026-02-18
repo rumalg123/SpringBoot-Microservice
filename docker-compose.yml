@@ -42,7 +42,8 @@ services:
 
   microservice-frontend:
     build:
-      context: ./microservce-frontend
+      context: .
+      dockerfile: microservce-frontend/Dockerfile
     depends_on:
       - api-gateway
     ports:
