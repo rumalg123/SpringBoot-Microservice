@@ -11,9 +11,9 @@ export default function LandingPage() {
 
   useEffect(() => {
     if (session.status === "ready" && session.isAuthenticated) {
-      router.replace("/orders");
+      router.replace(session.canViewAdmin ? "/admin/orders" : "/orders");
     }
-  }, [router, session.isAuthenticated, session.status]);
+  }, [router, session.isAuthenticated, session.status, session.canViewAdmin]);
 
   return (
     <main className="mx-auto min-h-screen max-w-6xl px-6 py-10">

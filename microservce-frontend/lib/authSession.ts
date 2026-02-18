@@ -49,6 +49,30 @@ function isAdminByClaims(claims: Record<string, unknown> | null, namespace: stri
   return Array.isArray(roles) && roles.some((role) => String(role).toLowerCase() === "admin");
 }
 
+function toBooleanClaim(value: unknown): boolean | null {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    if (value.toLowerCase() === "true") return true;
+    if (value.toLowerCase() === "false") return false;
+  }
+  return null;
+}
+
+function resolveEmailVerified(
+  claims: Record<string, unknown> | null,
+  profile: UserProfile,
+  namespace: string
+): boolean | null {
+  const standard = toBooleanClaim(claims?.email_verified);
+  if (standard !== null) return standard;
+
+  const normalizedNamespace = namespace.endsWith("/") ? namespace : `${namespace}/`;
+  const namespaced = toBooleanClaim(claims?.[`${normalizedNamespace}email_verified`]);
+  if (namespaced !== null) return namespaced;
+
+  return toBooleanClaim(profile?.email_verified);
+}
+
 async function getAuth0(): Promise<Auth0Client> {
   if (auth0Singleton) return auth0Singleton;
   auth0Singleton = await createAuth0Client({
@@ -70,7 +94,7 @@ export function useAuthSession() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [profile, setProfile] = useState<UserProfile>(null);
   const [canViewAdmin, setCanViewAdmin] = useState(false);
-  const [emailVerified, setEmailVerified] = useState(false);
+  const [emailVerified, setEmailVerified] = useState<boolean | null>(null);
 
   useEffect(() => {
     const init = async () => {
@@ -118,11 +142,11 @@ export function useAuthSession() {
           });
           const claims = parseJwtPayload(accessToken);
           setCanViewAdmin(isAdminByClaims(claims, env.claimsNamespace));
-          setEmailVerified(Boolean(claims?.email_verified));
+          setEmailVerified(resolveEmailVerified(claims, user ? (user as UserProfile) : null, env.claimsNamespace));
         } else {
           setProfile(null);
           setCanViewAdmin(false);
-          setEmailVerified(false);
+          setEmailVerified(null);
         }
         setStatus("ready");
       } catch (e) {

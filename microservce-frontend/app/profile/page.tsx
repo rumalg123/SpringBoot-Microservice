@@ -15,21 +15,35 @@ type Customer = {
 export default function ProfilePage() {
   const router = useRouter();
   const session = useAuthSession();
+  const {
+    status: sessionStatus,
+    isAuthenticated,
+    canViewAdmin,
+    apiClient,
+    ensureCustomer,
+    resendVerificationEmail,
+    profile,
+    logout,
+    emailVerified,
+  } = session;
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [status, setStatus] = useState("Loading session...");
 
   useEffect(() => {
-    if (session.status !== "ready") return;
-    if (!session.isAuthenticated) {
+    if (sessionStatus !== "ready") return;
+    if (!isAuthenticated) {
       router.replace("/");
+      return;
+    }
+    if (canViewAdmin) {
       return;
     }
 
     const run = async () => {
-      if (!session.apiClient) return;
+      if (!apiClient) return;
       try {
-        await session.ensureCustomer();
-        const response = await session.apiClient.get("/customers/me");
+        await ensureCustomer();
+        const response = await apiClient.get("/customers/me");
         setCustomer(response.data as Customer);
         setStatus("Profile loaded.");
       } catch (err) {
@@ -37,36 +51,40 @@ export default function ProfilePage() {
       }
     };
     void run();
-  }, [router, session.status, session.isAuthenticated, session.apiClient, session.ensureCustomer]);
+  }, [router, sessionStatus, isAuthenticated, canViewAdmin, apiClient, ensureCustomer]);
 
   const resendVerification = async () => {
     setStatus("Requesting verification email...");
     try {
-      await session.resendVerificationEmail();
+      await resendVerificationEmail();
       setStatus("Verification email sent. Please verify and sign in again.");
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Failed to resend verification email.");
     }
   };
 
-  if (session.status === "loading" || session.status === "idle") {
+  if (sessionStatus === "loading" || sessionStatus === "idle") {
     return <main className="mx-auto min-h-screen max-w-5xl px-6 py-10 text-zinc-700">Loading...</main>;
   }
 
-  if (!session.isAuthenticated) {
+  if (!isAuthenticated) {
     return null;
   }
+
+  const displayStatus = canViewAdmin
+    ? "Admin account detected. Customer profile is not required."
+    : status;
 
   return (
     <main className="mx-auto min-h-screen max-w-5xl px-6 py-10">
       <AppNav
-        email={(session.profile?.email as string) || ""}
-        canViewAdmin={session.canViewAdmin}
+        email={(profile?.email as string) || ""}
+        canViewAdmin={canViewAdmin}
         onLogout={() => {
-          void session.logout();
+          void logout();
         }}
       />
-      {!session.emailVerified && (
+      {emailVerified === false && (
         <section className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <p>Your email is not verified. Profile and order actions are blocked until verification.</p>
           <button
@@ -83,9 +101,16 @@ export default function ProfilePage() {
       <section className="grid gap-4 rounded-3xl border border-zinc-200 bg-white/85 p-6 shadow-xl backdrop-blur">
         <p className="text-xs tracking-widest text-zinc-500">MY ACCOUNT</p>
         <h2 className="text-2xl font-semibold text-zinc-900">Personal Profile</h2>
-        <p className="text-sm text-zinc-600">
-          This page reads only `GET /customers/me`. Other customer records are blocked at the gateway.
-        </p>
+        {!canViewAdmin && (
+          <p className="text-sm text-zinc-600">
+            This page reads only `GET /customers/me`. Other customer records are blocked at the gateway.
+          </p>
+        )}
+        {canViewAdmin && (
+          <p className="text-sm text-zinc-600">
+            Admin account detected. Use the Admin Orders screen for operations.
+          </p>
+        )}
         <div className="grid gap-3 rounded-2xl bg-zinc-900 p-5 text-sm text-zinc-100">
           <div>
             <span className="text-zinc-400">Name</span>
@@ -106,7 +131,7 @@ export default function ProfilePage() {
             </p>
           </div>
         </div>
-        <p className="text-xs text-zinc-500">{status}</p>
+        <p className="text-xs text-zinc-500">{displayStatus}</p>
       </section>
     </main>
   );

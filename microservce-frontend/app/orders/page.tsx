@@ -36,6 +36,17 @@ type PagedOrder = {
 export default function OrdersPage() {
   const router = useRouter();
   const session = useAuthSession();
+  const {
+    status: sessionStatus,
+    isAuthenticated,
+    canViewAdmin,
+    ensureCustomer,
+    apiClient,
+    resendVerificationEmail,
+    profile,
+    logout,
+    emailVerified,
+  } = session;
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [status, setStatus] = useState("Loading session...");
@@ -44,22 +55,26 @@ export default function OrdersPage() {
   const [selectedDetail, setSelectedDetail] = useState<OrderDetail | null>(null);
 
   const loadOrders = useCallback(async () => {
-    if (!session.apiClient) return;
-    const res = await session.apiClient.get("/orders/me");
+    if (!apiClient) return;
+    const res = await apiClient.get("/orders/me");
     const data = res.data as PagedOrder;
     setOrders(data.content || []);
-  }, [session.apiClient]);
+  }, [apiClient]);
 
   useEffect(() => {
-    if (session.status !== "ready") return;
-    if (!session.isAuthenticated) {
+    if (sessionStatus !== "ready") return;
+    if (!isAuthenticated) {
       router.replace("/");
+      return;
+    }
+    if (canViewAdmin) {
+      router.replace("/admin/orders");
       return;
     }
 
     const run = async () => {
       try {
-        await session.ensureCustomer();
+        await ensureCustomer();
         await loadOrders();
         setStatus("Loaded your orders.");
       } catch (err) {
@@ -67,14 +82,14 @@ export default function OrdersPage() {
       }
     };
     void run();
-  }, [router, session.status, session.isAuthenticated, session.ensureCustomer, loadOrders]);
+  }, [router, sessionStatus, isAuthenticated, canViewAdmin, ensureCustomer, loadOrders]);
 
   const createOrder = async (e: FormEvent) => {
     e.preventDefault();
-    if (!session.apiClient) return;
+    if (!apiClient) return;
     setStatus("Creating order...");
     try {
-      await session.apiClient.post("/orders/me", {
+      await apiClient.post("/orders/me", {
         item: form.item.trim(),
         quantity: Number(form.quantity),
       });
@@ -88,10 +103,10 @@ export default function OrdersPage() {
 
   const loadDetail = async (orderId?: string) => {
     const targetId = (orderId || selectedId).trim();
-    if (!session.apiClient || !targetId) return;
+    if (!apiClient || !targetId) return;
     setStatus("Loading order detail...");
     try {
-      const res = await session.apiClient.get(`/orders/me/${targetId}`);
+      const res = await apiClient.get(`/orders/me/${targetId}`);
       setSelectedDetail(res.data as OrderDetail);
       setSelectedId(targetId);
       setStatus("Order detail loaded.");
@@ -103,31 +118,31 @@ export default function OrdersPage() {
   const resendVerification = async () => {
     setStatus("Requesting verification email...");
     try {
-      await session.resendVerificationEmail();
+      await resendVerificationEmail();
       setStatus("Verification email sent. Please verify and sign in again.");
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Failed to resend verification email.");
     }
   };
 
-  if (session.status === "loading" || session.status === "idle") {
+  if (sessionStatus === "loading" || sessionStatus === "idle") {
     return <main className="mx-auto min-h-screen max-w-6xl px-6 py-10 text-zinc-700">Loading...</main>;
   }
 
-  if (!session.isAuthenticated) {
+  if (!isAuthenticated) {
     return null;
   }
 
   return (
     <main className="mx-auto min-h-screen max-w-6xl px-6 py-10">
       <AppNav
-        email={(session.profile?.email as string) || ""}
-        canViewAdmin={session.canViewAdmin}
+        email={(profile?.email as string) || ""}
+        canViewAdmin={canViewAdmin}
         onLogout={() => {
-          void session.logout();
+          void logout();
         }}
       />
-      {!session.emailVerified && (
+      {emailVerified === false && (
         <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <p>Your email is not verified. Customer and order endpoints are blocked until verification.</p>
           <button
