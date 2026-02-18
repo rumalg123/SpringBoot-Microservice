@@ -82,7 +82,13 @@ export function useAuthSession() {
     if (!client) return null;
     return createApiClient({
       baseURL: env.apiBase,
-      getToken: () => client.getTokenSilently(),
+      getToken: () =>
+        client.getTokenSilently({
+          authorizationParams: {
+            audience: env.audience || undefined,
+            scope: "openid profile email",
+          },
+        }),
     });
   }, [client]);
 
@@ -91,6 +97,10 @@ export function useAuthSession() {
       if (!client) return;
       await client.loginWithRedirect({
         appState: { returnTo },
+        authorizationParams: {
+          audience: env.audience || undefined,
+          scope: "openid profile email",
+        },
       });
     },
     [client]
@@ -101,7 +111,11 @@ export function useAuthSession() {
       if (!client) return;
       await client.loginWithRedirect({
         appState: { returnTo },
-        authorizationParams: { screen_hint: "signup" },
+        authorizationParams: {
+          screen_hint: "signup",
+          audience: env.audience || undefined,
+          scope: "openid profile email",
+        },
       });
     },
     [client]

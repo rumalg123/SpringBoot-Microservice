@@ -13,11 +13,14 @@ import reactor.core.publisher.Mono;
 public class AuthHeaderRelayFilter implements GlobalFilter, Ordered {
 
     private final String internalSharedSecret;
+    private final String claimsNamespace;
 
     public AuthHeaderRelayFilter(
-            @Value("${internal.auth.shared-secret:}") String internalSharedSecret
+            @Value("${internal.auth.shared-secret:}") String internalSharedSecret,
+            @Value("${auth0.claims-namespace:https://auth0.rumalg.me/claims/}") String claimsNamespace
     ) {
         this.internalSharedSecret = internalSharedSecret;
+        this.claimsNamespace = claimsNamespace.endsWith("/") ? claimsNamespace : claimsNamespace + "/";
     }
 
     @Override
@@ -36,7 +39,10 @@ public class AuthHeaderRelayFilter implements GlobalFilter, Ordered {
                 .cast(JwtAuthenticationToken.class)
                 .map(auth -> {
                     String subject = auth.getToken().getSubject();
-                    String email = auth.getToken().getClaimAsString("email");
+                    String email = auth.getToken().getClaimAsString(claimsNamespace + "email");
+                    if (email == null || email.isBlank()) {
+                        email = auth.getToken().getClaimAsString("email");
+                    }
 
                     ServerHttpRequest.Builder requestBuilder = sanitizedExchange.getRequest().mutate();
                     if (subject != null && !subject.isBlank()) {

@@ -63,6 +63,7 @@ eureka:
 
 auth0:
   audience: ${AUTH0_AUDIENCE:https://auth0.rumalg.me/}
+  claims-namespace: ${AUTH0_CLAIMS_NAMESPACE:https://auth0.rumalg.me/claims/}
 
 internal:
   auth:
