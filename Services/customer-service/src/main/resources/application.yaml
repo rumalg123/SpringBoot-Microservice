@@ -1,0 +1,25 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: customer-service
+
+  datasource:
+    url: ${CUSTOMER_DB_URL:jdbc:postgresql://customer-db:5432/customer_db}
+    username: ${CUSTOMER_DB_USER:customer_user}
+    password: ${CUSTOMER_DB_PASS:customer_pass}
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://discovery-server:8761/eureka/}
+
+logging:
+  pattern:
+    level: "%5p [${spring.application.name},traceId=%X{traceId},spanId=%X{spanId}]"

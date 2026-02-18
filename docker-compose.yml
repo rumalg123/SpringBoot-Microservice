@@ -1,0 +1,46 @@
+services:
+  discovery-server:
+    build:
+      context: ./Services/discovery-server
+    ports:
+      - "8761:8761"
+    env_file:
+      - ./env/common.env
+
+  customer-service:
+    build:
+      context: ./Services/customer-service
+    depends_on:
+      - discovery-server
+      - customer-db
+    ports:
+      - "8091:8081"
+    env_file:
+      - ./env/common.env
+      - ./env/customer-service.env
+
+  order-service:
+    build:
+      context: ./Services/order-service
+    depends_on:
+      - discovery-server
+      - order-db
+    ports:
+      - "8092:8082"
+    env_file:
+      - ./env/common.env
+      - ./env/order-service.env
+
+  api-gateway:
+    build:
+      context: ./Services/api-gateway
+    depends_on:
+      - discovery-server
+    ports:
+      - "8090:8080"
+    env_file:
+      - ./env/common.env
+
+volumes:
+  customer-db-data:
+  order-db-data:
