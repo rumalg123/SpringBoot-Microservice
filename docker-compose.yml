@@ -12,7 +12,6 @@ services:
       context: ./Services/customer-service
     depends_on:
       - discovery-server
-      - customer-db
     ports:
       - "8091:8081"
     env_file:
@@ -24,7 +23,6 @@ services:
       context: ./Services/order-service
     depends_on:
       - discovery-server
-      - order-db
     ports:
       - "8092:8082"
     env_file:
