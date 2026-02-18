@@ -62,6 +62,25 @@ public class CustomerClient {
         }
     }
 
+    @Retry(name = "customerService")
+    @CircuitBreaker(name = "customerService", fallbackMethod = "customerFallbackGetCustomerByAuth0")
+    public CustomerSummary getCustomerByAuth0Id(String auth0Id) {
+        RestClient rc = lbRestClientBuilder.build();
+
+        try {
+            return rc.get()
+                    .uri("http://customer-service/customers/me")
+                    .header("X-Auth0-Sub", auth0Id)
+                    .retrieve()
+                    .body(CustomerSummary.class);
+        } catch (HttpClientErrorException ex) {
+            if (ex.getStatusCode() == HttpStatus.NOT_FOUND) {
+                throw new ResourceNotFoundException("Customer not found for auth0 id");
+            }
+            throw ex;
+        }
+    }
+
 
 
     public void customerFallback(UUID customerId, Throwable ex) {
@@ -69,6 +88,10 @@ public class CustomerClient {
     }
 
     public CustomerSummary customerFallbackGetCustomer(UUID customerId, Throwable ex) {
+        throw new ServiceUnavailableException("Customer service unavailable. Try again later.", ex);
+    }
+
+    public CustomerSummary customerFallbackGetCustomerByAuth0(String auth0Id, Throwable ex) {
         throw new ServiceUnavailableException("Customer service unavailable. Try again later.", ex);
     }
 }

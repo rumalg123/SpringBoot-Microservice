@@ -66,6 +66,16 @@ services:
     env_file:
       - ./env/common.env
 
+  microservice-frontend:
+    build:
+      context: ./microservce-frontend
+    depends_on:
+      - api-gateway
+    ports:
+      - "88616:3000"
+    env_file:
+      - ./env/frontend.env
+
 volumes:
   customer-db-data:
   order-db-data:

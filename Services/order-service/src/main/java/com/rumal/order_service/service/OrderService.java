@@ -61,6 +61,11 @@ public class OrderService {
         return page.map(this::toResponse);
     }
 
+    public Page<OrderResponse> listForAuth0Id(String auth0Id, Pageable pageable) {
+        CustomerSummary customer = customerClient.getCustomerByAuth0Id(auth0Id);
+        return list(customer.id(), pageable);
+    }
+
     public OrderDetailsResponse getDetails(UUID orderId) {
         Order o = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId));

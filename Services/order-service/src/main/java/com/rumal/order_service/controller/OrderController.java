@@ -40,6 +40,14 @@ public class OrderController {
         return orderService.list(customerId, pageable);
     }
 
+    @GetMapping("/me")
+    public Page<OrderResponse> listMine(
+            @RequestHeader("X-Auth0-Sub") String auth0Id,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
+    ) {
+        return orderService.listForAuth0Id(auth0Id, pageable);
+    }
+
     @GetMapping("/{id}/details")
     public OrderDetailsResponse details(@PathVariable UUID id) {
         return orderService.getDetails(id);

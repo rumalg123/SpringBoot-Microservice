@@ -10,6 +10,7 @@ import java.util.UUID;
 
 public interface CustomerService {
     CustomerResponse getByEmail(String email);
+    CustomerResponse getByAuth0Id(String auth0Id);
 
     CustomerResponse create(CreateCustomerRequest request);
     CustomerResponse register(RegisterCustomerRequest request);

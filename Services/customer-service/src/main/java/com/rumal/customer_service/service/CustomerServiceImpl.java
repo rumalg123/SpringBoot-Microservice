@@ -33,6 +33,18 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
+    public CustomerResponse getByAuth0Id(String auth0Id) {
+        if (auth0Id == null || auth0Id.isBlank()) {
+            throw new ResourceNotFoundException("Customer not found for auth0 id");
+        }
+
+        Customer c = customerRepository.findByAuth0Id(auth0Id)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found for auth0 id"));
+
+        return toResponse(c);
+    }
+
+    @Override
     public CustomerResponse create(CreateCustomerRequest request) {
         String email = request.email().trim().toLowerCase();
 
