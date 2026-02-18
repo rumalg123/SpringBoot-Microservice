@@ -63,6 +63,7 @@ public class RateLimitConfig {
     }
 
     @Bean
+    @Primary
     public KeyResolver userOrIpKeyResolver() {
         return exchange -> exchange.getPrincipal()
                 .filter(p -> p instanceof JwtAuthenticationToken)
