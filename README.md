@@ -73,6 +73,7 @@ flowchart LR
   - register
   - customer-me
   - orders-me
+  - admin-orders
 
 ### customer-service
 - Customer CRUD/register logic
@@ -100,6 +101,7 @@ flowchart LR
   - `GET /admin/orders` (supports `page`, `size`, `sort`, optional `customerId`)
 - Fetches data from `order-service` via service discovery and forwards pagination payload
 - Verifies internal trust header (`X-Internal-Auth`)
+- Caches admin list responses in Redis (`adminOrders`)
 
 ### microservce-frontend
 - Auth0 login/signup/logout using redirect flow
@@ -184,6 +186,7 @@ Configured by environment variables:
 - `RATE_LIMIT_REGISTER_REPLENISH`, `RATE_LIMIT_REGISTER_BURST`
 - `RATE_LIMIT_CUSTOMER_ME_REPLENISH`, `RATE_LIMIT_CUSTOMER_ME_BURST`
 - `RATE_LIMIT_ORDERS_ME_REPLENISH`, `RATE_LIMIT_ORDERS_ME_BURST`
+- `RATE_LIMIT_ADMIN_ORDERS_REPLENISH`, `RATE_LIMIT_ADMIN_ORDERS_BURST`
 - Optional defaults:
   - `RATE_LIMIT_DEFAULT_REPLENISH`
   - `RATE_LIMIT_DEFAULT_BURST`
@@ -214,6 +217,8 @@ Fill required values:
   - `NEXT_PUBLIC_AUTH0_AUDIENCE`
 - Internal trust:
   - `INTERNAL_AUTH_SHARED_SECRET` (same value across gateway/customer/order)
+- Admin cache:
+  - `CACHE_ADMIN_ORDERS_TTL` (example: `30s`)
 - API base for frontend:
   - `NEXT_PUBLIC_API_BASE` (for local compose: `http://localhost:8080` with `docker-compose-db.yml`, or `http://localhost:8095` with `docker-compose.yml`)
 

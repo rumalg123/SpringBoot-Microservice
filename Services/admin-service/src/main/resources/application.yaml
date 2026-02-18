@@ -4,6 +4,11 @@ server:
 spring:
   application:
     name: admin-service
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      timeout: ${REDIS_TIMEOUT:2s}
 
 eureka:
   client:
@@ -17,3 +22,6 @@ internal:
 logging:
   pattern:
     level: "%5p [${spring.application.name},traceId=%X{traceId},spanId=%X{spanId}]"
+
+cache:
+  admin-orders-ttl: ${CACHE_ADMIN_ORDERS_TTL:30s}

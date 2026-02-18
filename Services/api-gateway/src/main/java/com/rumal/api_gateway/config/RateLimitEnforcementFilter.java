@@ -4,6 +4,8 @@ import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.cloud.gateway.filter.ratelimit.KeyResolver;
 import org.springframework.cloud.gateway.filter.ratelimit.RedisRateLimiter;
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.Ordered;
 import org.springframework.core.io.buffer.DataBuffer;
@@ -17,11 +19,13 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 
 @Component
+@NullMarked
 public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
 
     private final RedisRateLimiter registerRateLimiter;
     private final RedisRateLimiter customerMeRateLimiter;
     private final RedisRateLimiter ordersMeRateLimiter;
+    private final RedisRateLimiter adminOrdersRateLimiter;
     private final KeyResolver ipKeyResolver;
     private final KeyResolver userOrIpKeyResolver;
 
@@ -29,12 +33,14 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
             @Qualifier("registerRateLimiter") RedisRateLimiter registerRateLimiter,
             @Qualifier("customerMeRateLimiter") RedisRateLimiter customerMeRateLimiter,
             @Qualifier("ordersMeRateLimiter") RedisRateLimiter ordersMeRateLimiter,
+            @Qualifier("adminOrdersRateLimiter") RedisRateLimiter adminOrdersRateLimiter,
             @Qualifier("ipKeyResolver") KeyResolver ipKeyResolver,
             @Qualifier("userOrIpKeyResolver") KeyResolver userOrIpKeyResolver
     ) {
         this.registerRateLimiter = registerRateLimiter;
         this.customerMeRateLimiter = customerMeRateLimiter;
         this.ordersMeRateLimiter = ordersMeRateLimiter;
+        this.adminOrdersRateLimiter = adminOrdersRateLimiter;
         this.ipKeyResolver = ipKeyResolver;
         this.userOrIpKeyResolver = userOrIpKeyResolver;
     }
@@ -80,7 +86,7 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
         return exchange.getResponse().writeWith(Mono.just(dataBuffer));
     }
 
-    private Policy resolvePolicy(String path) {
+    private @Nullable Policy resolvePolicy(String path) {
         if ("/customers/register".equals(path) || "/customers/register-auth0".equals(path)) {
             return new Policy("register", registerRateLimiter, ipKeyResolver);
         }
@@ -89,6 +95,9 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
         }
         if ("/orders/me".equals(path) || path.startsWith("/orders/me/")) {
             return new Policy("orders-me", ordersMeRateLimiter, userOrIpKeyResolver);
+        }
+        if ("/admin/orders".equals(path) || path.startsWith("/admin/orders/")) {
+            return new Policy("admin-orders", adminOrdersRateLimiter, userOrIpKeyResolver);
         }
         return null;
     }

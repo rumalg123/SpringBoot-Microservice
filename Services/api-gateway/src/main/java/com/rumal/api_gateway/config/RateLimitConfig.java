@@ -63,6 +63,14 @@ public class RateLimitConfig {
     }
 
     @Bean
+    public RedisRateLimiter adminOrdersRateLimiter(
+            @Value("${RATE_LIMIT_ADMIN_ORDERS_REPLENISH:20}") int replenishRate,
+            @Value("${RATE_LIMIT_ADMIN_ORDERS_BURST:40}") int burstCapacity
+    ) {
+        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+    }
+
+    @Bean
     @Primary
     public KeyResolver userOrIpKeyResolver() {
         return exchange -> exchange.getPrincipal()
