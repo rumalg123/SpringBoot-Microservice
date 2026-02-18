@@ -35,7 +35,9 @@ public class SecurityConfig {
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .authorizeExchange(exchanges -> exchanges
                         .pathMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .pathMatchers("/actuator/health", "/actuator/info", "/customers/register", "/auth/logout").permitAll()
+                        .pathMatchers("/actuator/health", "/actuator/info", "/customers/register").permitAll()
+                        .pathMatchers("/auth/logout", "/customers/me", "/customers/register-auth0", "/orders/me", "/orders/me/**").authenticated()
+                        .pathMatchers("/customers/**", "/orders/**").denyAll()
                         .anyExchange().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtDecoder(jwtDecoder())))

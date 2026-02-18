@@ -4,6 +4,7 @@ package com.rumal.order_service.service;
 import com.rumal.order_service.client.CustomerClient;
 import com.rumal.order_service.config.CustomerDetailsMode;
 import com.rumal.order_service.config.OrderAggregationProperties;
+import com.rumal.order_service.dto.CreateMyOrderRequest;
 import com.rumal.order_service.dto.CreateOrderRequest;
 import com.rumal.order_service.dto.CustomerSummary;
 import com.rumal.order_service.dto.OrderDetailsResponse;
@@ -35,6 +36,20 @@ public class OrderService {
         Order saved = orderRepository.save(
                 Order.builder()
                         .customerId(req.customerId())
+                        .item(req.item().trim())
+                        .quantity(req.quantity())
+                        .build()
+        );
+
+        return toResponse(saved);
+    }
+
+    public OrderResponse createForAuth0(String auth0Id, CreateMyOrderRequest req) {
+        CustomerSummary customer = customerClient.getCustomerByAuth0Id(auth0Id);
+
+        Order saved = orderRepository.save(
+                Order.builder()
+                        .customerId(customer.id())
                         .item(req.item().trim())
                         .quantity(req.quantity())
                         .build()
@@ -92,6 +107,26 @@ public class OrderService {
                 o.getCreatedAt(),
                 customer,
                 warnings
+        );
+    }
+
+    public OrderDetailsResponse getMyDetails(String auth0Id, UUID orderId) {
+        CustomerSummary customer = customerClient.getCustomerByAuth0Id(auth0Id);
+        Order o = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId));
+
+        if (!o.getCustomerId().equals(customer.id())) {
+            throw new ResourceNotFoundException("Order not found: " + orderId);
+        }
+
+        return new OrderDetailsResponse(
+                o.getId(),
+                o.getCustomerId(),
+                o.getItem(),
+                o.getQuantity(),
+                o.getCreatedAt(),
+                customer,
+                List.of()
         );
     }
 

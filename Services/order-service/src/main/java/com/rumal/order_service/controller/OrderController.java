@@ -1,6 +1,7 @@
 package com.rumal.order_service.controller;
 
 import com.rumal.order_service.dto.CreateOrderRequest;
+import com.rumal.order_service.dto.CreateMyOrderRequest;
 import com.rumal.order_service.dto.OrderDetailsResponse;
 import com.rumal.order_service.dto.OrderResponse;
 import com.rumal.order_service.service.OrderService;
@@ -46,6 +47,23 @@ public class OrderController {
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         return orderService.listForAuth0Id(auth0Id, pageable);
+    }
+
+    @PostMapping("/me")
+    @ResponseStatus(HttpStatus.CREATED)
+    public OrderResponse createMine(
+            @RequestHeader("X-Auth0-Sub") String auth0Id,
+            @Valid @RequestBody CreateMyOrderRequest req
+    ) {
+        return orderService.createForAuth0(auth0Id, req);
+    }
+
+    @GetMapping("/me/{id}")
+    public OrderDetailsResponse detailsMine(
+            @RequestHeader("X-Auth0-Sub") String auth0Id,
+            @PathVariable UUID id
+    ) {
+        return orderService.getMyDetails(auth0Id, id);
     }
 
     @GetMapping("/{id}/details")
