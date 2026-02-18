@@ -1,8 +1,11 @@
 package com.rumal.customer_service.service;
 
 
+import com.rumal.customer_service.auth.Auth0ManagementService;
+import com.rumal.customer_service.auth.Auth0UserExistsException;
 import com.rumal.customer_service.dto.CreateCustomerRequest;
 import com.rumal.customer_service.dto.CustomerResponse;
+import com.rumal.customer_service.dto.RegisterCustomerRequest;
 import com.rumal.customer_service.entity.Customer;
 import com.rumal.customer_service.exception.DuplicateResourceException;
 import com.rumal.customer_service.exception.ResourceNotFoundException;
@@ -17,6 +20,7 @@ import java.util.UUID;
 public class CustomerServiceImpl implements CustomerService {
 
     private final CustomerRepository customerRepository;
+    private final Auth0ManagementService auth0ManagementService;
 
     @Override
     public CustomerResponse getByEmail(String email) {
@@ -40,6 +44,32 @@ public class CustomerServiceImpl implements CustomerService {
                 Customer.builder()
                         .name(request.name().trim())
                         .email(email)
+                        .build()
+        );
+
+        return toResponse(saved);
+    }
+
+    @Override
+    public CustomerResponse register(RegisterCustomerRequest request) {
+        String email = request.email().trim().toLowerCase();
+
+        if (customerRepository.existsByEmail(email)) {
+            throw new DuplicateResourceException("Customer already exists with email: " + email);
+        }
+
+        String auth0Id;
+        try {
+            auth0Id = auth0ManagementService.createUser(email, request.password(), request.name().trim());
+        } catch (Auth0UserExistsException ex) {
+            auth0Id = auth0ManagementService.getUserIdByEmail(email);
+        }
+
+        Customer saved = customerRepository.save(
+                Customer.builder()
+                        .name(request.name().trim())
+                        .email(email)
+                        .auth0Id(auth0Id)
                         .build()
         );
 

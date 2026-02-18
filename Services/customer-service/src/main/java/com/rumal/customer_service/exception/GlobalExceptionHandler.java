@@ -7,6 +7,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import com.rumal.customer_service.auth.Auth0RequestException;
+
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
@@ -35,6 +37,11 @@ public class GlobalExceptionHandler {
         body.put("fields", fieldErrors);
 
         return ResponseEntity.badRequest().body(body);
+    }
+
+    @ExceptionHandler(Auth0RequestException.class)
+    public ResponseEntity<?> auth0Error(Auth0RequestException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(error(ex.getMessage()));
     }
 
     private Map<String, Object> error(String message) {

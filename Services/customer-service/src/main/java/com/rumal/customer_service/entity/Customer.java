@@ -11,7 +11,8 @@ import java.util.UUID;
 @Table(
         name = "customers",
         uniqueConstraints = {
-                @UniqueConstraint(name = "uk_customers_email", columnNames = "email")
+                @UniqueConstraint(name = "uk_customers_email", columnNames = "email"),
+                @UniqueConstraint(name = "uk_customers_auth0_id", columnNames = "auth0_id")
         }
 )
 @Getter
@@ -30,6 +31,9 @@ public class Customer {
 
     @Column(nullable = false, length = 180)
     private String email;
+
+    @Column(name = "auth0_id", length = 120)
+    private String auth0Id;
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)

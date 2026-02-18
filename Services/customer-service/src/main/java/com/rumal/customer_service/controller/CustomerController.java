@@ -3,6 +3,7 @@ package com.rumal.customer_service.controller;
 
 import com.rumal.customer_service.dto.CreateCustomerRequest;
 import com.rumal.customer_service.dto.CustomerResponse;
+import com.rumal.customer_service.dto.RegisterCustomerRequest;
 import com.rumal.customer_service.service.CustomerService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,12 @@ public class CustomerController {
     @ResponseStatus(HttpStatus.CREATED)
     public CustomerResponse create(@Valid @RequestBody CreateCustomerRequest request) {
         return customerService.create(request);
+    }
+
+    @PostMapping("/register")
+    @ResponseStatus(HttpStatus.CREATED)
+    public CustomerResponse register(@Valid @RequestBody RegisterCustomerRequest request) {
+        return customerService.register(request);
     }
 
     @GetMapping("/{id}")

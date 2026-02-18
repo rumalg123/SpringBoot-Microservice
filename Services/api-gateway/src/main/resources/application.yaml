@@ -5,6 +5,12 @@ spring:
   application:
     name: api-gateway
 
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${AUTH0_ISSUER_URI:https://rumalg001.us.auth0.com/}
+
   cloud:
     gateway:
       server:
@@ -30,6 +36,9 @@ eureka:
   client:
     service-url:
       defaultZone: ${EUREKA_URL:http://discovery-server:8761/eureka/}
+
+auth0:
+  audience: ${AUTH0_AUDIENCE:https://auth0.rumalg.me/}
 
 
 logging:
