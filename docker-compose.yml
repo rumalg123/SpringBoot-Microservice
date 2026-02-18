@@ -35,7 +35,7 @@ services:
     depends_on:
       - discovery-server
     ports:
-      - "8090:8080"
+      - "8095:8080"
     env_file:
       - ./env/common.env
 
