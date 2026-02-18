@@ -102,7 +102,12 @@ export default function Home() {
       const authed = await client.isAuthenticated();
       setAuth0(client);
       setIsAuthed(authed);
-      setProfile(authed ? await client.getUser() : null);
+      if (authed) {
+        const user = await client.getUser();
+        setProfile(user ? (user as Record<string, unknown>) : null);
+      } else {
+        setProfile(null);
+      }
       setIsReady(true);
     };
 
@@ -172,7 +177,12 @@ export default function Home() {
     if (!auth0) return;
     const authed = await auth0.isAuthenticated();
     setIsAuthed(authed);
-    setProfile(authed ? await auth0.getUser() : null);
+    if (authed) {
+      const user = await auth0.getUser();
+      setProfile(user ? (user as Record<string, unknown>) : null);
+    } else {
+      setProfile(null);
+    }
   };
 
   const handleRegister = async () => {
