@@ -10,6 +10,7 @@ public record OrderDetailsResponse(
         String item,
         int quantity,
         Instant createdAt,
+        List<OrderItemResponse> items,
 
         CustomerSummary customer,     // can be null in GRACEFUL mode
         List<String> warnings         // can be empty

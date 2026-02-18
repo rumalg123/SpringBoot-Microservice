@@ -8,8 +8,10 @@ import com.rumal.order_service.dto.CreateMyOrderRequest;
 import com.rumal.order_service.dto.CreateOrderRequest;
 import com.rumal.order_service.dto.CustomerSummary;
 import com.rumal.order_service.dto.OrderDetailsResponse;
+import com.rumal.order_service.dto.OrderItemResponse;
 import com.rumal.order_service.dto.OrderResponse;
 import com.rumal.order_service.entity.Order;
+import com.rumal.order_service.entity.OrderItem;
 import com.rumal.order_service.exception.ResourceNotFoundException;
 import com.rumal.order_service.exception.ServiceUnavailableException;
 import com.rumal.order_service.repo.OrderRepository;
@@ -33,13 +35,7 @@ public class OrderService {
     public OrderResponse create(CreateOrderRequest req) {
         customerClient.assertCustomerExists(req.customerId());
 
-        Order saved = orderRepository.save(
-                Order.builder()
-                        .customerId(req.customerId())
-                        .item(req.item().trim())
-                        .quantity(req.quantity())
-                        .build()
-        );
+        Order saved = orderRepository.save(buildOrder(req.customerId(), req.item(), req.quantity()));
 
         return toResponse(saved);
     }
@@ -47,13 +43,7 @@ public class OrderService {
     public OrderResponse createForAuth0(String auth0Id, CreateMyOrderRequest req) {
         CustomerSummary customer = customerClient.getCustomerByAuth0Id(auth0Id);
 
-        Order saved = orderRepository.save(
-                Order.builder()
-                        .customerId(customer.id())
-                        .item(req.item().trim())
-                        .quantity(req.quantity())
-                        .build()
-        );
+        Order saved = orderRepository.save(buildOrder(customer.id(), req.item(), req.quantity()));
 
         return toResponse(saved);
     }
@@ -105,6 +95,7 @@ public class OrderService {
                 o.getItem(),
                 o.getQuantity(),
                 o.getCreatedAt(),
+                toItems(o),
                 customer,
                 warnings
         );
@@ -125,9 +116,38 @@ public class OrderService {
                 o.getItem(),
                 o.getQuantity(),
                 o.getCreatedAt(),
+                toItems(o),
                 customer,
                 List.of()
         );
+    }
+
+    private Order buildOrder(UUID customerId, String item, int quantity) {
+        String normalizedItem = item.trim();
+        Order order = Order.builder()
+                .customerId(customerId)
+                .item(normalizedItem)
+                .quantity(quantity)
+                .build();
+
+        OrderItem orderItem = OrderItem.builder()
+                .order(order)
+                .item(normalizedItem)
+                .quantity(quantity)
+                .build();
+        order.getOrderItems().add(orderItem);
+        return order;
+    }
+
+    private List<OrderItemResponse> toItems(Order order) {
+        if (order.getOrderItems() == null || order.getOrderItems().isEmpty()) {
+            return List.of(
+                    new OrderItemResponse(null, order.getItem(), order.getQuantity())
+            );
+        }
+        return order.getOrderItems().stream()
+                .map(i -> new OrderItemResponse(i.getId(), i.getItem(), i.getQuantity()))
+                .toList();
     }
 
 }

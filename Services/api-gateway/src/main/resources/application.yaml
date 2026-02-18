@@ -4,6 +4,11 @@ server:
 spring:
   application:
     name: api-gateway
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      timeout: ${REDIS_TIMEOUT:2s}
 
   security:
     oauth2:
@@ -32,18 +37,20 @@ spring:
             allowCredentials: false
       server:
         webflux:
-          # routes (NEW key)
           routes:
-            - id: customer-service
+            - id: customer-register
               uri: lb://customer-service
               predicates:
-                - Path=/customers/**
-            - id: order-service
+                - Path=/customers/register,/customers/register-auth0
+            - id: customer-me
+              uri: lb://customer-service
+              predicates:
+                - Path=/customers/me
+            - id: order-me
               uri: lb://order-service
               predicates:
-                - Path=/orders/**
+                - Path=/orders/me,/orders/me/**
 
-          # discovery locator (NEW key)
           discovery:
             locator:
               enabled: true

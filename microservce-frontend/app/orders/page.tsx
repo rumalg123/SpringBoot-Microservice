@@ -13,6 +13,21 @@ type Order = {
   createdAt: string;
 };
 
+type OrderItem = {
+  id: string | null;
+  item: string;
+  quantity: number;
+};
+
+type OrderDetail = {
+  id: string;
+  customerId: string;
+  item: string;
+  quantity: number;
+  createdAt: string;
+  items: OrderItem[];
+};
+
 type PagedOrder = {
   content: Order[];
   totalElements: number;
@@ -26,7 +41,7 @@ export default function OrdersPage() {
   const [status, setStatus] = useState("Loading session...");
   const [form, setForm] = useState({ item: "", quantity: 1 });
   const [selectedId, setSelectedId] = useState("");
-  const [selectedDetail, setSelectedDetail] = useState<Record<string, unknown> | null>(null);
+  const [selectedDetail, setSelectedDetail] = useState<OrderDetail | null>(null);
 
   const loadOrders = useCallback(async () => {
     if (!session.apiClient) return;
@@ -71,12 +86,14 @@ export default function OrdersPage() {
     }
   };
 
-  const loadDetail = async () => {
-    if (!session.apiClient || !selectedId.trim()) return;
+  const loadDetail = async (orderId?: string) => {
+    const targetId = (orderId || selectedId).trim();
+    if (!session.apiClient || !targetId) return;
     setStatus("Loading order detail...");
     try {
-      const res = await session.apiClient.get(`/orders/me/${selectedId.trim()}`);
-      setSelectedDetail(res.data as Record<string, unknown>);
+      const res = await session.apiClient.get(`/orders/me/${targetId}`);
+      setSelectedDetail(res.data as OrderDetail);
+      setSelectedId(targetId);
       setStatus("Order detail loaded.");
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Failed to load detail.");
@@ -133,6 +150,14 @@ export default function OrdersPage() {
                 <p className="mt-1 text-xs text-zinc-500">
                   {new Date(order.createdAt).toLocaleString()}
                 </p>
+                <button
+                  onClick={() => {
+                    void loadDetail(order.id);
+                  }}
+                  className="mt-3 rounded-lg border border-zinc-300 bg-white px-3 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
+                >
+                  Open Details
+                </button>
               </article>
             ))}
           </div>
@@ -177,15 +202,50 @@ export default function OrdersPage() {
                 className="rounded-xl border border-zinc-300 px-3 py-2 text-sm"
               />
               <button
-                onClick={loadDetail}
+                onClick={() => {
+                  void loadDetail();
+                }}
                 className="rounded-xl bg-zinc-900 px-3 py-2 text-sm font-semibold text-white hover:bg-zinc-700"
               >
                 GET /orders/me/{"{id}"}
               </button>
             </div>
-            <pre className="mt-3 max-h-52 overflow-auto rounded-xl bg-zinc-900 p-3 text-xs text-zinc-200">
-              {selectedDetail ? JSON.stringify(selectedDetail, null, 2) : "No order detail loaded."}
-            </pre>
+            {!selectedDetail && (
+              <p className="mt-3 rounded-xl border border-dashed border-zinc-300 p-3 text-xs text-zinc-500">
+                No order detail loaded.
+              </p>
+            )}
+            {selectedDetail && (
+              <div className="mt-3 grid gap-3 rounded-xl bg-zinc-900 p-3 text-xs text-zinc-200">
+                <p className="font-mono text-[11px] text-zinc-400">{selectedDetail.id}</p>
+                <p>
+                  <span className="text-zinc-400">Placed:</span>{" "}
+                  {new Date(selectedDetail.createdAt).toLocaleString()}
+                </p>
+                <div className="overflow-hidden rounded-lg border border-zinc-700">
+                  <table className="w-full text-left">
+                    <thead className="bg-zinc-800">
+                      <tr>
+                        <th className="px-2 py-1 font-medium">Item</th>
+                        <th className="px-2 py-1 font-medium">Qty</th>
+                        <th className="px-2 py-1 font-medium">Row ID</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedDetail.items?.map((row, idx) => (
+                        <tr key={row.id || `${row.item}-${idx}`} className="border-t border-zinc-800">
+                          <td className="px-2 py-1">{row.item}</td>
+                          <td className="px-2 py-1">{row.quantity}</td>
+                          <td className="px-2 py-1 font-mono text-[10px] text-zinc-400">
+                            {row.id || "legacy-row"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </section>
         </div>
       </section>

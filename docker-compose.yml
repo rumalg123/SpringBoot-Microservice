@@ -1,4 +1,9 @@
 services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6479:6379"
+
   discovery-server:
     build:
       context: ./Services/discovery-server
@@ -35,6 +40,7 @@ services:
       context: ./Services/api-gateway
     depends_on:
       - discovery-server
+      - redis
     ports:
       - "8095:8080"
     env_file:
