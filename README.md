@@ -10,6 +10,7 @@ flowchart LR
     F --> G[API Gateway :8080]
     G --> C[customer-service :8081]
     G --> O[order-service :8082]
+    G --> AD[admin-service :8083]
     C --> P1[(PostgreSQL customer_db)]
     O --> P2[(PostgreSQL order_db)]
     G --> R[(Redis)]
@@ -28,6 +29,7 @@ flowchart LR
 - `Services/api-gateway`: Spring Cloud Gateway (JWT auth, header relay, rate limiting)
 - `Services/customer-service`: customer domain + Auth0 management integration
 - `Services/order-service`: order domain + customer-service integration
+- `Services/admin-service`: admin APIs (aggregates privileged order views)
 - `microservce-frontend`: Next.js UI (Auth0 SPA flow)
 - `env/*-sample.env`: environment variable templates
 - `docker-compose.yml`: stack without PostgreSQL containers (external DB expected)
@@ -56,7 +58,12 @@ flowchart LR
 - Exposes only user-scoped endpoints:
   - `/customers/register`, `/customers/register-auth0`, `/customers/me`
   - `/orders/me`, `/orders/me/**`
+- Enforces `email_verified=true` for:
+  - `/customers/register-auth0`, `/customers/me`
+  - `/orders/me`, `/orders/me/**`
 - Denies raw backend paths (`/customers/**`, `/orders/**`) by default
+- Exposes admin endpoint:
+  - `/admin/orders` (requires `ROLE_admin` or `read:admin-orders` permission)
 - Adds/propagates:
   - `X-Request-Id`
   - `X-Auth0-Sub`
@@ -87,16 +94,26 @@ flowchart LR
   - `ordersByAuth0`
   - `orderDetailsByAuth0`
 
+### admin-service
+- Admin-only APIs exposed through gateway
+- Current endpoint:
+  - `GET /admin/orders` (supports `page`, `size`, `sort`, optional `customerId`)
+- Fetches data from `order-service` via service discovery and forwards pagination payload
+- Verifies internal trust header (`X-Internal-Auth`)
+
 ### microservce-frontend
 - Auth0 login/signup/logout using redirect flow
 - Gets access token silently and sends `Authorization: Bearer ...` to gateway
 - On authenticated sessions, auto-bootstrap customer profile:
   - GET `/customers/me`
   - if 404 -> POST `/customers/register-auth0`
+- If email is unverified, shows resend verification action:
+  - POST `/auth/resend-verification`
 - UI routes:
   - `/` landing/login/signup
   - `/profile` customer profile
   - `/orders` create/list/detail for own orders
+  - `/admin/orders` admin paginated order view
 
 ## API Map (Gateway-Exposed)
 
@@ -110,8 +127,12 @@ flowchart LR
 - `POST /orders/me` (authenticated)
 - `GET /orders/me/{id}` (authenticated)
 
+### Admin
+- `GET /admin/orders` (authenticated + admin authority)
+
 ### Auth
 - `POST /auth/logout` (authenticated)
+- `POST /auth/resend-verification` (authenticated)
 
 ## Auth and Trust Model
 
@@ -122,6 +143,7 @@ sequenceDiagram
     participant GW as API Gateway
     participant CS as customer-service
     participant OS as order-service
+    participant ADS as admin-service
 
     UI->>A0: Login/Signup redirect
     A0-->>UI: Access token (JWT)
@@ -129,14 +151,17 @@ sequenceDiagram
     GW->>GW: Validate issuer + audience
     GW->>GW: Strip client-forged internal headers
     GW->>CS: Forward + X-Auth0-Sub/X-Auth0-Email/X-Internal-Auth
-    GW->>OS: Forward + X-Auth0-Sub/X-Internal-Auth
+    GW->>CS: Forward + X-Auth0-Email-Verified
+    GW->>OS: Forward + X-Auth0-Sub/X-Auth0-Email-Verified/X-Internal-Auth
+    GW->>ADS: Forward + X-Internal-Auth
+    ADS->>OS: Internal service call + shared secret
     OS->>CS: Internal service call + shared secret
 ```
 
 Key points:
 - Backend services do **not** trust incoming internal headers from clients.
 - Gateway sanitizes and rewrites trusted headers.
-- `INTERNAL_AUTH_SHARED_SECRET` must be identical across gateway/customer/order services.
+- `INTERNAL_AUTH_SHARED_SECRET` must be identical across gateway/customer/order/admin services.
 
 ## Data and Caching Design
 
@@ -238,6 +263,7 @@ cd microservce-frontend && npm ci && npm run dev
 cd Services/api-gateway && ./mvnw -q -DskipTests compile
 cd Services/customer-service && ./mvnw -q -DskipTests compile
 cd Services/order-service && ./mvnw -q -DskipTests compile
+cd Services/admin-service && ./mvnw -q -DskipTests compile
 cd Services/discovery-server && ./mvnw -q -DskipTests compile
 cd microservce-frontend && npm run lint
 ```
@@ -265,4 +291,3 @@ cd microservce-frontend && npm run lint
 - Rotate `INTERNAL_AUTH_SHARED_SECRET`.
 - Disable Auth0 development keys on any enabled social/enterprise connection.
 - Add structured central logging and metrics dashboards.
-

@@ -31,6 +31,14 @@ services:
       - ./env/common.env
       - ./env/order-service.env
 
+  admin-service:
+    build:
+      context: ./Services/admin-service
+    depends_on:
+      - discovery-server
+    env_file:
+      - ./env/common.env
+
   api-gateway:
     build:
       context: ./Services/api-gateway

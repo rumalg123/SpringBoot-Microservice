@@ -50,6 +50,10 @@ spring:
               uri: lb://order-service
               predicates:
                 - Path=/orders/me,/orders/me/**
+            - id: admin-orders
+              uri: lb://admin-service
+              predicates:
+                - Path=/admin/orders,/admin/orders/**
 
           discovery:
             locator:
@@ -62,8 +66,13 @@ eureka:
       defaultZone: ${EUREKA_URL:http://discovery-server:8761/eureka/}
 
 auth0:
+  domain: ${AUTH0_DOMAIN:rumalg001.us.auth0.com}
   audience: ${AUTH0_AUDIENCE:https://auth0.rumalg.me/}
   claims-namespace: ${AUTH0_CLAIMS_NAMESPACE:https://auth0.rumalg.me/claims/}
+  mgmt:
+    client-id: ${AUTH0_MGMT_CLIENT_ID:}
+    client-secret: ${AUTH0_MGMT_CLIENT_SECRET:}
+    audience: ${AUTH0_MGMT_AUDIENCE:https://rumalg001.us.auth0.com/api/v2/}
 
 internal:
   auth:

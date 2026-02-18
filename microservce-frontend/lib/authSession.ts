@@ -12,9 +12,42 @@ const env = {
   domain: process.env.NEXT_PUBLIC_AUTH0_DOMAIN || "",
   clientId: process.env.NEXT_PUBLIC_AUTH0_CLIENT_ID || "",
   audience: process.env.NEXT_PUBLIC_AUTH0_AUDIENCE || "",
+  claimsNamespace: process.env.NEXT_PUBLIC_AUTH0_CLAIMS_NAMESPACE || "https://auth0.rumalg.me/claims/",
   connection: process.env.NEXT_PUBLIC_AUTH0_CONNECTION || "",
   apiBase: process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me",
 };
+
+function parseJwtPayload(token: string): Record<string, unknown> | null {
+  const parts = token.split(".");
+  if (parts.length < 2) return null;
+
+  try {
+    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+    const decoded = atob(padded);
+    return JSON.parse(decoded) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function isAdminByClaims(claims: Record<string, unknown> | null, namespace: string): boolean {
+  if (!claims) return false;
+
+  const permissions = claims.permissions;
+  if (Array.isArray(permissions) && permissions.includes("read:admin-orders")) {
+    return true;
+  }
+
+  const normalizedNamespace = namespace.endsWith("/") ? namespace : `${namespace}/`;
+  const namespacedRoles = claims[`${normalizedNamespace}roles`];
+  if (Array.isArray(namespacedRoles) && namespacedRoles.some((role) => String(role).toLowerCase() === "admin")) {
+    return true;
+  }
+
+  const roles = claims.roles;
+  return Array.isArray(roles) && roles.some((role) => String(role).toLowerCase() === "admin");
+}
 
 async function getAuth0(): Promise<Auth0Client> {
   if (auth0Singleton) return auth0Singleton;
@@ -36,6 +69,8 @@ export function useAuthSession() {
   const [error, setError] = useState<string>("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [profile, setProfile] = useState<UserProfile>(null);
+  const [canViewAdmin, setCanViewAdmin] = useState(false);
+  const [emailVerified, setEmailVerified] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -75,8 +110,19 @@ export function useAuthSession() {
         if (authed) {
           const user = await auth0.getUser();
           setProfile(user ? (user as UserProfile) : null);
+          const accessToken = await auth0.getTokenSilently({
+            authorizationParams: {
+              audience: env.audience || undefined,
+              scope: "openid profile email",
+            },
+          });
+          const claims = parseJwtPayload(accessToken);
+          setCanViewAdmin(isAdminByClaims(claims, env.claimsNamespace));
+          setEmailVerified(Boolean(claims?.email_verified));
         } else {
           setProfile(null);
+          setCanViewAdmin(false);
+          setEmailVerified(false);
         }
         setStatus("ready");
       } catch (e) {
@@ -160,16 +206,24 @@ export function useAuthSession() {
     await apiClient.post("/customers/register-auth0", { name: profileName });
   }, [apiClient, isAuthenticated, profile]);
 
+  const resendVerificationEmail = useCallback(async () => {
+    if (!apiClient || !isAuthenticated) return;
+    await apiClient.post("/auth/resend-verification");
+  }, [apiClient, isAuthenticated]);
+
   return {
     env,
     status,
     error,
     isAuthenticated,
+    canViewAdmin,
+    emailVerified,
     profile,
     apiClient,
     login,
     signup,
     logout,
     ensureCustomer,
+    resendVerificationEmail,
   };
 }

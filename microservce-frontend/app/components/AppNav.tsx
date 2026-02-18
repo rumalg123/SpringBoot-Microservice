@@ -4,10 +4,11 @@ import Link from "next/link";
 
 type Props = {
   email?: string;
+  canViewAdmin?: boolean;
   onLogout: () => void;
 };
 
-export default function AppNav({ email, onLogout }: Props) {
+export default function AppNav({ email, canViewAdmin = false, onLogout }: Props) {
   return (
     <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
       <div className="space-y-1">
@@ -18,6 +19,11 @@ export default function AppNav({ email, onLogout }: Props) {
         <Link href="/orders" className="rounded-full border border-zinc-300 bg-white px-4 py-2 text-sm">
           My Orders
         </Link>
+        {canViewAdmin && (
+          <Link href="/admin/orders" className="rounded-full border border-zinc-300 bg-white px-4 py-2 text-sm">
+            Admin Orders
+          </Link>
+        )}
         <Link href="/profile" className="rounded-full border border-zinc-300 bg-white px-4 py-2 text-sm">
           My Profile
         </Link>

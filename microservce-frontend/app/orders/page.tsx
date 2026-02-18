@@ -100,6 +100,16 @@ export default function OrdersPage() {
     }
   };
 
+  const resendVerification = async () => {
+    setStatus("Requesting verification email...");
+    try {
+      await session.resendVerificationEmail();
+      setStatus("Verification email sent. Please verify and sign in again.");
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Failed to resend verification email.");
+    }
+  };
+
   if (session.status === "loading" || session.status === "idle") {
     return <main className="mx-auto min-h-screen max-w-6xl px-6 py-10 text-zinc-700">Loading...</main>;
   }
@@ -112,10 +122,24 @@ export default function OrdersPage() {
     <main className="mx-auto min-h-screen max-w-6xl px-6 py-10">
       <AppNav
         email={(session.profile?.email as string) || ""}
+        canViewAdmin={session.canViewAdmin}
         onLogout={() => {
           void session.logout();
         }}
       />
+      {!session.emailVerified && (
+        <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p>Your email is not verified. Customer and order endpoints are blocked until verification.</p>
+          <button
+            onClick={() => {
+              void resendVerification();
+            }}
+            className="mt-2 rounded-lg bg-amber-600 px-3 py-1 text-xs font-semibold text-white hover:bg-amber-500"
+          >
+            Resend Verification Email
+          </button>
+        </div>
+      )}
 
       <section className="grid gap-6 lg:grid-cols-[1.15fr,0.85fr]">
         <div className="rounded-3xl border border-zinc-200 bg-white/85 p-6 shadow-xl backdrop-blur">

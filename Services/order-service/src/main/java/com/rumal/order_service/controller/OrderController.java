@@ -4,6 +4,7 @@ import com.rumal.order_service.dto.CreateOrderRequest;
 import com.rumal.order_service.dto.CreateMyOrderRequest;
 import com.rumal.order_service.dto.OrderDetailsResponse;
 import com.rumal.order_service.dto.OrderResponse;
+import com.rumal.order_service.exception.UnauthorizedException;
 import com.rumal.order_service.security.InternalRequestVerifier;
 import com.rumal.order_service.service.OrderService;
 import jakarta.validation.Valid;
@@ -46,10 +47,12 @@ public class OrderController {
     @GetMapping("/me")
     public Page<OrderResponse> listMine(
             @RequestHeader("X-Auth0-Sub") String auth0Id,
+            @RequestHeader(value = "X-Auth0-Email-Verified", required = false) String emailVerified,
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         internalRequestVerifier.verify(internalAuth);
+        verifyEmailVerified(emailVerified);
         return orderService.listForAuth0Id(auth0Id, pageable);
     }
 
@@ -57,26 +60,36 @@ public class OrderController {
     @ResponseStatus(HttpStatus.CREATED)
     public OrderResponse createMine(
             @RequestHeader("X-Auth0-Sub") String auth0Id,
+            @RequestHeader(value = "X-Auth0-Email-Verified", required = false) String emailVerified,
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @Valid @RequestBody CreateMyOrderRequest req
     ) {
         internalRequestVerifier.verify(internalAuth);
+        verifyEmailVerified(emailVerified);
         return orderService.createForAuth0(auth0Id, req);
     }
 
     @GetMapping("/me/{id}")
     public OrderDetailsResponse detailsMine(
             @RequestHeader("X-Auth0-Sub") String auth0Id,
+            @RequestHeader(value = "X-Auth0-Email-Verified", required = false) String emailVerified,
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
+        verifyEmailVerified(emailVerified);
         return orderService.getMyDetails(auth0Id, id);
     }
 
     @GetMapping("/{id}/details")
     public OrderDetailsResponse details(@PathVariable UUID id) {
         return orderService.getDetails(id);
+    }
+
+    private void verifyEmailVerified(String emailVerified) {
+        if (!Boolean.parseBoolean(emailVerified)) {
+            throw new UnauthorizedException("Email is not verified");
+        }
     }
 
 

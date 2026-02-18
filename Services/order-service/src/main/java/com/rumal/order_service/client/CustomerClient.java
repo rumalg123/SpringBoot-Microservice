@@ -75,6 +75,7 @@ public class CustomerClient {
             return rc.get()
                     .uri("http://customer-service/customers/me")
                     .header("X-Auth0-Sub", auth0Id)
+                    .header("X-Auth0-Email-Verified", "true")
                     .header("X-Internal-Auth", internalSharedSecret)
                     .retrieve()
                     .body(CustomerSummary.class);

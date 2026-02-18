@@ -40,10 +40,12 @@ public class CustomerController {
     public CustomerResponse registerAuth0(
             @RequestHeader("X-Auth0-Sub") String auth0Id,
             @RequestHeader(value = "X-Auth0-Email", required = false) String email,
+            @RequestHeader(value = "X-Auth0-Email-Verified", required = false) String emailVerified,
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestBody(required = false) RegisterAuth0CustomerRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
+        verifyEmailVerified(emailVerified);
         if (auth0Id == null || auth0Id.isBlank()) {
             throw new UnauthorizedException("Missing authentication header");
         }
@@ -58,9 +60,11 @@ public class CustomerController {
     @GetMapping("/me")
     public CustomerResponse me(
             @RequestHeader("X-Auth0-Sub") String auth0Id,
+            @RequestHeader(value = "X-Auth0-Email-Verified", required = false) String emailVerified,
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth
     ) {
         internalRequestVerifier.verify(internalAuth);
+        verifyEmailVerified(emailVerified);
         if (auth0Id == null || auth0Id.isBlank()) {
             throw new UnauthorizedException("Missing authentication header");
         }
@@ -70,6 +74,12 @@ public class CustomerController {
     @GetMapping("/by-email")
     public CustomerResponse getByEmail(@RequestParam String email) {
         return customerService.getByEmail(email);
+    }
+
+    private void verifyEmailVerified(String emailVerified) {
+        if (!Boolean.parseBoolean(emailVerified)) {
+            throw new UnauthorizedException("Email is not verified");
+        }
     }
 
 }

@@ -29,6 +29,7 @@ public class AuthHeaderRelayFilter implements GlobalFilter, Ordered {
                 .headers(headers -> {
                     headers.remove("X-Auth0-Sub");
                     headers.remove("X-Auth0-Email");
+                    headers.remove("X-Auth0-Email-Verified");
                     headers.remove("X-Internal-Auth");
                 })
                 .build();
@@ -41,6 +42,7 @@ public class AuthHeaderRelayFilter implements GlobalFilter, Ordered {
                     String subject = auth.getToken().getSubject();
                     String namespacedEmail = auth.getToken().getClaimAsString(claimsNamespace + "email");
                     String fallbackEmail = auth.getToken().getClaimAsString("email");
+                    Boolean emailVerified = auth.getToken().getClaimAsBoolean("email_verified");
                     final String resolvedEmail = (namespacedEmail != null && !namespacedEmail.isBlank())
                             ? namespacedEmail
                             : fallbackEmail;
@@ -52,6 +54,8 @@ public class AuthHeaderRelayFilter implements GlobalFilter, Ordered {
                     if (resolvedEmail != null && !resolvedEmail.isBlank()) {
                         requestBuilder.headers(headers -> headers.set("X-Auth0-Email", resolvedEmail));
                     }
+                    requestBuilder.headers(headers ->
+                            headers.set("X-Auth0-Email-Verified", String.valueOf(Boolean.TRUE.equals(emailVerified))));
                     if (internalSharedSecret != null && !internalSharedSecret.isBlank()) {
                         requestBuilder.headers(headers -> headers.set("X-Internal-Auth", internalSharedSecret));
                     }
