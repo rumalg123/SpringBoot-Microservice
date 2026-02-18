@@ -39,17 +39,18 @@ public class AuthHeaderRelayFilter implements GlobalFilter, Ordered {
                 .cast(JwtAuthenticationToken.class)
                 .map(auth -> {
                     String subject = auth.getToken().getSubject();
-                    String email = auth.getToken().getClaimAsString(claimsNamespace + "email");
-                    if (email == null || email.isBlank()) {
-                        email = auth.getToken().getClaimAsString("email");
-                    }
+                    String namespacedEmail = auth.getToken().getClaimAsString(claimsNamespace + "email");
+                    String fallbackEmail = auth.getToken().getClaimAsString("email");
+                    final String resolvedEmail = (namespacedEmail != null && !namespacedEmail.isBlank())
+                            ? namespacedEmail
+                            : fallbackEmail;
 
                     ServerHttpRequest.Builder requestBuilder = sanitizedExchange.getRequest().mutate();
                     if (subject != null && !subject.isBlank()) {
                         requestBuilder.headers(headers -> headers.set("X-Auth0-Sub", subject));
                     }
-                    if (email != null && !email.isBlank()) {
-                        requestBuilder.headers(headers -> headers.set("X-Auth0-Email", email));
+                    if (resolvedEmail != null && !resolvedEmail.isBlank()) {
+                        requestBuilder.headers(headers -> headers.set("X-Auth0-Email", resolvedEmail));
                     }
                     if (internalSharedSecret != null && !internalSharedSecret.isBlank()) {
                         requestBuilder.headers(headers -> headers.set("X-Internal-Auth", internalSharedSecret));
