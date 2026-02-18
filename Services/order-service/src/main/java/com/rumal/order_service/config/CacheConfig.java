@@ -1,10 +1,13 @@
 package com.rumal.order_service.config;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.CachingConfigurer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
@@ -24,8 +27,11 @@ public class CacheConfig implements CachingConfigurer {
             @Value("${cache.orders-by-auth0-ttl:60s}") Duration ordersByAuth0Ttl,
             @Value("${cache.order-details-by-auth0-ttl:60s}") Duration orderDetailsByAuth0Ttl
     ) {
+        ObjectMapper cacheObjectMapper = objectMapper.copy();
+        cacheObjectMapper.addMixIn(PageImpl.class, PageImplMixin.class);
+
         GenericJackson2JsonRedisSerializer valueSerializer = GenericJackson2JsonRedisSerializer.builder()
-                .objectMapper(objectMapper.copy())
+                .objectMapper(cacheObjectMapper)
                 .defaultTyping(true)
                 .build();
 
@@ -44,5 +50,16 @@ public class CacheConfig implements CachingConfigurer {
                         "orderDetailsByAuth0", defaultConfig.entryTtl(orderDetailsByAuth0Ttl)
                 ))
                 .build();
+    }
+
+    abstract static class PageImplMixin {
+        @JsonCreator
+        PageImplMixin(
+                @JsonProperty("content") java.util.List<?> content,
+                @JsonProperty("number") int number,
+                @JsonProperty("size") int size,
+                @JsonProperty("totalElements") long totalElements
+        ) {
+        }
     }
 }
