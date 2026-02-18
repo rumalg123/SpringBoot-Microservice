@@ -3,6 +3,7 @@ package com.rumal.customer_service.controller;
 
 import com.rumal.customer_service.dto.CreateCustomerRequest;
 import com.rumal.customer_service.dto.CustomerResponse;
+import com.rumal.customer_service.dto.RegisterAuth0CustomerRequest;
 import com.rumal.customer_service.dto.RegisterCustomerRequest;
 import com.rumal.customer_service.exception.UnauthorizedException;
 import com.rumal.customer_service.service.CustomerService;
@@ -30,6 +31,19 @@ public class CustomerController {
     @ResponseStatus(HttpStatus.CREATED)
     public CustomerResponse register(@Valid @RequestBody RegisterCustomerRequest request) {
         return customerService.register(request);
+    }
+
+    @PostMapping("/register-auth0")
+    @ResponseStatus(HttpStatus.CREATED)
+    public CustomerResponse registerAuth0(
+            @RequestHeader("X-Auth0-Sub") String auth0Id,
+            @RequestHeader("X-Auth0-Email") String email,
+            @RequestBody(required = false) RegisterAuth0CustomerRequest request
+    ) {
+        if (auth0Id == null || auth0Id.isBlank()) {
+            throw new UnauthorizedException("Missing authentication header");
+        }
+        return customerService.registerAuth0(auth0Id, email, request);
     }
 
     @GetMapping("/{id}")

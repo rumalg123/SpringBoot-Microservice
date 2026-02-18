@@ -5,6 +5,7 @@ import com.rumal.customer_service.auth.Auth0ManagementService;
 import com.rumal.customer_service.auth.Auth0UserExistsException;
 import com.rumal.customer_service.dto.CreateCustomerRequest;
 import com.rumal.customer_service.dto.CustomerResponse;
+import com.rumal.customer_service.dto.RegisterAuth0CustomerRequest;
 import com.rumal.customer_service.dto.RegisterCustomerRequest;
 import com.rumal.customer_service.entity.Customer;
 import com.rumal.customer_service.exception.DuplicateResourceException;
@@ -81,6 +82,40 @@ public class CustomerServiceImpl implements CustomerService {
                 Customer.builder()
                         .name(request.name().trim())
                         .email(email)
+                        .auth0Id(auth0Id)
+                        .build()
+        );
+
+        return toResponse(saved);
+    }
+
+    @Override
+    public CustomerResponse registerAuth0(String auth0Id, String email, RegisterAuth0CustomerRequest request) {
+        if (auth0Id == null || auth0Id.isBlank()) {
+            throw new ResourceNotFoundException("Customer not found for auth0 id");
+        }
+        if (email == null || email.isBlank()) {
+            throw new ResourceNotFoundException("Customer email is required");
+        }
+
+        String normalizedEmail = email.trim().toLowerCase();
+
+        if (customerRepository.existsByAuth0Id(auth0Id)) {
+            return getByAuth0Id(auth0Id);
+        }
+
+        if (customerRepository.existsByEmail(normalizedEmail)) {
+            throw new DuplicateResourceException("Customer already exists with email: " + normalizedEmail);
+        }
+
+        String name = (request != null && request.name() != null && !request.name().isBlank())
+                ? request.name().trim()
+                : normalizedEmail;
+
+        Customer saved = customerRepository.save(
+                Customer.builder()
+                        .name(name)
+                        .email(normalizedEmail)
                         .auth0Id(auth0Id)
                         .build()
         );

@@ -48,12 +48,6 @@ export default function Home() {
   const [profile, setProfile] = useState<Record<string, unknown> | null>(null);
   const [status, setStatus] = useState("Idle");
 
-  const [registerForm, setRegisterForm] = useState({
-    name: "",
-    email: "",
-    password: "",
-  });
-
   const [createCustomerForm, setCreateCustomerForm] = useState({
     name: "",
     email: "",
@@ -185,23 +179,37 @@ export default function Home() {
     }
   };
 
-  const handleRegister = async () => {
-    setStatus("Registering customer...");
+  const ensureCustomer = useCallback(async () => {
+    if (!isAuthed || !apiClient) return;
     try {
-      const data = await apiFetch(
-        "/customers/register",
-        {
-          method: "POST",
-          data: registerForm,
-        },
-        false
-      );
-      setStatus("Registered customer.");
+      const data = await apiFetch("/customers/me");
       setMe(data);
+      return;
+    } catch (err) {
+      const message = (err as Error).message || "";
+      if (!message.startsWith("404")) {
+        setStatus(message);
+        return;
+      }
+    }
+
+    try {
+      const name =
+        (profile?.name as string) ||
+        (profile?.nickname as string) ||
+        (profile?.email as string) ||
+        "New User";
+      const data = await apiFetch("/customers/register-auth0", { method: "POST", data: { name } });
+      setMe(data);
+      setStatus("Created customer profile from Auth0.");
     } catch (err) {
       setStatus((err as Error).message);
     }
-  };
+  }, [apiClient, apiFetch, isAuthed, profile]);
+
+  useEffect(() => {
+    void ensureCustomer();
+  }, [ensureCustomer]);
 
   const handleCreateCustomer = async () => {
     setStatus("Creating customer...");
@@ -347,29 +355,6 @@ export default function Home() {
               <div className="muted">Authenticated: {String(isAuthed)}</div>
               <div className="code">{profile ? JSON.stringify(profile, null, 2) : "No profile"}</div>
             </div>
-          </div>
-        </div>
-
-        <div className="card">
-          <h2>Customer Registration</h2>
-          <div className="row">
-            <input
-              placeholder="Name"
-              value={registerForm.name}
-              onChange={(e) => setRegisterForm({ ...registerForm, name: e.target.value })}
-            />
-            <input
-              placeholder="Email"
-              value={registerForm.email}
-              onChange={(e) => setRegisterForm({ ...registerForm, email: e.target.value })}
-            />
-            <input
-              placeholder="Password"
-              type="password"
-              value={registerForm.password}
-              onChange={(e) => setRegisterForm({ ...registerForm, password: e.target.value })}
-            />
-            <button onClick={handleRegister}>POST /customers/register</button>
           </div>
         </div>
 

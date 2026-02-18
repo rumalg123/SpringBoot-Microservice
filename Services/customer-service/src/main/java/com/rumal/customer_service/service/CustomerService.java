@@ -4,6 +4,7 @@ package com.rumal.customer_service.service;
 
 import com.rumal.customer_service.dto.CreateCustomerRequest;
 import com.rumal.customer_service.dto.CustomerResponse;
+import com.rumal.customer_service.dto.RegisterAuth0CustomerRequest;
 import com.rumal.customer_service.dto.RegisterCustomerRequest;
 
 import java.util.UUID;
@@ -14,5 +15,6 @@ public interface CustomerService {
 
     CustomerResponse create(CreateCustomerRequest request);
     CustomerResponse register(RegisterCustomerRequest request);
+    CustomerResponse registerAuth0(String auth0Id, String email, RegisterAuth0CustomerRequest request);
     CustomerResponse getById(UUID id);
 }
