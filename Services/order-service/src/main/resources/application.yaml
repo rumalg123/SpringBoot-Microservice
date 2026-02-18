@@ -5,6 +5,12 @@ spring:
   application:
     name: order-service
 
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      timeout: ${REDIS_TIMEOUT:2s}
+
   datasource:
     url: ${ORDER_DB_URL:jdbc:postgresql://order-db:5432/order_db}
     username: ${ORDER_DB_USER:order_user}
@@ -52,3 +58,7 @@ resilience4j:
 order:
   aggregation:
     customerDetailsMode: GRACEFUL   # STRICT or GRACEFUL
+
+cache:
+  orders-by-auth0-ttl: ${CACHE_ORDERS_BY_AUTH0_TTL:60s}
+  order-details-by-auth0-ttl: ${CACHE_ORDER_DETAILS_BY_AUTH0_TTL:60s}

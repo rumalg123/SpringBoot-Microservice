@@ -5,6 +5,12 @@ spring:
   application:
     name: customer-service
 
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      timeout: ${REDIS_TIMEOUT:2s}
+
   datasource:
     url: ${CUSTOMER_DB_URL:jdbc:postgresql://customer-db:5432/customer_db}
     username: ${CUSTOMER_DB_USER:customer_user}
@@ -31,3 +37,6 @@ auth0:
 logging:
   pattern:
     level: "%5p [${spring.application.name},traceId=%X{traceId},spanId=%X{spanId}]"
+
+cache:
+  customer-by-auth0-ttl: ${CACHE_CUSTOMER_BY_AUTH0_TTL:120s}

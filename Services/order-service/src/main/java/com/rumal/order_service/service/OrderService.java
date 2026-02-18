@@ -16,6 +16,9 @@ import com.rumal.order_service.exception.ResourceNotFoundException;
 import com.rumal.order_service.exception.ServiceUnavailableException;
 import com.rumal.order_service.repo.OrderRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -40,6 +43,10 @@ public class OrderService {
         return toResponse(saved);
     }
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "ordersByAuth0", allEntries = true),
+            @CacheEvict(cacheNames = "orderDetailsByAuth0", allEntries = true)
+    })
     public OrderResponse createForAuth0(String auth0Id, CreateMyOrderRequest req) {
         CustomerSummary customer = customerClient.getCustomerByAuth0Id(auth0Id);
 
@@ -66,6 +73,10 @@ public class OrderService {
         return page.map(this::toResponse);
     }
 
+    @Cacheable(
+            cacheNames = "ordersByAuth0",
+            key = "#auth0Id + '::' + #pageable.pageNumber + '::' + #pageable.pageSize + '::' + #pageable.sort.toString()"
+    )
     public Page<OrderResponse> listForAuth0Id(String auth0Id, Pageable pageable) {
         CustomerSummary customer = customerClient.getCustomerByAuth0Id(auth0Id);
         return list(customer.id(), pageable);
@@ -101,6 +112,7 @@ public class OrderService {
         );
     }
 
+    @Cacheable(cacheNames = "orderDetailsByAuth0", key = "#auth0Id + '::' + #orderId")
     public OrderDetailsResponse getMyDetails(String auth0Id, UUID orderId) {
         CustomerSummary customer = customerClient.getCustomerByAuth0Id(auth0Id);
         Order o = orderRepository.findById(orderId)

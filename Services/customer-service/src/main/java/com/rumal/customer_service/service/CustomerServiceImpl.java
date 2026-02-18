@@ -12,6 +12,8 @@ import com.rumal.customer_service.exception.DuplicateResourceException;
 import com.rumal.customer_service.exception.ResourceNotFoundException;
 import com.rumal.customer_service.repo.CustomerRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CachePut;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.util.UUID;
@@ -34,6 +36,7 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
+    @Cacheable(cacheNames = "customerByAuth0", key = "#auth0Id")
     public CustomerResponse getByAuth0Id(String auth0Id) {
         if (auth0Id == null || auth0Id.isBlank()) {
             throw new ResourceNotFoundException("Customer not found for auth0 id");
@@ -90,6 +93,7 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
+    @CachePut(cacheNames = "customerByAuth0", key = "#auth0Id")
     public CustomerResponse registerAuth0(String auth0Id, String email, RegisterAuth0CustomerRequest request) {
         if (auth0Id == null || auth0Id.isBlank()) {
             throw new ResourceNotFoundException("Customer not found for auth0 id");
