@@ -41,6 +41,3 @@ services:
     env_file:
       - ./env/common.env
 
-volumes:
-  customer-db-data:
-  order-db-data:

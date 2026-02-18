@@ -1,0 +1,23 @@
+name: Deploy main
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    types: [closed]
+    branches: [ "main" ]
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    # Only run PR trigger if merged
+    if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
+    runs-on: [self-hosted, Linux, ARM64, java21, microservice]
+
+    steps:
+      - name: Deploy
+        run: |
+          /home/ubuntu/deploy_microservice_backend/deploy.sh
