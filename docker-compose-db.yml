@@ -8,6 +8,7 @@ services:
       - "8761:8761"
     env_file:
       - ./env/common.env
+      - ./env/eureka.env
 
   customer-db:
     image: postgres:16-alpine

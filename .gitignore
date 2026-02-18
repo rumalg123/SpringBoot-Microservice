@@ -1,3 +1,4 @@
 env\common.env
 env\customer-service.env
 env\order-service.env
+env\eureka.env

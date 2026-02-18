@@ -6,6 +6,7 @@ services:
       - "8761:8761"
     env_file:
       - ./env/common.env
+      - ./env/eureka.env
 
   customer-service:
     build:
@@ -38,4 +39,3 @@ services:
       - "8095:8080"
     env_file:
       - ./env/common.env
-

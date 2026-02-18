@@ -1,11 +1,16 @@
 server:
-  port: 8761
+  port: ${SERVER_PORT:8761}
+  forward-headers-strategy: ${SERVER_FORWARD_HEADERS_STRATEGY:framework}   # important for nginx/https
 
 spring:
   application:
-    name: discovery-server
+    name: ${SPRING_APPLICATION_NAME:discovery-server}
 
 eureka:
+  instance:
+    hostname: ${EUREKA_INSTANCE_HOSTNAME}          # so links don't show localhost
+    prefer-ip-address: ${EUREKA_INSTANCE_PREFER_IP_ADDRESS:false}
+
   client:
-    register-with-eureka: false
-    fetch-registry: false
+    register-with-eureka: ${EUREKA_CLIENT_REGISTER_WITH_EUREKA:false}
+    fetch-registry: ${EUREKA_CLIENT_FETCH_REGISTRY:false}
