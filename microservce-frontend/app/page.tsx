@@ -1,6 +1,6 @@
 "use client";
 
-import createAuth0Client, { Auth0Client } from "@auth0/auth0-spa-js";
+import { Auth0Client, createAuth0Client } from "@auth0/auth0-spa-js";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ApiRequestConfig, createApiClient } from "../lib/apiClient";
 
