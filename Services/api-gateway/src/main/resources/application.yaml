@@ -53,7 +53,7 @@ spring:
 
           discovery:
             locator:
-              enabled: true
+              enabled: ${GATEWAY_DISCOVERY_LOCATOR_ENABLED:false}
               lower-case-service-id: true
 
 eureka:
@@ -63,6 +63,10 @@ eureka:
 
 auth0:
   audience: ${AUTH0_AUDIENCE:https://auth0.rumalg.me/}
+
+internal:
+  auth:
+    shared-secret: ${INTERNAL_AUTH_SHARED_SECRET:}
 
 
 logging:

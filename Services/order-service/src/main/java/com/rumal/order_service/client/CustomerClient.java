@@ -6,6 +6,7 @@ import com.rumal.order_service.exception.ServiceUnavailableException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -18,11 +19,14 @@ import java.util.UUID;
 public class CustomerClient {
 
     private final RestClient.Builder lbRestClientBuilder;
+    private final String internalSharedSecret;
 
     public CustomerClient(
-            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder,
+            @Value("${internal.auth.shared-secret:}") String internalSharedSecret
     ) {
         this.lbRestClientBuilder = lbRestClientBuilder;
+        this.internalSharedSecret = internalSharedSecret;
     }
 
     @Retry(name = "customerService")
@@ -71,6 +75,7 @@ public class CustomerClient {
             return rc.get()
                     .uri("http://customer-service/customers/me")
                     .header("X-Auth0-Sub", auth0Id)
+                    .header("X-Internal-Auth", internalSharedSecret)
                     .retrieve()
                     .body(CustomerSummary.class);
         } catch (HttpClientErrorException ex) {

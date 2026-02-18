@@ -1,8 +1,5 @@
 package com.rumal.customer_service.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.CachingConfigurer;
 import org.springframework.context.annotation.Bean;
@@ -24,18 +21,11 @@ public class CacheConfig implements CachingConfigurer {
             RedisConnectionFactory redisConnectionFactory,
             @Value("${cache.customer-by-auth0-ttl:120s}") Duration customerByAuth0Ttl
     ) {
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.registerModule(new JavaTimeModule());
-        mapper.activateDefaultTyping(
-                BasicPolymorphicTypeValidator.builder().allowIfSubType(Object.class).build(),
-                ObjectMapper.DefaultTyping.NON_FINAL
-        );
-
         RedisCacheConfiguration defaultConfig = RedisCacheConfiguration.defaultCacheConfig()
                 .disableCachingNullValues()
                 .serializeValuesWith(
                         RedisSerializationContext.SerializationPair.fromSerializer(
-                                new GenericJackson2JsonRedisSerializer(mapper)
+                                new GenericJackson2JsonRedisSerializer()
                         )
                 );
 

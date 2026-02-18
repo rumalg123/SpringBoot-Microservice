@@ -59,6 +59,10 @@ order:
   aggregation:
     customerDetailsMode: GRACEFUL   # STRICT or GRACEFUL
 
+internal:
+  auth:
+    shared-secret: ${INTERNAL_AUTH_SHARED_SECRET:}
+
 cache:
   orders-by-auth0-ttl: ${CACHE_ORDERS_BY_AUTH0_TTL:60s}
   order-details-by-auth0-ttl: ${CACHE_ORDER_DETAILS_BY_AUTH0_TTL:60s}

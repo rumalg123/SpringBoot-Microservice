@@ -1,8 +1,6 @@
 services:
   redis:
     image: redis:7-alpine
-    ports:
-      - "6479:6379"
 
   discovery-server:
     build:
@@ -19,8 +17,6 @@ services:
     depends_on:
       - discovery-server
       - redis
-    ports:
-      - "8091:8081"
     env_file:
       - ./env/common.env
       - ./env/customer-service.env
@@ -31,8 +27,6 @@ services:
     depends_on:
       - discovery-server
       - redis
-    ports:
-      - "8092:8082"
     env_file:
       - ./env/common.env
       - ./env/order-service.env
