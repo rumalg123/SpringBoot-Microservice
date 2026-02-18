@@ -1,12 +1,12 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
-COPY package.json package-lock.json ./
+COPY microservce-frontend/package.json microservce-frontend/package-lock.json ./
 RUN npm ci
 
 FROM node:20-alpine AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+COPY microservce-frontend/ ./
 COPY env/frontend.env /app/env/frontend.env
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN set -a; . /app/env/frontend.env; set +a; npm run build
