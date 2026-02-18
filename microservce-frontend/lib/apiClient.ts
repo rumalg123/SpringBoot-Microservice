@@ -1,4 +1,4 @@
-import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from "axios";
+import axios, { AxiosError, AxiosHeaders, AxiosInstance, AxiosRequestConfig } from "axios";
 
 type CreateApiClientOptions = {
   baseURL: string;
@@ -22,11 +22,10 @@ export function createApiClient(options: CreateApiClientOptions): AxiosInstance 
     }
 
     const token = await options.getToken();
-    config.headers = {
-      ...(config.headers ?? {}),
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    };
+    const headers = new AxiosHeaders(config.headers);
+    headers.set("Authorization", `Bearer ${token}`);
+    headers.set("Content-Type", "application/json");
+    config.headers = headers;
     return config;
   });
 

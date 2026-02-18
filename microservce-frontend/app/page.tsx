@@ -192,7 +192,7 @@ export default function Home() {
         "/customers/register",
         {
           method: "POST",
-          body: JSON.stringify(registerForm),
+          data: registerForm,
         },
         false
       );
@@ -208,7 +208,7 @@ export default function Home() {
     try {
       const data = await apiFetch("/customers", {
         method: "POST",
-        body: JSON.stringify(createCustomerForm),
+        data: createCustomerForm,
       });
       setStatus("Customer created.");
       setById(data);
@@ -293,11 +293,11 @@ export default function Home() {
     try {
       const data = await apiFetch("/orders", {
         method: "POST",
-        body: JSON.stringify({
+        data: {
           customerId: me.id,
           item: createOrderForm.item,
           quantity: Number(createOrderForm.quantity),
-        }),
+        },
       });
       setStatus("Order created.");
       setOrders({ content: [data], totalElements: 1, totalPages: 1, number: 0, size: 1 });
