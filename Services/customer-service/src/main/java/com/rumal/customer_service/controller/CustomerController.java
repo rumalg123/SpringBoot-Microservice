@@ -37,7 +37,7 @@ public class CustomerController {
     @ResponseStatus(HttpStatus.CREATED)
     public CustomerResponse registerAuth0(
             @RequestHeader("X-Auth0-Sub") String auth0Id,
-            @RequestHeader("X-Auth0-Email") String email,
+            @RequestHeader(value = "X-Auth0-Email", required = false) String email,
             @RequestBody(required = false) RegisterAuth0CustomerRequest request
     ) {
         if (auth0Id == null || auth0Id.isBlank()) {

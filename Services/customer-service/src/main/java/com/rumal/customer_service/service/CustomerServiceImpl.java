@@ -94,11 +94,22 @@ public class CustomerServiceImpl implements CustomerService {
         if (auth0Id == null || auth0Id.isBlank()) {
             throw new ResourceNotFoundException("Customer not found for auth0 id");
         }
-        if (email == null || email.isBlank()) {
+        String resolvedEmail = email;
+        String resolvedName = request != null ? request.name() : null;
+
+        if (resolvedEmail == null || resolvedEmail.isBlank()) {
+            var user = auth0ManagementService.getUserById(auth0Id);
+            resolvedEmail = user.email();
+            if (resolvedName == null || resolvedName.isBlank()) {
+                resolvedName = user.name();
+            }
+        }
+
+        if (resolvedEmail == null || resolvedEmail.isBlank()) {
             throw new ResourceNotFoundException("Customer email is required");
         }
 
-        String normalizedEmail = email.trim().toLowerCase();
+        String normalizedEmail = resolvedEmail.trim().toLowerCase();
 
         if (customerRepository.existsByAuth0Id(auth0Id)) {
             return getByAuth0Id(auth0Id);
@@ -108,8 +119,8 @@ public class CustomerServiceImpl implements CustomerService {
             throw new DuplicateResourceException("Customer already exists with email: " + normalizedEmail);
         }
 
-        String name = (request != null && request.name() != null && !request.name().isBlank())
-                ? request.name().trim()
+        String name = (resolvedName != null && !resolvedName.isBlank())
+                ? resolvedName.trim()
                 : normalizedEmail;
 
         Customer saved = customerRepository.save(

@@ -82,6 +82,21 @@ public class Auth0ManagementService {
         return users.get(0).userId();
     }
 
+    public Auth0User getUserById(String userId) {
+        String token = getAccessToken();
+        Auth0User user = webClient.get()
+                .uri("/api/v2/users/{id}", userId)
+                .header("Authorization", "Bearer " + token)
+                .retrieve()
+                .bodyToMono(Auth0User.class)
+                .block();
+
+        if (user == null || user.userId() == null || user.userId().isBlank()) {
+            throw new Auth0RequestException("Auth0 user not found for id: " + userId);
+        }
+        return user;
+    }
+
     private String getAccessToken() {
         try {
             Auth0AccessTokenResponse token = webClient.post()
