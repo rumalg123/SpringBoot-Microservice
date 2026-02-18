@@ -4,6 +4,7 @@ import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.cloud.gateway.filter.ratelimit.KeyResolver;
 import org.springframework.cloud.gateway.filter.ratelimit.RedisRateLimiter;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.Ordered;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpStatus;
@@ -25,11 +26,11 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
     private final KeyResolver userOrIpKeyResolver;
 
     public RateLimitEnforcementFilter(
-            RedisRateLimiter registerRateLimiter,
-            RedisRateLimiter customerMeRateLimiter,
-            RedisRateLimiter ordersMeRateLimiter,
-            KeyResolver ipKeyResolver,
-            KeyResolver userOrIpKeyResolver
+            @Qualifier("registerRateLimiter") RedisRateLimiter registerRateLimiter,
+            @Qualifier("customerMeRateLimiter") RedisRateLimiter customerMeRateLimiter,
+            @Qualifier("ordersMeRateLimiter") RedisRateLimiter ordersMeRateLimiter,
+            @Qualifier("ipKeyResolver") KeyResolver ipKeyResolver,
+            @Qualifier("userOrIpKeyResolver") KeyResolver userOrIpKeyResolver
     ) {
         this.registerRateLimiter = registerRateLimiter;
         this.customerMeRateLimiter = customerMeRateLimiter;

@@ -1,9 +1,11 @@
 package com.rumal.api_gateway.config;
 
 import org.springframework.cloud.gateway.filter.ratelimit.KeyResolver;
+import org.springframework.cloud.gateway.filter.ratelimit.RateLimiter;
 import org.springframework.cloud.gateway.filter.ratelimit.RedisRateLimiter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.server.ServerWebExchange;
@@ -31,6 +33,15 @@ public class RateLimitConfig {
     public RedisRateLimiter registerRateLimiter(
             @Value("${RATE_LIMIT_REGISTER_REPLENISH:5}") int replenishRate,
             @Value("${RATE_LIMIT_REGISTER_BURST:10}") int burstCapacity
+    ) {
+        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+    }
+
+    @Bean
+    @Primary
+    public RateLimiter<?> gatewayDefaultRateLimiter(
+            @Value("${RATE_LIMIT_DEFAULT_REPLENISH:15}") int replenishRate,
+            @Value("${RATE_LIMIT_DEFAULT_BURST:30}") int burstCapacity
     ) {
         return new RedisRateLimiter(replenishRate, burstCapacity, 1);
     }

@@ -12,6 +12,7 @@ const env = {
   domain: process.env.NEXT_PUBLIC_AUTH0_DOMAIN || "",
   clientId: process.env.NEXT_PUBLIC_AUTH0_CLIENT_ID || "",
   audience: process.env.NEXT_PUBLIC_AUTH0_AUDIENCE || "",
+  connection: process.env.NEXT_PUBLIC_AUTH0_CONNECTION || "",
   apiBase: process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me",
 };
 
@@ -47,6 +48,15 @@ export function useAuthSession() {
       try {
         setStatus("loading");
         const auth0 = await getAuth0();
+        const params = new URLSearchParams(window.location.search);
+        const auth0Error = params.get("error");
+        const auth0ErrorDescription = params.get("error_description");
+        if (auth0Error) {
+          setStatus("error");
+          setError(auth0ErrorDescription || auth0Error);
+          window.history.replaceState({}, document.title, window.location.pathname);
+          return;
+        }
         const hasCallback =
           window.location.search.includes("code=") && window.location.search.includes("state=");
 
@@ -113,6 +123,7 @@ export function useAuthSession() {
         appState: { returnTo },
         authorizationParams: {
           screen_hint: "signup",
+          connection: env.connection || undefined,
           audience: env.audience || undefined,
           scope: "openid profile email",
         },
