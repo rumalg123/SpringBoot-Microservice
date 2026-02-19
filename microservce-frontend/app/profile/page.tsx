@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import toast from "react-hot-toast";
 import AppNav from "../components/AppNav";
 import { useAuthSession } from "../../lib/authSession";
 
@@ -27,7 +29,7 @@ export default function ProfilePage() {
     emailVerified,
   } = session;
   const [customer, setCustomer] = useState<Customer | null>(null);
-  const [status, setStatus] = useState("Loading session...");
+  const [status, setStatus] = useState("Loading account...");
 
   useEffect(() => {
     if (sessionStatus !== "ready") return;
@@ -45,9 +47,9 @@ export default function ProfilePage() {
         await ensureCustomer();
         const response = await apiClient.get("/customers/me");
         setCustomer(response.data as Customer);
-        setStatus("Profile loaded.");
+        setStatus("Account loaded.");
       } catch (err) {
-        setStatus(err instanceof Error ? err.message : "Failed to load profile");
+        setStatus(err instanceof Error ? err.message : "Failed to load account");
       }
     };
     void run();
@@ -58,25 +60,25 @@ export default function ProfilePage() {
     try {
       await resendVerificationEmail();
       setStatus("Verification email sent. Please verify and sign in again.");
+      toast.success("Verification email sent");
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Failed to resend verification email.");
+      toast.error(err instanceof Error ? err.message : "Failed to resend verification email");
     }
   };
 
   if (sessionStatus === "loading" || sessionStatus === "idle") {
-    return <main className="mx-auto min-h-screen max-w-5xl px-6 py-10 text-zinc-700">Loading...</main>;
+    return <main className="mx-auto min-h-screen max-w-5xl px-6 py-10 text-[var(--muted)]">Loading...</main>;
   }
 
   if (!isAuthenticated) {
     return null;
   }
 
-  const displayStatus = canViewAdmin
-    ? "Admin account detected. Customer profile is not required."
-    : status;
+  const displayStatus = canViewAdmin ? "Admin account detected." : status;
 
   return (
-    <main className="mx-auto min-h-screen max-w-5xl px-6 py-10">
+    <main className="mx-auto min-h-screen max-w-6xl px-6 py-8">
       <AppNav
         email={(profile?.email as string) || ""}
         canViewAdmin={canViewAdmin}
@@ -84,8 +86,9 @@ export default function ProfilePage() {
           void logout();
         }}
       />
+
       {emailVerified === false && (
-        <section className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <section className="mb-5 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <p>Your email is not verified. Profile and order actions are blocked until verification.</p>
           <button
             onClick={() => {
@@ -98,40 +101,81 @@ export default function ProfilePage() {
         </section>
       )}
 
-      <section className="grid gap-4 rounded-3xl border border-zinc-200 bg-white/85 p-6 shadow-xl backdrop-blur">
-        <p className="text-xs tracking-widest text-zinc-500">MY ACCOUNT</p>
-        <h2 className="text-2xl font-semibold text-zinc-900">Personal Profile</h2>
-        {!canViewAdmin && (
-          <p className="text-sm text-zinc-600">
-            This page reads only `GET /customers/me`. Other customer records are blocked at the gateway.
-          </p>
-        )}
-        {canViewAdmin && (
-          <p className="text-sm text-zinc-600">
-            Admin account detected. Use the Admin Orders screen for operations.
-          </p>
-        )}
-        <div className="grid gap-3 rounded-2xl bg-zinc-900 p-5 text-sm text-zinc-100">
+      <section className="card-surface animate-rise rounded-3xl p-6 md:p-8">
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <span className="text-zinc-400">Name</span>
-            <p className="font-medium">{customer?.name || "-"}</p>
+            <p className="text-xs tracking-[0.22em] text-[var(--muted)]">ACCOUNT</p>
+            <h1 className="text-4xl text-[var(--ink)]">My Profile</h1>
+            <p className="mt-1 text-sm text-[var(--muted)]">Manage your customer identity and view account metadata.</p>
           </div>
-          <div>
-            <span className="text-zinc-400">Email</span>
-            <p className="font-medium">{customer?.email || "-"}</p>
-          </div>
-          <div>
-            <span className="text-zinc-400">Customer ID</span>
-            <p className="break-all font-mono text-xs">{customer?.id || "-"}</p>
-          </div>
-          <div>
-            <span className="text-zinc-400">Created At</span>
-            <p className="font-medium">
-              {customer?.createdAt ? new Date(customer.createdAt).toLocaleString() : "-"}
-            </p>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/products"
+              className="rounded-full border border-[var(--line)] bg-white px-4 py-2 text-sm text-[var(--ink)] hover:bg-[var(--brand-soft)]"
+            >
+              Shop
+            </Link>
+            <Link
+              href="/orders"
+              className="rounded-full border border-[var(--line)] bg-white px-4 py-2 text-sm text-[var(--ink)] hover:bg-[var(--brand-soft)]"
+            >
+              Purchases
+            </Link>
           </div>
         </div>
-        <p className="text-xs text-zinc-500">{displayStatus}</p>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <article className="card-surface rounded-2xl p-5">
+            <p className="text-xs tracking-[0.2em] text-[var(--muted)]">CUSTOMER PROFILE</p>
+            {!canViewAdmin && (
+              <div className="mt-3 space-y-3 text-sm">
+                <div>
+                  <p className="text-[var(--muted)]">Name</p>
+                  <p className="font-semibold text-[var(--ink)]">{customer?.name || "-"}</p>
+                </div>
+                <div>
+                  <p className="text-[var(--muted)]">Email</p>
+                  <p className="font-semibold text-[var(--ink)]">{customer?.email || "-"}</p>
+                </div>
+                <div>
+                  <p className="text-[var(--muted)]">Customer ID</p>
+                  <p className="break-all font-mono text-xs text-[var(--ink)]">{customer?.id || "-"}</p>
+                </div>
+                <div>
+                  <p className="text-[var(--muted)]">Created</p>
+                  <p className="font-semibold text-[var(--ink)]">
+                    {customer?.createdAt ? new Date(customer.createdAt).toLocaleString() : "-"}
+                  </p>
+                </div>
+              </div>
+            )}
+            {canViewAdmin && (
+              <p className="mt-3 text-sm text-[var(--muted)]">
+                Admin account detected. Customer profile bootstrap is not required for admin operations.
+              </p>
+            )}
+          </article>
+
+          <article className="card-surface rounded-2xl p-5">
+            <p className="text-xs tracking-[0.2em] text-[var(--muted)]">SESSION INFO</p>
+            <div className="mt-3 space-y-3 text-sm">
+              <div>
+                <p className="text-[var(--muted)]">Auth Email</p>
+                <p className="font-semibold text-[var(--ink)]">{(profile?.email as string) || "-"}</p>
+              </div>
+              <div>
+                <p className="text-[var(--muted)]">Auth Name</p>
+                <p className="font-semibold text-[var(--ink)]">{(profile?.name as string) || "-"}</p>
+              </div>
+              <div>
+                <p className="text-[var(--muted)]">Role</p>
+                <p className="font-semibold text-[var(--ink)]">{canViewAdmin ? "Admin" : "Customer"}</p>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <p className="mt-5 text-xs text-[var(--muted)]">{displayStatus}</p>
       </section>
     </main>
   );

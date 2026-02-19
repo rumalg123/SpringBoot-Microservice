@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: product-service
+
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      timeout: ${REDIS_TIMEOUT:2s}
+
+  datasource:
+    url: ${PRODUCT_DB_URL:jdbc:postgresql://product-db:5432/product_db}
+    username: ${PRODUCT_DB_USER:product_user}
+    password: ${PRODUCT_DB_PASS:product_pass}
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+
+server:
+  port: 8084
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://discovery-server:8761/eureka/}
+
+logging:
+  pattern:
+    level: "%5p [${spring.application.name},traceId=%X{traceId},spanId=%X{spanId}]"
+
+cache:
+  product-by-id-ttl: ${CACHE_PRODUCT_BY_ID_TTL:120s}
+  product-list-ttl: ${CACHE_PRODUCT_LIST_TTL:45s}
+  product-deleted-list-ttl: ${CACHE_PRODUCT_DELETED_LIST_TTL:30s}

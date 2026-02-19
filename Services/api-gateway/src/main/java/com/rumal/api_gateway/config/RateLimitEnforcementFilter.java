@@ -26,6 +26,8 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
     private final RedisRateLimiter customerMeRateLimiter;
     private final RedisRateLimiter ordersMeRateLimiter;
     private final RedisRateLimiter adminOrdersRateLimiter;
+    private final RedisRateLimiter productsRateLimiter;
+    private final RedisRateLimiter adminProductsRateLimiter;
     private final KeyResolver ipKeyResolver;
     private final KeyResolver userOrIpKeyResolver;
 
@@ -34,6 +36,8 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
             @Qualifier("customerMeRateLimiter") RedisRateLimiter customerMeRateLimiter,
             @Qualifier("ordersMeRateLimiter") RedisRateLimiter ordersMeRateLimiter,
             @Qualifier("adminOrdersRateLimiter") RedisRateLimiter adminOrdersRateLimiter,
+            @Qualifier("productsRateLimiter") RedisRateLimiter productsRateLimiter,
+            @Qualifier("adminProductsRateLimiter") RedisRateLimiter adminProductsRateLimiter,
             @Qualifier("ipKeyResolver") KeyResolver ipKeyResolver,
             @Qualifier("userOrIpKeyResolver") KeyResolver userOrIpKeyResolver
     ) {
@@ -41,6 +45,8 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
         this.customerMeRateLimiter = customerMeRateLimiter;
         this.ordersMeRateLimiter = ordersMeRateLimiter;
         this.adminOrdersRateLimiter = adminOrdersRateLimiter;
+        this.productsRateLimiter = productsRateLimiter;
+        this.adminProductsRateLimiter = adminProductsRateLimiter;
         this.ipKeyResolver = ipKeyResolver;
         this.userOrIpKeyResolver = userOrIpKeyResolver;
     }
@@ -98,6 +104,12 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
         }
         if ("/admin/orders".equals(path) || path.startsWith("/admin/orders/")) {
             return new Policy("admin-orders", adminOrdersRateLimiter, userOrIpKeyResolver);
+        }
+        if ("/products".equals(path) || path.startsWith("/products/")) {
+            return new Policy("products", productsRateLimiter, ipKeyResolver);
+        }
+        if ("/admin/products".equals(path) || path.startsWith("/admin/products/")) {
+            return new Policy("admin-products", adminProductsRateLimiter, userOrIpKeyResolver);
         }
         return null;
     }

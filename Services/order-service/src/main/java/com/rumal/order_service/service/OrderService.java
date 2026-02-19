@@ -2,6 +2,7 @@ package com.rumal.order_service.service;
 
 
 import com.rumal.order_service.client.CustomerClient;
+import com.rumal.order_service.client.ProductClient;
 import com.rumal.order_service.config.CustomerDetailsMode;
 import com.rumal.order_service.config.OrderAggregationProperties;
 import com.rumal.order_service.dto.CreateMyOrderRequest;
@@ -10,10 +11,12 @@ import com.rumal.order_service.dto.CustomerSummary;
 import com.rumal.order_service.dto.OrderDetailsResponse;
 import com.rumal.order_service.dto.OrderItemResponse;
 import com.rumal.order_service.dto.OrderResponse;
+import com.rumal.order_service.dto.ProductSummary;
 import com.rumal.order_service.entity.Order;
 import com.rumal.order_service.entity.OrderItem;
 import com.rumal.order_service.exception.ResourceNotFoundException;
 import com.rumal.order_service.exception.ServiceUnavailableException;
+import com.rumal.order_service.exception.ValidationException;
 import com.rumal.order_service.repo.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.Cacheable;
@@ -33,12 +36,14 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final CustomerClient customerClient;
+    private final ProductClient productClient;
     private final OrderAggregationProperties props;
 
     public OrderResponse create(CreateOrderRequest req) {
         customerClient.assertCustomerExists(req.customerId());
+        ProductSummary product = resolvePurchasableProduct(req.productId());
 
-        Order saved = orderRepository.save(buildOrder(req.customerId(), req.item(), req.quantity()));
+        Order saved = orderRepository.save(buildOrder(req.customerId(), product, req.quantity()));
 
         return toResponse(saved);
     }
@@ -49,8 +54,9 @@ public class OrderService {
     })
     public OrderResponse createForAuth0(String auth0Id, CreateMyOrderRequest req) {
         CustomerSummary customer = customerClient.getCustomerByAuth0Id(auth0Id);
+        ProductSummary product = resolvePurchasableProduct(req.productId());
 
-        Order saved = orderRepository.save(buildOrder(customer.id(), req.item(), req.quantity()));
+        Order saved = orderRepository.save(buildOrder(customer.id(), product, req.quantity()));
 
         return toResponse(saved);
     }
@@ -134,8 +140,8 @@ public class OrderService {
         );
     }
 
-    private Order buildOrder(UUID customerId, String item, int quantity) {
-        String normalizedItem = item.trim();
+    private Order buildOrder(UUID customerId, ProductSummary product, int quantity) {
+        String normalizedItem = product.name().trim();
         Order order = Order.builder()
                 .customerId(customerId)
                 .item(normalizedItem)
@@ -144,11 +150,24 @@ public class OrderService {
 
         OrderItem orderItem = OrderItem.builder()
                 .order(order)
+                .productId(product.id())
+                .productSku(product.sku())
                 .item(normalizedItem)
                 .quantity(quantity)
                 .build();
         order.getOrderItems().add(orderItem);
         return order;
+    }
+
+    private ProductSummary resolvePurchasableProduct(UUID productId) {
+        ProductSummary product = productClient.getById(productId);
+        if (!product.active()) {
+            throw new ValidationException("Product is not active: " + productId);
+        }
+        if ("PARENT".equalsIgnoreCase(product.productType())) {
+            throw new ValidationException("Parent products cannot be bought directly. Select a variation.");
+        }
+        return product;
     }
 
     private List<OrderItemResponse> toItems(Order order) {

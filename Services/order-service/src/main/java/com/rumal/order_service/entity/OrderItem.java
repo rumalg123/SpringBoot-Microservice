@@ -22,6 +22,12 @@ public class OrderItem {
     @JoinColumn(name = "order_id", nullable = false)
     private Order order;
 
+    @Column(name = "product_id", nullable = false)
+    private UUID productId;
+
+    @Column(name = "product_sku", nullable = false, length = 80)
+    private String productSku;
+
     @Column(nullable = false, length = 120)
     private String item;
 

@@ -31,6 +31,16 @@ services:
       - ./env/common.env
       - ./env/order-service.env
 
+  product-service:
+    build:
+      context: ./Services/product-service
+    depends_on:
+      - discovery-server
+      - redis
+    env_file:
+      - ./env/common.env
+      - ./env/product-service.env
+
   admin-service:
     build:
       context: ./Services/admin-service

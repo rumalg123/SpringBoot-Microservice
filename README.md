@@ -11,8 +11,10 @@ flowchart LR
     G --> C[customer-service :8081]
     G --> O[order-service :8082]
     G --> AD[admin-service :8083]
+    G --> PR[product-service :8084]
     C --> P1[(PostgreSQL customer_db)]
     O --> P2[(PostgreSQL order_db)]
+    PR --> P3[(PostgreSQL product_db)]
     G --> R[(Redis)]
     C --> R
     O --> R
@@ -30,6 +32,7 @@ flowchart LR
 - `Services/customer-service`: customer domain + Auth0 management integration
 - `Services/order-service`: order domain + customer-service integration
 - `Services/admin-service`: admin APIs (aggregates privileged order views)
+- `Services/product-service`: product catalog domain (single/parent/variation products)
 - `microservce-frontend`: Next.js UI (Auth0 SPA flow)
 - `env/*-sample.env`: environment variable templates
 - `docker-compose.yml`: stack without PostgreSQL containers (external DB expected)
@@ -40,7 +43,7 @@ flowchart LR
 - Java 21, Spring Boot 4.0.2, Spring Cloud 2025.1.1
 - Spring Cloud Gateway (WebFlux), Spring MVC services
 - Eureka discovery
-- PostgreSQL (customer/order services)
+- PostgreSQL (customer/order/product services)
 - Redis (gateway rate limit + service caches)
 - Resilience4j (order-service -> customer-service calls)
 - Next.js 16 + React 19 + Auth0 SPA SDK
@@ -62,6 +65,15 @@ flowchart LR
   - `/customers/register-auth0`, `/customers/me`
   - `/orders/me`, `/orders/me/**`
 - Denies raw backend paths (`/customers/**`, `/orders/**`) by default
+- Publicly exposes product catalog read APIs:
+  - `GET /products`, `GET /products/{id}`
+- Admin-only catalog writes:
+  - `POST /admin/products`
+  - `POST /admin/products/{parentId}/variations`
+  - `PUT /admin/products/{id}`
+  - `DELETE /admin/products/{id}` (soft delete)
+  - `GET /admin/products/deleted`
+  - `POST /admin/products/{id}/restore`
 - Exposes admin endpoint:
   - `/admin/orders` (requires `ROLE_admin` or `read:admin-orders` permission)
 - Adds/propagates:
@@ -103,6 +115,21 @@ flowchart LR
 - Verifies internal trust header (`X-Internal-Auth`)
 - Caches admin list responses in Redis (`adminOrders`)
 
+### product-service
+- Manages product catalog CRUD
+- Supports product types:
+  - `SINGLE`, `PARENT`, `VARIATION`
+- Product model includes:
+  - name, shortDescription, description
+  - ordered image names (first image = main image)
+  - regularPrice, discountedPrice
+  - sellingPrice (`discountedPrice` when present, otherwise `regularPrice`)
+  - vendorId (admin products use `00000000-0000-0000-0000-000000000000`)
+  - categories (multi-value)
+  - required SKU
+  - soft delete (`is_deleted`, `deleted_at`)
+  - variation attributes (only for `VARIATION` type)
+
 ### microservce-frontend
 - Auth0 login/signup/logout using redirect flow
 - Gets access token silently and sends `Authorization: Bearer ...` to gateway
@@ -131,6 +158,16 @@ flowchart LR
 
 ### Admin
 - `GET /admin/orders` (authenticated + admin authority)
+
+### Products
+- `GET /products` (public)
+- `GET /products/{id}` (public)
+- `POST /admin/products` (authenticated + admin authority)
+- `POST /admin/products/{parentId}/variations` (authenticated + admin authority)
+- `PUT /admin/products/{id}` (authenticated + admin authority)
+- `DELETE /admin/products/{id}` (authenticated + admin authority, soft delete)
+- `GET /admin/products/deleted` (authenticated + admin authority)
+- `POST /admin/products/{id}/restore` (authenticated + admin authority)
 
 ### Auth
 - `POST /auth/logout` (authenticated)
@@ -175,6 +212,7 @@ Key points:
 - Gateway: token bucket state for rate limiting
 - customer-service: `customerByAuth0`
 - order-service: `ordersByAuth0`, `orderDetailsByAuth0`
+- product-service: `productById`, `productsList`, `deletedProductsList`
 
 ### Serialization note
 - Cache serializers are configured with app `ObjectMapper` and type metadata.
@@ -187,6 +225,8 @@ Configured by environment variables:
 - `RATE_LIMIT_CUSTOMER_ME_REPLENISH`, `RATE_LIMIT_CUSTOMER_ME_BURST`
 - `RATE_LIMIT_ORDERS_ME_REPLENISH`, `RATE_LIMIT_ORDERS_ME_BURST`
 - `RATE_LIMIT_ADMIN_ORDERS_REPLENISH`, `RATE_LIMIT_ADMIN_ORDERS_BURST`
+- `RATE_LIMIT_PRODUCTS_REPLENISH`, `RATE_LIMIT_PRODUCTS_BURST`
+- `RATE_LIMIT_ADMIN_PRODUCTS_REPLENISH`, `RATE_LIMIT_ADMIN_PRODUCTS_BURST`
 - Optional defaults:
   - `RATE_LIMIT_DEFAULT_REPLENISH`
   - `RATE_LIMIT_DEFAULT_BURST`
@@ -202,6 +242,7 @@ Copy-Item env/common-sample.env env/common.env
 Copy-Item env/eureka-sample.env env/eureka.env
 Copy-Item env/customer-service-sample.env env/customer-service.env
 Copy-Item env/order-service-sample.env env/order-service.env
+Copy-Item env/product-service-sample.env env/product-service.env
 Copy-Item env/frontend-sample.env env/frontend.env
 ```
 
@@ -217,8 +258,16 @@ Fill required values:
   - `NEXT_PUBLIC_AUTH0_AUDIENCE`
 - Internal trust:
   - `INTERNAL_AUTH_SHARED_SECRET` (same value across gateway/customer/order)
+- Product DB:
+  - `PRODUCT_DB_URL`
+  - `PRODUCT_DB_USER`
+  - `PRODUCT_DB_PASS`
 - Admin cache:
   - `CACHE_ADMIN_ORDERS_TTL` (example: `30s`)
+- Product cache:
+  - `CACHE_PRODUCT_BY_ID_TTL` (example: `120s`)
+  - `CACHE_PRODUCT_LIST_TTL` (example: `45s`)
+  - `CACHE_PRODUCT_DELETED_LIST_TTL` (example: `30s`)
 - API base for frontend:
   - `NEXT_PUBLIC_API_BASE` (for local compose: `http://localhost:8080` with `docker-compose-db.yml`, or `http://localhost:8095` with `docker-compose.yml`)
 
@@ -236,6 +285,7 @@ Ports:
 - Frontend: `http://localhost:8086`
 - Customer DB: `localhost:5433`
 - Order DB: `localhost:5434`
+- Product DB: `localhost:5435`
 
 ### Option B: without PostgreSQL containers
 
@@ -258,6 +308,7 @@ Start infra first (at least Redis, PostgreSQL, Eureka), then in separate termina
 cd Services/discovery-server && ./mvnw spring-boot:run
 cd Services/customer-service && ./mvnw spring-boot:run
 cd Services/order-service && ./mvnw spring-boot:run
+cd Services/product-service && ./mvnw spring-boot:run
 cd Services/api-gateway && ./mvnw spring-boot:run
 cd microservce-frontend && npm ci && npm run dev
 ```
@@ -268,6 +319,7 @@ cd microservce-frontend && npm ci && npm run dev
 cd Services/api-gateway && ./mvnw -q -DskipTests compile
 cd Services/customer-service && ./mvnw -q -DskipTests compile
 cd Services/order-service && ./mvnw -q -DskipTests compile
+cd Services/product-service && ./mvnw -q -DskipTests compile
 cd Services/admin-service && ./mvnw -q -DskipTests compile
 cd Services/discovery-server && ./mvnw -q -DskipTests compile
 cd microservce-frontend && npm run lint
