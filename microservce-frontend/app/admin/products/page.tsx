@@ -122,7 +122,7 @@ async function validateImageFile(file: File): Promise<void> {
   }
   const dimensions = await new Promise<{ width: number; height: number }>((resolve, reject) => {
     const url = URL.createObjectURL(file);
-    const image = new Image();
+    const image = new window.Image();
     image.onload = () => {
       resolve({ width: image.width, height: image.height });
       URL.revokeObjectURL(url);
