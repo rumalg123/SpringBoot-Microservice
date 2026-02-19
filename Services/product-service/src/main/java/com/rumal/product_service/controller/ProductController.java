@@ -4,11 +4,19 @@ import com.rumal.product_service.dto.ProductResponse;
 import com.rumal.product_service.dto.ProductSummaryResponse;
 import com.rumal.product_service.entity.ProductType;
 import com.rumal.product_service.service.ProductService;
+import com.rumal.product_service.storage.ProductImageStorageService;
+import com.rumal.product_service.storage.StoredImage;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.util.AntPathMatcher;
+import org.springframework.web.servlet.HandlerMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -25,6 +33,7 @@ import java.util.UUID;
 public class ProductController {
 
     private final ProductService productService;
+    private final ProductImageStorageService productImageStorageService;
 
     @GetMapping("/{id}")
     public ProductResponse getById(@PathVariable UUID id) {
@@ -34,6 +43,18 @@ public class ProductController {
     @GetMapping("/{id}/variations")
     public List<ProductSummaryResponse> listVariations(@PathVariable UUID id) {
         return productService.listVariations(id);
+    }
+
+    @GetMapping("/images/**")
+    public ResponseEntity<byte[]> getImage(HttpServletRequest request) {
+        String path = (String) request.getAttribute(HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE);
+        String bestPattern = (String) request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
+        String key = new AntPathMatcher().extractPathWithinPattern(bestPattern, path);
+        StoredImage image = productImageStorageService.getImage(key);
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noCache())
+                .contentType(MediaType.parseMediaType(image.contentType()))
+                .body(image.bytes());
     }
 
     @GetMapping

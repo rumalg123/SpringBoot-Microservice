@@ -7,4 +7,5 @@ import java.util.List;
 public interface ProductImageStorageService {
     List<String> generateImageNames(List<String> fileNames);
     List<String> uploadImages(List<MultipartFile> files, List<String> keys);
+    StoredImage getImage(String key);
 }

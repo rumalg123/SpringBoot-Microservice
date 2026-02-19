@@ -2,6 +2,7 @@
 
 import { ChangeEvent, DragEvent, FormEvent, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import toast from "react-hot-toast";
 import AppNav from "../../components/AppNav";
 import { useAuthSession } from "../../../lib/authSession";
@@ -19,6 +20,7 @@ type ProductSummary = {
   vendorId: string;
   categories: string[];
   active: boolean;
+  variations?: Array<{ name: string; value: string }>;
 };
 
 type ProductDetail = {
@@ -103,8 +105,15 @@ const MAX_IMAGE_DIMENSION = 1200;
 
 function resolveImageUrl(imageName: string): string | null {
   const base = (process.env.NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL || "").trim();
-  if (!base) return null;
-  return `${base.replace(/\/+$/, "")}/${imageName.replace(/^\/+/, "")}`;
+  if (base) {
+    return `${base.replace(/\/+$/, "")}/${imageName.replace(/^\/+/, "")}`;
+  }
+  const apiBase = (process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me").trim();
+  const encoded = imageName
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+  return `${apiBase.replace(/\/+$/, "")}/products/images/${encoded}`;
 }
 
 async function validateImageFile(file: File): Promise<void> {
@@ -141,6 +150,14 @@ function parseVariations(value: string) {
     .filter((v): v is { name: string; value: string } => Boolean(v));
 }
 
+function buildVariationsForProductType(productType: ProductType, raw: string) {
+  if (productType === "SINGLE") return [];
+  if (productType === "PARENT") {
+    return parseCsv(raw).map((name) => ({ name, value: "" }));
+  }
+  return parseVariations(raw);
+}
+
 function money(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
 }
@@ -163,7 +180,11 @@ export default function AdminProductsPage() {
   const [form, setForm] = useState<ProductFormState>(emptyForm);
   const [uploadingImages, setUploadingImages] = useState(false);
   const [dragImageIndex, setDragImageIndex] = useState<number | null>(null);
+  const [parentProducts, setParentProducts] = useState<ProductSummary[]>([]);
   const [variationParentId, setVariationParentId] = useState("");
+  const [parentSearch, setParentSearch] = useState("");
+  const [parentVariationAttributes, setParentVariationAttributes] = useState<string[]>([]);
+  const [variationAttributeValues, setVariationAttributeValues] = useState<Record<string, string>>({});
   const [categoryForm, setCategoryForm] = useState<{ id?: string; name: string; type: "PARENT" | "SUB"; parentCategoryId: string }>({
     name: "",
     type: "PARENT",
@@ -220,6 +241,18 @@ export default function AdminProductsPage() {
     [session.apiClient, q, sku, category, type]
   );
 
+  const loadParentProducts = useCallback(async () => {
+    if (!session.apiClient) return;
+    const params = new URLSearchParams();
+    params.set("page", "0");
+    params.set("size", "200");
+    params.set("sort", "name,ASC");
+    params.set("type", "PARENT");
+    const res = await session.apiClient.get(`/products?${params.toString()}`);
+    const pageData = res.data as PagedResponse<ProductSummary>;
+    setParentProducts((pageData.content || []).filter((p) => p.active));
+  }, [session.apiClient]);
+
   const reloadCurrentView = useCallback(async () => {
     if (showDeleted) {
       await loadDeleted(deletedPageIndex);
@@ -241,14 +274,14 @@ export default function AdminProductsPage() {
 
     const run = async () => {
       try {
-        await Promise.all([loadActive(0), loadDeleted(0), loadCategories(), loadDeletedCategories()]);
+        await Promise.all([loadActive(0), loadDeleted(0), loadCategories(), loadDeletedCategories(), loadParentProducts()]);
         setStatus("Admin product catalog loaded.");
       } catch (err) {
         setStatus(err instanceof Error ? err.message : "Failed to load products.");
       }
     };
     void run();
-  }, [router, session.status, session.isAuthenticated, session.canViewAdmin, loadActive, loadDeleted, loadCategories, loadDeletedCategories]);
+  }, [router, session.status, session.isAuthenticated, session.canViewAdmin, loadActive, loadDeleted, loadCategories, loadDeletedCategories, loadParentProducts]);
 
   const applyFilters = async (e: FormEvent) => {
     e.preventDefault();
@@ -279,7 +312,10 @@ export default function AdminProductsPage() {
         mainCategoryName: p.mainCategory || "",
         subCategoryNames: p.subCategories || [],
         productType: p.productType,
-        variationsCsv: p.variations.map((v) => `${v.name}:${v.value}`).join(", "),
+        variationsCsv:
+          p.productType === "PARENT"
+            ? p.variations.map((v) => v.name).join(", ")
+            : p.variations.map((v) => `${v.name}:${v.value}`).join(", "),
         sku: p.sku,
         active: p.active,
       });
@@ -309,7 +345,7 @@ export default function AdminProductsPage() {
       vendorId: form.vendorId.trim() ? form.vendorId.trim() : null,
       categories: [form.mainCategoryName, ...form.subCategoryNames].filter(Boolean),
       productType: form.productType,
-      variations: parseVariations(form.variationsCsv),
+      variations: buildVariationsForProductType(form.productType, form.variationsCsv),
       sku: form.sku.trim(),
       active: form.active,
     };
@@ -340,6 +376,18 @@ export default function AdminProductsPage() {
       toast.error("Upload at least one image");
       return;
     }
+    if (parentVariationAttributes.length === 0) {
+      toast.error("Selected parent has no variation attributes");
+      return;
+    }
+    const variationPairs = parentVariationAttributes.map((name) => ({
+      name,
+      value: (variationAttributeValues[name] || "").trim(),
+    }));
+    if (variationPairs.some((pair) => !pair.value)) {
+      toast.error("Enter values for all parent variation attributes");
+      return;
+    }
     const payload = {
       name: form.name.trim(),
       shortDescription: form.shortDescription.trim(),
@@ -350,7 +398,7 @@ export default function AdminProductsPage() {
       vendorId: form.vendorId.trim() ? form.vendorId.trim() : null,
       categories: [form.mainCategoryName, ...form.subCategoryNames].filter(Boolean),
       productType: "VARIATION",
-      variations: parseVariations(form.variationsCsv),
+      variations: variationPairs,
       sku: form.sku.trim(),
       active: form.active,
     };
@@ -361,11 +409,38 @@ export default function AdminProductsPage() {
       setStatus("Variation created.");
       toast.success("Variation created");
       setVariationParentId("");
+      setParentVariationAttributes([]);
+      setVariationAttributeValues({});
       setForm(emptyForm);
       await reloadCurrentView();
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Variation create failed.");
       toast.error(err instanceof Error ? err.message : "Variation create failed");
+    }
+  };
+
+  const onSelectVariationParent = async (parentId: string) => {
+    setVariationParentId(parentId);
+    setParentVariationAttributes([]);
+    setVariationAttributeValues({});
+    if (!session.apiClient || !parentId) return;
+    try {
+      const res = await session.apiClient.get(`/products/${parentId}`);
+      const parent = res.data as ProductDetail;
+      const attrs = (parent.variations || []).map((v) => v.name).filter(Boolean);
+      setParentVariationAttributes(attrs);
+      const initial: Record<string, string> = {};
+      attrs.forEach((name) => {
+        initial[name] = "";
+      });
+      setVariationAttributeValues(initial);
+      setForm((old) => ({
+        ...old,
+        mainCategoryName: parent.mainCategory || old.mainCategoryName,
+        subCategoryNames: parent.subCategories || old.subCategoryNames,
+      }));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to load parent product");
     }
   };
 
@@ -533,6 +608,11 @@ export default function AdminProductsPage() {
   );
 
   const title = showDeleted ? "Deleted Products" : "Active Products";
+  const filteredParentProducts = parentProducts.filter((p) => {
+    const needle = parentSearch.trim().toLowerCase();
+    if (!needle) return true;
+    return p.name.toLowerCase().includes(needle) || p.sku.toLowerCase().includes(needle);
+  });
 
   return (
     <main className="mx-auto min-h-screen max-w-7xl px-6 py-8">
@@ -760,7 +840,7 @@ export default function AdminProductsPage() {
                         >
                           <div className="h-12 w-12 overflow-hidden rounded-md border border-[var(--line)] bg-[#f6f2ea]">
                             {imageUrl ? (
-                              <img src={imageUrl} alt={imageName} className="h-full w-full object-cover" />
+                              <Image src={imageUrl} alt={imageName} width={48} height={48} className="h-full w-full object-cover" unoptimized />
                             ) : (
                               <div className="grid h-full w-full place-items-center text-[10px] text-[var(--muted)]">IMG</div>
                             )}
@@ -781,6 +861,15 @@ export default function AdminProductsPage() {
                     })}
                   </div>
                 </div>
+                <select
+                  value={form.productType}
+                  onChange={(e) => setForm((o) => ({ ...o, productType: e.target.value as ProductType, variationsCsv: "" }))}
+                  className="rounded-lg border border-[var(--line)] px-3 py-2"
+                >
+                  <option value="SINGLE">SINGLE</option>
+                  <option value="PARENT">PARENT</option>
+                  <option value="VARIATION">VARIATION</option>
+                </select>
                 <select
                   value={form.mainCategoryName}
                   onChange={(e) =>
@@ -830,15 +919,25 @@ export default function AdminProductsPage() {
                   <input type="number" step="0.01" min="0.01" value={form.regularPrice} onChange={(e) => setForm((o) => ({ ...o, regularPrice: e.target.value }))} placeholder="Regular Price" className="rounded-lg border border-[var(--line)] px-3 py-2" required />
                   <input type="number" step="0.01" min="0" value={form.discountedPrice} onChange={(e) => setForm((o) => ({ ...o, discountedPrice: e.target.value }))} placeholder="Discounted Price" className="rounded-lg border border-[var(--line)] px-3 py-2" />
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <select value={form.productType} onChange={(e) => setForm((o) => ({ ...o, productType: e.target.value as ProductType }))} className="rounded-lg border border-[var(--line)] px-3 py-2">
-                    <option value="SINGLE">SINGLE</option>
-                    <option value="PARENT">PARENT</option>
-                    <option value="VARIATION">VARIATION</option>
-                  </select>
-                  <input value={form.vendorId} onChange={(e) => setForm((o) => ({ ...o, vendorId: e.target.value }))} placeholder="Vendor UUID (optional)" className="rounded-lg border border-[var(--line)] px-3 py-2" />
-                </div>
-                <input value={form.variationsCsv} onChange={(e) => setForm((o) => ({ ...o, variationsCsv: e.target.value }))} placeholder="Variations: color:red,size:XL" className="rounded-lg border border-[var(--line)] px-3 py-2" />
+                <input value={form.vendorId} onChange={(e) => setForm((o) => ({ ...o, vendorId: e.target.value }))} placeholder="Vendor UUID (optional)" className="rounded-lg border border-[var(--line)] px-3 py-2" />
+                {form.productType === "PARENT" && (
+                  <input
+                    value={form.variationsCsv}
+                    onChange={(e) => setForm((o) => ({ ...o, variationsCsv: e.target.value }))}
+                    placeholder="Parent attributes CSV: color,size,material"
+                    className="rounded-lg border border-[var(--line)] px-3 py-2"
+                    required
+                  />
+                )}
+                {form.productType === "VARIATION" && (
+                  <input
+                    value={form.variationsCsv}
+                    onChange={(e) => setForm((o) => ({ ...o, variationsCsv: e.target.value }))}
+                    placeholder="Variation values: color:red,size:XL"
+                    className="rounded-lg border border-[var(--line)] px-3 py-2"
+                    required
+                  />
+                )}
                 <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
                   <input type="checkbox" checked={form.active} onChange={(e) => setForm((o) => ({ ...o, active: e.target.checked }))} />
                   Active
@@ -852,14 +951,46 @@ export default function AdminProductsPage() {
             <section className="card-surface rounded-2xl p-5">
               <h3 className="text-xl text-[var(--ink)]">Create Variation For Parent</h3>
               <p className="mt-1 text-xs text-[var(--muted)]">
-                Fill the editor fields above for variation data, then provide parent product ID.
+                Fill the editor fields above for child product data, then select parent and attribute values.
               </p>
               <input
-                value={variationParentId}
-                onChange={(e) => setVariationParentId(e.target.value)}
-                placeholder="Parent Product ID"
+                value={parentSearch}
+                onChange={(e) => setParentSearch(e.target.value)}
+                placeholder="Search parent by name or SKU"
                 className="mt-3 w-full rounded-lg border border-[var(--line)] px-3 py-2 text-sm"
               />
+              <select
+                value={variationParentId}
+                onChange={(e) => {
+                  void onSelectVariationParent(e.target.value);
+                }}
+                className="mt-3 w-full rounded-lg border border-[var(--line)] px-3 py-2 text-sm"
+              >
+                <option value="">Select Parent Product</option>
+                {filteredParentProducts.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({p.sku})
+                  </option>
+                ))}
+              </select>
+              {parentVariationAttributes.length > 0 && (
+                <div className="mt-3 grid gap-2">
+                  {parentVariationAttributes.map((attributeName) => (
+                    <input
+                      key={attributeName}
+                      value={variationAttributeValues[attributeName] || ""}
+                      onChange={(e) =>
+                        setVariationAttributeValues((old) => ({
+                          ...old,
+                          [attributeName]: e.target.value,
+                        }))
+                      }
+                      placeholder={`${attributeName} value`}
+                      className="rounded-lg border border-[var(--line)] px-3 py-2 text-sm"
+                    />
+                  ))}
+                </div>
+              )}
               <button onClick={() => void createVariation()} className="btn-brand mt-3 rounded-lg px-3 py-2 text-sm font-semibold">
                 Create Variation
               </button>

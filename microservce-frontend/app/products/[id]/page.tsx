@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useParams } from "next/navigation";
 import toast from "react-hot-toast";
 import AppNav from "../../components/AppNav";
@@ -30,6 +31,11 @@ type ProductDetail = {
   variations: Variation[];
   sku: string;
 };
+type VariationSummary = {
+  id: string;
+  name: string;
+  sku: string;
+};
 
 function money(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
@@ -37,16 +43,24 @@ function money(value: number) {
 
 function resolveImageUrl(imageName: string): string | null {
   const base = (process.env.NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL || "").trim();
-  if (!base) return null;
-  return `${base.replace(/\/+$/, "")}/${imageName.replace(/^\/+/, "")}`;
+  if (base) {
+    return `${base.replace(/\/+$/, "")}/${imageName.replace(/^\/+/, "")}`;
+  }
+  const apiBase = (process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me").trim();
+  const encoded = imageName
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+  return `${apiBase.replace(/\/+$/, "")}/products/images/${encoded}`;
 }
 
 export default function ProductDetailPage() {
   const params = useParams<{ id: string }>();
   const { isAuthenticated, profile, logout, canViewAdmin, login, apiClient } = useAuthSession();
   const [product, setProduct] = useState<ProductDetail | null>(null);
-  const [variations, setVariations] = useState<ProductDetail[]>([]);
+  const [variations, setVariations] = useState<VariationSummary[]>([]);
   const [selectedVariationId, setSelectedVariationId] = useState("");
+  const [selectedVariation, setSelectedVariation] = useState<ProductDetail | null>(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [status, setStatus] = useState("Loading product...");
@@ -64,7 +78,7 @@ export default function ProductDetailPage() {
         if (data.productType === "PARENT") {
           const vRes = await fetch(`${apiBase}/products/${params.id}/variations`, { cache: "no-store" });
           if (vRes.ok) {
-            const vData = (await vRes.json()) as ProductDetail[];
+            const vData = (await vRes.json()) as VariationSummary[];
             setVariations(vData || []);
           }
         }
@@ -75,6 +89,31 @@ export default function ProductDetailPage() {
     };
     void run();
   }, [params.id]);
+
+  useEffect(() => {
+    if (!product || product.productType !== "PARENT") {
+      setSelectedVariation(null);
+      return;
+    }
+    if (!selectedVariationId) {
+      setSelectedVariation(null);
+      setSelectedImageIndex(0);
+      return;
+    }
+    const run = async () => {
+      try {
+        const apiBase = process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me";
+        const res = await fetch(`${apiBase}/products/${selectedVariationId}`, { cache: "no-store" });
+        if (!res.ok) throw new Error("Failed to load variation");
+        const data = (await res.json()) as ProductDetail;
+        setSelectedVariation(data);
+        setSelectedImageIndex(0);
+      } catch {
+        toast.error("Failed to load selected variation details");
+      }
+    };
+    void run();
+  }, [selectedVariationId, product]);
 
   const buyNow = async () => {
     if (!apiClient || !product) return;
@@ -96,6 +135,14 @@ export default function ProductDetailPage() {
       toast.error(err instanceof Error ? err.message : "Failed to place order");
     }
   };
+  const displayProduct = selectedVariation || product;
+  if (!displayProduct) {
+    return (
+      <main className="mx-auto min-h-screen max-w-7xl px-6 py-8">
+        <p className="rounded-xl border border-dashed border-[var(--line)] p-4 text-sm text-[var(--muted)]">{status}</p>
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto min-h-screen max-w-7xl px-6 py-8">
@@ -127,18 +174,21 @@ export default function ProductDetailPage() {
           <div className="grid gap-8 lg:grid-cols-[1fr,1fr]">
             <div className="space-y-3">
               <div className="h-80 rounded-2xl border border-[var(--line)] bg-[linear-gradient(160deg,#eee7db,#f9f5ee)] p-4 text-sm text-[var(--muted)]">
-                {resolveImageUrl(product.images?.[selectedImageIndex] || "") ? (
-                  <img
-                    src={resolveImageUrl(product.images[selectedImageIndex]) || ""}
-                    alt={product.name}
+                {resolveImageUrl(displayProduct.images?.[selectedImageIndex] || "") ? (
+                  <Image
+                    src={resolveImageUrl(displayProduct.images[selectedImageIndex]) || ""}
+                    alt={displayProduct.name}
+                    width={800}
+                    height={800}
                     className="h-full w-full rounded-xl object-cover"
+                    unoptimized
                   />
                 ) : (
-                  product.images?.[selectedImageIndex] || "main-image.jpg"
+                  displayProduct.images?.[selectedImageIndex] || "main-image.jpg"
                 )}
               </div>
               <div className="grid grid-cols-5 gap-2">
-                {product.images?.slice(0, 5).map((img, index) => {
+                {displayProduct.images?.slice(0, 5).map((img, index) => {
                   const imageUrl = resolveImageUrl(img);
                   return (
                     <button
@@ -149,7 +199,7 @@ export default function ProductDetailPage() {
                       }`}
                     >
                       {imageUrl ? (
-                        <img src={imageUrl} alt={img} className="h-14 w-full rounded-md object-cover" />
+                        <Image src={imageUrl} alt={img} width={96} height={56} className="h-14 w-full rounded-md object-cover" unoptimized />
                       ) : (
                         <span className="block truncate px-1 py-4 text-[10px] text-[var(--muted)]">{img}</span>
                       )}
@@ -160,36 +210,44 @@ export default function ProductDetailPage() {
             </div>
 
             <div className="space-y-4">
-              <h1 className="text-4xl text-[var(--ink)]">{product.name}</h1>
-              <p className="text-sm leading-6 text-[var(--muted)]">{product.description}</p>
-              <p className="text-xs text-[var(--muted)]">SKU: {product.sku}</p>
+              <h1 className="text-4xl text-[var(--ink)]">{displayProduct.name}</h1>
+              <p className="text-sm leading-6 text-[var(--muted)]">{displayProduct.description}</p>
+              <p className="text-xs text-[var(--muted)]">SKU: {displayProduct.sku}</p>
               <div className="flex items-center gap-3">
-                <span className="text-2xl font-semibold text-[var(--ink)]">{money(product.sellingPrice)}</span>
-                {product.discountedPrice !== null && (
-                  <span className="text-sm text-[var(--muted)] line-through">{money(product.regularPrice)}</span>
+                <span className="text-2xl font-semibold text-[var(--ink)]">{money(displayProduct.sellingPrice)}</span>
+                {displayProduct.discountedPrice !== null && (
+                  <span className="text-sm text-[var(--muted)] line-through">{money(displayProduct.regularPrice)}</span>
                 )}
               </div>
 
               <div className="flex flex-wrap gap-2">
-                {product.mainCategory && (
+                {displayProduct.mainCategory && (
                   <span className="rounded-full bg-[var(--brand)] px-3 py-1 text-xs text-white">
-                    Main: {product.mainCategory}
+                    Main: {displayProduct.mainCategory}
                   </span>
                 )}
-                {product.subCategories.map((c) => (
+                {displayProduct.subCategories.map((c) => (
                   <span key={c} className="rounded-full bg-[var(--brand-soft)] px-3 py-1 text-xs capitalize text-[var(--ink)]">
                     {c}
                   </span>
                 ))}
               </div>
 
-              {product.variations.length > 0 && (
+              {displayProduct.variations.length > 0 && (
                 <div className="rounded-xl border border-[var(--line)] bg-white p-4">
-                  <p className="text-xs tracking-[0.2em] text-[var(--muted)]">VARIATIONS</p>
+                  <p className="text-xs tracking-[0.2em] text-[var(--muted)]">
+                    {displayProduct.productType === "PARENT" ? "AVAILABLE ATTRIBUTES" : "VARIATIONS"}
+                  </p>
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                    {product.variations.map((v, i) => (
+                    {displayProduct.variations.map((v, i) => (
                       <div key={`${v.name}-${i}`} className="rounded-lg border border-[var(--line)] px-3 py-2 text-sm">
-                        <span className="capitalize text-[var(--muted)]">{v.name}:</span> {v.value}
+                        {displayProduct.productType === "PARENT" ? (
+                          <span className="capitalize text-[var(--ink)]">{v.name}</span>
+                        ) : (
+                          <>
+                            <span className="capitalize text-[var(--muted)]">{v.name}:</span> {v.value}
+                          </>
+                        )}
                       </div>
                     ))}
                   </div>

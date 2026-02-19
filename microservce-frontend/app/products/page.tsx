@@ -60,6 +60,7 @@ function ProductsPageContent() {
         const params = new URLSearchParams();
         params.set("page", String(page));
         params.set("size", "12");
+        params.set("type", "PARENT");
         if (search.trim()) params.set("q", search.trim());
         if (category.trim()) params.set("category", category.trim());
         if (mainCategory.trim()) params.set("mainCategory", mainCategory.trim());

@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import javax.imageio.ImageIO;
@@ -82,6 +83,29 @@ public class ProductImageStorageServiceImpl implements ProductImageStorageServic
         return uploadedKeys;
     }
 
+    @Override
+    public StoredImage getImage(String key) {
+        if (!properties.enabled()) {
+            throw new ValidationException("Object storage is not enabled");
+        }
+        S3Client s3Client = s3ClientProvider.getIfAvailable();
+        if (s3Client == null) {
+            throw new ValidationException("Object storage client is not configured");
+        }
+        String normalizedKey = normalizeImageKey(key);
+        try {
+            GetObjectRequest request = GetObjectRequest.builder()
+                    .bucket(properties.bucket())
+                    .key(normalizedKey)
+                    .build();
+            var responseBytes = s3Client.getObjectAsBytes(request);
+            String contentType = responseBytes.response().contentType();
+            return new StoredImage(responseBytes.asByteArray(), contentType != null ? contentType : "image/jpeg");
+        } catch (RuntimeException ex) {
+            throw new ValidationException("Image not found");
+        }
+    }
+
     private String uploadOne(S3Client s3Client, MultipartFile file, String preferredKey) {
         if (file == null || file.isEmpty()) {
             throw new ValidationException("Image file cannot be empty");
@@ -123,6 +147,17 @@ public class ProductImageStorageServiceImpl implements ProductImageStorageServic
             throw new ValidationException("Image key extension does not match file extension");
         }
         return key;
+    }
+
+    private String normalizeImageKey(String key) {
+        if (key == null || key.isBlank()) {
+            throw new ValidationException("Image key is required");
+        }
+        String normalized = key.trim().toLowerCase(Locale.ROOT);
+        if (!KEY_PATTERN.matcher(normalized).matches()) {
+            throw new ValidationException("Invalid image key format");
+        }
+        return normalized;
     }
 
     private void validateDimensions(MultipartFile file) {

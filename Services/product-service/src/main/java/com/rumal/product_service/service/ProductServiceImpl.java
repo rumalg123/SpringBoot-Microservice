@@ -74,6 +74,7 @@ public class ProductServiceImpl implements ProductService {
 
         Product variation = new Product();
         applyUpsertRequest(variation, request, parent.getId());
+        validateVariationAgainstParent(parent, variation);
         return toResponse(productRepository.save(variation));
     }
 
@@ -84,6 +85,12 @@ public class ProductServiceImpl implements ProductService {
         if (!product.isActive()) {
             throw new ResourceNotFoundException("Product not found: " + id);
         }
+        if (product.getProductType() == ProductType.VARIATION && product.getParentProductId() != null) {
+            Product parent = getActiveEntityById(product.getParentProductId());
+            if (!parent.isActive()) {
+                throw new ResourceNotFoundException("Product not found: " + id);
+            }
+        }
         return toResponse(product);
     }
 
@@ -93,6 +100,9 @@ public class ProductServiceImpl implements ProductService {
         Product parent = getActiveEntityById(parentId);
         if (parent.getProductType() != ProductType.PARENT) {
             throw new ValidationException("Variations are available only for parent products");
+        }
+        if (!parent.isActive()) {
+            throw new ResourceNotFoundException("Product not found: " + parentId);
         }
         return productRepository.findByParentProductIdAndDeletedFalseAndActiveTrue(parentId)
                 .stream()
@@ -154,6 +164,10 @@ public class ProductServiceImpl implements ProductService {
             throw new ValidationException("Use variation endpoint to create variation products under a parent");
         }
         applyUpsertRequest(product, request, parentId);
+        if (parentId != null) {
+            Product parent = getActiveEntityById(parentId);
+            validateVariationAgainstParent(parent, product);
+        }
         return toResponse(productRepository.save(product));
     }
 
@@ -364,12 +378,23 @@ public class ProductServiceImpl implements ProductService {
         if (variations == null || variations.isEmpty()) {
             return new ArrayList<>();
         }
-        return variations.stream()
-                .map(v -> ProductVariationAttribute.builder()
-                        .name(v.name().trim().toLowerCase())
-                        .value(v.value().trim())
-                        .build())
-                .toList();
+        List<ProductVariationAttribute> normalized = new ArrayList<>();
+        java.util.Set<String> names = new java.util.HashSet<>();
+        for (ProductVariationAttributeRequest v : variations) {
+            String name = v.name().trim().toLowerCase();
+            if (name.isEmpty()) {
+                throw new ValidationException("variation name is required");
+            }
+            if (!names.add(name)) {
+                throw new ValidationException("duplicate variation attribute name: " + name);
+            }
+            String value = v.value() == null ? "" : v.value().trim();
+            normalized.add(ProductVariationAttribute.builder()
+                    .name(name)
+                    .value(value)
+                    .build());
+        }
+        return normalized;
     }
 
     private void validatePricing(BigDecimal regularPrice, BigDecimal discountedPrice) {
@@ -382,11 +407,43 @@ public class ProductServiceImpl implements ProductService {
     }
 
     private void validateProductTypeAndVariations(ProductType productType, List<ProductVariationAttribute> variations) {
-        if (productType == ProductType.VARIATION && variations.isEmpty()) {
-            throw new ValidationException("variations are required when productType=VARIATION");
+        if (productType == ProductType.SINGLE && !variations.isEmpty()) {
+            throw new ValidationException("variations are not allowed when productType=SINGLE");
         }
-        if (productType != ProductType.VARIATION && !variations.isEmpty()) {
-            throw new ValidationException("variations are allowed only when productType=VARIATION");
+        if (productType == ProductType.PARENT && variations.isEmpty()) {
+            throw new ValidationException("variation attribute names are required when productType=PARENT");
+        }
+        if (productType == ProductType.PARENT) {
+            for (ProductVariationAttribute attribute : variations) {
+                if (!attribute.getValue().isEmpty()) {
+                    throw new ValidationException("parent product variation attributes should not have values");
+                }
+            }
+        }
+        if (productType == ProductType.VARIATION) {
+            if (variations.isEmpty()) {
+                throw new ValidationException("variations are required when productType=VARIATION");
+            }
+            for (ProductVariationAttribute attribute : variations) {
+                if (attribute.getValue().isEmpty()) {
+                    throw new ValidationException("variation values are required when productType=VARIATION");
+                }
+            }
+        }
+    }
+
+    private void validateVariationAgainstParent(Product parent, Product variation) {
+        java.util.Set<String> parentNames = parent.getVariations().stream()
+                .map(ProductVariationAttribute::getName)
+                .collect(java.util.stream.Collectors.toSet());
+        if (parentNames.isEmpty()) {
+            throw new ValidationException("Parent product must define variation attributes before adding child variations");
+        }
+        java.util.Set<String> childNames = variation.getVariations().stream()
+                .map(ProductVariationAttribute::getName)
+                .collect(java.util.stream.Collectors.toSet());
+        if (!childNames.equals(parentNames)) {
+            throw new ValidationException("Variation attributes must match parent attributes exactly: " + parentNames);
         }
     }
 
