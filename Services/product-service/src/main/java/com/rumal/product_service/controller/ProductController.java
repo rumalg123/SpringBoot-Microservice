@@ -68,8 +68,21 @@ public class ProductController {
             @RequestParam(required = false) ProductType type,
             @RequestParam(required = false) BigDecimal minSellingPrice,
             @RequestParam(required = false) BigDecimal maxSellingPrice,
+            @RequestParam(defaultValue = "false") boolean includeOrphanParents,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
-        return productService.list(pageable, q, sku, category, mainCategory, subCategory, vendorId, type, minSellingPrice, maxSellingPrice);
+        return productService.list(
+                pageable,
+                q,
+                sku,
+                category,
+                mainCategory,
+                subCategory,
+                vendorId,
+                type,
+                minSellingPrice,
+                maxSellingPrice,
+                includeOrphanParents
+        );
     }
 }

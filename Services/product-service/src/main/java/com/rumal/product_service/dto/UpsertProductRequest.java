@@ -39,7 +39,6 @@ public record UpsertProductRequest(
 
         UUID vendorId,
 
-        @NotEmpty(message = "category list cannot be empty")
         Set<@NotBlank(message = "category cannot be blank") String> categories,
 
         @NotNull(message = "productType is required")

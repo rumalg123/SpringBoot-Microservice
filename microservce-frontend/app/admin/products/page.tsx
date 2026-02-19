@@ -263,6 +263,7 @@ export default function AdminProductsPage() {
         params.set("page", String(targetPage));
         params.set("size", "12");
         params.set("sort", "createdAt,DESC");
+        params.set("includeOrphanParents", "true");
         if (q.trim()) params.set("q", q.trim());
         if (sku.trim()) params.set("sku", sku.trim());
         if (category.trim()) params.set("category", category.trim());
@@ -309,6 +310,7 @@ export default function AdminProductsPage() {
     params.set("size", "1000");
     params.set("sort", "name,ASC");
     params.set("type", "PARENT");
+    params.set("includeOrphanParents", "true");
     const res = await session.apiClient.get(`/products?${params.toString()}`);
     const pageData = res.data as PagedResponse<ProductSummary>;
     setParentProducts((pageData.content || []).filter((p) => p.active));
@@ -445,8 +447,9 @@ export default function AdminProductsPage() {
     if (pairs.length === 0) {
       throw new Error("Selected parent has no variation attributes");
     }
-    if (pairs.every((pair) => !pair.value)) {
-      throw new Error("Enter at least one attribute value");
+    const missingAttribute = pairs.find((pair) => !pair.value);
+    if (missingAttribute) {
+      throw new Error(`Enter value for ${missingAttribute.name}`);
     }
     return pairs;
   };
@@ -616,10 +619,10 @@ export default function AdminProductsPage() {
     ) {
       return "Discounted price cannot be greater than regular price";
     }
-    if (!draft.payload.categories || draft.payload.categories.length === 0) return "At least one category is required";
+    if (!draft.payload.categories || draft.payload.categories.length === 0) return "Parent categories are required";
     if (!draft.payload.variations || draft.payload.variations.length === 0) return "Variation attributes are required";
-    if (draft.payload.variations.every((pair) => !(pair.value || "").trim())) {
-      return "At least one attribute value is required";
+    if (draft.payload.variations.some((pair) => !(pair.value || "").trim())) {
+      return "All attribute values are required";
     }
     return null;
   };
@@ -1037,6 +1040,7 @@ export default function AdminProductsPage() {
   const productMutationBusy = savingProduct || creatingQueuedVariationBatch || uploadingImages;
   const productRowActionBusy = Boolean(loadingProductId) || confirmLoading || Boolean(restoringProductId) || listLoading;
   const categoryMutationBusy = savingCategory || confirmLoading || Boolean(restoringCategoryId);
+  const categoryLockedByParent = form.productType === "VARIATION";
 
   return (
     <div className="min-h-screen bg-[var(--bg)]">
@@ -1372,6 +1376,7 @@ export default function AdminProductsPage() {
                       }))
                     }
                     className="rounded-lg border border-[var(--line)] px-3 py-2"
+                    disabled={categoryLockedByParent || productMutationBusy}
                     required
                   >
                     <option value="">Select Main Category</option>
@@ -1383,6 +1388,11 @@ export default function AdminProductsPage() {
                   </select>
                   <div className="rounded-lg border border-[var(--line)] p-2">
                     <p className="mb-1 text-xs text-[var(--muted)]">Sub Categories (multiple)</p>
+                    {categoryLockedByParent && (
+                      <p className="mb-2 text-[11px] text-[var(--muted)]">
+                        Categories are inherited from selected parent product.
+                      </p>
+                    )}
                     <div className="grid gap-1">
                       {subCategoryOptions.length === 0 && (
                         <p className="text-xs text-[var(--muted)]">No sub categories for selected main category.</p>
@@ -1400,6 +1410,7 @@ export default function AdminProductsPage() {
                                   : o.subCategoryNames.filter((n) => n !== c.name),
                               }))
                             }
+                            disabled={categoryLockedByParent || productMutationBusy}
                           />
                           {c.name}
                         </label>
@@ -1479,7 +1490,7 @@ export default function AdminProductsPage() {
                     <div className="rounded-lg border border-[var(--line)] p-3">
                       <p className="text-xs font-semibold text-[var(--ink)]">Child Variation Setup</p>
                       <p className="mt-1 text-[11px] text-[var(--muted)]">
-                        Select a parent product, then fill attribute values. At least one value is required.
+                        Select a parent product, then fill all attribute values.
                       </p>
                       <input
                         value={parentSearch}
@@ -1528,8 +1539,9 @@ export default function AdminProductsPage() {
                                   [attributeName]: e.target.value,
                                 }))
                               }
-                              placeholder={`${attributeName} (optional)`}
+                              placeholder={`${attributeName} (required)`}
                               className="rounded-lg border border-[var(--line)] px-3 py-2 text-sm"
+                              required
                             />
                           ))}
                         </div>
@@ -1659,7 +1671,7 @@ export default function AdminProductsPage() {
                                       key={`${draft.id}-${pair.name}`}
                                       value={pair.value}
                                       onChange={(e) => updateVariationDraftAttributeValue(draft.id, pair.name, e.target.value)}
-                                      placeholder={`${pair.name} (optional)`}
+                                      placeholder={`${pair.name} (required)`}
                                       className="rounded border border-[var(--line)] px-2 py-1.5"
                                     />
                                   ))}

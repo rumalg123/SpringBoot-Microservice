@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useParams } from "next/navigation";
@@ -36,6 +36,7 @@ type VariationSummary = {
   id: string;
   name: string;
   sku: string;
+  variations: Variation[];
 };
 
 function money(value: number) {
@@ -62,12 +63,21 @@ function calcDiscount(regular: number, selling: number): number | null {
   return null;
 }
 
+function normalizeVariationName(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function normalizeVariationValue(value: string): string {
+  return value.trim().toLowerCase();
+}
+
 export default function ProductDetailPage() {
   const params = useParams<{ id: string }>();
   const { isAuthenticated, profile, logout, canViewAdmin, login, apiClient } = useAuthSession();
   const [product, setProduct] = useState<ProductDetail | null>(null);
   const [variations, setVariations] = useState<VariationSummary[]>([]);
   const [selectedVariationId, setSelectedVariationId] = useState("");
+  const [selectedAttributes, setSelectedAttributes] = useState<Record<string, string>>({});
   const [selectedVariation, setSelectedVariation] = useState<ProductDetail | null>(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
@@ -84,13 +94,20 @@ export default function ProductDetailPage() {
         const data = (await res.json()) as ProductDetail;
         setProduct(data);
         setSelectedImageIndex(0);
+        setSelectedVariationId("");
+        setSelectedVariation(null);
+        setSelectedAttributes({});
         setStatus("Product loaded.");
         if (data.productType === "PARENT") {
           const vRes = await fetch(`${apiBase}/products/${params.id}/variations`, { cache: "no-store" });
           if (vRes.ok) {
             const vData = (await vRes.json()) as VariationSummary[];
             setVariations(vData || []);
+          } else {
+            setVariations([]);
           }
+        } else {
+          setVariations([]);
         }
       } catch {
         setStatus("Product not found.");
@@ -99,6 +116,79 @@ export default function ProductDetailPage() {
     };
     void run();
   }, [params.id]);
+
+  const parentAttributeNames = useMemo(() => {
+    if (!product || product.productType !== "PARENT") return [];
+    const directNames = (product.variations || [])
+      .map((pair) => normalizeVariationName(pair.name || ""))
+      .filter(Boolean);
+    if (directNames.length > 0) {
+      return Array.from(new Set(directNames));
+    }
+    const derived = new Set<string>();
+    for (const variation of variations) {
+      for (const pair of variation.variations || []) {
+        const name = normalizeVariationName(pair.name || "");
+        if (name) derived.add(name);
+      }
+    }
+    return Array.from(derived);
+  }, [product, variations]);
+
+  const variationOptionsByAttribute = useMemo(() => {
+    const options: Record<string, string[]> = {};
+    for (const attributeName of parentAttributeNames) {
+      const values = new Set<string>();
+      for (const variation of variations) {
+        const match = (variation.variations || []).find(
+          (pair) => normalizeVariationName(pair.name || "") === attributeName
+        );
+        const value = (match?.value || "").trim();
+        if (value) values.add(value);
+      }
+      options[attributeName] = Array.from(values).sort((a, b) => a.localeCompare(b));
+    }
+    return options;
+  }, [parentAttributeNames, variations]);
+
+  useEffect(() => {
+    if (!product || product.productType !== "PARENT") {
+      setSelectedAttributes({});
+      return;
+    }
+    setSelectedAttributes((old) => {
+      const next: Record<string, string> = {};
+      parentAttributeNames.forEach((name) => {
+        next[name] = old[name] || "";
+      });
+      return next;
+    });
+  }, [product, parentAttributeNames]);
+
+  useEffect(() => {
+    if (!product || product.productType !== "PARENT") {
+      setSelectedVariationId("");
+      return;
+    }
+    if (parentAttributeNames.length === 0 || variations.length === 0) {
+      setSelectedVariationId("");
+      return;
+    }
+    const missingRequired = parentAttributeNames.some((name) => !(selectedAttributes[name] || "").trim());
+    if (missingRequired) {
+      setSelectedVariationId("");
+      return;
+    }
+    const matched = variations.find((variation) =>
+      parentAttributeNames.every((name) => {
+        const candidate = (variation.variations || []).find(
+          (pair) => normalizeVariationName(pair.name || "") === name
+        );
+        return normalizeVariationValue(candidate?.value || "") === normalizeVariationValue(selectedAttributes[name] || "");
+      })
+    );
+    setSelectedVariationId(matched ? matched.id : "");
+  }, [product, parentAttributeNames, selectedAttributes, variations]);
 
   useEffect(() => {
     if (!product || product.productType !== "PARENT") {
@@ -128,6 +218,13 @@ export default function ProductDetailPage() {
   const buyNow = async () => {
     if (!apiClient || !product) return;
     if (buyingNow) return;
+    if (product.productType === "PARENT") {
+      const missingRequired = parentAttributeNames.some((name) => !(selectedAttributes[name] || "").trim());
+      if (missingRequired) {
+        toast.error("Select all variation attributes before buying");
+        return;
+      }
+    }
     const targetProductId =
       product.productType === "PARENT" ? selectedVariationId.trim() : product.id;
 
@@ -151,6 +248,11 @@ export default function ProductDetailPage() {
   };
 
   const displayProduct = selectedVariation || product;
+  const requiresVariationSelection = product?.productType === "PARENT";
+  const allAttributesSelected =
+    !requiresVariationSelection || parentAttributeNames.every((name) => (selectedAttributes[name] || "").trim());
+  const hasMatchingVariation = !requiresVariationSelection || Boolean(selectedVariationId.trim());
+  const canBuyNow = !buyingNow && (!requiresVariationSelection || (allAttributesSelected && hasMatchingVariation));
 
   if (!displayProduct) {
     return (
@@ -350,23 +452,47 @@ export default function ProductDetailPage() {
                   <div className="space-y-4">
                     {/* Variation Selector */}
                     {product?.productType === "PARENT" && (
-                      <div>
+                      <div className="space-y-3">
                         <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-[var(--muted)]">
                           Select Variation
                         </label>
-                        <select
-                          value={selectedVariationId}
-                          onChange={(e) => setSelectedVariationId(e.target.value)}
-                          disabled={buyingNow}
-                          className="w-full rounded-lg border border-[var(--line)] bg-white px-4 py-3 text-sm text-[var(--ink)]"
-                        >
-                          <option value="">Choose an option...</option>
-                          {variations.map((v) => (
-                            <option key={v.id} value={v.id}>
-                              {v.name} ({v.sku})
-                            </option>
-                          ))}
-                        </select>
+                        {parentAttributeNames.length === 0 && (
+                          <p className="text-xs text-[var(--muted)]">No variation attributes configured for this parent product.</p>
+                        )}
+                        {parentAttributeNames.map((attributeName) => (
+                          <div key={attributeName}>
+                            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                              {attributeName}
+                            </label>
+                            <select
+                              value={selectedAttributes[attributeName] || ""}
+                              onChange={(e) =>
+                                setSelectedAttributes((old) => ({
+                                  ...old,
+                                  [attributeName]: e.target.value,
+                                }))
+                              }
+                              disabled={buyingNow || (variationOptionsByAttribute[attributeName] || []).length === 0}
+                              className="w-full rounded-lg border border-[var(--line)] bg-white px-4 py-3 text-sm text-[var(--ink)] disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              <option value="">Select {attributeName}</option>
+                              {(variationOptionsByAttribute[attributeName] || []).map((value) => (
+                                <option key={`${attributeName}-${value}`} value={value}>
+                                  {value}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        ))}
+                        {variations.length === 0 && (
+                          <p className="text-xs text-[var(--muted)]">No variations available for this parent product.</p>
+                        )}
+                        {variations.length > 0 && !allAttributesSelected && (
+                          <p className="text-xs text-[var(--muted)]">Select all attributes to continue.</p>
+                        )}
+                        {allAttributesSelected && !selectedVariationId && variations.length > 0 && (
+                          <p className="text-xs font-semibold text-red-600">No variation matches the selected attribute combination.</p>
+                        )}
                       </div>
                     )}
 
@@ -386,7 +512,7 @@ export default function ProductDetailPage() {
 
                     <div className="flex flex-wrap gap-3">
                       <button
-                        disabled={buyingNow}
+                        disabled={!canBuyNow}
                         onClick={() => void buyNow()}
                         className="btn-primary flex-1 px-8 py-3 text-base disabled:cursor-not-allowed disabled:opacity-60"
                       >

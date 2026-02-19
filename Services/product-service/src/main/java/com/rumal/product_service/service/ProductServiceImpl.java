@@ -13,7 +13,11 @@ import com.rumal.product_service.exception.ResourceNotFoundException;
 import com.rumal.product_service.exception.ValidationException;
 import com.rumal.product_service.repo.CategoryRepository;
 import com.rumal.product_service.repo.ProductRepository;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.JoinType;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -54,7 +58,7 @@ public class ProductServiceImpl implements ProductService {
             throw new ValidationException("Use /admin/products/{parentId}/variations to create variation products");
         }
         Product product = new Product();
-        applyUpsertRequest(product, request, null);
+        applyUpsertRequest(product, request, null, null);
         return toResponse(productRepository.save(product));
     }
 
@@ -74,7 +78,7 @@ public class ProductServiceImpl implements ProductService {
         }
 
         Product variation = new Product();
-        applyUpsertRequest(variation, request, parent.getId());
+        applyUpsertRequest(variation, request, parent.getId(), parent);
         validateVariationAgainstParent(parent, variation);
         return toResponse(productRepository.save(variation));
     }
@@ -116,7 +120,7 @@ public class ProductServiceImpl implements ProductService {
     @Cacheable(
             cacheNames = "productsList",
             key = "T(com.rumal.product_service.service.ProductServiceImpl).listCacheKey(" +
-                    "#pageable,#q,#sku,#category,#mainCategory,#subCategory,#vendorId,#type,#minSellingPrice,#maxSellingPrice)"
+                    "#pageable,#q,#sku,#category,#mainCategory,#subCategory,#vendorId,#type,#minSellingPrice,#maxSellingPrice,#includeOrphanParents)"
     )
     public Page<ProductSummaryResponse> list(
             Pageable pageable,
@@ -128,9 +132,21 @@ public class ProductServiceImpl implements ProductService {
             UUID vendorId,
             ProductType type,
             BigDecimal minSellingPrice,
-            BigDecimal maxSellingPrice
+            BigDecimal maxSellingPrice,
+            boolean includeOrphanParents
     ) {
-        Specification<Product> spec = buildFilterSpec(q, sku, category, mainCategory, subCategory, vendorId, type, minSellingPrice, maxSellingPrice)
+        Specification<Product> spec = buildFilterSpec(
+                q,
+                sku,
+                category,
+                mainCategory,
+                subCategory,
+                vendorId,
+                type,
+                minSellingPrice,
+                maxSellingPrice,
+                includeOrphanParents
+        )
                 .and((root, query, cb) -> cb.isFalse(root.get("deleted")))
                 .and((root, query, cb) -> cb.isTrue(root.get("active")));
         return productRepository.findAll(spec, pageable).map(this::toSummaryResponse);
@@ -154,7 +170,18 @@ public class ProductServiceImpl implements ProductService {
             BigDecimal minSellingPrice,
             BigDecimal maxSellingPrice
     ) {
-        Specification<Product> spec = buildFilterSpec(q, sku, category, mainCategory, subCategory, vendorId, type, minSellingPrice, maxSellingPrice)
+        Specification<Product> spec = buildFilterSpec(
+                q,
+                sku,
+                category,
+                mainCategory,
+                subCategory,
+                vendorId,
+                type,
+                minSellingPrice,
+                maxSellingPrice,
+                true
+        )
                 .and((root, query, cb) -> cb.isTrue(root.get("deleted")));
         return productRepository.findAll(spec, pageable).map(this::toSummaryResponse);
     }
@@ -168,15 +195,18 @@ public class ProductServiceImpl implements ProductService {
     public ProductResponse update(UUID id, UpsertProductRequest request) {
         Product product = getActiveEntityById(id);
         UUID parentId = product.getParentProductId();
+        Product parent = null;
         if (parentId != null && request.productType() != ProductType.VARIATION) {
             throw new ValidationException("Existing variation product must keep productType=VARIATION");
         }
         if (parentId == null && request.productType() == ProductType.VARIATION) {
             throw new ValidationException("Use variation endpoint to create variation products under a parent");
         }
-        applyUpsertRequest(product, request, parentId);
         if (parentId != null) {
-            Product parent = getActiveEntityById(parentId);
+            parent = getActiveEntityById(parentId);
+        }
+        applyUpsertRequest(product, request, parentId, parent);
+        if (parentId != null) {
             validateVariationAgainstParent(parent, product);
         }
         return toResponse(productRepository.save(product));
@@ -229,7 +259,8 @@ public class ProductServiceImpl implements ProductService {
             UUID vendorId,
             ProductType type,
             BigDecimal minSellingPrice,
-            BigDecimal maxSellingPrice
+            BigDecimal maxSellingPrice,
+            boolean includeOrphanParents
     ) {
         Specification<Product> spec = (root, query, cb) -> cb.conjunction();
 
@@ -252,6 +283,9 @@ public class ProductServiceImpl implements ProductService {
         } else {
             // Public/product listings should not include child variation rows by default.
             spec = spec.and((root, query, cb) -> cb.notEqual(root.get("productType"), ProductType.VARIATION));
+        }
+        if (!includeOrphanParents && (type == null || type == ProductType.PARENT)) {
+            spec = spec.and(this::variationRowsWithParentConstraint);
         }
         if (StringUtils.hasText(category)) {
             String normalizedCategory = category.trim().toLowerCase();
@@ -298,14 +332,35 @@ public class ProductServiceImpl implements ProductService {
         return spec;
     }
 
-    private void applyUpsertRequest(Product product, UpsertProductRequest request, UUID parentProductId) {
+    private Predicate variationRowsWithParentConstraint(Root<Product> root, CriteriaQuery<?> query, CriteriaBuilder cb) {
+        Predicate isParent = cb.equal(root.get("productType"), ProductType.PARENT);
+        Predicate hasChild = hasActiveVariationChild(root, query, cb);
+        return cb.or(cb.not(isParent), cb.and(isParent, hasChild));
+    }
+
+    private Predicate hasActiveVariationChild(Root<Product> root, CriteriaQuery<?> query, CriteriaBuilder cb) {
+        var subQuery = query.subquery(UUID.class);
+        var child = subQuery.from(Product.class);
+        subQuery.select(child.get("id"));
+        subQuery.where(
+                cb.equal(child.get("parentProductId"), root.get("id")),
+                cb.equal(child.get("productType"), ProductType.VARIATION),
+                cb.isFalse(child.get("deleted")),
+                cb.isTrue(child.get("active"))
+        );
+        return cb.exists(subQuery);
+    }
+
+    private void applyUpsertRequest(Product product, UpsertProductRequest request, UUID parentProductId, Product parentProduct) {
         String normalizedName = request.name().trim();
         String normalizedShortDescription = request.shortDescription().trim();
         String normalizedDescription = request.description().trim();
         String normalizedSku = request.sku().trim();
 
         List<String> normalizedImages = normalizeImages(request.images());
-        Set<Category> resolvedCategories = resolveCategories(request.categories());
+        Set<Category> resolvedCategories = request.productType() == ProductType.VARIATION
+                ? resolveCategoriesFromParent(parentProduct)
+                : resolveCategories(request.categories());
         List<ProductVariationAttribute> normalizedVariations = normalizeVariations(request.variations());
         UUID resolvedVendorId = resolveVendorId(request.vendorId());
 
@@ -340,7 +395,8 @@ public class ProductServiceImpl implements ProductService {
             UUID vendorId,
             ProductType type,
             BigDecimal minSellingPrice,
-            BigDecimal maxSellingPrice
+            BigDecimal maxSellingPrice,
+            boolean includeOrphanParents
     ) {
         return pageableCacheKey(pageable)
                 + "::q=" + normalizeCacheFilter(q)
@@ -351,7 +407,8 @@ public class ProductServiceImpl implements ProductService {
                 + "::vendorId=" + (vendorId == null ? "" : vendorId)
                 + "::type=" + (type == null ? "" : type.name())
                 + "::minPrice=" + decimalKey(minSellingPrice)
-                + "::maxPrice=" + decimalKey(maxSellingPrice);
+                + "::maxPrice=" + decimalKey(maxSellingPrice)
+                + "::includeOrphanParents=" + includeOrphanParents;
     }
 
     public static String deletedListCacheKey(
@@ -376,7 +433,8 @@ public class ProductServiceImpl implements ProductService {
                 vendorId,
                 type,
                 minSellingPrice,
-                maxSellingPrice
+                maxSellingPrice,
+                true
         );
     }
 
@@ -406,8 +464,14 @@ public class ProductServiceImpl implements ProductService {
     }
 
     private Set<Category> resolveCategories(Set<String> categories) {
+        if (categories == null || categories.isEmpty()) {
+            throw new ValidationException("category list cannot be empty");
+        }
         Set<Category> resolved = new java.util.LinkedHashSet<>();
         for (String category : categories) {
+            if (category == null) {
+                throw new ValidationException("category cannot be blank");
+            }
             String normalized = category.trim().toLowerCase();
             if (normalized.isEmpty()) {
                 throw new ValidationException("category cannot be blank");
@@ -418,6 +482,16 @@ public class ProductServiceImpl implements ProductService {
             resolved.add(found);
         }
         return resolved;
+    }
+
+    private Set<Category> resolveCategoriesFromParent(Product parentProduct) {
+        if (parentProduct == null) {
+            throw new ValidationException("Parent product is required for variation category inheritance");
+        }
+        if (parentProduct.getProductType() != ProductType.PARENT) {
+            throw new ValidationException("Variations can be added only to parent products");
+        }
+        return new java.util.LinkedHashSet<>(parentProduct.getCategories());
     }
 
     private void validateMainAndSubCategories(Set<Category> categories) {
@@ -488,14 +562,10 @@ public class ProductServiceImpl implements ProductService {
             if (variations.isEmpty()) {
                 throw new ValidationException("variations are required when productType=VARIATION");
             }
-            boolean hasAtLeastOneValue = false;
             for (ProductVariationAttribute attribute : variations) {
-                if (!attribute.getValue().isEmpty()) {
-                    hasAtLeastOneValue = true;
+                if (attribute.getValue().isEmpty()) {
+                    throw new ValidationException("variation value is required for attribute: " + attribute.getName());
                 }
-            }
-            if (!hasAtLeastOneValue) {
-                throw new ValidationException("At least one variation attribute value is required when productType=VARIATION");
             }
         }
     }
