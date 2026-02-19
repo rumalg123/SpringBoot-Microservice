@@ -1,23 +1,19 @@
 import type { Metadata } from "next";
-import { Playfair_Display, Manrope } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import AppToaster from "./components/AppToaster";
+import ScrollToTop from "./components/ScrollToTop";
+import BackToTop from "./components/BackToTop";
 
-const displayFont = Playfair_Display({
-  variable: "--font-display",
-  subsets: ["latin"],
-  weight: ["600", "700", "800"],
-});
-
-const bodyFont = Manrope({
+const bodyFont = Inter({
   variable: "--font-body",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["400", "500", "600", "700", "800"],
 });
 
 export const metadata: Metadata = {
-  title: "Storefront",
-  description: "E-commerce storefront powered by Spring microservices",
+  title: "Rumal Store – Shop Online | Best Deals & Discounts",
+  description: "Discover amazing deals on top products. Shop with confidence at Rumal Store — your trusted online marketplace.",
 };
 
 export default function RootLayout({
@@ -27,11 +23,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${displayFont.variable} ${bodyFont.variable} antialiased`}
-      >
+      <body className={`${bodyFont.variable} antialiased`}>
+        <ScrollToTop />
         <AppToaster />
         {children}
+        <BackToTop />
       </body>
     </html>
   );

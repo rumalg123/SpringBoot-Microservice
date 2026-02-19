@@ -1,8 +1,11 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AppNav from "../../components/AppNav";
+import Footer from "../../components/Footer";
+import Pagination from "../../components/Pagination";
 import { useAuthSession } from "../../../lib/authSession";
 
 type AdminOrder = {
@@ -95,7 +98,14 @@ export default function AdminOrdersPage() {
   };
 
   if (session.status === "loading" || session.status === "idle") {
-    return <main className="mx-auto min-h-screen max-w-6xl px-6 py-10 text-zinc-700">Loading...</main>;
+    return (
+      <div className="min-h-screen bg-[var(--bg)]">
+        <div className="mx-auto max-w-7xl px-4 py-10 text-center text-[var(--muted)]">
+          <div className="mx-auto w-12 h-12 animate-spin rounded-full border-4 border-[var(--line)] border-t-[var(--brand)]" />
+          <p className="mt-4">Loading...</p>
+        </div>
+      </div>
+    );
   }
 
   if (!session.isAuthenticated) {
@@ -108,108 +118,112 @@ export default function AdminOrdersPage() {
   const totalElements = ordersPage?.totalElements ?? 0;
 
   return (
-    <main className="mx-auto min-h-screen max-w-6xl px-6 py-10">
+    <div className="min-h-screen bg-[var(--bg)]">
       <AppNav
         email={(session.profile?.email as string) || ""}
         canViewAdmin={session.canViewAdmin}
-        onLogout={() => {
-          void session.logout();
-        }}
+        onLogout={() => { void session.logout(); }}
       />
 
-      <section className="grid gap-4 rounded-3xl border border-zinc-200 bg-white/85 p-6 shadow-xl backdrop-blur">
-        <div className="flex flex-wrap items-end justify-between gap-3">
+      <main className="mx-auto max-w-7xl px-4 py-4">
+        {/* Breadcrumbs */}
+        <nav className="breadcrumb">
+          <Link href="/">Home</Link>
+          <span className="breadcrumb-sep">›</span>
+          <Link href="/admin/products">Admin</Link>
+          <span className="breadcrumb-sep">›</span>
+          <span className="breadcrumb-current">Orders</span>
+        </nav>
+
+        {/* Page Header */}
+        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="text-xs tracking-widest text-zinc-500">ADMIN</p>
-            <h2 className="text-2xl font-semibold text-zinc-900">All Orders</h2>
-            <p className="text-sm text-zinc-600">Gateway requires admin permission for this endpoint.</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-[var(--brand)]">ADMIN</p>
+            <h1 className="text-2xl font-bold text-[var(--ink)]">📋 All Orders</h1>
+            <p className="mt-0.5 text-sm text-[var(--muted)]">Manage and inspect all customer orders</p>
           </div>
-          <span className="rounded-full bg-zinc-900 px-3 py-1 text-xs text-white">{totalElements} total</span>
+          <span className="rounded-full bg-[var(--brand)] px-3 py-1 text-xs font-bold text-white">{totalElements} total</span>
         </div>
 
-        <form onSubmit={applyFilter} className="flex flex-wrap items-center gap-2">
-          <input
-            value={customerIdInput}
-            onChange={(e) => setCustomerIdInput(e.target.value)}
-            placeholder="Filter by customerId (UUID)"
-            className="min-w-[280px] flex-1 rounded-xl border border-zinc-300 px-3 py-2 text-sm"
-          />
-          <button type="submit" className="rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white">
-            Apply Filter
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setCustomerIdInput("");
-              setCustomerIdFilter("");
-            }}
-            className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-700"
-          >
-            Clear
-          </button>
-        </form>
-
-        <div className="overflow-hidden rounded-2xl border border-zinc-200">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-zinc-100 text-zinc-700">
-              <tr>
-                <th className="px-3 py-2 font-medium">Order ID</th>
-                <th className="px-3 py-2 font-medium">Customer ID</th>
-                <th className="px-3 py-2 font-medium">Item</th>
-                <th className="px-3 py-2 font-medium">Qty</th>
-                <th className="px-3 py-2 font-medium">Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              {orders.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-3 py-6 text-center text-zinc-500">
-                    No orders found for this page/filter.
-                  </td>
-                </tr>
+        <section className="animate-rise space-y-4 rounded-xl bg-white p-5 shadow-sm">
+          {/* Filter Form */}
+          <form onSubmit={applyFilter} className="flex flex-wrap items-center gap-2">
+            <div className="relative flex min-w-[280px] flex-1 items-center rounded-lg border border-[var(--line)] bg-white">
+              <span className="pl-3 text-[var(--muted)]">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
+              </span>
+              <input
+                value={customerIdInput}
+                onChange={(e) => setCustomerIdInput(e.target.value)}
+                placeholder="Filter by Customer ID (UUID)..."
+                className="flex-1 border-none bg-transparent px-3 py-2.5 text-sm outline-none"
+              />
+              {customerIdInput && (
+                <button
+                  type="button"
+                  onClick={() => { setCustomerIdInput(""); setCustomerIdFilter(""); }}
+                  className="mr-2 flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-xs text-gray-600 hover:bg-gray-300"
+                  title="Clear filter"
+                >
+                  ×
+                </button>
               )}
-              {orders.map((order) => (
-                <tr key={order.id} className="border-t border-zinc-200">
-                  <td className="px-3 py-2 font-mono text-xs text-zinc-700">{order.id}</td>
-                  <td className="px-3 py-2 font-mono text-xs text-zinc-700">{order.customerId}</td>
-                  <td className="px-3 py-2 text-zinc-900">{order.item}</td>
-                  <td className="px-3 py-2 text-zinc-900">{order.quantity}</td>
-                  <td className="px-3 py-2 text-zinc-600">{new Date(order.createdAt).toLocaleString()}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            </div>
+            <button type="submit" className="btn-primary px-5 py-2.5 text-sm">
+              Apply Filter
+            </button>
+          </form>
 
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-xs text-zinc-500">
-            Page {totalPages === 0 ? 0 : currentPage + 1} of {totalPages}
-          </p>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                void goToPage(currentPage - 1);
-              }}
-              disabled={ordersPage?.first ?? true}
-              className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-700 disabled:opacity-50"
-            >
-              Previous
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                void goToPage(currentPage + 1);
-              }}
-              disabled={ordersPage?.last ?? true}
-              className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-700 disabled:opacity-50"
-            >
-              Next
-            </button>
+          <div className="overflow-hidden rounded-xl border border-[var(--line)]">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Order ID</th>
+                  <th>Customer ID</th>
+                  <th>Item</th>
+                  <th>Qty</th>
+                  <th>Created</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orders.length === 0 && (
+                  <tr>
+                    <td colSpan={5}>
+                      <div className="empty-state">
+                        <div className="empty-state-icon">📦</div>
+                        <p className="empty-state-title">No orders found</p>
+                        <p className="empty-state-desc">{customerIdFilter ? "Try a different customer ID filter" : "No orders exist yet"}</p>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                {orders.map((order) => (
+                  <tr key={order.id}>
+                    <td className="font-mono text-xs text-[var(--ink)]">{order.id}</td>
+                    <td className="font-mono text-xs text-[var(--ink)]">{order.customerId}</td>
+                    <td className="font-medium text-[var(--ink)]">{order.item}</td>
+                    <td>
+                      <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700">{order.quantity}</span>
+                    </td>
+                    <td className="text-xs text-[var(--muted)]">{new Date(order.createdAt).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </div>
-        <p className="text-xs text-zinc-500">{status}</p>
-      </section>
-    </main>
+
+          {/* Pagination */}
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalElements={totalElements}
+            onPageChange={(p) => { void goToPage(p); }}
+          />
+          <p className="text-xs text-[var(--muted)]">{status}</p>
+        </section>
+      </main>
+
+      <Footer />
+    </div>
   );
 }

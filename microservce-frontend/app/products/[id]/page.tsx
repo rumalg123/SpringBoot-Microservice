@@ -6,6 +6,7 @@ import Image from "next/image";
 import { useParams } from "next/navigation";
 import toast from "react-hot-toast";
 import AppNav from "../../components/AppNav";
+import Footer from "../../components/Footer";
 import { useAuthSession } from "../../../lib/authSession";
 
 type Variation = {
@@ -52,6 +53,13 @@ function resolveImageUrl(imageName: string): string | null {
     .map((segment) => encodeURIComponent(segment))
     .join("/");
   return `${apiBase.replace(/\/+$/, "")}/products/images/${encoded}`;
+}
+
+function calcDiscount(regular: number, selling: number): number | null {
+  if (regular > selling && regular > 0) {
+    return Math.round(((regular - selling) / regular) * 100);
+  }
+  return null;
 }
 
 export default function ProductDetailPage() {
@@ -130,142 +138,221 @@ export default function ProductDetailPage() {
         productId: targetProductId,
         quantity,
       });
-      toast.success("Order placed successfully");
+      toast.success("Order placed successfully! 🎉");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to place order");
     }
   };
+
   const displayProduct = selectedVariation || product;
+
   if (!displayProduct) {
     return (
-      <main className="mx-auto min-h-screen max-w-7xl px-6 py-8">
-        <p className="rounded-xl border border-dashed border-[var(--line)] p-4 text-sm text-[var(--muted)]">{status}</p>
-      </main>
+      <div className="min-h-screen bg-[var(--bg)]">
+        {isAuthenticated && (
+          <AppNav
+            email={(profile?.email as string) || ""}
+            canViewAdmin={canViewAdmin}
+            onLogout={() => { void logout(); }}
+          />
+        )}
+        <main className="mx-auto max-w-7xl px-4 py-8">
+          <div className="rounded-xl bg-white p-8 text-center shadow-sm">
+            <p className="text-3xl">📦</p>
+            <p className="mt-2 text-lg font-semibold text-[var(--ink)]">{status}</p>
+            <Link href="/products" className="mt-3 inline-block text-sm text-[var(--brand)] hover:underline">
+              ← Back to Shop
+            </Link>
+          </div>
+        </main>
+      </div>
     );
   }
 
+  const discount = calcDiscount(displayProduct.regularPrice, displayProduct.sellingPrice);
+
   return (
-    <main className="mx-auto min-h-screen max-w-7xl px-6 py-8">
+    <div className="min-h-screen bg-[var(--bg)]">
       {isAuthenticated && (
         <AppNav
           email={(profile?.email as string) || ""}
           canViewAdmin={canViewAdmin}
-          onLogout={() => {
-            void logout();
-          }}
+          onLogout={() => { void logout(); }}
         />
       )}
 
-      <section className="card-surface animate-rise rounded-3xl p-6 md:p-8">
-        <div className="mb-6 flex items-center justify-between">
-          <Link href="/products" className="text-sm font-semibold text-[var(--brand)] hover:underline">
-            Back to catalog
-          </Link>
-          <p className="text-xs tracking-[0.2em] text-[var(--muted)]">PRODUCT DETAIL</p>
-        </div>
+      {!isAuthenticated && (
+        <header className="bg-[var(--header-bg)] shadow-lg">
+          <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
+            <Link href="/" className="flex items-center gap-2 text-white no-underline">
+              <span className="text-2xl">🛒</span>
+              <p className="text-lg font-bold text-white">Rumal Store</p>
+            </Link>
+            <Link href="/" className="rounded-lg bg-[var(--brand)] px-5 py-2 text-sm font-semibold text-white no-underline transition hover:bg-[var(--brand-hover)]">
+              Sign In
+            </Link>
+          </div>
+        </header>
+      )}
 
-        {!product && (
-          <p className="rounded-xl border border-dashed border-[var(--line)] p-4 text-sm text-[var(--muted)]">
-            {status}
-          </p>
-        )}
+      <main className="mx-auto max-w-7xl px-4 py-4">
+        {/* Breadcrumb */}
+        <nav className="mb-4 flex items-center gap-2 text-sm text-[var(--muted)]">
+          <Link href="/" className="text-[var(--muted)] no-underline hover:text-[var(--brand)]">Home</Link>
+          <span>›</span>
+          <Link href="/products" className="text-[var(--muted)] no-underline hover:text-[var(--brand)]">Products</Link>
+          <span>›</span>
+          <span className="line-clamp-1 text-[var(--ink)]">{displayProduct.name}</span>
+        </nav>
 
-        {product && (
+        {/* Product Detail Card */}
+        <section className="animate-rise rounded-2xl bg-white p-6 shadow-sm md:p-8">
           <div className="grid gap-8 lg:grid-cols-[1fr,1fr]">
+            {/* Image Gallery */}
             <div className="space-y-3">
-              <div className="h-80 rounded-2xl border border-[var(--line)] bg-[linear-gradient(160deg,#eee7db,#f9f5ee)] p-4 text-sm text-[var(--muted)]">
+              <div className="relative aspect-square overflow-hidden rounded-xl border border-[var(--line)] bg-[#fafafa]">
+                {discount && <span className="badge-sale text-base">-{discount}% OFF</span>}
                 {resolveImageUrl(displayProduct.images?.[selectedImageIndex] || "") ? (
                   <Image
                     src={resolveImageUrl(displayProduct.images[selectedImageIndex]) || ""}
                     alt={displayProduct.name}
                     width={800}
                     height={800}
-                    className="h-full w-full rounded-xl object-cover"
+                    className="h-full w-full object-cover"
                     unoptimized
                   />
                 ) : (
-                  displayProduct.images?.[selectedImageIndex] || "main-image.jpg"
+                  <div className="grid h-full w-full place-items-center bg-gradient-to-br from-gray-100 to-gray-200 text-6xl">
+                    📦
+                  </div>
                 )}
               </div>
-              <div className="grid grid-cols-5 gap-2">
-                {displayProduct.images?.slice(0, 5).map((img, index) => {
-                  const imageUrl = resolveImageUrl(img);
-                  return (
-                    <button
-                      key={`${img}-${index}`}
-                      onClick={() => setSelectedImageIndex(index)}
-                      className={`overflow-hidden rounded-xl border bg-white px-1 py-1 text-xs ${
-                        selectedImageIndex === index ? "border-[var(--brand)]" : "border-[var(--line)]"
-                      }`}
-                    >
-                      {imageUrl ? (
-                        <Image src={imageUrl} alt={img} width={96} height={56} className="h-14 w-full rounded-md object-cover" unoptimized />
-                      ) : (
-                        <span className="block truncate px-1 py-4 text-[10px] text-[var(--muted)]">{img}</span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+              {/* Thumbnails */}
+              {displayProduct.images?.length > 1 && (
+                <div className="grid grid-cols-5 gap-2">
+                  {displayProduct.images.slice(0, 5).map((img, index) => {
+                    const imageUrl = resolveImageUrl(img);
+                    return (
+                      <button
+                        key={`${img}-${index}`}
+                        onClick={() => setSelectedImageIndex(index)}
+                        className={`aspect-square overflow-hidden rounded-lg border-2 transition ${selectedImageIndex === index
+                            ? "border-[var(--brand)] shadow-md"
+                            : "border-[var(--line)] hover:border-[var(--brand)]"
+                          }`}
+                      >
+                        {imageUrl ? (
+                          <Image src={imageUrl} alt={img} width={120} height={120} className="h-full w-full object-cover" unoptimized />
+                        ) : (
+                          <div className="grid h-full w-full place-items-center bg-gray-100 text-lg">📦</div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
-            <div className="space-y-4">
-              <h1 className="text-4xl text-[var(--ink)]">{displayProduct.name}</h1>
-              <p className="text-sm leading-6 text-[var(--muted)]">{displayProduct.description}</p>
-              <p className="text-xs text-[var(--muted)]">SKU: {displayProduct.sku}</p>
-              <div className="flex items-center gap-3">
-                <span className="text-2xl font-semibold text-[var(--ink)]">{money(displayProduct.sellingPrice)}</span>
+            {/* Product Info */}
+            <div className="space-y-5">
+              <div>
+                <h1 className="text-2xl font-bold leading-tight text-[var(--ink)] md:text-3xl">
+                  {displayProduct.name}
+                </h1>
+                <div className="mt-2 flex items-center gap-3">
+                  <span className="star-rating text-base">★★★★☆</span>
+                  <span className="text-sm text-[var(--muted)]">4.5 | 1,200+ ratings</span>
+                  <span className="text-sm text-[var(--muted)]">•</span>
+                  <span className="text-sm text-[var(--success)]">In Stock</span>
+                </div>
+              </div>
+
+              {/* Price Section */}
+              <div className="rounded-xl bg-[var(--brand-soft)] p-4">
+                <div className="flex items-baseline gap-3">
+                  <span className="text-3xl font-extrabold text-[var(--brand)]">
+                    {money(displayProduct.sellingPrice)}
+                  </span>
+                  {displayProduct.discountedPrice !== null && (
+                    <>
+                      <span className="text-lg text-[var(--muted)] line-through">
+                        {money(displayProduct.regularPrice)}
+                      </span>
+                      {discount && (
+                        <span className="price-discount-badge text-sm">-{discount}% OFF</span>
+                      )}
+                    </>
+                  )}
+                </div>
                 {displayProduct.discountedPrice !== null && (
-                  <span className="text-sm text-[var(--muted)] line-through">{money(displayProduct.regularPrice)}</span>
+                  <p className="mt-1 text-xs text-[var(--success)]">
+                    💰 You save {money(displayProduct.regularPrice - displayProduct.sellingPrice)}
+                  </p>
                 )}
               </div>
 
+              {/* Description */}
+              <div>
+                <p className="text-sm leading-relaxed text-[var(--ink-light)]">{displayProduct.description}</p>
+                <p className="mt-2 text-xs text-[var(--muted)]">SKU: {displayProduct.sku}</p>
+              </div>
+
+              {/* Categories */}
               <div className="flex flex-wrap gap-2">
                 {displayProduct.mainCategory && (
-                  <span className="rounded-full bg-[var(--brand)] px-3 py-1 text-xs text-white">
-                    Main: {displayProduct.mainCategory}
+                  <span className="rounded-full bg-[var(--brand)] px-3 py-1 text-xs font-semibold text-white">
+                    {displayProduct.mainCategory}
                   </span>
                 )}
                 {displayProduct.subCategories.map((c) => (
-                  <span key={c} className="rounded-full bg-[var(--brand-soft)] px-3 py-1 text-xs capitalize text-[var(--ink)]">
+                  <span key={c} className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium capitalize text-[var(--ink)]">
                     {c}
                   </span>
                 ))}
               </div>
 
+              {/* Variations */}
               {displayProduct.variations.length > 0 && (
-                <div className="rounded-xl border border-[var(--line)] bg-white p-4">
-                  <p className="text-xs tracking-[0.2em] text-[var(--muted)]">
-                    {displayProduct.productType === "PARENT" ? "AVAILABLE ATTRIBUTES" : "VARIATIONS"}
+                <div className="rounded-xl border border-[var(--line)] bg-[#fafafa] p-4">
+                  <p className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--muted)]">
+                    {displayProduct.productType === "PARENT" ? "Available Options" : "Specifications"}
                   </p>
-                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <div className="flex flex-wrap gap-2">
                     {displayProduct.variations.map((v, i) => (
-                      <div key={`${v.name}-${i}`} className="rounded-lg border border-[var(--line)] px-3 py-2 text-sm">
+                      <span
+                        key={`${v.name}-${i}`}
+                        className="rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-sm transition hover:border-[var(--brand)]"
+                      >
                         {displayProduct.productType === "PARENT" ? (
-                          <span className="capitalize text-[var(--ink)]">{v.name}</span>
+                          <span className="font-medium text-[var(--ink)]">{v.name}</span>
                         ) : (
                           <>
-                            <span className="capitalize text-[var(--muted)]">{v.name}:</span> {v.value}
+                            <span className="text-[var(--muted)]">{v.name}:</span>{" "}
+                            <span className="font-medium">{v.value}</span>
                           </>
                         )}
-                      </div>
+                      </span>
                     ))}
                   </div>
                 </div>
               )}
 
-              <div className="pt-2">
+              {/* Purchase Controls */}
+              <div className="border-t border-[var(--line)] pt-5">
                 {isAuthenticated ? (
-                  <div className="space-y-3">
-                    {product.productType === "PARENT" && (
+                  <div className="space-y-4">
+                    {/* Variation Selector */}
+                    {product?.productType === "PARENT" && (
                       <div>
-                        <label className="mb-1 block text-xs tracking-[0.2em] text-[var(--muted)]">SELECT VARIATION</label>
+                        <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-[var(--muted)]">
+                          Select Variation
+                        </label>
                         <select
                           value={selectedVariationId}
                           onChange={(e) => setSelectedVariationId(e.target.value)}
-                          className="w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm text-[var(--ink)]"
+                          className="w-full rounded-lg border border-[var(--line)] bg-white px-4 py-3 text-sm text-[var(--ink)]"
                         >
-                          <option value="">Choose variation</option>
+                          <option value="">Choose an option...</option>
                           {variations.map((v) => (
                             <option key={v.id} value={v.id}>
                               {v.name} ({v.sku})
@@ -275,42 +362,60 @@ export default function ProductDetailPage() {
                       </div>
                     )}
 
-                    <div className="flex items-center gap-3">
-                      <div className="inline-flex items-center overflow-hidden rounded-lg border border-[var(--line)] bg-white">
-                        <button
-                          onClick={() => setQuantity((old) => Math.max(1, old - 1))}
-                          className="px-3 py-2 text-sm text-[var(--ink)] hover:bg-[var(--brand-soft)]"
-                        >
-                          -
-                        </button>
-                        <span className="min-w-10 border-x border-[var(--line)] px-3 py-2 text-center text-sm text-[var(--ink)]">
-                          {quantity}
-                        </span>
-                        <button
-                          onClick={() => setQuantity((old) => old + 1)}
-                          className="px-3 py-2 text-sm text-[var(--ink)] hover:bg-[var(--brand-soft)]"
-                        >
-                          +
-                        </button>
+                    {/* Quantity + Buy */}
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div>
+                        <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-[var(--muted)]">
+                          Quantity
+                        </label>
+                        <div className="qty-stepper">
+                          <button onClick={() => setQuantity((old) => Math.max(1, old - 1))}>−</button>
+                          <span>{quantity}</span>
+                          <button onClick={() => setQuantity((old) => old + 1)}>+</button>
+                        </div>
                       </div>
-                      <button onClick={() => void buyNow()} className="btn-brand rounded-xl px-5 py-2 text-sm font-semibold">
-                        Buy Now
+                    </div>
+
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        onClick={() => void buyNow()}
+                        className="btn-primary flex-1 px-8 py-3 text-base"
+                      >
+                        🛒 Buy Now
                       </button>
-                      <Link href="/orders" className="rounded-xl border border-[var(--line)] bg-white px-4 py-2 text-sm text-[var(--ink)]">
-                        My Orders
+                      <Link
+                        href="/orders"
+                        className="btn-outline flex items-center justify-center px-6 py-3 text-sm no-underline"
+                      >
+                        📦 My Orders
                       </Link>
                     </div>
                   </div>
                 ) : (
-                  <button onClick={() => void login("/products")} className="btn-brand rounded-xl px-5 py-2 text-sm font-semibold">
-                    Sign In to Continue
-                  </button>
+                  <div className="space-y-3">
+                    <p className="text-sm text-[var(--muted)]">Sign in to purchase this product</p>
+                    <button
+                      onClick={() => void login("/products")}
+                      className="btn-primary w-full py-3 text-base"
+                    >
+                      🔑 Sign In to Buy
+                    </button>
+                  </div>
                 )}
+              </div>
+
+              {/* Trust Badges */}
+              <div className="flex flex-wrap gap-4 border-t border-[var(--line)] pt-4 text-xs text-[var(--muted)]">
+                <span className="flex items-center gap-1">🚚 Free Shipping</span>
+                <span className="flex items-center gap-1">🔒 Secure Payment</span>
+                <span className="flex items-center gap-1">🔄 30-Day Returns</span>
               </div>
             </div>
           </div>
-        )}
-      </section>
-    </main>
+        </section>
+      </main>
+
+      <Footer />
+    </div>
   );
 }

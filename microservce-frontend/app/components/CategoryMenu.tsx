@@ -10,6 +10,29 @@ type Category = {
   parentCategoryId: string | null;
 };
 
+const CATEGORY_ICONS: Record<string, string> = {
+  electronics: "📱",
+  fashion: "👗",
+  home: "🏠",
+  beauty: "💄",
+  sports: "⚽",
+  toys: "🧸",
+  books: "📚",
+  food: "🍕",
+  automotive: "🚗",
+  garden: "🌿",
+  health: "💊",
+  office: "💼",
+};
+
+function getCategoryIcon(name: string): string {
+  const lower = name.toLowerCase();
+  for (const [key, icon] of Object.entries(CATEGORY_ICONS)) {
+    if (lower.includes(key)) return icon;
+  }
+  return "📂";
+}
+
 export default function CategoryMenu() {
   const [categories, setCategories] = useState<Category[]>([]);
 
@@ -46,39 +69,46 @@ export default function CategoryMenu() {
   if (parents.length === 0) return null;
 
   return (
-    <nav className="mb-5 rounded-2xl border border-[var(--line)] bg-white px-3 py-2">
-      <div className="flex items-center gap-3">
-        <div className="group relative pb-2">
-          <button className="inline-flex rounded-full border border-[var(--line)] bg-[var(--surface)] px-4 py-1.5 text-sm font-semibold text-[var(--ink)] hover:bg-[var(--brand-soft)]">
+    <nav className="mb-4 overflow-hidden rounded-xl bg-white shadow-sm">
+      {/* Horizontal Category Scroll */}
+      <div className="flex items-center gap-1 overflow-x-auto px-3 py-2.5 hide-scrollbar">
+        {/* All Categories Mega Menu */}
+        <div className="group relative shrink-0 pb-1">
+          <button className="flex items-center gap-2 rounded-lg bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--brand-hover)]">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
             All Categories
           </button>
-          <div className="absolute left-0 top-full z-30 hidden min-w-64 group-hover:block">
+          <div className="absolute left-0 top-full z-40 hidden min-w-72 pt-1 group-hover:block">
             <div className="rounded-xl border border-[var(--line)] bg-white p-2 shadow-2xl">
               <Link
                 href="/products"
-                className="mb-1 block rounded-lg px-3 py-2 text-sm font-semibold text-[var(--ink)] hover:bg-[var(--brand-soft)]"
+                className="mb-1 flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold text-[var(--ink)] no-underline transition hover:bg-[var(--brand-soft)]"
               >
-                All Products
+                🏪 All Products
               </Link>
+              <div className="my-1 h-px bg-[var(--line)]" />
               {parents.map((parent) => {
                 const children = subsByParent.get(parent.id) || [];
                 return (
                   <div key={parent.id} className="group/parent relative">
                     <Link
                       href={`/products?mainCategory=${encodeURIComponent(parent.name)}`}
-                      className="flex items-center justify-between rounded-lg px-3 py-2 text-sm text-[var(--ink)] hover:bg-[var(--brand-soft)]"
+                      className="flex items-center justify-between rounded-lg px-3 py-2.5 text-sm text-[var(--ink)] no-underline transition hover:bg-[var(--brand-soft)]"
                     >
-                      <span>{parent.name}</span>
+                      <span className="flex items-center gap-2">
+                        <span>{getCategoryIcon(parent.name)}</span>
+                        {parent.name}
+                      </span>
                       {children.length > 0 && <span className="text-xs text-[var(--muted)]">›</span>}
                     </Link>
                     {children.length > 0 && (
-                      <div className="absolute left-[calc(100%-8px)] top-0 z-40 hidden min-w-56 group-hover/parent:block">
+                      <div className="absolute left-full top-0 z-50 hidden min-w-56 pl-1 group-hover/parent:block">
                         <div className="rounded-xl border border-[var(--line)] bg-white p-2 shadow-2xl">
                           {children.map((sub) => (
                             <Link
                               key={sub.id}
                               href={`/products?mainCategory=${encodeURIComponent(parent.name)}&subCategory=${encodeURIComponent(sub.name)}`}
-                              className="block rounded-lg px-3 py-2 text-sm text-[var(--ink)] hover:bg-[var(--brand-soft)]"
+                              className="block rounded-lg px-3 py-2 text-sm text-[var(--ink)] no-underline transition hover:bg-[var(--brand-soft)]"
                             >
                               {sub.name}
                             </Link>
@@ -92,6 +122,18 @@ export default function CategoryMenu() {
             </div>
           </div>
         </div>
+
+        {/* Category Pills */}
+        {parents.map((parent) => (
+          <Link
+            key={parent.id}
+            href={`/products?mainCategory=${encodeURIComponent(parent.name)}`}
+            className="category-pill shrink-0 no-underline"
+          >
+            <span>{getCategoryIcon(parent.name)}</span>
+            {parent.name}
+          </Link>
+        ))}
       </div>
     </nav>
   );

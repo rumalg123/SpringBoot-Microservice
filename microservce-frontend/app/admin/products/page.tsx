@@ -3,8 +3,12 @@
 import { ChangeEvent, DragEvent, FormEvent, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
 import toast from "react-hot-toast";
 import AppNav from "../../components/AppNav";
+import Footer from "../../components/Footer";
+import Pagination from "../../components/Pagination";
+import ConfirmModal from "../../components/ConfirmModal";
 import { useAuthSession } from "../../../lib/authSession";
 
 type ProductType = "SINGLE" | "PARENT" | "VARIATION";
@@ -174,14 +178,14 @@ function parseNumber(value: string): number | null {
 
 function getPageMeta<T>(pageInfo: PagedResponse<T> | null) {
   if (!pageInfo) {
-    return { totalElements: 0, first: true, last: true };
+    return { totalElements: 0, totalPages: 0, first: true, last: true };
   }
   const pageNumber = pageInfo.number ?? pageInfo.page?.number ?? 0;
   const totalPages = pageInfo.totalPages ?? pageInfo.page?.totalPages ?? 1;
   const totalElements = pageInfo.totalElements ?? pageInfo.page?.totalElements ?? pageInfo.content.length;
   const first = pageInfo.first ?? pageNumber <= 0;
   const last = pageInfo.last ?? pageNumber >= Math.max(totalPages - 1, 0);
-  return { totalElements, first, last };
+  return { totalElements, totalPages, first, last };
 }
 
 export default function AdminProductsPage() {
@@ -212,6 +216,8 @@ export default function AdminProductsPage() {
     type: "PARENT",
     parentCategoryId: "",
   });
+  const [confirmAction, setConfirmAction] = useState<{ type: "product" | "category"; id: string; name: string } | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
 
   const loadCategories = useCallback(async () => {
     if (!session.apiClient) return;
@@ -622,7 +628,14 @@ export default function AdminProductsPage() {
   };
 
   if (session.status === "loading" || session.status === "idle") {
-    return <main className="mx-auto min-h-screen max-w-7xl px-6 py-10 text-[var(--muted)]">Loading...</main>;
+    return (
+      <div className="min-h-screen bg-[var(--bg)]">
+        <div className="mx-auto max-w-7xl px-4 py-10 text-center text-[var(--muted)]">
+          <div className="mx-auto w-12 h-12 animate-spin rounded-full border-4 border-[var(--line)] border-t-[var(--brand)]" />
+          <p className="mt-4">Loading...</p>
+        </div>
+      </div>
+    );
   }
 
   if (!session.isAuthenticated) {
@@ -653,7 +666,7 @@ export default function AdminProductsPage() {
       : null;
 
   return (
-    <main className="mx-auto min-h-screen max-w-7xl px-6 py-8">
+    <div className="min-h-screen bg-[var(--bg)]">
       <AppNav
         email={(session.profile?.email as string) || ""}
         canViewAdmin={session.canViewAdmin}
@@ -662,525 +675,562 @@ export default function AdminProductsPage() {
         }}
       />
 
-      <section className="card-surface animate-rise rounded-3xl p-6 md:p-8">
-        <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="text-xs tracking-[0.22em] text-[var(--muted)]">ADMIN CATALOG</p>
-            <h1 className="text-4xl text-[var(--ink)]">Product Operations</h1>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setShowDeleted(false)}
-              className={`rounded-full px-4 py-2 text-sm ${!showDeleted ? "btn-brand" : "border border-[var(--line)] bg-white"}`}
-            >
-              Active
-            </button>
-            <button
-              onClick={() => setShowDeleted(true)}
-              className={`rounded-full px-4 py-2 text-sm ${showDeleted ? "btn-brand" : "border border-[var(--line)] bg-white"}`}
-            >
-              Deleted
-            </button>
-          </div>
-        </div>
+      <main className="mx-auto max-w-7xl px-4 py-4">
+        {/* Breadcrumbs */}
+        <nav className="breadcrumb">
+          <Link href="/">Home</Link>
+          <span className="breadcrumb-sep">›</span>
+          <span className="breadcrumb-current">Admin Products</span>
+        </nav>
 
-        <form onSubmit={applyFilters} className="mb-5 grid gap-3 md:grid-cols-5">
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search text"
-            className="rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm"
-          />
-          <input
-            value={sku}
-            onChange={(e) => setSku(e.target.value)}
-            placeholder="SKU"
-            className="rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm"
-          />
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm"
-          >
-            <option value="">All Categories</option>
-            {parentCategories.length > 0 && (
-              <optgroup label="Main Categories">
-                {parentCategories
-                  .slice()
-                  .sort((a, b) => a.name.localeCompare(b.name))
-                  .map((item) => (
-                    <option key={item.id} value={item.name}>
-                      {item.name}
-                    </option>
-                  ))}
-              </optgroup>
-            )}
-            {subCategories.length > 0 && (
-              <optgroup label="Sub Categories">
-                {subCategories
-                  .slice()
-                  .sort((a, b) => a.name.localeCompare(b.name))
-                  .map((item) => (
-                    <option key={item.id} value={item.name}>
-                      {item.name}
-                    </option>
-                  ))}
-              </optgroup>
-            )}
-          </select>
-          <select
-            value={type}
-            onChange={(e) => setType(e.target.value as ProductType | "")}
-            className="rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm"
-          >
-            <option value="">All Types</option>
-            <option value="SINGLE">SINGLE</option>
-            <option value="PARENT">PARENT</option>
-            <option value="VARIATION">VARIATION</option>
-          </select>
-          <button type="submit" className="btn-brand rounded-xl px-3 py-2 text-sm font-semibold">
-            Apply Filters
-          </button>
-        </form>
-
-        <div className="grid gap-6 lg:grid-cols-[1.1fr,0.9fr]">
-          <div>
-            <h2 className="mb-3 text-2xl text-[var(--ink)]">{title}</h2>
-            <div className="overflow-hidden rounded-2xl border border-[var(--line)] bg-white">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-[#f0e8dd] text-[var(--ink)]">
-                  <tr>
-                    <th className="px-3 py-2">Name</th>
-                    <th className="px-3 py-2">SKU</th>
-                    <th className="px-3 py-2">Type</th>
-                    <th className="px-3 py-2">Price</th>
-                    <th className="px-3 py-2">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="px-3 py-6 text-center text-[var(--muted)]">
-                        No products.
-                      </td>
-                    </tr>
-                  )}
-                  {rows.map((p) => (
-                    <tr key={p.id} className="border-t border-[var(--line)]">
-                      <td className="px-3 py-2">
-                        <p className="font-semibold text-[var(--ink)]">{p.name}</p>
-                        <p className="line-clamp-1 text-xs text-[var(--muted)]">{p.shortDescription}</p>
-                      </td>
-                      <td className="px-3 py-2 font-mono text-xs text-[var(--muted)]">{p.sku}</td>
-                      <td className="px-3 py-2 text-xs text-[var(--muted)]">{p.productType}</td>
-                      <td className="px-3 py-2 text-[var(--ink)]">{money(p.sellingPrice)}</td>
-                      <td className="px-3 py-2">
-                        <div className="flex flex-wrap gap-2">
-                          {!showDeleted && (
-                            <>
-                              <button
-                                onClick={() => {
-                                  void loadToEdit(p.id);
-                                }}
-                                className="rounded-md border border-[var(--line)] bg-white px-2 py-1 text-xs"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                onClick={() => {
-                                  void softDelete(p.id);
-                                }}
-                                className="rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-700"
-                              >
-                                Delete
-                              </button>
-                            </>
-                          )}
-                          {showDeleted && (
-                            <button
-                              onClick={() => {
-                                void restore(p.id);
-                              }}
-                              className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs text-emerald-700"
-                            >
-                              Restore
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        <section className="animate-rise space-y-4 rounded-xl bg-white p-5 shadow-sm">
+          <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-[var(--brand)]">ADMIN CATALOG</p>
+              <h1 className="text-2xl font-bold text-[var(--ink)]">📦 Product Operations</h1>
             </div>
-
-            <div className="mt-3 flex items-center justify-between">
-              <p className="text-xs text-[var(--muted)]">
-                {`${pageMeta.totalElements} total`}
-              </p>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    if (!pageInfo || pageMeta.first) return;
-                    if (showDeleted) {
-                      void loadDeleted(Math.max(deletedPageIndex - 1, 0));
-                    } else {
-                      void loadActive(Math.max(page - 1, 0));
-                    }
-                  }}
-                  disabled={!pageInfo || pageMeta.first}
-                  className="rounded-md border border-[var(--line)] bg-white px-3 py-1 text-sm disabled:opacity-50"
-                >
-                  Prev
-                </button>
-                <button
-                  onClick={() => {
-                    if (!pageInfo || pageMeta.last) return;
-                    if (showDeleted) {
-                      void loadDeleted(deletedPageIndex + 1);
-                    } else {
-                      void loadActive(page + 1);
-                    }
-                  }}
-                  disabled={!pageInfo || pageMeta.last}
-                  className="rounded-md border border-[var(--line)] bg-white px-3 py-1 text-sm disabled:opacity-50"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <section className="card-surface rounded-2xl p-5">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-2xl text-[var(--ink)]">{form.id ? "Update Product" : "Create Product"}</h2>
-                {form.id && (
-                  <button
-                    onClick={() => setForm(emptyForm)}
-                    className="rounded-md border border-[var(--line)] bg-white px-2 py-1 text-xs"
-                  >
-                    Reset
-                  </button>
-                )}
-              </div>
-              <form onSubmit={submitProduct} className="grid gap-2 text-sm">
-                <input value={form.name} onChange={(e) => setForm((o) => ({ ...o, name: e.target.value }))} placeholder="Name" className="rounded-lg border border-[var(--line)] px-3 py-2" required />
-                <input value={form.shortDescription} onChange={(e) => setForm((o) => ({ ...o, shortDescription: e.target.value }))} placeholder="Short Description" className="rounded-lg border border-[var(--line)] px-3 py-2" required />
-                <textarea value={form.description} onChange={(e) => setForm((o) => ({ ...o, description: e.target.value }))} placeholder="Description" className="rounded-lg border border-[var(--line)] px-3 py-2" rows={3} required />
-                <div className="rounded-lg border border-[var(--line)] p-3">
-                  <div className="mb-2 flex items-center justify-between">
-                    <p className="text-xs text-[var(--muted)]">
-                      Product Images ({form.images.length}/{MAX_IMAGE_COUNT})
-                    </p>
-                    <label className="cursor-pointer rounded-md border border-[var(--line)] bg-white px-2 py-1 text-xs">
-                      {uploadingImages ? "Uploading..." : "Upload Images"}
-                      <input
-                        type="file"
-                        accept="image/png,image/jpeg,image/webp"
-                        multiple
-                        className="hidden"
-                        disabled={uploadingImages || form.images.length >= MAX_IMAGE_COUNT}
-                        onChange={(e) => {
-                          void uploadImages(e);
-                        }}
-                      />
-                    </label>
-                  </div>
-                  <p className="mb-2 text-[11px] text-[var(--muted)]">Max 5 images, 1MB each, 540x540 max. Drag to reorder. First image is main.</p>
-                  {form.images.length === 0 && <p className="text-xs text-[var(--muted)]">No images uploaded.</p>}
-                  <div className="grid gap-2">
-                    {form.images.map((imageName, index) => {
-                      const imageUrl = resolveImageUrl(imageName);
-                      return (
-                        <div
-                          key={`${imageName}-${index}`}
-                          draggable
-                          onDragStart={() => setDragImageIndex(index)}
-                          onDragOver={(e: DragEvent<HTMLDivElement>) => e.preventDefault()}
-                          onDrop={() => onImageDrop(index)}
-                          className="flex items-center gap-2 rounded-lg border border-[var(--line)] bg-white p-2"
-                        >
-                          <div className="h-12 w-12 overflow-hidden rounded-md border border-[var(--line)] bg-[#f6f2ea]">
-                            {imageUrl ? (
-                              <Image src={imageUrl} alt={imageName} width={48} height={48} className="h-full w-full object-cover" unoptimized />
-                            ) : (
-                              <div className="grid h-full w-full place-items-center text-[10px] text-[var(--muted)]">IMG</div>
-                            )}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs text-[var(--ink)]">{imageName}</p>
-                            <p className="text-[10px] text-[var(--muted)]">{index === 0 ? "Main image" : `Position ${index + 1}`}</p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => removeImage(index)}
-                            className="rounded border border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-                <select
-                  value={form.productType}
-                  onChange={(e) => setForm((o) => ({ ...o, productType: e.target.value as ProductType, variationsCsv: "" }))}
-                  className="rounded-lg border border-[var(--line)] px-3 py-2"
-                >
-                  <option value="SINGLE">SINGLE</option>
-                  <option value="PARENT">PARENT</option>
-                  <option value="VARIATION">VARIATION</option>
-                </select>
-                <select
-                  value={form.mainCategoryName}
-                  onChange={(e) =>
-                    setForm((o) => ({
-                      ...o,
-                      mainCategoryName: e.target.value,
-                      subCategoryNames: [],
-                    }))
-                  }
-                  className="rounded-lg border border-[var(--line)] px-3 py-2"
-                  required
-                >
-                  <option value="">Select Main Category</option>
-                  {parentCategories.map((c) => (
-                    <option key={c.id} value={c.name}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-                <div className="rounded-lg border border-[var(--line)] p-2">
-                  <p className="mb-1 text-xs text-[var(--muted)]">Sub Categories (multiple)</p>
-                  <div className="grid gap-1">
-                    {subCategoryOptions.length === 0 && (
-                      <p className="text-xs text-[var(--muted)]">No sub categories for selected main category.</p>
-                    )}
-                    {subCategoryOptions.map((c) => (
-                      <label key={c.id} className="flex items-center gap-2 text-xs text-[var(--ink)]">
-                        <input
-                          type="checkbox"
-                          checked={form.subCategoryNames.includes(c.name)}
-                          onChange={(e) =>
-                            setForm((o) => ({
-                              ...o,
-                              subCategoryNames: e.target.checked
-                                ? [...o.subCategoryNames, c.name]
-                                : o.subCategoryNames.filter((n) => n !== c.name),
-                            }))
-                          }
-                        />
-                        {c.name}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-                <input value={form.sku} onChange={(e) => setForm((o) => ({ ...o, sku: e.target.value }))} placeholder="SKU" className="rounded-lg border border-[var(--line)] px-3 py-2" required />
-                <div className="grid grid-cols-2 gap-2">
-                  <input type="number" step="0.01" min="0.01" value={form.regularPrice} onChange={(e) => setForm((o) => ({ ...o, regularPrice: e.target.value }))} placeholder="Regular Price" className="rounded-lg border border-[var(--line)] px-3 py-2" required />
-                  <input type="number" step="0.01" min="0" value={form.discountedPrice} onChange={(e) => setForm((o) => ({ ...o, discountedPrice: e.target.value }))} placeholder="Discounted Price" className="rounded-lg border border-[var(--line)] px-3 py-2" />
-                </div>
-                {priceValidationMessage && (
-                  <p className="text-xs font-semibold text-red-600">{priceValidationMessage}</p>
-                )}
-                <input value={form.vendorId} onChange={(e) => setForm((o) => ({ ...o, vendorId: e.target.value }))} placeholder="Vendor UUID (optional)" className="rounded-lg border border-[var(--line)] px-3 py-2" />
-                {form.productType === "PARENT" && (
-                  <input
-                    value={form.variationsCsv}
-                    onChange={(e) => setForm((o) => ({ ...o, variationsCsv: e.target.value }))}
-                    placeholder="Parent attributes CSV: color,size,material"
-                    className="rounded-lg border border-[var(--line)] px-3 py-2"
-                    required
-                  />
-                )}
-                {form.productType === "VARIATION" && (
-                  <input
-                    value={form.variationsCsv}
-                    onChange={(e) => setForm((o) => ({ ...o, variationsCsv: e.target.value }))}
-                    placeholder="Variation values: color:red,size:XL"
-                    className="rounded-lg border border-[var(--line)] px-3 py-2"
-                    required
-                  />
-                )}
-                <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
-                  <input type="checkbox" checked={form.active} onChange={(e) => setForm((o) => ({ ...o, active: e.target.checked }))} />
-                  Active
-                </label>
-                <button type="submit" disabled={Boolean(priceValidationMessage)} className="btn-brand rounded-lg px-3 py-2 font-semibold disabled:opacity-50">
-                  {form.id ? "Update Product" : "Create Product"}
-                </button>
-              </form>
-            </section>
-
-            <section className="card-surface rounded-2xl p-5">
-              <h3 className="text-xl text-[var(--ink)]">Create Variation For Parent</h3>
-              <p className="mt-1 text-xs text-[var(--muted)]">
-                Fill the editor fields above for child product data, then select parent and attribute values.
-              </p>
-              <input
-                value={parentSearch}
-                onChange={(e) => setParentSearch(e.target.value)}
-                placeholder="Search parent by name or SKU"
-                className="mt-3 w-full rounded-lg border border-[var(--line)] px-3 py-2 text-sm"
-              />
-              <select
-                value={variationParentId}
-                onChange={(e) => {
-                  void onSelectVariationParent(e.target.value);
-                }}
-                className="mt-3 w-full rounded-lg border border-[var(--line)] px-3 py-2 text-sm"
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowDeleted(false)}
+                className={`rounded-full px-4 py-2 text-sm ${!showDeleted ? "btn-brand" : "border border-[var(--line)] bg-white"}`}
               >
-                <option value="">Select Parent Product</option>
-                {filteredParentProducts.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} ({p.sku})
-                  </option>
-                ))}
-              </select>
-              {parentVariationAttributes.length > 0 && (
-                <div className="mt-3 grid gap-2">
-                  {parentVariationAttributes.map((attributeName) => (
-                    <input
-                      key={attributeName}
-                      value={variationAttributeValues[attributeName] || ""}
-                      onChange={(e) =>
-                        setVariationAttributeValues((old) => ({
-                          ...old,
-                          [attributeName]: e.target.value,
-                        }))
-                      }
-                      placeholder={`${attributeName} value`}
-                      className="rounded-lg border border-[var(--line)] px-3 py-2 text-sm"
-                    />
-                  ))}
-                </div>
-              )}
-              <button onClick={() => void createVariation()} disabled={Boolean(priceValidationMessage)} className="btn-brand mt-3 rounded-lg px-3 py-2 text-sm font-semibold disabled:opacity-50">
-                Create Variation
+                Active
               </button>
-            </section>
+              <button
+                onClick={() => setShowDeleted(true)}
+                className={`rounded-full px-4 py-2 text-sm ${showDeleted ? "btn-brand" : "border border-[var(--line)] bg-white"}`}
+              >
+                Deleted
+              </button>
+            </div>
+          </div>
 
-            <section className="card-surface rounded-2xl p-5">
-              <h3 className="text-xl text-[var(--ink)]">Category Operations</h3>
-              <p className="mt-1 text-xs text-[var(--muted)]">
-                One unique category name, with parent and sub hierarchy.
-              </p>
-
-              <div className="mt-3 grid gap-2 text-sm">
-                <input
-                  value={categoryForm.name}
-                  onChange={(e) => setCategoryForm((o) => ({ ...o, name: e.target.value }))}
-                  placeholder="Category name"
-                  className="rounded-lg border border-[var(--line)] px-3 py-2"
-                />
-                <select
-                  value={categoryForm.type}
-                  onChange={(e) =>
-                    setCategoryForm((o) => ({
-                      ...o,
-                      type: e.target.value as "PARENT" | "SUB",
-                      parentCategoryId: e.target.value === "SUB" ? o.parentCategoryId : "",
-                    }))
-                  }
-                  className="rounded-lg border border-[var(--line)] px-3 py-2"
-                >
-                  <option value="PARENT">PARENT</option>
-                  <option value="SUB">SUB</option>
-                </select>
-                {categoryForm.type === "SUB" && (
-                  <select
-                    value={categoryForm.parentCategoryId}
-                    onChange={(e) => setCategoryForm((o) => ({ ...o, parentCategoryId: e.target.value }))}
-                    className="rounded-lg border border-[var(--line)] px-3 py-2"
-                  >
-                    <option value="">Select parent category</option>
-                    {parentCategories.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
+          <form onSubmit={applyFilters} className="mb-5 grid gap-3 md:grid-cols-5">
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search text"
+              className="rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm"
+            />
+            <input
+              value={sku}
+              onChange={(e) => setSku(e.target.value)}
+              placeholder="SKU"
+              className="rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm"
+            />
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm"
+            >
+              <option value="">All Categories</option>
+              {parentCategories.length > 0 && (
+                <optgroup label="Main Categories">
+                  {parentCategories
+                    .slice()
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map((item) => (
+                      <option key={item.id} value={item.name}>
+                        {item.name}
                       </option>
                     ))}
-                  </select>
-                )}
-                <div className="flex gap-2">
-                  <button onClick={() => void saveCategory()} className="btn-brand rounded-lg px-3 py-2 text-xs font-semibold">
-                    {categoryForm.id ? "Update Category" : "Create Category"}
-                  </button>
-                  {categoryForm.id && (
+                </optgroup>
+              )}
+              {subCategories.length > 0 && (
+                <optgroup label="Sub Categories">
+                  {subCategories
+                    .slice()
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map((item) => (
+                      <option key={item.id} value={item.name}>
+                        {item.name}
+                      </option>
+                    ))}
+                </optgroup>
+              )}
+            </select>
+            <select
+              value={type}
+              onChange={(e) => setType(e.target.value as ProductType | "")}
+              className="rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm"
+            >
+              <option value="">All Types</option>
+              <option value="SINGLE">SINGLE</option>
+              <option value="PARENT">PARENT</option>
+              <option value="VARIATION">VARIATION</option>
+            </select>
+            <button type="submit" className="btn-brand rounded-xl px-3 py-2 text-sm font-semibold">
+              Apply Filters
+            </button>
+          </form>
+
+          <div className="grid gap-6 lg:grid-cols-[1.1fr,0.9fr]">
+            <div>
+              <h2 className="mb-3 text-2xl text-[var(--ink)]">{title}</h2>
+              <div className="overflow-hidden rounded-2xl border border-[var(--line)] bg-white">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-[#fafafa] text-[var(--ink)]">
+                    <tr>
+                      <th className="px-3 py-2">Name</th>
+                      <th className="px-3 py-2">SKU</th>
+                      <th className="px-3 py-2">Type</th>
+                      <th className="px-3 py-2">Price</th>
+                      <th className="px-3 py-2">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.length === 0 && (
+                      <tr>
+                        <td colSpan={5}>
+                          <div className="empty-state">
+                            <div className="empty-state-icon">📦</div>
+                            <p className="empty-state-title">No products</p>
+                            <p className="empty-state-desc">{showDeleted ? "No deleted products" : "Create your first product to get started"}</p>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    {rows.map((p) => (
+                      <tr key={p.id} className="border-t border-[var(--line)]">
+                        <td className="px-3 py-2">
+                          <p className="font-semibold text-[var(--ink)]">{p.name}</p>
+                          <p className="line-clamp-1 text-xs text-[var(--muted)]">{p.shortDescription}</p>
+                        </td>
+                        <td className="px-3 py-2 font-mono text-xs text-[var(--muted)]">{p.sku}</td>
+                        <td className="text-xs text-[var(--muted)]">
+                          <span className={`type-badge type-badge--${p.productType.toLowerCase()}`}>{p.productType}</span>
+                        </td>
+                        <td className="px-3 py-2 text-[var(--ink)]">{money(p.sellingPrice)}</td>
+                        <td className="px-3 py-2">
+                          <div className="flex flex-wrap gap-2">
+                            {!showDeleted && (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    void loadToEdit(p.id);
+                                  }}
+                                  className="rounded-md border border-[var(--line)] bg-white px-2 py-1 text-xs"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setConfirmAction({ type: "product", id: p.id, name: p.name });
+                                  }}
+                                  className="rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-700"
+                                >
+                                  Delete
+                                </button>
+                              </>
+                            )}
+                            {showDeleted && (
+                              <button
+                                onClick={() => {
+                                  void restore(p.id);
+                                }}
+                                className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs text-emerald-700"
+                              >
+                                Restore
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <Pagination
+                currentPage={showDeleted ? deletedPageIndex : page}
+                totalPages={pageMeta.totalPages}
+                totalElements={pageMeta.totalElements}
+                onPageChange={(p) => {
+                  if (showDeleted) {
+                    void loadDeleted(p);
+                  } else {
+                    void loadActive(p);
+                  }
+                }}
+              />
+            </div>
+
+            <div className="space-y-4">
+              <section className="card-surface rounded-2xl p-5">
+                <div className="mb-3 flex items-center justify-between">
+                  <h2 className="text-2xl text-[var(--ink)]">{form.id ? "Update Product" : "Create Product"}</h2>
+                  {form.id && (
                     <button
-                      onClick={() => setCategoryForm({ name: "", type: "PARENT", parentCategoryId: "" })}
-                      className="rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-xs"
+                      onClick={() => setForm(emptyForm)}
+                      className="rounded-md border border-[var(--line)] bg-white px-2 py-1 text-xs"
                     >
                       Reset
                     </button>
                   )}
                 </div>
-              </div>
+                <form onSubmit={submitProduct} className="grid gap-3 text-sm">
+                  <div className="form-group">
+                    <label className="form-label">Product Name</label>
+                    <input value={form.name} onChange={(e) => setForm((o) => ({ ...o, name: e.target.value }))} placeholder="e.g. Nike Air Max 90" className="rounded-lg border border-[var(--line)] px-3 py-2" required />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Short Description</label>
+                    <input value={form.shortDescription} onChange={(e) => setForm((o) => ({ ...o, shortDescription: e.target.value }))} placeholder="Brief product summary" className="rounded-lg border border-[var(--line)] px-3 py-2" required />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Description</label>
+                    <textarea value={form.description} onChange={(e) => setForm((o) => ({ ...o, description: e.target.value }))} placeholder="Full product description" className="rounded-lg border border-[var(--line)] px-3 py-2" rows={3} required />
+                  </div>
+                  <div className="rounded-lg border border-[var(--line)] p-3">
+                    <div className="mb-2 flex items-center justify-between">
+                      <p className="text-xs text-[var(--muted)]">
+                        Product Images ({form.images.length}/{MAX_IMAGE_COUNT})
+                      </p>
+                      <label className="cursor-pointer rounded-md border border-[var(--line)] bg-white px-2 py-1 text-xs">
+                        {uploadingImages ? "Uploading..." : "Upload Images"}
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          multiple
+                          className="hidden"
+                          disabled={uploadingImages || form.images.length >= MAX_IMAGE_COUNT}
+                          onChange={(e) => {
+                            void uploadImages(e);
+                          }}
+                        />
+                      </label>
+                    </div>
+                    <p className="mb-2 text-[11px] text-[var(--muted)]">Max 5 images, 1MB each, 540x540 max. Drag to reorder. First image is main.</p>
+                    {form.images.length === 0 && <p className="text-xs text-[var(--muted)]">No images uploaded.</p>}
+                    <div className="grid gap-2">
+                      {form.images.map((imageName, index) => {
+                        const imageUrl = resolveImageUrl(imageName);
+                        return (
+                          <div
+                            key={`${imageName}-${index}`}
+                            draggable
+                            onDragStart={() => setDragImageIndex(index)}
+                            onDragOver={(e: DragEvent<HTMLDivElement>) => e.preventDefault()}
+                            onDrop={() => onImageDrop(index)}
+                            className="flex items-center gap-2 rounded-lg border border-[var(--line)] bg-white p-2"
+                          >
+                            <div className="h-12 w-12 overflow-hidden rounded-md border border-[var(--line)] bg-[#f8f8f8]">
+                              {imageUrl ? (
+                                <Image src={imageUrl} alt={imageName} width={48} height={48} className="h-full w-full object-cover" unoptimized />
+                              ) : (
+                                <div className="grid h-full w-full place-items-center text-[10px] text-[var(--muted)]">IMG</div>
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-xs text-[var(--ink)]">{imageName}</p>
+                              <p className="text-[10px] text-[var(--muted)]">{index === 0 ? "Main image" : `Position ${index + 1}`}</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeImage(index)}
+                              className="rounded border border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <select
+                    value={form.productType}
+                    onChange={(e) => setForm((o) => ({ ...o, productType: e.target.value as ProductType, variationsCsv: "" }))}
+                    className="rounded-lg border border-[var(--line)] px-3 py-2"
+                  >
+                    <option value="SINGLE">SINGLE</option>
+                    <option value="PARENT">PARENT</option>
+                    <option value="VARIATION">VARIATION</option>
+                  </select>
+                  <select
+                    value={form.mainCategoryName}
+                    onChange={(e) =>
+                      setForm((o) => ({
+                        ...o,
+                        mainCategoryName: e.target.value,
+                        subCategoryNames: [],
+                      }))
+                    }
+                    className="rounded-lg border border-[var(--line)] px-3 py-2"
+                    required
+                  >
+                    <option value="">Select Main Category</option>
+                    {parentCategories.map((c) => (
+                      <option key={c.id} value={c.name}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="rounded-lg border border-[var(--line)] p-2">
+                    <p className="mb-1 text-xs text-[var(--muted)]">Sub Categories (multiple)</p>
+                    <div className="grid gap-1">
+                      {subCategoryOptions.length === 0 && (
+                        <p className="text-xs text-[var(--muted)]">No sub categories for selected main category.</p>
+                      )}
+                      {subCategoryOptions.map((c) => (
+                        <label key={c.id} className="flex items-center gap-2 text-xs text-[var(--ink)]">
+                          <input
+                            type="checkbox"
+                            checked={form.subCategoryNames.includes(c.name)}
+                            onChange={(e) =>
+                              setForm((o) => ({
+                                ...o,
+                                subCategoryNames: e.target.checked
+                                  ? [...o.subCategoryNames, c.name]
+                                  : o.subCategoryNames.filter((n) => n !== c.name),
+                              }))
+                            }
+                          />
+                          {c.name}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">SKU</label>
+                    <input value={form.sku} onChange={(e) => setForm((o) => ({ ...o, sku: e.target.value }))} placeholder="e.g. NK-AM90-BLK-42" className="rounded-lg border border-[var(--line)] px-3 py-2" required />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="form-group">
+                      <label className="form-label">Regular Price</label>
+                      <input type="number" step="0.01" min="0.01" value={form.regularPrice} onChange={(e) => setForm((o) => ({ ...o, regularPrice: e.target.value }))} placeholder="0.00" className="rounded-lg border border-[var(--line)] px-3 py-2" required />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Discounted Price</label>
+                      <input type="number" step="0.01" min="0" value={form.discountedPrice} onChange={(e) => setForm((o) => ({ ...o, discountedPrice: e.target.value }))} placeholder="Optional" className="rounded-lg border border-[var(--line)] px-3 py-2" />
+                    </div>
+                  </div>
+                  {priceValidationMessage && (
+                    <p className="text-xs font-semibold text-red-600">{priceValidationMessage}</p>
+                  )}
+                  <input value={form.vendorId} onChange={(e) => setForm((o) => ({ ...o, vendorId: e.target.value }))} placeholder="Vendor UUID (optional)" className="rounded-lg border border-[var(--line)] px-3 py-2" />
+                  {form.productType === "PARENT" && (
+                    <input
+                      value={form.variationsCsv}
+                      onChange={(e) => setForm((o) => ({ ...o, variationsCsv: e.target.value }))}
+                      placeholder="Parent attributes CSV: color,size,material"
+                      className="rounded-lg border border-[var(--line)] px-3 py-2"
+                      required
+                    />
+                  )}
+                  {form.productType === "VARIATION" && (
+                    <input
+                      value={form.variationsCsv}
+                      onChange={(e) => setForm((o) => ({ ...o, variationsCsv: e.target.value }))}
+                      placeholder="Variation values: color:red,size:XL"
+                      className="rounded-lg border border-[var(--line)] px-3 py-2"
+                      required
+                    />
+                  )}
+                  <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
+                    <input type="checkbox" checked={form.active} onChange={(e) => setForm((o) => ({ ...o, active: e.target.checked }))} />
+                    Active
+                  </label>
+                  <button type="submit" disabled={Boolean(priceValidationMessage)} className="btn-brand rounded-lg px-3 py-2 font-semibold disabled:opacity-50">
+                    {form.id ? "Update Product" : "Create Product"}
+                  </button>
+                </form>
+              </section>
 
-              <div className="mt-4">
-                <p className="text-xs tracking-[0.2em] text-[var(--muted)]">ACTIVE CATEGORIES</p>
-                <div className="mt-2 max-h-40 overflow-auto rounded-lg border border-[var(--line)] p-2">
-                  {categories.map((c) => (
-                    <div key={c.id} className="mb-1 flex items-center justify-between rounded-md px-2 py-1 hover:bg-[var(--brand-soft)]">
-                      <span className="text-xs text-[var(--ink)]">
-                        {c.name} ({c.type})
-                      </span>
-                      <div className="flex gap-1">
-                        <button
-                          onClick={() =>
-                            setCategoryForm({
-                              id: c.id,
-                              name: c.name,
-                              type: c.type,
-                              parentCategoryId: c.parentCategoryId || "",
-                            })
-                          }
-                          className="rounded border border-[var(--line)] bg-white px-2 py-0.5 text-[10px]"
-                        >
-                          Edit
-                        </button>
+              <section className="card-surface rounded-2xl p-5">
+                <h3 className="text-xl text-[var(--ink)]">Create Variation For Parent</h3>
+                <p className="mt-1 text-xs text-[var(--muted)]">
+                  Fill the editor fields above for child product data, then select parent and attribute values.
+                </p>
+                <input
+                  value={parentSearch}
+                  onChange={(e) => setParentSearch(e.target.value)}
+                  placeholder="Search parent by name or SKU"
+                  className="mt-3 w-full rounded-lg border border-[var(--line)] px-3 py-2 text-sm"
+                />
+                <select
+                  value={variationParentId}
+                  onChange={(e) => {
+                    void onSelectVariationParent(e.target.value);
+                  }}
+                  className="mt-3 w-full rounded-lg border border-[var(--line)] px-3 py-2 text-sm"
+                >
+                  <option value="">Select Parent Product</option>
+                  {filteredParentProducts.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({p.sku})
+                    </option>
+                  ))}
+                </select>
+                {parentVariationAttributes.length > 0 && (
+                  <div className="mt-3 grid gap-2">
+                    {parentVariationAttributes.map((attributeName) => (
+                      <input
+                        key={attributeName}
+                        value={variationAttributeValues[attributeName] || ""}
+                        onChange={(e) =>
+                          setVariationAttributeValues((old) => ({
+                            ...old,
+                            [attributeName]: e.target.value,
+                          }))
+                        }
+                        placeholder={`${attributeName} value`}
+                        className="rounded-lg border border-[var(--line)] px-3 py-2 text-sm"
+                      />
+                    ))}
+                  </div>
+                )}
+                <button onClick={() => void createVariation()} disabled={Boolean(priceValidationMessage)} className="btn-brand mt-3 rounded-lg px-3 py-2 text-sm font-semibold disabled:opacity-50">
+                  Create Variation
+                </button>
+              </section>
+
+              <section className="card-surface rounded-2xl p-5">
+                <h3 className="text-xl text-[var(--ink)]">Category Operations</h3>
+                <p className="mt-1 text-xs text-[var(--muted)]">
+                  One unique category name, with parent and sub hierarchy.
+                </p>
+
+                <div className="mt-3 grid gap-2 text-sm">
+                  <input
+                    value={categoryForm.name}
+                    onChange={(e) => setCategoryForm((o) => ({ ...o, name: e.target.value }))}
+                    placeholder="Category name"
+                    className="rounded-lg border border-[var(--line)] px-3 py-2"
+                  />
+                  <select
+                    value={categoryForm.type}
+                    onChange={(e) =>
+                      setCategoryForm((o) => ({
+                        ...o,
+                        type: e.target.value as "PARENT" | "SUB",
+                        parentCategoryId: e.target.value === "SUB" ? o.parentCategoryId : "",
+                      }))
+                    }
+                    className="rounded-lg border border-[var(--line)] px-3 py-2"
+                  >
+                    <option value="PARENT">PARENT</option>
+                    <option value="SUB">SUB</option>
+                  </select>
+                  {categoryForm.type === "SUB" && (
+                    <select
+                      value={categoryForm.parentCategoryId}
+                      onChange={(e) => setCategoryForm((o) => ({ ...o, parentCategoryId: e.target.value }))}
+                      className="rounded-lg border border-[var(--line)] px-3 py-2"
+                    >
+                      <option value="">Select parent category</option>
+                      {parentCategories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <div className="flex gap-2">
+                    <button onClick={() => void saveCategory()} className="btn-brand rounded-lg px-3 py-2 text-xs font-semibold">
+                      {categoryForm.id ? "Update Category" : "Create Category"}
+                    </button>
+                    {categoryForm.id && (
+                      <button
+                        onClick={() => setCategoryForm({ name: "", type: "PARENT", parentCategoryId: "" })}
+                        className="rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-xs"
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <p className="text-xs tracking-[0.2em] text-[var(--muted)]">ACTIVE CATEGORIES</p>
+                  <div className="mt-2 max-h-40 overflow-auto rounded-lg border border-[var(--line)] p-2">
+                    {categories.map((c) => (
+                      <div key={c.id} className="mb-1 flex items-center justify-between rounded-md px-2 py-1 hover:bg-[var(--brand-soft)]">
+                        <span className="text-xs text-[var(--ink)]">
+                          {c.name} ({c.type})
+                        </span>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() =>
+                              setCategoryForm({
+                                id: c.id,
+                                name: c.name,
+                                type: c.type,
+                                parentCategoryId: c.parentCategoryId || "",
+                              })
+                            }
+                            className="rounded border border-[var(--line)] bg-white px-2 py-0.5 text-[10px]"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => {
+                              setConfirmAction({ type: "category", id: c.id, name: c.name });
+                            }}
+                            className="rounded border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] text-red-700"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <p className="text-xs tracking-[0.2em] text-[var(--muted)]">DELETED CATEGORIES</p>
+                  <div className="mt-2 max-h-32 overflow-auto rounded-lg border border-[var(--line)] p-2">
+                    {deletedCategories.length === 0 && <p className="text-xs text-[var(--muted)]">No deleted categories.</p>}
+                    {deletedCategories.map((c) => (
+                      <div key={c.id} className="mb-1 flex items-center justify-between rounded-md px-2 py-1">
+                        <span className="text-xs text-[var(--ink)]">
+                          {c.name} ({c.type})
+                        </span>
                         <button
                           onClick={() => {
-                            void deleteCategory(c.id);
+                            void restoreCategory(c.id);
                           }}
-                          className="rounded border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] text-red-700"
+                          className="rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] text-emerald-700"
                         >
-                          Delete
+                          Restore
                         </button>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-
-              <div className="mt-4">
-                <p className="text-xs tracking-[0.2em] text-[var(--muted)]">DELETED CATEGORIES</p>
-                <div className="mt-2 max-h-32 overflow-auto rounded-lg border border-[var(--line)] p-2">
-                  {deletedCategories.length === 0 && <p className="text-xs text-[var(--muted)]">No deleted categories.</p>}
-                  {deletedCategories.map((c) => (
-                    <div key={c.id} className="mb-1 flex items-center justify-between rounded-md px-2 py-1">
-                      <span className="text-xs text-[var(--ink)]">
-                        {c.name} ({c.type})
-                      </span>
-                      <button
-                        onClick={() => {
-                          void restoreCategory(c.id);
-                        }}
-                        className="rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] text-emerald-700"
-                      >
-                        Restore
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </section>
+              </section>
+            </div>
           </div>
-        </div>
 
-        <p className="mt-5 text-xs text-[var(--muted)]">{status}</p>
-      </section>
-    </main>
+          <p className="mt-5 text-xs text-[var(--muted)]">{status}</p>
+        </section>
+      </main>
+
+      <ConfirmModal
+        open={confirmAction !== null}
+        title={confirmAction?.type === "product" ? "Delete Product" : "Delete Category"}
+        message={`Are you sure you want to delete "${confirmAction?.name ?? ""}"? This action can be reversed from the deleted items list.`}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        danger
+        loading={confirmLoading}
+        onCancel={() => setConfirmAction(null)}
+        onConfirm={async () => {
+          if (!confirmAction) return;
+          setConfirmLoading(true);
+          try {
+            if (confirmAction.type === "product") {
+              await softDelete(confirmAction.id);
+            } else {
+              await deleteCategory(confirmAction.id);
+            }
+          } finally {
+            setConfirmLoading(false);
+            setConfirmAction(null);
+          }
+        }}
+      />
+
+      <Footer />
+    </div>
   );
 }
