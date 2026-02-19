@@ -231,6 +231,16 @@ export default function AdminProductsPage() {
   });
   const [confirmAction, setConfirmAction] = useState<{ type: "product" | "category"; id: string; name: string } | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
+  const [filtersSubmitting, setFiltersSubmitting] = useState(false);
+  const [loadingProductId, setLoadingProductId] = useState<string | null>(null);
+  const [savingProduct, setSavingProduct] = useState(false);
+  const [creatingQueuedVariationBatch, setCreatingQueuedVariationBatch] = useState(false);
+  const [selectingVariationParentId, setSelectingVariationParentId] = useState<string | null>(null);
+  const [restoringProductId, setRestoringProductId] = useState<string | null>(null);
+  const [savingCategory, setSavingCategory] = useState(false);
+  const [restoringCategoryId, setRestoringCategoryId] = useState<string | null>(null);
+  const [loadingActiveList, setLoadingActiveList] = useState(false);
+  const [loadingDeletedList, setLoadingDeletedList] = useState(false);
 
   const loadCategories = useCallback(async () => {
     if (!session.apiClient) return;
@@ -247,18 +257,23 @@ export default function AdminProductsPage() {
   const loadActive = useCallback(
     async (targetPage: number) => {
       if (!session.apiClient) return;
-      const params = new URLSearchParams();
-      params.set("page", String(targetPage));
-      params.set("size", "12");
-      params.set("sort", "createdAt,DESC");
-      if (q.trim()) params.set("q", q.trim());
-      if (sku.trim()) params.set("sku", sku.trim());
-      if (category.trim()) params.set("category", category.trim());
-      if (type) params.set("type", type);
+      setLoadingActiveList(true);
+      try {
+        const params = new URLSearchParams();
+        params.set("page", String(targetPage));
+        params.set("size", "12");
+        params.set("sort", "createdAt,DESC");
+        if (q.trim()) params.set("q", q.trim());
+        if (sku.trim()) params.set("sku", sku.trim());
+        if (category.trim()) params.set("category", category.trim());
+        if (type) params.set("type", type);
 
-      const res = await session.apiClient.get(`/products?${params.toString()}`);
-      setActivePage(res.data as PagedResponse<ProductSummary>);
-      setPage(targetPage);
+        const res = await session.apiClient.get(`/products?${params.toString()}`);
+        setActivePage(res.data as PagedResponse<ProductSummary>);
+        setPage(targetPage);
+      } finally {
+        setLoadingActiveList(false);
+      }
     },
     [session.apiClient, q, sku, category, type]
   );
@@ -266,18 +281,23 @@ export default function AdminProductsPage() {
   const loadDeleted = useCallback(
     async (targetPage: number) => {
       if (!session.apiClient) return;
-      const params = new URLSearchParams();
-      params.set("page", String(targetPage));
-      params.set("size", "12");
-      params.set("sort", "updatedAt,DESC");
-      if (q.trim()) params.set("q", q.trim());
-      if (sku.trim()) params.set("sku", sku.trim());
-      if (category.trim()) params.set("category", category.trim());
-      if (type) params.set("type", type);
+      setLoadingDeletedList(true);
+      try {
+        const params = new URLSearchParams();
+        params.set("page", String(targetPage));
+        params.set("size", "12");
+        params.set("sort", "updatedAt,DESC");
+        if (q.trim()) params.set("q", q.trim());
+        if (sku.trim()) params.set("sku", sku.trim());
+        if (category.trim()) params.set("category", category.trim());
+        if (type) params.set("type", type);
 
-      const res = await session.apiClient.get(`/admin/products/deleted?${params.toString()}`);
-      setDeletedPage(res.data as PagedResponse<ProductSummary>);
-      setDeletedPageIndex(targetPage);
+        const res = await session.apiClient.get(`/admin/products/deleted?${params.toString()}`);
+        setDeletedPage(res.data as PagedResponse<ProductSummary>);
+        setDeletedPageIndex(targetPage);
+      } finally {
+        setLoadingDeletedList(false);
+      }
     },
     [session.apiClient, q, sku, category, type]
   );
@@ -326,17 +346,23 @@ export default function AdminProductsPage() {
 
   const applyFilters = async (e: FormEvent) => {
     e.preventDefault();
+    if (filtersSubmitting) return;
+    setFiltersSubmitting(true);
     setStatus("Applying filters...");
     try {
       await Promise.all([loadActive(0), loadDeleted(0)]);
       setStatus("Filters applied.");
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Failed to filter.");
+    } finally {
+      setFiltersSubmitting(false);
     }
   };
 
   const loadToEdit = async (id: string) => {
     if (!session.apiClient) return;
+    if (loadingProductId) return;
+    setLoadingProductId(id);
     setStatus("Loading product into editor...");
     try {
       const res = await session.apiClient.get(`/products/${id}`);
@@ -393,6 +419,8 @@ export default function AdminProductsPage() {
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Failed to load product details.");
       toast.error(err instanceof Error ? err.message : "Failed to load product details");
+    } finally {
+      setLoadingProductId(null);
     }
   };
 
@@ -598,6 +626,7 @@ export default function AdminProductsPage() {
 
   const createQueuedVariations = async () => {
     if (!session.apiClient) return;
+    if (creatingQueuedVariationBatch) return;
     if (variationDrafts.length === 0) {
       toast.error("Add at least one child variation");
       return;
@@ -621,6 +650,7 @@ export default function AdminProductsPage() {
       }
       queueSignatures.add(signatureKey);
     }
+    setCreatingQueuedVariationBatch(true);
     setStatus(`Creating ${variationDrafts.length} variation product(s)...`);
     try {
       for (const draft of variationDrafts) {
@@ -659,12 +689,15 @@ export default function AdminProductsPage() {
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Variation create failed.");
       toast.error(err instanceof Error ? err.message : "Variation create failed");
+    } finally {
+      setCreatingQueuedVariationBatch(false);
     }
   };
 
   const submitProduct = async (e: FormEvent) => {
     e.preventDefault();
     if (!session.apiClient) return;
+    if (savingProduct) return;
     if (priceValidationMessage) {
       toast.error(priceValidationMessage);
       return;
@@ -679,6 +712,7 @@ export default function AdminProductsPage() {
       return;
     }
 
+    setSavingProduct(true);
     try {
       let payload: {
         name: string;
@@ -743,10 +777,13 @@ export default function AdminProductsPage() {
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Save failed.");
       toast.error(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setSavingProduct(false);
     }
   };
 
   const onSelectVariationParent = async (parentId: string) => {
+    if (selectingVariationParentId) return;
     if (variationDrafts.length > 0 && variationDrafts.some((draft) => draft.parentId !== parentId)) {
       setVariationDrafts([]);
       toast("Variation queue cleared because parent product changed.");
@@ -760,6 +797,7 @@ export default function AdminProductsPage() {
     setParentVariationAttributes([]);
     setVariationAttributeValues({});
     if (!session.apiClient || !parentId) return;
+    setSelectingVariationParentId(parentId);
     try {
       const res = await session.apiClient.get(`/products/${parentId}`);
       const parent = res.data as ProductDetail;
@@ -778,6 +816,8 @@ export default function AdminProductsPage() {
       }));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to load parent product");
+    } finally {
+      setSelectingVariationParentId(null);
     }
   };
 
@@ -797,6 +837,7 @@ export default function AdminProductsPage() {
 
   const softDelete = async (id: string) => {
     if (!session.apiClient) return;
+    if (confirmLoading) return;
     setStatus("Deleting product...");
     try {
       await session.apiClient.delete(`/admin/products/${id}`);
@@ -812,6 +853,8 @@ export default function AdminProductsPage() {
 
   const restore = async (id: string) => {
     if (!session.apiClient) return;
+    if (restoringProductId) return;
+    setRestoringProductId(id);
     setStatus("Restoring product...");
     try {
       await session.apiClient.post(`/admin/products/${id}/restore`);
@@ -822,12 +865,16 @@ export default function AdminProductsPage() {
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Restore failed.");
       toast.error(err instanceof Error ? err.message : "Restore failed");
+    } finally {
+      setRestoringProductId(null);
     }
   };
 
   const saveCategory = async () => {
     if (!session.apiClient) return;
+    if (savingCategory) return;
     if (!categoryForm.name.trim()) return;
+    setSavingCategory(true);
     const payload = {
       name: categoryForm.name.trim(),
       type: categoryForm.type,
@@ -848,11 +895,14 @@ export default function AdminProductsPage() {
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Category save failed.");
       toast.error(err instanceof Error ? err.message : "Category save failed");
+    } finally {
+      setSavingCategory(false);
     }
   };
 
   const deleteCategory = async (id: string) => {
     if (!session.apiClient) return;
+    if (confirmLoading) return;
     setStatus("Deleting category...");
     try {
       await session.apiClient.delete(`/admin/categories/${id}`);
@@ -867,6 +917,8 @@ export default function AdminProductsPage() {
 
   const restoreCategory = async (id: string) => {
     if (!session.apiClient) return;
+    if (restoringCategoryId) return;
+    setRestoringCategoryId(id);
     setStatus("Restoring category...");
     try {
       await session.apiClient.post(`/admin/categories/${id}/restore`);
@@ -876,6 +928,8 @@ export default function AdminProductsPage() {
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Restore category failed.");
       toast.error(err instanceof Error ? err.message : "Restore category failed");
+    } finally {
+      setRestoringCategoryId(null);
     }
   };
 
@@ -979,6 +1033,10 @@ export default function AdminProductsPage() {
     regularPriceValue !== null && discountedPriceValue !== null && discountedPriceValue > regularPriceValue
       ? "Discounted price cannot be greater than regular price."
       : null;
+  const listLoading = showDeleted ? loadingDeletedList : loadingActiveList;
+  const productMutationBusy = savingProduct || creatingQueuedVariationBatch || uploadingImages;
+  const productRowActionBusy = Boolean(loadingProductId) || confirmLoading || Boolean(restoringProductId) || listLoading;
+  const categoryMutationBusy = savingCategory || confirmLoading || Boolean(restoringCategoryId);
 
   return (
     <div className="min-h-screen bg-[var(--bg)]">
@@ -1006,14 +1064,18 @@ export default function AdminProductsPage() {
             </div>
             <div className="flex gap-2">
               <button
+                type="button"
                 onClick={() => setShowDeleted(false)}
-                className={`rounded-full px-4 py-2 text-sm ${!showDeleted ? "btn-brand" : "border border-[var(--line)] bg-white"}`}
+                disabled={filtersSubmitting || listLoading}
+                className={`rounded-full px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60 ${!showDeleted ? "btn-brand" : "border border-[var(--line)] bg-white"}`}
               >
                 Active
               </button>
               <button
+                type="button"
                 onClick={() => setShowDeleted(true)}
-                className={`rounded-full px-4 py-2 text-sm ${showDeleted ? "btn-brand" : "border border-[var(--line)] bg-white"}`}
+                disabled={filtersSubmitting || listLoading}
+                className={`rounded-full px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60 ${showDeleted ? "btn-brand" : "border border-[var(--line)] bg-white"}`}
               >
                 Deleted
               </button>
@@ -1074,8 +1136,12 @@ export default function AdminProductsPage() {
               <option value="PARENT">PARENT</option>
               <option value="VARIATION">VARIATION</option>
             </select>
-            <button type="submit" className="btn-brand rounded-xl px-3 py-2 text-sm font-semibold">
-              Apply Filters
+            <button
+              type="submit"
+              disabled={filtersSubmitting || listLoading}
+              className="btn-brand rounded-xl px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {(filtersSubmitting || listLoading) ? "Applying..." : "Apply Filters"}
             </button>
           </form>
 
@@ -1121,18 +1187,22 @@ export default function AdminProductsPage() {
                             {!showDeleted && (
                               <>
                                 <button
+                                  type="button"
                                   onClick={() => {
                                     void loadToEdit(p.id);
                                   }}
-                                  className="rounded-md border border-[var(--line)] bg-white px-2 py-1 text-xs"
+                                  disabled={productRowActionBusy}
+                                  className="rounded-md border border-[var(--line)] bg-white px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
                                 >
-                                  Edit
+                                  {loadingProductId === p.id ? "Loading..." : "Edit"}
                                 </button>
                                 <button
+                                  type="button"
                                   onClick={() => {
                                     setConfirmAction({ type: "product", id: p.id, name: p.name });
                                   }}
-                                  className="rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-700"
+                                  disabled={productRowActionBusy}
+                                  className="rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
                                 >
                                   Delete
                                 </button>
@@ -1140,12 +1210,14 @@ export default function AdminProductsPage() {
                             )}
                             {showDeleted && (
                               <button
+                                type="button"
                                 onClick={() => {
                                   void restore(p.id);
                                 }}
-                                className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs text-emerald-700"
+                                disabled={productRowActionBusy}
+                                className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs text-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
                               >
-                                Restore
+                                {restoringProductId === p.id ? "Restoring..." : "Restore"}
                               </button>
                             )}
                           </div>
@@ -1167,6 +1239,7 @@ export default function AdminProductsPage() {
                     void loadActive(p);
                   }
                 }}
+                disabled={listLoading}
               />
             </div>
 
@@ -1176,6 +1249,7 @@ export default function AdminProductsPage() {
                   <h2 className="text-2xl text-[var(--ink)]">{form.id ? "Update Product" : "Create Product"}</h2>
                   {form.id && (
                     <button
+                      type="button"
                       onClick={() => {
                         setForm(emptyForm);
                         setParentAttributeNames([]);
@@ -1187,7 +1261,8 @@ export default function AdminProductsPage() {
                         setVariationAttributeValues({});
                         setVariationDrafts([]);
                       }}
-                      className="rounded-md border border-[var(--line)] bg-white px-2 py-1 text-xs"
+                      disabled={productMutationBusy}
+                      className="rounded-md border border-[var(--line)] bg-white px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       Reset
                     </button>
@@ -1218,7 +1293,7 @@ export default function AdminProductsPage() {
                           accept="image/png,image/jpeg,image/webp"
                           multiple
                           className="hidden"
-                          disabled={uploadingImages || form.images.length >= MAX_IMAGE_COUNT}
+                          disabled={productMutationBusy || form.images.length >= MAX_IMAGE_COUNT}
                           onChange={(e) => {
                             void uploadImages(e);
                           }}
@@ -1253,7 +1328,8 @@ export default function AdminProductsPage() {
                             <button
                               type="button"
                               onClick={() => removeImage(index)}
-                              className="rounded border border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700"
+                              disabled={productMutationBusy}
+                              className="rounded border border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
                             >
                               Remove
                             </button>
@@ -1367,7 +1443,12 @@ export default function AdminProductsPage() {
                           placeholder="Attribute name"
                           className="flex-1 rounded-lg border border-[var(--line)] px-3 py-2"
                         />
-                        <button type="button" onClick={addParentAttribute} className="rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-xs">
+                        <button
+                          type="button"
+                          onClick={addParentAttribute}
+                          disabled={productMutationBusy}
+                          className="rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-60"
+                        >
                           Add
                         </button>
                       </div>
@@ -1384,7 +1465,8 @@ export default function AdminProductsPage() {
                             <button
                               type="button"
                               onClick={() => removeParentAttribute(name)}
-                              className="rounded-full border border-[var(--line)] bg-white px-1.5 text-[10px] leading-4"
+                              disabled={productMutationBusy}
+                              className="rounded-full border border-[var(--line)] bg-white px-1.5 text-[10px] leading-4 disabled:cursor-not-allowed disabled:opacity-60"
                             >
                               x
                             </button>
@@ -1416,9 +1498,10 @@ export default function AdminProductsPage() {
                             onClick={() => {
                               void onSelectVariationParent(p.id);
                             }}
+                            disabled={Boolean(selectingVariationParentId) || productMutationBusy}
                             className={`flex w-full items-center justify-between px-3 py-2 text-left text-xs transition hover:bg-[var(--brand-soft)] ${
                               variationParentId === p.id ? "bg-[var(--brand-soft)]" : ""
-                            }`}
+                            } disabled:cursor-not-allowed disabled:opacity-60`}
                           >
                             <span className="text-[var(--ink)]">{p.name}</span>
                             <span className="text-[var(--muted)]">{p.sku}</span>
@@ -1429,6 +1512,9 @@ export default function AdminProductsPage() {
                         <p className="mt-2 text-xs text-[var(--muted)]">
                           Selected parent: <span className="font-semibold text-[var(--ink)]">{selectedVariationParent.name}</span> ({selectedVariationParent.sku})
                         </p>
+                      )}
+                      {selectingVariationParentId && (
+                        <p className="mt-2 text-xs text-[var(--muted)]">Loading parent attributes...</p>
                       )}
                       {parentVariationAttributes.length > 0 && (
                         <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -1454,7 +1540,12 @@ export default function AdminProductsPage() {
                         </p>
                       )}
                       <div className="mt-3 flex flex-wrap gap-2">
-                        <button type="button" onClick={addVariationDraft} disabled={Boolean(priceValidationMessage)} className="btn-brand rounded-lg px-3 py-2 text-xs font-semibold disabled:opacity-50">
+                        <button
+                          type="button"
+                          onClick={addVariationDraft}
+                          disabled={Boolean(priceValidationMessage) || productMutationBusy || Boolean(selectingVariationParentId)}
+                          className="btn-brand rounded-lg px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                        >
                           Add Another Variation
                         </button>
                         <button
@@ -1462,16 +1553,19 @@ export default function AdminProductsPage() {
                           onClick={() => {
                             void createQueuedVariations();
                           }}
-                          disabled={variationDrafts.length === 0 || Boolean(priceValidationMessage)}
-                          className="rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-xs font-semibold disabled:opacity-50"
+                          disabled={variationDrafts.length === 0 || Boolean(priceValidationMessage) || creatingQueuedVariationBatch || savingProduct}
+                          className="rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          Create Queued Variations ({variationDrafts.length})
+                          {creatingQueuedVariationBatch
+                            ? `Creating... (${variationDrafts.length})`
+                            : `Create Queued Variations (${variationDrafts.length})`}
                         </button>
                         {variationDrafts.length > 0 && (
                           <button
                             type="button"
                             onClick={() => setVariationDrafts([])}
-                            className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700"
+                            disabled={creatingQueuedVariationBatch}
+                            className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             Clear Queue
                           </button>
@@ -1493,14 +1587,16 @@ export default function AdminProductsPage() {
                                     <button
                                       type="button"
                                       onClick={() => loadVariationDraftToForm(draft.id)}
-                                      className="rounded border border-[var(--line)] bg-white px-2 py-0.5 text-[10px]"
+                                      disabled={creatingQueuedVariationBatch || savingProduct}
+                                      className="rounded border border-[var(--line)] bg-white px-2 py-0.5 text-[10px] disabled:cursor-not-allowed disabled:opacity-60"
                                     >
                                       Load To Form
                                     </button>
                                     <button
                                       type="button"
                                       onClick={() => removeVariationDraft(draft.id)}
-                                      className="rounded border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] text-red-700"
+                                      disabled={creatingQueuedVariationBatch || savingProduct}
+                                      className="rounded border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
                                     >
                                       Remove
                                     </button>
@@ -1579,8 +1675,14 @@ export default function AdminProductsPage() {
                     <input type="checkbox" checked={form.active} onChange={(e) => setForm((o) => ({ ...o, active: e.target.checked }))} />
                     Active
                   </label>
-                  <button type="submit" disabled={Boolean(priceValidationMessage)} className="btn-brand rounded-lg px-3 py-2 font-semibold disabled:opacity-50">
-                    {form.productType === "VARIATION" && !form.id
+                  <button
+                    type="submit"
+                    disabled={Boolean(priceValidationMessage) || savingProduct || creatingQueuedVariationBatch || uploadingImages || Boolean(selectingVariationParentId)}
+                    className="btn-brand rounded-lg px-3 py-2 font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {savingProduct
+                      ? "Saving..."
+                      : form.productType === "VARIATION" && !form.id
                       ? "Add Child Variation"
                       : form.id
                         ? "Update Product"
@@ -1631,13 +1733,20 @@ export default function AdminProductsPage() {
                     </select>
                   )}
                   <div className="flex gap-2">
-                    <button onClick={() => void saveCategory()} className="btn-brand rounded-lg px-3 py-2 text-xs font-semibold">
-                      {categoryForm.id ? "Update Category" : "Create Category"}
+                    <button
+                      type="button"
+                      onClick={() => void saveCategory()}
+                      disabled={categoryMutationBusy}
+                      className="btn-brand rounded-lg px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {savingCategory ? "Saving..." : categoryForm.id ? "Update Category" : "Create Category"}
                     </button>
                     {categoryForm.id && (
                       <button
+                        type="button"
                         onClick={() => setCategoryForm({ name: "", type: "PARENT", parentCategoryId: "" })}
-                        className="rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-xs"
+                        disabled={categoryMutationBusy}
+                        className="rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         Reset
                       </button>
@@ -1655,6 +1764,7 @@ export default function AdminProductsPage() {
                         </span>
                         <div className="flex gap-1">
                           <button
+                            type="button"
                             onClick={() =>
                               setCategoryForm({
                                 id: c.id,
@@ -1663,15 +1773,18 @@ export default function AdminProductsPage() {
                                 parentCategoryId: c.parentCategoryId || "",
                               })
                             }
-                            className="rounded border border-[var(--line)] bg-white px-2 py-0.5 text-[10px]"
+                            disabled={categoryMutationBusy}
+                            className="rounded border border-[var(--line)] bg-white px-2 py-0.5 text-[10px] disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             Edit
                           </button>
                           <button
+                            type="button"
                             onClick={() => {
                               setConfirmAction({ type: "category", id: c.id, name: c.name });
                             }}
-                            className="rounded border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] text-red-700"
+                            disabled={categoryMutationBusy}
+                            className="rounded border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             Delete
                           </button>
@@ -1691,12 +1804,14 @@ export default function AdminProductsPage() {
                           {c.name} ({c.type})
                         </span>
                         <button
+                          type="button"
                           onClick={() => {
                             void restoreCategory(c.id);
                           }}
-                          className="rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] text-emerald-700"
+                          disabled={categoryMutationBusy}
+                          className="rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] text-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          Restore
+                          {restoringCategoryId === c.id ? "Restoring..." : "Restore"}
                         </button>
                       </div>
                     ))}

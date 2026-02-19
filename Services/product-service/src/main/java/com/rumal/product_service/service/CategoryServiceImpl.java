@@ -30,7 +30,9 @@ public class CategoryServiceImpl implements CategoryService {
     @Caching(evict = {
             @CacheEvict(cacheNames = "categoriesList", allEntries = true),
             @CacheEvict(cacheNames = "deletedCategoriesList", allEntries = true),
-            @CacheEvict(cacheNames = "productsList", allEntries = true)
+            @CacheEvict(cacheNames = "productsList", allEntries = true),
+            @CacheEvict(cacheNames = "deletedProductsList", allEntries = true),
+            @CacheEvict(cacheNames = "productById", allEntries = true)
     })
     public CategoryResponse create(UpsertCategoryRequest request) {
         String normalizedName = normalizeName(request.name());
@@ -47,7 +49,9 @@ public class CategoryServiceImpl implements CategoryService {
     @Caching(evict = {
             @CacheEvict(cacheNames = "categoriesList", allEntries = true),
             @CacheEvict(cacheNames = "deletedCategoriesList", allEntries = true),
-            @CacheEvict(cacheNames = "productsList", allEntries = true)
+            @CacheEvict(cacheNames = "productsList", allEntries = true),
+            @CacheEvict(cacheNames = "deletedProductsList", allEntries = true),
+            @CacheEvict(cacheNames = "productById", allEntries = true)
     })
     public CategoryResponse update(UUID id, UpsertCategoryRequest request) {
         Category category = getActiveById(id);
@@ -64,7 +68,9 @@ public class CategoryServiceImpl implements CategoryService {
     @Caching(evict = {
             @CacheEvict(cacheNames = "categoriesList", allEntries = true),
             @CacheEvict(cacheNames = "deletedCategoriesList", allEntries = true),
-            @CacheEvict(cacheNames = "productsList", allEntries = true)
+            @CacheEvict(cacheNames = "productsList", allEntries = true),
+            @CacheEvict(cacheNames = "deletedProductsList", allEntries = true),
+            @CacheEvict(cacheNames = "productById", allEntries = true)
     })
     public void softDelete(UUID id) {
         Category category = getActiveById(id);
@@ -87,7 +93,9 @@ public class CategoryServiceImpl implements CategoryService {
     @Caching(evict = {
             @CacheEvict(cacheNames = "categoriesList", allEntries = true),
             @CacheEvict(cacheNames = "deletedCategoriesList", allEntries = true),
-            @CacheEvict(cacheNames = "productsList", allEntries = true)
+            @CacheEvict(cacheNames = "productsList", allEntries = true),
+            @CacheEvict(cacheNames = "deletedProductsList", allEntries = true),
+            @CacheEvict(cacheNames = "productById", allEntries = true)
     })
     public CategoryResponse restore(UUID id) {
         Category category = categoryRepository.findById(id)
@@ -186,4 +194,3 @@ public class CategoryServiceImpl implements CategoryService {
         );
     }
 }
-

@@ -71,6 +71,7 @@ function ProductsPageContent() {
   const [subCategory, setSubCategory] = useState("");
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
+  const [productsLoading, setProductsLoading] = useState(false);
   const [status, setStatus] = useState("Loading products...");
 
   useEffect(() => {
@@ -100,6 +101,7 @@ function ProductsPageContent() {
 
   useEffect(() => {
     const run = async () => {
+      setProductsLoading(true);
       try {
         setStatus("Loading products...");
         const apiBase = process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me";
@@ -120,6 +122,8 @@ function ProductsPageContent() {
         setStatus(`Showing ${data.content?.length || 0} products`);
       } catch {
         setStatus("Failed to load products.");
+      } finally {
+        setProductsLoading(false);
       }
     };
 
@@ -133,6 +137,7 @@ function ProductsPageContent() {
 
   const onSearch = (e: FormEvent) => {
     e.preventDefault();
+    if (productsLoading) return;
     setPage(0);
     setSearch(query);
   };
@@ -205,7 +210,8 @@ function ProductsPageContent() {
                 <button
                   type="button"
                   onClick={() => { setQuery(""); setSearch(""); setPage(0); }}
-                  className="mr-2 flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-xs text-gray-600 hover:bg-gray-300"
+                  disabled={productsLoading}
+                  className="mr-2 flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-xs text-gray-600 hover:bg-gray-300 disabled:cursor-not-allowed disabled:opacity-60"
                   title="Clear search"
                 >
                   ×
@@ -222,6 +228,7 @@ function ProductsPageContent() {
                 }
                 setPage(0);
               }}
+              disabled={productsLoading}
               className="rounded-lg border border-[var(--line)] bg-white px-3 py-2.5 text-sm"
             >
               <option value="">All Categories</option>
@@ -229,8 +236,12 @@ function ProductsPageContent() {
                 <option key={c} value={c}>{c}</option>
               ))}
             </select>
-            <button type="submit" className="btn-primary text-sm">
-              Search
+            <button
+              type="submit"
+              disabled={productsLoading}
+              className="btn-primary text-sm disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {productsLoading ? "Searching..." : "Search"}
             </button>
           </form>
         </section>
@@ -292,8 +303,9 @@ function ProductsPageContent() {
             <p className="empty-state-title">No products found</p>
             <p className="empty-state-desc">Try adjusting your search or browse all categories</p>
             <button
+              disabled={productsLoading}
               onClick={() => { setQuery(""); setSearch(""); setCategory(""); setMainCategory(""); setSubCategory(""); setPage(0); }}
-              className="btn-primary inline-block px-6 py-2.5 text-sm"
+              className="btn-primary inline-block px-6 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-60"
             >
               Clear All Filters
             </button>
@@ -305,6 +317,7 @@ function ProductsPageContent() {
           currentPage={page}
           totalPages={totalPages}
           onPageChange={setPage}
+          disabled={productsLoading}
         />
       </main>
 

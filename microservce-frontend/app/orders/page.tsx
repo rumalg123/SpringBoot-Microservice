@@ -69,6 +69,8 @@ export default function OrdersPage() {
   const [form, setForm] = useState({ productId: "", quantity: 1 });
   const [selectedId, setSelectedId] = useState("");
   const [selectedDetail, setSelectedDetail] = useState<OrderDetail | null>(null);
+  const [resendingVerification, setResendingVerification] = useState(false);
+  const [detailLoadingTarget, setDetailLoadingTarget] = useState<string | null>(null);
 
   const loadOrders = useCallback(async () => {
     if (!apiClient) return;
@@ -108,6 +110,7 @@ export default function OrdersPage() {
   const createOrder = async (e: FormEvent) => {
     e.preventDefault();
     if (!apiClient) return;
+    if (status === CREATING_STATUS) return;
     setStatus("Creating purchase...");
     try {
       await apiClient.post("/orders/me", {
@@ -127,6 +130,8 @@ export default function OrdersPage() {
   const loadDetail = async (orderId?: string) => {
     const targetId = (orderId || selectedId).trim();
     if (!apiClient || !targetId) return;
+    if (detailLoadingTarget) return;
+    setDetailLoadingTarget(targetId);
     setStatus("Loading purchase detail...");
     try {
       const res = await apiClient.get(`/orders/me/${targetId}`);
@@ -137,10 +142,14 @@ export default function OrdersPage() {
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Failed to load detail.");
       toast.error(err instanceof Error ? err.message : "Failed to load detail");
+    } finally {
+      setDetailLoadingTarget(null);
     }
   };
 
   const resendVerification = async () => {
+    if (resendingVerification) return;
+    setResendingVerification(true);
     setStatus("Requesting verification email...");
     try {
       await resendVerificationEmail();
@@ -149,6 +158,8 @@ export default function OrdersPage() {
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Failed to resend verification email.");
       toast.error(err instanceof Error ? err.message : "Failed to resend verification email");
+    } finally {
+      setResendingVerification(false);
     }
   };
 
@@ -185,9 +196,10 @@ export default function OrdersPage() {
             </div>
             <button
               onClick={() => { void resendVerification(); }}
-              className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-500"
+              disabled={resendingVerification}
+              className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Resend Email
+              {resendingVerification ? "Sending..." : "Resend Email"}
             </button>
           </section>
         )}
@@ -260,9 +272,10 @@ export default function OrdersPage() {
                   </div>
                   <button
                     onClick={() => { void loadDetail(order.id); }}
-                    className="btn-outline px-3 py-1.5 text-xs"
+                    disabled={Boolean(detailLoadingTarget)}
+                    className="btn-outline px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    View Details
+                    {detailLoadingTarget === order.id ? "Loading..." : "View Details"}
                   </button>
                 </div>
               </article>
@@ -281,6 +294,7 @@ export default function OrdersPage() {
                 <select
                   value={form.productId}
                   onChange={(e) => setForm((old) => ({ ...old, productId: e.target.value }))}
+                  disabled={status === CREATING_STATUS}
                   className="rounded-lg border border-[var(--line)] bg-white px-3 py-2.5 text-sm"
                   required
                 >
@@ -297,6 +311,7 @@ export default function OrdersPage() {
                     min={1}
                     value={form.quantity}
                     onChange={(e) => setForm((old) => ({ ...old, quantity: Number(e.target.value) }))}
+                    disabled={status === CREATING_STATUS}
                     className="w-24 rounded-lg border border-[var(--line)] bg-white px-3 py-2.5 text-sm"
                     placeholder="Qty"
                   />
@@ -323,9 +338,10 @@ export default function OrdersPage() {
                 />
                 <button
                   onClick={() => { void loadDetail(); }}
-                  className="btn-outline py-2.5 text-sm"
+                  disabled={Boolean(detailLoadingTarget) || !selectedId.trim()}
+                  className="btn-outline py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Load Detail
+                  {detailLoadingTarget ? "Loading..." : "Load Detail"}
                 </button>
               </div>
 

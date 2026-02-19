@@ -7,12 +7,13 @@ import { useState } from "react";
 type Props = {
   email?: string;
   canViewAdmin?: boolean;
-  onLogout: () => void;
+  onLogout: () => void | Promise<void>;
 };
 
 export default function AppNav({ email, canViewAdmin = false, onLogout }: Props) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [logoutPending, setLogoutPending] = useState(false);
 
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(`${href}/`);
@@ -61,10 +62,19 @@ export default function AppNav({ email, canViewAdmin = false, onLogout }: Props)
             👤 {email || "User"}
           </span>
           <button
-            onClick={onLogout}
-            className="rounded-lg bg-[var(--brand)] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[var(--brand-hover)]"
+            disabled={logoutPending}
+            onClick={async () => {
+              if (logoutPending) return;
+              setLogoutPending(true);
+              try {
+                await onLogout();
+              } finally {
+                setLogoutPending(false);
+              }
+            }}
+            className="rounded-lg bg-[var(--brand)] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[var(--brand-hover)] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Logout
+            {logoutPending ? "Logging out..." : "Logout"}
           </button>
           {/* Mobile Hamburger */}
           <button

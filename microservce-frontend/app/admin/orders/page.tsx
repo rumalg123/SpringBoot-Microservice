@@ -38,21 +38,28 @@ export default function AdminOrdersPage() {
   const [page, setPage] = useState(0);
   const [customerIdInput, setCustomerIdInput] = useState("");
   const [customerIdFilter, setCustomerIdFilter] = useState("");
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [filterSubmitting, setFilterSubmitting] = useState(false);
 
   const loadAdminOrders = useCallback(
     async (targetPage: number, targetCustomerId: string) => {
       if (!session.apiClient) return;
-      const params = new URLSearchParams();
-      params.set("page", String(targetPage));
-      params.set("size", String(DEFAULT_PAGE_SIZE));
-      params.set("sort", "createdAt,DESC");
-      if (targetCustomerId.trim()) {
-        params.set("customerId", targetCustomerId.trim());
-      }
+      setOrdersLoading(true);
+      try {
+        const params = new URLSearchParams();
+        params.set("page", String(targetPage));
+        params.set("size", String(DEFAULT_PAGE_SIZE));
+        params.set("sort", "createdAt,DESC");
+        if (targetCustomerId.trim()) {
+          params.set("customerId", targetCustomerId.trim());
+        }
 
-      const res = await session.apiClient.get(`/admin/orders?${params.toString()}`);
-      setOrdersPage(res.data as AdminOrdersPage);
-      setPage(targetPage);
+        const res = await session.apiClient.get(`/admin/orders?${params.toString()}`);
+        setOrdersPage(res.data as AdminOrdersPage);
+        setPage(targetPage);
+      } finally {
+        setOrdersLoading(false);
+      }
     },
     [session.apiClient]
   );
@@ -70,24 +77,51 @@ export default function AdminOrdersPage() {
 
     const run = async () => {
       try {
-        await loadAdminOrders(0, customerIdFilter);
+        await loadAdminOrders(0, "");
         setStatus("Admin orders loaded.");
       } catch (err) {
         setStatus(err instanceof Error ? err.message : "Failed to load admin orders.");
       }
     };
     void run();
-  }, [router, session.status, session.isAuthenticated, session.canViewAdmin, customerIdFilter, loadAdminOrders]);
+  }, [router, session.status, session.isAuthenticated, session.canViewAdmin, loadAdminOrders]);
 
   const applyFilter = async (e: FormEvent) => {
     e.preventDefault();
+    if (ordersLoading || filterSubmitting) return;
+    setFilterSubmitting(true);
     setStatus("Loading filtered orders...");
     const nextFilter = customerIdInput.trim();
-    setCustomerIdFilter(nextFilter);
+    try {
+      setCustomerIdFilter(nextFilter);
+      await loadAdminOrders(0, nextFilter);
+      setStatus("Admin orders loaded.");
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Failed to load admin orders.");
+    } finally {
+      setFilterSubmitting(false);
+    }
+  };
+
+  const clearFilter = async () => {
+    if (ordersLoading || filterSubmitting) return;
+    setFilterSubmitting(true);
+    setStatus("Clearing filter...");
+    try {
+      setCustomerIdInput("");
+      setCustomerIdFilter("");
+      await loadAdminOrders(0, "");
+      setStatus("Admin orders loaded.");
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Failed to load admin orders.");
+    } finally {
+      setFilterSubmitting(false);
+    }
   };
 
   const goToPage = async (nextPage: number) => {
     if (nextPage < 0) return;
+    if (ordersLoading) return;
     setStatus("Loading page...");
     try {
       await loadAdminOrders(nextPage, customerIdFilter);
@@ -116,6 +150,7 @@ export default function AdminOrdersPage() {
   const currentPage = ordersPage?.number ?? page;
   const totalPages = ordersPage?.totalPages ?? 0;
   const totalElements = ordersPage?.totalElements ?? 0;
+  const filterBusy = ordersLoading || filterSubmitting;
 
   return (
     <div className="min-h-screen bg-[var(--bg)]">
@@ -156,21 +191,27 @@ export default function AdminOrdersPage() {
                 value={customerIdInput}
                 onChange={(e) => setCustomerIdInput(e.target.value)}
                 placeholder="Filter by Customer ID (UUID)..."
+                disabled={filterBusy}
                 className="flex-1 border-none bg-transparent px-3 py-2.5 text-sm outline-none"
               />
               {customerIdInput && (
                 <button
                   type="button"
-                  onClick={() => { setCustomerIdInput(""); setCustomerIdFilter(""); }}
-                  className="mr-2 flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-xs text-gray-600 hover:bg-gray-300"
+                  onClick={() => { void clearFilter(); }}
+                  disabled={filterBusy}
+                  className="mr-2 flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-xs text-gray-600 hover:bg-gray-300 disabled:cursor-not-allowed disabled:opacity-60"
                   title="Clear filter"
                 >
                   ×
                 </button>
               )}
             </div>
-            <button type="submit" className="btn-primary px-5 py-2.5 text-sm">
-              Apply Filter
+            <button
+              type="submit"
+              disabled={filterBusy}
+              className="btn-primary px-5 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {filterBusy ? "Applying..." : "Apply Filter"}
             </button>
           </form>
 
@@ -218,6 +259,7 @@ export default function AdminOrdersPage() {
             totalPages={totalPages}
             totalElements={totalElements}
             onPageChange={(p) => { void goToPage(p); }}
+            disabled={ordersLoading}
           />
           <p className="text-xs text-[var(--muted)]">{status}</p>
         </section>

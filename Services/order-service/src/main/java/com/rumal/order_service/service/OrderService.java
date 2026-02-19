@@ -19,8 +19,8 @@ import com.rumal.order_service.exception.ServiceUnavailableException;
 import com.rumal.order_service.exception.ValidationException;
 import com.rumal.order_service.repo.OrderRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -39,6 +39,10 @@ public class OrderService {
     private final ProductClient productClient;
     private final OrderAggregationProperties props;
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "ordersByAuth0", allEntries = true),
+            @CacheEvict(cacheNames = "orderDetailsByAuth0", allEntries = true)
+    })
     public OrderResponse create(CreateOrderRequest req) {
         customerClient.assertCustomerExists(req.customerId());
         ProductSummary product = resolvePurchasableProduct(req.productId());

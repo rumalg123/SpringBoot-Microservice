@@ -96,6 +96,14 @@ internal:
   auth:
     shared-secret: ${INTERNAL_AUTH_SHARED_SECRET:}
 
+idempotency:
+  enabled: ${IDEMPOTENCY_ENABLED:true}
+  require-key-for-mutating-requests: ${IDEMPOTENCY_REQUIRE_KEY_FOR_MUTATING_REQUESTS:false}
+  key-header-name: ${IDEMPOTENCY_KEY_HEADER_NAME:Idempotency-Key}
+  response-ttl: ${IDEMPOTENCY_RESPONSE_TTL:24h}
+  pending-ttl: ${IDEMPOTENCY_PENDING_TTL:30s}
+  key-prefix: ${IDEMPOTENCY_KEY_PREFIX:gw:idem:v1::}
+
 
 logging:
   pattern:

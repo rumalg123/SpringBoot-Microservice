@@ -28,6 +28,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -112,6 +113,11 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    @Cacheable(
+            cacheNames = "productsList",
+            key = "T(com.rumal.product_service.service.ProductServiceImpl).listCacheKey(" +
+                    "#pageable,#q,#sku,#category,#mainCategory,#subCategory,#vendorId,#type,#minSellingPrice,#maxSellingPrice)"
+    )
     public Page<ProductSummaryResponse> list(
             Pageable pageable,
             String q,
@@ -131,6 +137,11 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    @Cacheable(
+            cacheNames = "deletedProductsList",
+            key = "T(com.rumal.product_service.service.ProductServiceImpl).deletedListCacheKey(" +
+                    "#pageable,#q,#sku,#category,#mainCategory,#subCategory,#vendorId,#type,#minSellingPrice,#maxSellingPrice)"
+    )
     public Page<ProductSummaryResponse> listDeleted(
             Pageable pageable,
             String q,
@@ -319,6 +330,56 @@ public class ProductServiceImpl implements ProductService {
         product.setDeletedAt(null);
     }
 
+    public static String listCacheKey(
+            Pageable pageable,
+            String q,
+            String sku,
+            String category,
+            String mainCategory,
+            String subCategory,
+            UUID vendorId,
+            ProductType type,
+            BigDecimal minSellingPrice,
+            BigDecimal maxSellingPrice
+    ) {
+        return pageableCacheKey(pageable)
+                + "::q=" + normalizeCacheFilter(q)
+                + "::sku=" + normalizeCacheFilter(sku)
+                + "::category=" + normalizeCacheFilter(category)
+                + "::mainCategory=" + normalizeCacheFilter(mainCategory)
+                + "::subCategory=" + normalizeCacheFilter(subCategory)
+                + "::vendorId=" + (vendorId == null ? "" : vendorId)
+                + "::type=" + (type == null ? "" : type.name())
+                + "::minPrice=" + decimalKey(minSellingPrice)
+                + "::maxPrice=" + decimalKey(maxSellingPrice);
+    }
+
+    public static String deletedListCacheKey(
+            Pageable pageable,
+            String q,
+            String sku,
+            String category,
+            String mainCategory,
+            String subCategory,
+            UUID vendorId,
+            ProductType type,
+            BigDecimal minSellingPrice,
+            BigDecimal maxSellingPrice
+    ) {
+        return "deleted::" + listCacheKey(
+                pageable,
+                q,
+                sku,
+                category,
+                mainCategory,
+                subCategory,
+                vendorId,
+                type,
+                minSellingPrice,
+                maxSellingPrice
+        );
+    }
+
     private UUID resolveVendorId(UUID vendorId) {
         return vendorId != null ? vendorId : ADMIN_VENDOR_UUID;
     }
@@ -477,6 +538,23 @@ public class ProductServiceImpl implements ProductService {
 
     private String normalizeVariationValue(String value) {
         return value == null ? "" : value.trim().toLowerCase();
+    }
+
+    private static String pageableCacheKey(Pageable pageable) {
+        if (pageable == null) {
+            return "page=0::size=20::sort=UNSORTED";
+        }
+        return "page=" + pageable.getPageNumber()
+                + "::size=" + pageable.getPageSize()
+                + "::sort=" + pageable.getSort();
+    }
+
+    private static String normalizeCacheFilter(String value) {
+        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private static String decimalKey(BigDecimal value) {
+        return value == null ? "" : value.stripTrailingZeros().toPlainString();
     }
 
     private ProductResponse toResponse(Product p) {

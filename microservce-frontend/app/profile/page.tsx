@@ -31,6 +31,7 @@ export default function ProfilePage() {
   } = session;
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [status, setStatus] = useState("Loading account...");
+  const [resendingVerification, setResendingVerification] = useState(false);
 
   useEffect(() => {
     if (sessionStatus !== "ready") return;
@@ -57,6 +58,8 @@ export default function ProfilePage() {
   }, [router, sessionStatus, isAuthenticated, canViewAdmin, apiClient, ensureCustomer]);
 
   const resendVerification = async () => {
+    if (resendingVerification) return;
+    setResendingVerification(true);
     setStatus("Requesting verification email...");
     try {
       await resendVerificationEmail();
@@ -65,6 +68,8 @@ export default function ProfilePage() {
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Failed to resend verification email.");
       toast.error(err instanceof Error ? err.message : "Failed to resend verification email");
+    } finally {
+      setResendingVerification(false);
     }
   };
 
@@ -108,9 +113,10 @@ export default function ProfilePage() {
             </div>
             <button
               onClick={() => { void resendVerification(); }}
-              className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-500"
+              disabled={resendingVerification}
+              className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Resend Email
+              {resendingVerification ? "Sending..." : "Resend Email"}
             </button>
           </section>
         )}

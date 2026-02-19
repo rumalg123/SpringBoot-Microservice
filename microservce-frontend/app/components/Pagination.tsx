@@ -5,6 +5,7 @@ type PaginationProps = {
     totalPages: number;
     totalElements?: number;
     onPageChange: (page: number) => void;
+    disabled?: boolean;
 };
 
 export default function Pagination({
@@ -12,8 +13,10 @@ export default function Pagination({
     totalPages,
     totalElements,
     onPageChange,
+    disabled = false,
 }: PaginationProps) {
     const handlePageChange = (page: number) => {
+        if (disabled) return;
         window.scrollTo({ top: 0, behavior: "smooth" });
         onPageChange(page);
     };
@@ -78,7 +81,7 @@ export default function Pagination({
                 {/* Previous */}
                 <button
                     onClick={() => handlePageChange(currentPage - 1)}
-                    disabled={currentPage <= 0}
+                    disabled={disabled || currentPage <= 0}
                     className="inline-flex items-center gap-1 rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-sm font-medium text-[var(--ink)] transition hover:border-[var(--brand)] hover:text-[var(--brand)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-[var(--line)] disabled:hover:text-[var(--ink)]"
                     aria-label="Go to previous page"
                 >
@@ -99,10 +102,11 @@ export default function Pagination({
                         <button
                             key={`page-${p}-${idx}`}
                             onClick={() => handlePageChange(p)}
+                            disabled={disabled}
                             className={`min-w-[36px] rounded-lg px-3 py-2 text-sm font-medium transition ${p === currentPage
                                 ? "bg-[var(--brand)] text-white shadow-md shadow-red-200"
                                 : "border border-[var(--line)] bg-white text-[var(--ink)] hover:border-[var(--brand)] hover:bg-[var(--brand-soft)] hover:text-[var(--brand)]"
-                                }`}
+                                } disabled:cursor-not-allowed disabled:opacity-60`}
                             aria-label={`Go to page ${p + 1}`}
                             aria-current={p === currentPage ? "page" : undefined}
                         >
@@ -114,7 +118,7 @@ export default function Pagination({
                 {/* Next */}
                 <button
                     onClick={() => handlePageChange(currentPage + 1)}
-                    disabled={currentPage + 1 >= totalPages}
+                    disabled={disabled || currentPage + 1 >= totalPages}
                     className="inline-flex items-center gap-1 rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-sm font-medium text-[var(--ink)] transition hover:border-[var(--brand)] hover:text-[var(--brand)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-[var(--line)] disabled:hover:text-[var(--ink)]"
                     aria-label="Go to next page"
                 >

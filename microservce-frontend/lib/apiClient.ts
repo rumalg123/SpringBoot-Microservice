@@ -8,7 +8,70 @@ type CreateApiClientOptions = {
 
 export type ApiRequestConfig = AxiosRequestConfig & {
   skipAuth?: boolean;
+  disableIdempotency?: boolean;
+  idempotencyKey?: string;
+  idempotencyWindowMs?: number;
 };
+
+type CachedIdempotencyKey = {
+  key: string;
+  expiresAt: number;
+};
+
+const idempotencyKeyCache = new Map<string, CachedIdempotencyKey>();
+const DEFAULT_IDEMPOTENCY_WINDOW_MS = 15_000;
+
+function generateIdempotencyKey(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+function normalizeForStableJson(value: unknown): unknown {
+  if (value === null || typeof value !== "object") return value;
+  if (Array.isArray(value)) return value.map((item) => normalizeForStableJson(item));
+  const obj = value as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const key of Object.keys(obj).sort()) {
+    const normalized = normalizeForStableJson(obj[key]);
+    if (normalized !== undefined) {
+      out[key] = normalized;
+    }
+  }
+  return out;
+}
+
+function stableStringify(value: unknown): string {
+  try {
+    return JSON.stringify(normalizeForStableJson(value));
+  } catch {
+    return String(value);
+  }
+}
+
+function cleanupExpiredIdempotencyKeys(now: number): void {
+  for (const [fingerprint, entry] of idempotencyKeyCache.entries()) {
+    if (entry.expiresAt <= now) {
+      idempotencyKeyCache.delete(fingerprint);
+    }
+  }
+}
+
+function resolveIdempotencyKeyForFingerprint(fingerprint: string, windowMs: number): string {
+  const now = Date.now();
+  cleanupExpiredIdempotencyKeys(now);
+  const existing = idempotencyKeyCache.get(fingerprint);
+  if (existing && existing.expiresAt > now) {
+    return existing.key;
+  }
+  const created = generateIdempotencyKey();
+  idempotencyKeyCache.set(fingerprint, {
+    key: created,
+    expiresAt: now + Math.max(windowMs, 1_000),
+  });
+  return created;
+}
 
 export function createApiClient(options: CreateApiClientOptions): AxiosInstance {
   const client = axios.create({
@@ -25,6 +88,23 @@ export function createApiClient(options: CreateApiClientOptions): AxiosInstance 
     const headers = new AxiosHeaders(config.headers);
     headers.set("Authorization", `Bearer ${token}`);
     const isFormData = typeof FormData !== "undefined" && config.data instanceof FormData;
+    const method = (config.method || "get").toLowerCase();
+    const isMutating = method === "post" || method === "put" || method === "patch" || method === "delete";
+    const requestConfig = config as ApiRequestConfig;
+
+    if (isMutating && !requestConfig.disableIdempotency && !headers.has("Idempotency-Key")) {
+      if (requestConfig.idempotencyKey && requestConfig.idempotencyKey.trim()) {
+        headers.set("Idempotency-Key", requestConfig.idempotencyKey.trim());
+      } else {
+        const windowMs = requestConfig.idempotencyWindowMs ?? DEFAULT_IDEMPOTENCY_WINDOW_MS;
+        const urlPart = String(config.url || "");
+        const paramsPart = stableStringify(config.params ?? null);
+        const bodyPart = isFormData ? "[multipart-form-data]" : stableStringify(config.data ?? null);
+        const fingerprint = `${method.toUpperCase()}|${urlPart}|${paramsPart}|${bodyPart}`;
+        headers.set("Idempotency-Key", resolveIdempotencyKeyForFingerprint(fingerprint, windowMs));
+      }
+    }
+
     if (isFormData) {
       headers.delete("Content-Type");
     } else if (!headers.has("Content-Type")) {

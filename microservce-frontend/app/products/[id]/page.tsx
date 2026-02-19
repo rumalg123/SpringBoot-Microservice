@@ -72,6 +72,8 @@ export default function ProductDetailPage() {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [status, setStatus] = useState("Loading product...");
+  const [buyingNow, setBuyingNow] = useState(false);
+  const [signingInToBuy, setSigningInToBuy] = useState(false);
 
   useEffect(() => {
     const run = async () => {
@@ -125,6 +127,7 @@ export default function ProductDetailPage() {
 
   const buyNow = async () => {
     if (!apiClient || !product) return;
+    if (buyingNow) return;
     const targetProductId =
       product.productType === "PARENT" ? selectedVariationId.trim() : product.id;
 
@@ -133,6 +136,7 @@ export default function ProductDetailPage() {
       return;
     }
 
+    setBuyingNow(true);
     try {
       await apiClient.post("/orders/me", {
         productId: targetProductId,
@@ -141,6 +145,8 @@ export default function ProductDetailPage() {
       toast.success("Order placed successfully! 🎉");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to place order");
+    } finally {
+      setBuyingNow(false);
     }
   };
 
@@ -235,8 +241,9 @@ export default function ProductDetailPage() {
                     return (
                       <button
                         key={`${img}-${index}`}
+                        disabled={buyingNow}
                         onClick={() => setSelectedImageIndex(index)}
-                        className={`aspect-square overflow-hidden rounded-lg border-2 transition ${selectedImageIndex === index
+                        className={`aspect-square overflow-hidden rounded-lg border-2 transition disabled:cursor-not-allowed disabled:opacity-60 ${selectedImageIndex === index
                           ? "border-[var(--brand)] shadow-md"
                           : "border-[var(--line)] hover:border-[var(--brand)]"
                           }`}
@@ -350,6 +357,7 @@ export default function ProductDetailPage() {
                         <select
                           value={selectedVariationId}
                           onChange={(e) => setSelectedVariationId(e.target.value)}
+                          disabled={buyingNow}
                           className="w-full rounded-lg border border-[var(--line)] bg-white px-4 py-3 text-sm text-[var(--ink)]"
                         >
                           <option value="">Choose an option...</option>
@@ -369,19 +377,20 @@ export default function ProductDetailPage() {
                           Quantity
                         </label>
                         <div className="qty-stepper">
-                          <button onClick={() => setQuantity((old) => Math.max(1, old - 1))}>−</button>
+                          <button disabled={buyingNow} onClick={() => setQuantity((old) => Math.max(1, old - 1))}>−</button>
                           <span>{quantity}</span>
-                          <button onClick={() => setQuantity((old) => old + 1)}>+</button>
+                          <button disabled={buyingNow} onClick={() => setQuantity((old) => old + 1)}>+</button>
                         </div>
                       </div>
                     </div>
 
                     <div className="flex flex-wrap gap-3">
                       <button
+                        disabled={buyingNow}
                         onClick={() => void buyNow()}
-                        className="btn-primary flex-1 px-8 py-3 text-base"
+                        className="btn-primary flex-1 px-8 py-3 text-base disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        🛒 Buy Now
+                        {buyingNow ? "Placing Order..." : "🛒 Buy Now"}
                       </button>
                       <Link
                         href="/orders"
@@ -395,10 +404,19 @@ export default function ProductDetailPage() {
                   <div className="space-y-3">
                     <p className="text-sm text-[var(--muted)]">Sign in to purchase this product</p>
                     <button
-                      onClick={() => void login("/products")}
-                      className="btn-primary w-full py-3 text-base"
+                      disabled={signingInToBuy}
+                      onClick={async () => {
+                        if (signingInToBuy) return;
+                        setSigningInToBuy(true);
+                        try {
+                          await login("/products");
+                        } finally {
+                          setSigningInToBuy(false);
+                        }
+                      }}
+                      className="btn-primary w-full py-3 text-base disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      🔑 Sign In to Buy
+                      {signingInToBuy ? "Redirecting..." : "🔑 Sign In to Buy"}
                     </button>
                   </div>
                 )}

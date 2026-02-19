@@ -84,8 +84,16 @@ flowchart LR
 - Applies Redis-backed route-aware rate limits:
   - register
   - customer-me
-  - orders-me
+  - orders-me-read
+  - orders-me-write
   - admin-orders
+  - products-read
+  - admin-products-read
+  - admin-products-write
+- Applies Redis-backed idempotency for mutating requests (`POST`, `PUT`, `PATCH`, `DELETE`) when `Idempotency-Key` is provided:
+  - First request with key -> forwarded and cached
+  - Same key + same payload -> cached response replayed (`X-Idempotency-Status: HIT`)
+  - Same key + different payload -> `409 Conflict`
 
 ### customer-service
 - Customer CRUD/register logic
@@ -210,9 +218,10 @@ Key points:
 
 ### Redis usage
 - Gateway: token bucket state for rate limiting
+- Gateway: idempotency key state/response replay cache
 - customer-service: `customerByAuth0`
 - order-service: `ordersByAuth0`, `orderDetailsByAuth0`
-- product-service: `productById`, `productsList`, `deletedProductsList`
+- product-service: `productById`, `productsList`, `deletedProductsList`, `categoriesList`, `deletedCategoriesList`
 
 ### Serialization note
 - Cache serializers are configured with app `ObjectMapper` and type metadata.
@@ -224,14 +233,32 @@ Configured by environment variables:
 - `RATE_LIMIT_REGISTER_REPLENISH`, `RATE_LIMIT_REGISTER_BURST`
 - `RATE_LIMIT_CUSTOMER_ME_REPLENISH`, `RATE_LIMIT_CUSTOMER_ME_BURST`
 - `RATE_LIMIT_ORDERS_ME_REPLENISH`, `RATE_LIMIT_ORDERS_ME_BURST`
+- `RATE_LIMIT_ORDERS_ME_WRITE_REPLENISH`, `RATE_LIMIT_ORDERS_ME_WRITE_BURST`
 - `RATE_LIMIT_ADMIN_ORDERS_REPLENISH`, `RATE_LIMIT_ADMIN_ORDERS_BURST`
 - `RATE_LIMIT_PRODUCTS_REPLENISH`, `RATE_LIMIT_PRODUCTS_BURST`
 - `RATE_LIMIT_ADMIN_PRODUCTS_REPLENISH`, `RATE_LIMIT_ADMIN_PRODUCTS_BURST`
+- `RATE_LIMIT_ADMIN_PRODUCTS_WRITE_REPLENISH`, `RATE_LIMIT_ADMIN_PRODUCTS_WRITE_BURST`
 - Optional defaults:
   - `RATE_LIMIT_DEFAULT_REPLENISH`
   - `RATE_LIMIT_DEFAULT_BURST`
 - Proxy IP handling:
   - `RATE_LIMIT_TRUSTED_PROXY_IPS`
+
+## Idempotency
+
+- Header: `Idempotency-Key`
+- Scope: user-or-ip + method + path + provided key
+- Behavior:
+  - `MISS`: request executed and response cached
+  - `HIT`: cached response replayed
+  - `CONFLICT`: key reused with different payload, or request is still processing
+- Config:
+  - `IDEMPOTENCY_ENABLED`
+  - `IDEMPOTENCY_REQUIRE_KEY_FOR_MUTATING_REQUESTS`
+  - `IDEMPOTENCY_KEY_HEADER_NAME`
+  - `IDEMPOTENCY_RESPONSE_TTL`
+  - `IDEMPOTENCY_PENDING_TTL`
+  - `IDEMPOTENCY_KEY_PREFIX`
 
 ## Environment Setup
 

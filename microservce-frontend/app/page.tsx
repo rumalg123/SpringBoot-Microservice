@@ -54,6 +54,7 @@ export default function LandingPage() {
   const session = useAuthSession();
   const [products, setProducts] = useState<ProductSummary[]>([]);
   const [status, setStatus] = useState("loading");
+  const [authActionPending, setAuthActionPending] = useState<"login" | "signup" | null>(null);
 
   useEffect(() => {
     if (session.status === "ready" && session.isAuthenticated) {
@@ -79,6 +80,27 @@ export default function LandingPage() {
 
   const dealProducts = useMemo(() => products.filter((p) => p.discountedPrice !== null).slice(0, 4), [products]);
   const trendingProducts = useMemo(() => products.slice(0, 8), [products]);
+  const authBusy = authActionPending !== null || session.status === "loading" || session.status === "idle";
+
+  const startLogin = async () => {
+    if (authBusy) return;
+    setAuthActionPending("login");
+    try {
+      await session.login("/products");
+    } finally {
+      setAuthActionPending(null);
+    }
+  };
+
+  const startSignup = async () => {
+    if (authBusy) return;
+    setAuthActionPending("signup");
+    try {
+      await session.signup("/products");
+    } finally {
+      setAuthActionPending(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[var(--bg)]">
@@ -108,18 +130,18 @@ export default function LandingPage() {
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => void session.login("/products")}
-              disabled={session.status === "loading" || session.status === "idle"}
-              className="rounded-lg bg-[var(--brand)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[var(--brand-hover)] disabled:opacity-50"
+              onClick={() => { void startLogin(); }}
+              disabled={authBusy}
+              className="rounded-lg bg-[var(--brand)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[var(--brand-hover)] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Login
+              {authActionPending === "login" ? "Redirecting..." : "Login"}
             </button>
             <button
-              onClick={() => void session.signup("/products")}
-              disabled={session.status === "loading" || session.status === "idle"}
-              className="hidden rounded-lg border border-white/30 px-5 py-2 text-sm font-semibold text-white transition hover:bg-white/10 disabled:opacity-50 sm:inline-block"
+              onClick={() => { void startSignup(); }}
+              disabled={authBusy}
+              className="hidden rounded-lg border border-white/30 px-5 py-2 text-sm font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50 sm:inline-block"
             >
-              Sign Up
+              {authActionPending === "signup" ? "Redirecting..." : "Sign Up"}
             </button>
           </div>
         </div>
@@ -155,11 +177,11 @@ export default function LandingPage() {
                   🛍️ Shop Now
                 </Link>
                 <button
-                  onClick={() => void session.signup("/products")}
-                  disabled={session.status === "loading" || session.status === "idle"}
-                  className="rounded-lg border-2 border-white bg-white/10 px-6 py-3 text-sm font-bold text-white transition hover:bg-white/25 disabled:opacity-50"
+                  onClick={() => { void startSignup(); }}
+                  disabled={authBusy}
+                  className="rounded-lg border-2 border-white bg-white/10 px-6 py-3 text-sm font-bold text-white transition hover:bg-white/25 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Create Account
+                  {authActionPending === "signup" ? "Redirecting..." : "Create Account"}
                 </button>
               </div>
             </div>
@@ -365,11 +387,11 @@ export default function LandingPage() {
           </p>
           <div className="mt-5 flex justify-center gap-3">
             <button
-              onClick={() => void session.signup("/products")}
-              disabled={session.status === "loading" || session.status === "idle"}
-              className="rounded-lg bg-[var(--brand)] px-8 py-3 text-sm font-bold text-white transition hover:bg-[var(--brand-hover)] disabled:opacity-50"
+              onClick={() => { void startSignup(); }}
+              disabled={authBusy}
+              className="rounded-lg bg-[var(--brand)] px-8 py-3 text-sm font-bold text-white transition hover:bg-[var(--brand-hover)] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Sign Up Free
+              {authActionPending === "signup" ? "Redirecting..." : "Sign Up Free"}
             </button>
             <Link
               href="/products"

@@ -63,6 +63,14 @@ public class RateLimitConfig {
     }
 
     @Bean
+    public RedisRateLimiter ordersMeWriteRateLimiter(
+            @Value("${RATE_LIMIT_ORDERS_ME_WRITE_REPLENISH:8}") int replenishRate,
+            @Value("${RATE_LIMIT_ORDERS_ME_WRITE_BURST:16}") int burstCapacity
+    ) {
+        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+    }
+
+    @Bean
     public RedisRateLimiter adminOrdersRateLimiter(
             @Value("${RATE_LIMIT_ADMIN_ORDERS_REPLENISH:20}") int replenishRate,
             @Value("${RATE_LIMIT_ADMIN_ORDERS_BURST:40}") int burstCapacity
@@ -82,6 +90,14 @@ public class RateLimitConfig {
     public RedisRateLimiter adminProductsRateLimiter(
             @Value("${RATE_LIMIT_ADMIN_PRODUCTS_REPLENISH:20}") int replenishRate,
             @Value("${RATE_LIMIT_ADMIN_PRODUCTS_BURST:40}") int burstCapacity
+    ) {
+        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+    }
+
+    @Bean
+    public RedisRateLimiter adminProductsWriteRateLimiter(
+            @Value("${RATE_LIMIT_ADMIN_PRODUCTS_WRITE_REPLENISH:10}") int replenishRate,
+            @Value("${RATE_LIMIT_ADMIN_PRODUCTS_WRITE_BURST:20}") int burstCapacity
     ) {
         return new RedisRateLimiter(replenishRate, burstCapacity, 1);
     }
