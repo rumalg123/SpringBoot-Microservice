@@ -5,11 +5,13 @@ import com.rumal.product_service.dto.ProductSummaryResponse;
 import com.rumal.product_service.dto.ProductVariationAttributeRequest;
 import com.rumal.product_service.dto.ProductVariationAttributeResponse;
 import com.rumal.product_service.dto.UpsertProductRequest;
+import com.rumal.product_service.entity.Category;
 import com.rumal.product_service.entity.Product;
 import com.rumal.product_service.entity.ProductType;
 import com.rumal.product_service.entity.ProductVariationAttribute;
 import com.rumal.product_service.exception.ResourceNotFoundException;
 import com.rumal.product_service.exception.ValidationException;
+import com.rumal.product_service.repo.CategoryRepository;
 import com.rumal.product_service.repo.ProductRepository;
 import jakarta.persistence.criteria.JoinType;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +27,6 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -36,9 +37,10 @@ import java.util.regex.Pattern;
 public class ProductServiceImpl implements ProductService {
 
     private static final UUID ADMIN_VENDOR_UUID = UUID.fromString("00000000-0000-0000-0000-000000000000");
-    private static final Pattern IMAGE_FILE_PATTERN = Pattern.compile("^[^\\\\/:*?\"<>|\\s]+\\.[A-Za-z0-9]{2,8}$");
+    private static final Pattern IMAGE_FILE_PATTERN = Pattern.compile("^[A-Za-z0-9._/-]+\\.[A-Za-z0-9]{2,8}$");
 
     private final ProductRepository productRepository;
+    private final CategoryRepository categoryRepository;
 
     @Override
     @Caching(evict = {
@@ -102,19 +104,21 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Cacheable(
             cacheNames = "productsList",
-            key = "'p=' + #pageable.pageNumber + '::s=' + #pageable.pageSize + '::sort=' + #pageable.sort.toString() + '::q=' + #q + '::sku=' + #sku + '::cat=' + #category + '::vendor=' + #vendorId + '::type=' + #type + '::min=' + #minSellingPrice + '::max=' + #maxSellingPrice"
+            key = "'p=' + #pageable.pageNumber + '::s=' + #pageable.pageSize + '::sort=' + #pageable.sort.toString() + '::q=' + #q + '::sku=' + #sku + '::cat=' + #category + '::main=' + #mainCategory + '::sub=' + #subCategory + '::vendor=' + #vendorId + '::type=' + #type + '::min=' + #minSellingPrice + '::max=' + #maxSellingPrice"
     )
     public Page<ProductSummaryResponse> list(
             Pageable pageable,
             String q,
             String sku,
             String category,
+            String mainCategory,
+            String subCategory,
             UUID vendorId,
             ProductType type,
             BigDecimal minSellingPrice,
             BigDecimal maxSellingPrice
     ) {
-        Specification<Product> spec = buildFilterSpec(q, sku, category, vendorId, type, minSellingPrice, maxSellingPrice)
+        Specification<Product> spec = buildFilterSpec(q, sku, category, mainCategory, subCategory, vendorId, type, minSellingPrice, maxSellingPrice)
                 .and((root, query, cb) -> cb.isFalse(root.get("deleted")))
                 .and((root, query, cb) -> cb.isTrue(root.get("active")));
         return productRepository.findAll(spec, pageable).map(this::toSummaryResponse);
@@ -123,19 +127,21 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Cacheable(
             cacheNames = "deletedProductsList",
-            key = "'p=' + #pageable.pageNumber + '::s=' + #pageable.pageSize + '::sort=' + #pageable.sort.toString() + '::q=' + #q + '::sku=' + #sku + '::cat=' + #category + '::vendor=' + #vendorId + '::type=' + #type + '::min=' + #minSellingPrice + '::max=' + #maxSellingPrice"
+            key = "'p=' + #pageable.pageNumber + '::s=' + #pageable.pageSize + '::sort=' + #pageable.sort.toString() + '::q=' + #q + '::sku=' + #sku + '::cat=' + #category + '::main=' + #mainCategory + '::sub=' + #subCategory + '::vendor=' + #vendorId + '::type=' + #type + '::min=' + #minSellingPrice + '::max=' + #maxSellingPrice"
     )
     public Page<ProductSummaryResponse> listDeleted(
             Pageable pageable,
             String q,
             String sku,
             String category,
+            String mainCategory,
+            String subCategory,
             UUID vendorId,
             ProductType type,
             BigDecimal minSellingPrice,
             BigDecimal maxSellingPrice
     ) {
-        Specification<Product> spec = buildFilterSpec(q, sku, category, vendorId, type, minSellingPrice, maxSellingPrice)
+        Specification<Product> spec = buildFilterSpec(q, sku, category, mainCategory, subCategory, vendorId, type, minSellingPrice, maxSellingPrice)
                 .and((root, query, cb) -> cb.isTrue(root.get("deleted")));
         return productRepository.findAll(spec, pageable).map(this::toSummaryResponse);
     }
@@ -201,6 +207,8 @@ public class ProductServiceImpl implements ProductService {
             String q,
             String sku,
             String category,
+            String mainCategory,
+            String subCategory,
             UUID vendorId,
             ProductType type,
             BigDecimal minSellingPrice,
@@ -229,7 +237,29 @@ public class ProductServiceImpl implements ProductService {
             String normalizedCategory = category.trim().toLowerCase();
             spec = spec.and((root, query, cb) -> {
                 query.distinct(true);
-                return cb.equal(cb.lower(root.joinSet("categories", JoinType.LEFT)), normalizedCategory);
+                return cb.equal(cb.lower(root.joinSet("categories", JoinType.LEFT).get("name")), normalizedCategory);
+            });
+        }
+        if (StringUtils.hasText(mainCategory)) {
+            String normalizedMain = mainCategory.trim().toLowerCase();
+            spec = spec.and((root, query, cb) -> {
+                query.distinct(true);
+                var categoryJoin = root.joinSet("categories", JoinType.LEFT);
+                return cb.and(
+                        cb.equal(categoryJoin.get("type"), com.rumal.product_service.entity.CategoryType.PARENT),
+                        cb.equal(cb.lower(categoryJoin.get("name")), normalizedMain)
+                );
+            });
+        }
+        if (StringUtils.hasText(subCategory)) {
+            String normalizedSub = subCategory.trim().toLowerCase();
+            spec = spec.and((root, query, cb) -> {
+                query.distinct(true);
+                var categoryJoin = root.joinSet("categories", JoinType.LEFT);
+                return cb.and(
+                        cb.equal(categoryJoin.get("type"), com.rumal.product_service.entity.CategoryType.SUB),
+                        cb.equal(cb.lower(categoryJoin.get("name")), normalizedSub)
+                );
             });
         }
         if (minSellingPrice != null) {
@@ -255,12 +285,13 @@ public class ProductServiceImpl implements ProductService {
         String normalizedSku = request.sku().trim();
 
         List<String> normalizedImages = normalizeImages(request.images());
-        Set<String> normalizedCategories = normalizeCategories(request.categories());
+        Set<Category> resolvedCategories = resolveCategories(request.categories());
         List<ProductVariationAttribute> normalizedVariations = normalizeVariations(request.variations());
         UUID resolvedVendorId = resolveVendorId(request.vendorId());
 
         validatePricing(request.regularPrice(), request.discountedPrice());
         validateProductTypeAndVariations(request.productType(), normalizedVariations);
+        validateMainAndSubCategories(resolvedCategories);
 
         product.setName(normalizedName);
         product.setShortDescription(normalizedShortDescription);
@@ -270,7 +301,7 @@ public class ProductServiceImpl implements ProductService {
         product.setDiscountedPrice(request.discountedPrice());
         product.setVendorId(resolvedVendorId);
         product.setParentProductId(parentProductId);
-        product.setCategories(normalizedCategories);
+        product.setCategories(resolvedCategories);
         product.setProductType(request.productType());
         product.setVariations(normalizedVariations);
         product.setSku(normalizedSku);
@@ -284,27 +315,57 @@ public class ProductServiceImpl implements ProductService {
     }
 
     private List<String> normalizeImages(List<String> images) {
+        if (images.size() > 5) {
+            throw new ValidationException("A product can have at most 5 images");
+        }
         List<String> normalized = new ArrayList<>();
         for (String image : images) {
             String value = image.trim();
             if (!IMAGE_FILE_PATTERN.matcher(value).matches()) {
                 throw new ValidationException("Invalid image name: " + image);
             }
+            if (value.startsWith("/") || value.contains("..")) {
+                throw new ValidationException("Invalid image name: " + image);
+            }
+            if (normalized.contains(value)) {
+                throw new ValidationException("Duplicate image name is not allowed: " + value);
+            }
             normalized.add(value);
         }
         return normalized;
     }
 
-    private Set<String> normalizeCategories(Set<String> categories) {
-        Set<String> normalized = new LinkedHashSet<>();
+    private Set<Category> resolveCategories(Set<String> categories) {
+        Set<Category> resolved = new java.util.LinkedHashSet<>();
         for (String category : categories) {
-            String value = category.trim().toLowerCase();
-            if (value.isEmpty()) {
+            String normalized = category.trim().toLowerCase();
+            if (normalized.isEmpty()) {
                 throw new ValidationException("category cannot be blank");
             }
-            normalized.add(value);
+            Category found = categoryRepository.findByNormalizedName(normalized)
+                    .filter(c -> !c.isDeleted())
+                    .orElseThrow(() -> new ValidationException("Category not found or deleted: " + category));
+            resolved.add(found);
         }
-        return normalized;
+        return resolved;
+    }
+
+    private void validateMainAndSubCategories(Set<Category> categories) {
+        List<Category> parents = categories.stream()
+                .filter(c -> c.getType() == com.rumal.product_service.entity.CategoryType.PARENT)
+                .toList();
+        if (parents.size() != 1) {
+            throw new ValidationException("Product must have exactly one main parent category");
+        }
+        UUID mainParentId = parents.getFirst().getId();
+        List<Category> subs = categories.stream()
+                .filter(c -> c.getType() == com.rumal.product_service.entity.CategoryType.SUB)
+                .toList();
+        for (Category sub : subs) {
+            if (sub.getParentCategoryId() == null || !sub.getParentCategoryId().equals(mainParentId)) {
+                throw new ValidationException("All sub categories must belong to the selected main parent category");
+            }
+        }
     }
 
     private List<ProductVariationAttribute> normalizeVariations(List<ProductVariationAttributeRequest> variations) {
@@ -349,7 +410,9 @@ public class ProductServiceImpl implements ProductService {
                 p.getDiscountedPrice(),
                 resolveSellingPrice(p),
                 p.getVendorId(),
-                Set.copyOf(p.getCategories()),
+                resolveMainCategoryName(p.getCategories()),
+                resolveSubCategoryNames(p.getCategories()),
+                p.getCategories().stream().map(Category::getName).collect(java.util.stream.Collectors.toSet()),
                 p.getProductType(),
                 p.getVariations().stream()
                         .map(v -> new ProductVariationAttributeResponse(v.getName(), v.getValue()))
@@ -374,7 +437,9 @@ public class ProductServiceImpl implements ProductService {
                 p.getDiscountedPrice(),
                 resolveSellingPrice(p),
                 p.getSku(),
-                Set.copyOf(p.getCategories()),
+                resolveMainCategoryName(p.getCategories()),
+                resolveSubCategoryNames(p.getCategories()),
+                p.getCategories().stream().map(Category::getName).collect(java.util.stream.Collectors.toSet()),
                 p.getProductType(),
                 p.getVendorId(),
                 p.isActive(),
@@ -386,5 +451,20 @@ public class ProductServiceImpl implements ProductService {
 
     private BigDecimal resolveSellingPrice(Product p) {
         return p.getDiscountedPrice() != null ? p.getDiscountedPrice() : p.getRegularPrice();
+    }
+
+    private String resolveMainCategoryName(Set<Category> categories) {
+        return categories.stream()
+                .filter(c -> c.getType() == com.rumal.product_service.entity.CategoryType.PARENT)
+                .map(Category::getName)
+                .findFirst()
+                .orElse(null);
+    }
+
+    private Set<String> resolveSubCategoryNames(Set<Category> categories) {
+        return categories.stream()
+                .filter(c -> c.getType() == com.rumal.product_service.entity.CategoryType.SUB)
+                .map(Category::getName)
+                .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
     }
 }

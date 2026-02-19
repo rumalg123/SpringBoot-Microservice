@@ -58,10 +58,18 @@ spring:
               uri: lb://product-service
               predicates:
                 - Path=/admin/products,/admin/products/**
+            - id: admin-categories
+              uri: lb://product-service
+              predicates:
+                - Path=/admin/categories,/admin/categories/**
             - id: products-catalog
               uri: lb://product-service
               predicates:
                 - Path=/products,/products/**
+            - id: categories-catalog
+              uri: lb://product-service
+              predicates:
+                - Path=/categories,/categories/**
 
           discovery:
             locator:

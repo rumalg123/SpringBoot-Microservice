@@ -41,12 +41,14 @@ public class ProductController {
             @RequestParam(required = false) String q,
             @RequestParam(required = false) String sku,
             @RequestParam(required = false) String category,
+            @RequestParam(required = false) String mainCategory,
+            @RequestParam(required = false) String subCategory,
             @RequestParam(required = false) UUID vendorId,
             @RequestParam(required = false) ProductType type,
             @RequestParam(required = false) BigDecimal minSellingPrice,
             @RequestParam(required = false) BigDecimal maxSellingPrice,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
-        return productService.list(pageable, q, sku, category, vendorId, type, minSellingPrice, maxSellingPrice);
+        return productService.list(pageable, q, sku, category, mainCategory, subCategory, vendorId, type, minSellingPrice, maxSellingPrice);
     }
 }

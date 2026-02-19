@@ -105,10 +105,12 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
         if ("/admin/orders".equals(path) || path.startsWith("/admin/orders/")) {
             return new Policy("admin-orders", adminOrdersRateLimiter, userOrIpKeyResolver);
         }
-        if ("/products".equals(path) || path.startsWith("/products/")) {
+        if ("/products".equals(path) || path.startsWith("/products/")
+                || "/categories".equals(path) || path.startsWith("/categories/")) {
             return new Policy("products", productsRateLimiter, ipKeyResolver);
         }
-        if ("/admin/products".equals(path) || path.startsWith("/admin/products/")) {
+        if ("/admin/products".equals(path) || path.startsWith("/admin/products/")
+                || "/admin/categories".equals(path) || path.startsWith("/admin/categories/")) {
             return new Policy("admin-products", adminProductsRateLimiter, userOrIpKeyResolver);
         }
         return null;

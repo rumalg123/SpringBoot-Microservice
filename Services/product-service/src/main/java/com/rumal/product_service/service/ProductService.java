@@ -16,8 +16,8 @@ public interface ProductService {
     ProductResponse createVariation(UUID parentId, UpsertProductRequest request);
     ProductResponse getById(UUID id);
     List<ProductSummaryResponse> listVariations(UUID parentId);
-    Page<ProductSummaryResponse> list(Pageable pageable, String q, String sku, String category, UUID vendorId, ProductType type, BigDecimal minSellingPrice, BigDecimal maxSellingPrice);
-    Page<ProductSummaryResponse> listDeleted(Pageable pageable, String q, String sku, String category, UUID vendorId, ProductType type, BigDecimal minSellingPrice, BigDecimal maxSellingPrice);
+    Page<ProductSummaryResponse> list(Pageable pageable, String q, String sku, String category, String mainCategory, String subCategory, UUID vendorId, ProductType type, BigDecimal minSellingPrice, BigDecimal maxSellingPrice);
+    Page<ProductSummaryResponse> listDeleted(Pageable pageable, String q, String sku, String category, String mainCategory, String subCategory, UUID vendorId, ProductType type, BigDecimal minSellingPrice, BigDecimal maxSellingPrice);
     ProductResponse update(UUID id, UpsertProductRequest request);
     void softDelete(UUID id);
     ProductResponse restore(UUID id);

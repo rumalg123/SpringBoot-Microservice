@@ -27,6 +27,7 @@ public record UpsertProductRequest(
         String description,
 
         @NotEmpty(message = "images must contain at least one item")
+        @Size(max = 5, message = "images cannot contain more than 5 items")
         List<@NotBlank(message = "image name cannot be blank") String> images,
 
         @NotNull(message = "regularPrice is required")

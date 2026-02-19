@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuthSession } from "../lib/authSession";
+import CategoryMenu from "./components/CategoryMenu";
 
 type ProductSummary = {
   id: string;
@@ -57,6 +58,7 @@ export default function LandingPage() {
 
   return (
     <main className="mx-auto min-h-screen max-w-7xl px-6 py-10">
+      <CategoryMenu />
       <section className="animate-rise relative overflow-hidden rounded-3xl border border-[var(--line)] bg-[linear-gradient(130deg,#2e2018,#50362b)] p-8 text-white shadow-2xl md:p-12">
         <div className="absolute -right-14 -top-20 h-64 w-64 rounded-full bg-[#f18f63]/20 blur-3xl" />
         <div className="absolute -bottom-24 -left-14 h-64 w-64 rounded-full bg-[#4fa2ab]/20 blur-3xl" />

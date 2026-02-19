@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { ChangeEvent, DragEvent, FormEvent, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import AppNav from "../../components/AppNav";
@@ -32,10 +32,20 @@ type ProductDetail = {
   discountedPrice: number | null;
   sku: string;
   vendorId: string;
+  mainCategory: string | null;
+  subCategories: string[];
   categories: string[];
   productType: ProductType;
   variations: Array<{ name: string; value: string }>;
   active: boolean;
+};
+
+type Category = {
+  id: string;
+  name: string;
+  type: "PARENT" | "SUB";
+  parentCategoryId: string | null;
+  deleted?: boolean;
 };
 
 type PagedResponse<T> = {
@@ -52,11 +62,12 @@ type ProductFormState = {
   name: string;
   shortDescription: string;
   description: string;
-  imagesCsv: string;
+  images: string[];
   regularPrice: string;
   discountedPrice: string;
   vendorId: string;
-  categoriesCsv: string;
+  mainCategoryName: string;
+  subCategoryNames: string[];
   productType: ProductType;
   variationsCsv: string;
   sku: string;
@@ -67,11 +78,12 @@ const emptyForm: ProductFormState = {
   name: "",
   shortDescription: "",
   description: "",
-  imagesCsv: "",
+  images: [],
   regularPrice: "",
   discountedPrice: "",
   vendorId: "",
-  categoriesCsv: "",
+  mainCategoryName: "",
+  subCategoryNames: [],
   productType: "SINGLE",
   variationsCsv: "",
   sku: "",
@@ -83,6 +95,38 @@ function parseCsv(value: string): string[] {
     .split(",")
     .map((v) => v.trim())
     .filter(Boolean);
+}
+
+const MAX_IMAGE_COUNT = 5;
+const MAX_IMAGE_SIZE_BYTES = 1_048_576;
+const MAX_IMAGE_DIMENSION = 540;
+
+function resolveImageUrl(imageName: string): string | null {
+  const base = (process.env.NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL || "").trim();
+  if (!base) return null;
+  return `${base.replace(/\/+$/, "")}/${imageName.replace(/^\/+/, "")}`;
+}
+
+async function validateImageFile(file: File): Promise<void> {
+  if (file.size > MAX_IMAGE_SIZE_BYTES) {
+    throw new Error(`${file.name} exceeds 1MB`);
+  }
+  const dimensions = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      resolve({ width: image.width, height: image.height });
+      URL.revokeObjectURL(url);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error(`${file.name} is not a valid image`));
+    };
+    image.src = url;
+  });
+  if (dimensions.width > MAX_IMAGE_DIMENSION || dimensions.height > MAX_IMAGE_DIMENSION) {
+    throw new Error(`${file.name} must be at most 540x540`);
+  }
 }
 
 function parseVariations(value: string) {
@@ -111,11 +155,32 @@ export default function AdminProductsPage() {
   const [q, setQ] = useState("");
   const [sku, setSku] = useState("");
   const [category, setCategory] = useState("");
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [deletedCategories, setDeletedCategories] = useState<Category[]>([]);
   const [type, setType] = useState<ProductType | "">("");
   const [status, setStatus] = useState("Loading admin products...");
   const [showDeleted, setShowDeleted] = useState(false);
   const [form, setForm] = useState<ProductFormState>(emptyForm);
+  const [uploadingImages, setUploadingImages] = useState(false);
+  const [dragImageIndex, setDragImageIndex] = useState<number | null>(null);
   const [variationParentId, setVariationParentId] = useState("");
+  const [categoryForm, setCategoryForm] = useState<{ id?: string; name: string; type: "PARENT" | "SUB"; parentCategoryId: string }>({
+    name: "",
+    type: "PARENT",
+    parentCategoryId: "",
+  });
+
+  const loadCategories = useCallback(async () => {
+    if (!session.apiClient) return;
+    const res = await session.apiClient.get("/admin/categories");
+    setCategories((res.data as Category[]) || []);
+  }, [session.apiClient]);
+
+  const loadDeletedCategories = useCallback(async () => {
+    if (!session.apiClient) return;
+    const res = await session.apiClient.get("/admin/categories/deleted");
+    setDeletedCategories((res.data as Category[]) || []);
+  }, [session.apiClient]);
 
   const loadActive = useCallback(
     async (targetPage: number) => {
@@ -176,14 +241,14 @@ export default function AdminProductsPage() {
 
     const run = async () => {
       try {
-        await Promise.all([loadActive(0), loadDeleted(0)]);
+        await Promise.all([loadActive(0), loadDeleted(0), loadCategories(), loadDeletedCategories()]);
         setStatus("Admin product catalog loaded.");
       } catch (err) {
         setStatus(err instanceof Error ? err.message : "Failed to load products.");
       }
     };
     void run();
-  }, [router, session.status, session.isAuthenticated, session.canViewAdmin, loadActive, loadDeleted]);
+  }, [router, session.status, session.isAuthenticated, session.canViewAdmin, loadActive, loadDeleted, loadCategories, loadDeletedCategories]);
 
   const applyFilters = async (e: FormEvent) => {
     e.preventDefault();
@@ -207,11 +272,12 @@ export default function AdminProductsPage() {
         name: p.name,
         shortDescription: p.shortDescription,
         description: p.description,
-        imagesCsv: p.images.join(", "),
+        images: p.images,
         regularPrice: String(p.regularPrice),
         discountedPrice: p.discountedPrice === null ? "" : String(p.discountedPrice),
         vendorId: p.vendorId,
-        categoriesCsv: p.categories.join(", "),
+        mainCategoryName: p.mainCategory || "",
+        subCategoryNames: p.subCategories || [],
         productType: p.productType,
         variationsCsv: p.variations.map((v) => `${v.name}:${v.value}`).join(", "),
         sku: p.sku,
@@ -228,16 +294,20 @@ export default function AdminProductsPage() {
   const submitProduct = async (e: FormEvent) => {
     e.preventDefault();
     if (!session.apiClient) return;
+    if (form.images.length === 0) {
+      toast.error("Upload at least one image");
+      return;
+    }
 
     const payload = {
       name: form.name.trim(),
       shortDescription: form.shortDescription.trim(),
       description: form.description.trim(),
-      images: parseCsv(form.imagesCsv),
+      images: form.images,
       regularPrice: Number(form.regularPrice),
       discountedPrice: form.discountedPrice.trim() ? Number(form.discountedPrice) : null,
       vendorId: form.vendorId.trim() ? form.vendorId.trim() : null,
-      categories: parseCsv(form.categoriesCsv),
+      categories: [form.mainCategoryName, ...form.subCategoryNames].filter(Boolean),
       productType: form.productType,
       variations: parseVariations(form.variationsCsv),
       sku: form.sku.trim(),
@@ -266,15 +336,19 @@ export default function AdminProductsPage() {
 
   const createVariation = async () => {
     if (!session.apiClient || !variationParentId.trim()) return;
+    if (form.images.length === 0) {
+      toast.error("Upload at least one image");
+      return;
+    }
     const payload = {
       name: form.name.trim(),
       shortDescription: form.shortDescription.trim(),
       description: form.description.trim(),
-      images: parseCsv(form.imagesCsv),
+      images: form.images,
       regularPrice: Number(form.regularPrice),
       discountedPrice: form.discountedPrice.trim() ? Number(form.discountedPrice) : null,
       vendorId: form.vendorId.trim() ? form.vendorId.trim() : null,
-      categories: parseCsv(form.categoriesCsv),
+      categories: [form.mainCategoryName, ...form.subCategoryNames].filter(Boolean),
       productType: "VARIATION",
       variations: parseVariations(form.variationsCsv),
       sku: form.sku.trim(),
@@ -325,6 +399,123 @@ export default function AdminProductsPage() {
     }
   };
 
+  const saveCategory = async () => {
+    if (!session.apiClient) return;
+    if (!categoryForm.name.trim()) return;
+    const payload = {
+      name: categoryForm.name.trim(),
+      type: categoryForm.type,
+      parentCategoryId: categoryForm.type === "SUB" ? categoryForm.parentCategoryId || null : null,
+    };
+    setStatus(categoryForm.id ? "Updating category..." : "Creating category...");
+    try {
+      if (categoryForm.id) {
+        await session.apiClient.put(`/admin/categories/${categoryForm.id}`, payload);
+        toast.success("Category updated");
+      } else {
+        await session.apiClient.post("/admin/categories", payload);
+        toast.success("Category created");
+      }
+      setCategoryForm({ name: "", type: "PARENT", parentCategoryId: "" });
+      await Promise.all([loadCategories(), loadDeletedCategories()]);
+      setStatus("Category operation complete.");
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Category save failed.");
+      toast.error(err instanceof Error ? err.message : "Category save failed");
+    }
+  };
+
+  const deleteCategory = async (id: string) => {
+    if (!session.apiClient) return;
+    setStatus("Deleting category...");
+    try {
+      await session.apiClient.delete(`/admin/categories/${id}`);
+      toast.success("Category deleted");
+      await Promise.all([loadCategories(), loadDeletedCategories()]);
+      setStatus("Category deleted.");
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Delete category failed.");
+      toast.error(err instanceof Error ? err.message : "Delete category failed");
+    }
+  };
+
+  const restoreCategory = async (id: string) => {
+    if (!session.apiClient) return;
+    setStatus("Restoring category...");
+    try {
+      await session.apiClient.post(`/admin/categories/${id}/restore`);
+      toast.success("Category restored");
+      await Promise.all([loadCategories(), loadDeletedCategories()]);
+      setStatus("Category restored.");
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Restore category failed.");
+      toast.error(err instanceof Error ? err.message : "Restore category failed");
+    }
+  };
+
+  const uploadImages = async (e: ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    if (!session.apiClient || files.length === 0) return;
+    if (form.images.length + files.length > MAX_IMAGE_COUNT) {
+      toast.error("You can add up to 5 images");
+      e.target.value = "";
+      return;
+    }
+
+    try {
+      setUploadingImages(true);
+      for (const file of files) {
+        await validateImageFile(file);
+      }
+
+      const namesRes = await session.apiClient.post("/admin/products/images/names", {
+        fileNames: files.map((file) => file.name),
+      });
+      const preparedKeys = ((namesRes.data as { images?: string[] })?.images || []).filter(Boolean);
+      if (preparedKeys.length !== files.length) {
+        throw new Error("Failed to prepare image names");
+      }
+
+      const data = new FormData();
+      files.forEach((file, index) => {
+        data.append("files", file);
+        data.append("keys", preparedKeys[index]);
+      });
+
+      const res = await session.apiClient.post("/admin/products/images", data, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+      const uploaded = ((res.data as { images?: string[] })?.images || []).filter(Boolean);
+      setForm((old) => ({ ...old, images: [...old.images, ...uploaded].slice(0, MAX_IMAGE_COUNT) }));
+      toast.success("Images uploaded");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Image upload failed");
+    } finally {
+      setUploadingImages(false);
+      e.target.value = "";
+    }
+  };
+
+  const removeImage = (index: number) => {
+    setForm((old) => ({
+      ...old,
+      images: old.images.filter((_, i) => i !== index),
+    }));
+  };
+
+  const onImageDrop = (targetIndex: number) => {
+    if (dragImageIndex === null || dragImageIndex === targetIndex) return;
+    setForm((old) => {
+      const next = [...old.images];
+      const [dragged] = next.splice(dragImageIndex, 1);
+      next.splice(targetIndex, 0, dragged);
+      return { ...old, images: next };
+    });
+    setDragImageIndex(null);
+  };
+
   if (session.status === "loading" || session.status === "idle") {
     return <main className="mx-auto min-h-screen max-w-7xl px-6 py-10 text-[var(--muted)]">Loading...</main>;
   }
@@ -335,6 +526,11 @@ export default function AdminProductsPage() {
 
   const rows = showDeleted ? deletedPage?.content || [] : activePage?.content || [];
   const pageInfo = showDeleted ? deletedPage : activePage;
+  const parentCategories = categories.filter((c) => c.type === "PARENT");
+  const selectedParent = parentCategories.find((c) => c.name === form.mainCategoryName) || null;
+  const subCategoryOptions = categories.filter(
+    (c) => c.type === "SUB" && c.parentCategoryId && selectedParent && c.parentCategoryId === selectedParent.id
+  );
 
   const title = showDeleted ? "Deleted Products" : "Active Products";
 
@@ -529,8 +725,106 @@ export default function AdminProductsPage() {
                 <input value={form.name} onChange={(e) => setForm((o) => ({ ...o, name: e.target.value }))} placeholder="Name" className="rounded-lg border border-[var(--line)] px-3 py-2" required />
                 <input value={form.shortDescription} onChange={(e) => setForm((o) => ({ ...o, shortDescription: e.target.value }))} placeholder="Short Description" className="rounded-lg border border-[var(--line)] px-3 py-2" required />
                 <textarea value={form.description} onChange={(e) => setForm((o) => ({ ...o, description: e.target.value }))} placeholder="Description" className="rounded-lg border border-[var(--line)] px-3 py-2" rows={3} required />
-                <input value={form.imagesCsv} onChange={(e) => setForm((o) => ({ ...o, imagesCsv: e.target.value }))} placeholder="Images CSV: a.jpg,b.png" className="rounded-lg border border-[var(--line)] px-3 py-2" required />
-                <input value={form.categoriesCsv} onChange={(e) => setForm((o) => ({ ...o, categoriesCsv: e.target.value }))} placeholder="Categories CSV" className="rounded-lg border border-[var(--line)] px-3 py-2" required />
+                <div className="rounded-lg border border-[var(--line)] p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-xs text-[var(--muted)]">
+                      Product Images ({form.images.length}/{MAX_IMAGE_COUNT})
+                    </p>
+                    <label className="cursor-pointer rounded-md border border-[var(--line)] bg-white px-2 py-1 text-xs">
+                      {uploadingImages ? "Uploading..." : "Upload Images"}
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        multiple
+                        className="hidden"
+                        disabled={uploadingImages || form.images.length >= MAX_IMAGE_COUNT}
+                        onChange={(e) => {
+                          void uploadImages(e);
+                        }}
+                      />
+                    </label>
+                  </div>
+                  <p className="mb-2 text-[11px] text-[var(--muted)]">Max 5 images, 1MB each, 540x540 max. Drag to reorder. First image is main.</p>
+                  {form.images.length === 0 && <p className="text-xs text-[var(--muted)]">No images uploaded.</p>}
+                  <div className="grid gap-2">
+                    {form.images.map((imageName, index) => {
+                      const imageUrl = resolveImageUrl(imageName);
+                      return (
+                        <div
+                          key={`${imageName}-${index}`}
+                          draggable
+                          onDragStart={() => setDragImageIndex(index)}
+                          onDragOver={(e: DragEvent<HTMLDivElement>) => e.preventDefault()}
+                          onDrop={() => onImageDrop(index)}
+                          className="flex items-center gap-2 rounded-lg border border-[var(--line)] bg-white p-2"
+                        >
+                          <div className="h-12 w-12 overflow-hidden rounded-md border border-[var(--line)] bg-[#f6f2ea]">
+                            {imageUrl ? (
+                              <img src={imageUrl} alt={imageName} className="h-full w-full object-cover" />
+                            ) : (
+                              <div className="grid h-full w-full place-items-center text-[10px] text-[var(--muted)]">IMG</div>
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs text-[var(--ink)]">{imageName}</p>
+                            <p className="text-[10px] text-[var(--muted)]">{index === 0 ? "Main image" : `Position ${index + 1}`}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeImage(index)}
+                            className="rounded border border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                <select
+                  value={form.mainCategoryName}
+                  onChange={(e) =>
+                    setForm((o) => ({
+                      ...o,
+                      mainCategoryName: e.target.value,
+                      subCategoryNames: [],
+                    }))
+                  }
+                  className="rounded-lg border border-[var(--line)] px-3 py-2"
+                  required
+                >
+                  <option value="">Select Main Category</option>
+                  {parentCategories.map((c) => (
+                    <option key={c.id} value={c.name}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="rounded-lg border border-[var(--line)] p-2">
+                  <p className="mb-1 text-xs text-[var(--muted)]">Sub Categories (multiple)</p>
+                  <div className="grid gap-1">
+                    {subCategoryOptions.length === 0 && (
+                      <p className="text-xs text-[var(--muted)]">No sub categories for selected main category.</p>
+                    )}
+                    {subCategoryOptions.map((c) => (
+                      <label key={c.id} className="flex items-center gap-2 text-xs text-[var(--ink)]">
+                        <input
+                          type="checkbox"
+                          checked={form.subCategoryNames.includes(c.name)}
+                          onChange={(e) =>
+                            setForm((o) => ({
+                              ...o,
+                              subCategoryNames: e.target.checked
+                                ? [...o.subCategoryNames, c.name]
+                                : o.subCategoryNames.filter((n) => n !== c.name),
+                            }))
+                          }
+                        />
+                        {c.name}
+                      </label>
+                    ))}
+                  </div>
+                </div>
                 <input value={form.sku} onChange={(e) => setForm((o) => ({ ...o, sku: e.target.value }))} placeholder="SKU" className="rounded-lg border border-[var(--line)] px-3 py-2" required />
                 <div className="grid grid-cols-2 gap-2">
                   <input type="number" step="0.01" min="0.01" value={form.regularPrice} onChange={(e) => setForm((o) => ({ ...o, regularPrice: e.target.value }))} placeholder="Regular Price" className="rounded-lg border border-[var(--line)] px-3 py-2" required />
@@ -569,6 +863,121 @@ export default function AdminProductsPage() {
               <button onClick={() => void createVariation()} className="btn-brand mt-3 rounded-lg px-3 py-2 text-sm font-semibold">
                 Create Variation
               </button>
+            </section>
+
+            <section className="card-surface rounded-2xl p-5">
+              <h3 className="text-xl text-[var(--ink)]">Category Operations</h3>
+              <p className="mt-1 text-xs text-[var(--muted)]">
+                One unique category name, with parent and sub hierarchy.
+              </p>
+
+              <div className="mt-3 grid gap-2 text-sm">
+                <input
+                  value={categoryForm.name}
+                  onChange={(e) => setCategoryForm((o) => ({ ...o, name: e.target.value }))}
+                  placeholder="Category name"
+                  className="rounded-lg border border-[var(--line)] px-3 py-2"
+                />
+                <select
+                  value={categoryForm.type}
+                  onChange={(e) =>
+                    setCategoryForm((o) => ({
+                      ...o,
+                      type: e.target.value as "PARENT" | "SUB",
+                      parentCategoryId: e.target.value === "SUB" ? o.parentCategoryId : "",
+                    }))
+                  }
+                  className="rounded-lg border border-[var(--line)] px-3 py-2"
+                >
+                  <option value="PARENT">PARENT</option>
+                  <option value="SUB">SUB</option>
+                </select>
+                {categoryForm.type === "SUB" && (
+                  <select
+                    value={categoryForm.parentCategoryId}
+                    onChange={(e) => setCategoryForm((o) => ({ ...o, parentCategoryId: e.target.value }))}
+                    className="rounded-lg border border-[var(--line)] px-3 py-2"
+                  >
+                    <option value="">Select parent category</option>
+                    {parentCategories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <div className="flex gap-2">
+                  <button onClick={() => void saveCategory()} className="btn-brand rounded-lg px-3 py-2 text-xs font-semibold">
+                    {categoryForm.id ? "Update Category" : "Create Category"}
+                  </button>
+                  {categoryForm.id && (
+                    <button
+                      onClick={() => setCategoryForm({ name: "", type: "PARENT", parentCategoryId: "" })}
+                      className="rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-xs"
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <p className="text-xs tracking-[0.2em] text-[var(--muted)]">ACTIVE CATEGORIES</p>
+                <div className="mt-2 max-h-40 overflow-auto rounded-lg border border-[var(--line)] p-2">
+                  {categories.map((c) => (
+                    <div key={c.id} className="mb-1 flex items-center justify-between rounded-md px-2 py-1 hover:bg-[var(--brand-soft)]">
+                      <span className="text-xs text-[var(--ink)]">
+                        {c.name} ({c.type})
+                      </span>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() =>
+                            setCategoryForm({
+                              id: c.id,
+                              name: c.name,
+                              type: c.type,
+                              parentCategoryId: c.parentCategoryId || "",
+                            })
+                          }
+                          className="rounded border border-[var(--line)] bg-white px-2 py-0.5 text-[10px]"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => {
+                            void deleteCategory(c.id);
+                          }}
+                          className="rounded border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] text-red-700"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <p className="text-xs tracking-[0.2em] text-[var(--muted)]">DELETED CATEGORIES</p>
+                <div className="mt-2 max-h-32 overflow-auto rounded-lg border border-[var(--line)] p-2">
+                  {deletedCategories.length === 0 && <p className="text-xs text-[var(--muted)]">No deleted categories.</p>}
+                  {deletedCategories.map((c) => (
+                    <div key={c.id} className="mb-1 flex items-center justify-between rounded-md px-2 py-1">
+                      <span className="text-xs text-[var(--ink)]">
+                        {c.name} ({c.type})
+                      </span>
+                      <button
+                        onClick={() => {
+                          void restoreCategory(c.id);
+                        }}
+                        className="rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] text-emerald-700"
+                      >
+                        Restore
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </section>
           </div>
         </div>

@@ -23,6 +23,8 @@ type ProductDetail = {
   discountedPrice: number | null;
   sellingPrice: number;
   vendorId: string;
+  mainCategory: string | null;
+  subCategories: string[];
   categories: string[];
   productType: string;
   variations: Variation[];
@@ -33,12 +35,19 @@ function money(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
 }
 
+function resolveImageUrl(imageName: string): string | null {
+  const base = (process.env.NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL || "").trim();
+  if (!base) return null;
+  return `${base.replace(/\/+$/, "")}/${imageName.replace(/^\/+/, "")}`;
+}
+
 export default function ProductDetailPage() {
   const params = useParams<{ id: string }>();
   const { isAuthenticated, profile, logout, canViewAdmin, login, apiClient } = useAuthSession();
   const [product, setProduct] = useState<ProductDetail | null>(null);
   const [variations, setVariations] = useState<ProductDetail[]>([]);
   const [selectedVariationId, setSelectedVariationId] = useState("");
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [status, setStatus] = useState("Loading product...");
 
@@ -50,6 +59,7 @@ export default function ProductDetailPage() {
         if (!res.ok) throw new Error("Failed");
         const data = (await res.json()) as ProductDetail;
         setProduct(data);
+        setSelectedImageIndex(0);
         setStatus("Product loaded.");
         if (data.productType === "PARENT") {
           const vRes = await fetch(`${apiBase}/products/${params.id}/variations`, { cache: "no-store" });
@@ -117,14 +127,35 @@ export default function ProductDetailPage() {
           <div className="grid gap-8 lg:grid-cols-[1fr,1fr]">
             <div className="space-y-3">
               <div className="h-80 rounded-2xl border border-[var(--line)] bg-[linear-gradient(160deg,#eee7db,#f9f5ee)] p-4 text-sm text-[var(--muted)]">
-                {product.images?.[0] || "main-image.jpg"}
+                {resolveImageUrl(product.images?.[selectedImageIndex] || "") ? (
+                  <img
+                    src={resolveImageUrl(product.images[selectedImageIndex]) || ""}
+                    alt={product.name}
+                    className="h-full w-full rounded-xl object-cover"
+                  />
+                ) : (
+                  product.images?.[selectedImageIndex] || "main-image.jpg"
+                )}
               </div>
-              <div className="grid grid-cols-3 gap-2">
-                {product.images?.slice(1, 4).map((img) => (
-                  <div key={img} className="rounded-xl border border-[var(--line)] bg-white px-2 py-3 text-xs text-[var(--muted)]">
-                    {img}
-                  </div>
-                ))}
+              <div className="grid grid-cols-5 gap-2">
+                {product.images?.slice(0, 5).map((img, index) => {
+                  const imageUrl = resolveImageUrl(img);
+                  return (
+                    <button
+                      key={`${img}-${index}`}
+                      onClick={() => setSelectedImageIndex(index)}
+                      className={`overflow-hidden rounded-xl border bg-white px-1 py-1 text-xs ${
+                        selectedImageIndex === index ? "border-[var(--brand)]" : "border-[var(--line)]"
+                      }`}
+                    >
+                      {imageUrl ? (
+                        <img src={imageUrl} alt={img} className="h-14 w-full rounded-md object-cover" />
+                      ) : (
+                        <span className="block truncate px-1 py-4 text-[10px] text-[var(--muted)]">{img}</span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -140,7 +171,12 @@ export default function ProductDetailPage() {
               </div>
 
               <div className="flex flex-wrap gap-2">
-                {product.categories.map((c) => (
+                {product.mainCategory && (
+                  <span className="rounded-full bg-[var(--brand)] px-3 py-1 text-xs text-white">
+                    Main: {product.mainCategory}
+                  </span>
+                )}
+                {product.subCategories.map((c) => (
                   <span key={c} className="rounded-full bg-[var(--brand-soft)] px-3 py-1 text-xs capitalize text-[var(--ink)]">
                     {c}
                   </span>

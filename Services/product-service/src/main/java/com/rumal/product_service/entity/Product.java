@@ -10,6 +10,8 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
@@ -23,7 +25,6 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -78,11 +79,14 @@ public class Product {
     @Column(name = "parent_product_id")
     private UUID parentProductId;
 
-    @ElementCollection
-    @CollectionTable(name = "product_categories", joinColumns = @JoinColumn(name = "product_id"))
-    @Column(name = "category_name", nullable = false, length = 80)
+    @ManyToMany
+    @JoinTable(
+            name = "product_category_map",
+            joinColumns = @JoinColumn(name = "product_id"),
+            inverseJoinColumns = @JoinColumn(name = "category_id")
+    )
     @Builder.Default
-    private Set<String> categories = new LinkedHashSet<>();
+    private Set<Category> categories = new java.util.LinkedHashSet<>();
 
     @Enumerated(EnumType.STRING)
     @Column(name = "product_type", nullable = false, length = 20)

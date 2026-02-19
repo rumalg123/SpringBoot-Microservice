@@ -47,6 +47,7 @@ public class SecurityConfig {
                 .authorizeExchange(exchanges -> exchanges
                         .pathMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .pathMatchers(HttpMethod.GET, "/products", "/products/**").permitAll()
+                        .pathMatchers(HttpMethod.GET, "/categories", "/categories/**").permitAll()
                         .pathMatchers("/actuator/health", "/actuator/info", "/customers/register").permitAll()
                         .pathMatchers("/auth/logout", "/auth/resend-verification").authenticated()
                         .pathMatchers("/customers/me", "/customers/register-auth0", "/orders/me", "/orders/me/**")

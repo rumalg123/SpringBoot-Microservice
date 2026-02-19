@@ -16,10 +16,11 @@ public record ProductSummaryResponse(
         BigDecimal discountedPrice,
         BigDecimal sellingPrice,
         String sku,
+        String mainCategory,
+        Set<String> subCategories,
         Set<String> categories,
         ProductType productType,
         UUID vendorId,
         boolean active,
         List<ProductVariationAttributeResponse> variations
 ) {}
-

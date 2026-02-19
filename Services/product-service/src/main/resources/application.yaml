@@ -20,6 +20,10 @@ spring:
 
 server:
   port: 8084
+  servlet:
+    multipart:
+      max-file-size: ${PRODUCT_IMAGE_MAX_FILE_SIZE:1MB}
+      max-request-size: ${PRODUCT_IMAGE_MAX_REQUEST_SIZE:5MB}
 
 eureka:
   client:
@@ -34,3 +38,13 @@ cache:
   product-by-id-ttl: ${CACHE_PRODUCT_BY_ID_TTL:120s}
   product-list-ttl: ${CACHE_PRODUCT_LIST_TTL:45s}
   product-deleted-list-ttl: ${CACHE_PRODUCT_DELETED_LIST_TTL:30s}
+  category-list-ttl: ${CACHE_CATEGORY_LIST_TTL:120s}
+  deleted-category-list-ttl: ${CACHE_DELETED_CATEGORY_LIST_TTL:90s}
+
+object-storage:
+  enabled: ${OBJECT_STORAGE_ENABLED:false}
+  endpoint: ${OBJECT_STORAGE_ENDPOINT:https://objectstorage.us-ashburn-1.oraclecloud.com}
+  region: ${OBJECT_STORAGE_REGION:us-ashburn-1}
+  access-key: ${OBJECT_STORAGE_ACCESS_KEY:}
+  secret-key: ${OBJECT_STORAGE_SECRET_KEY:}
+  bucket: ${OBJECT_STORAGE_BUCKET:}

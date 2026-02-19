@@ -2,7 +2,9 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import AppNav from "../components/AppNav";
+import CategoryMenu from "../components/CategoryMenu";
 import { useAuthSession } from "../../lib/authSession";
 
 type ProductSummary = {
@@ -28,14 +30,27 @@ function money(value: number) {
 }
 
 export default function ProductsPage() {
+  const searchParams = useSearchParams();
   const { isAuthenticated, profile, logout, canViewAdmin } = useAuthSession();
   const [products, setProducts] = useState<ProductSummary[]>([]);
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
+  const [mainCategory, setMainCategory] = useState("");
+  const [subCategory, setSubCategory] = useState("");
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [status, setStatus] = useState("Loading products...");
+
+  useEffect(() => {
+    const main = searchParams.get("mainCategory") || "";
+    const sub = searchParams.get("subCategory") || "";
+    const cat = searchParams.get("category") || "";
+    setMainCategory(main);
+    setSubCategory(sub);
+    setCategory(cat);
+    setPage(0);
+  }, [searchParams]);
 
   useEffect(() => {
     const run = async () => {
@@ -47,6 +62,8 @@ export default function ProductsPage() {
         params.set("size", "12");
         if (search.trim()) params.set("q", search.trim());
         if (category.trim()) params.set("category", category.trim());
+        if (mainCategory.trim()) params.set("mainCategory", mainCategory.trim());
+        if (subCategory.trim()) params.set("subCategory", subCategory.trim());
 
         const res = await fetch(`${apiBase}/products?${params.toString()}`, { cache: "no-store" });
         if (!res.ok) throw new Error("Failed to fetch products");
@@ -61,7 +78,7 @@ export default function ProductsPage() {
     };
 
     void run();
-  }, [search, category, page]);
+  }, [search, category, mainCategory, subCategory, page]);
 
   const uniqueCategories = useMemo(() => {
     const all = new Set<string>();
@@ -79,6 +96,7 @@ export default function ProductsPage() {
 
   return (
     <main className="mx-auto min-h-screen max-w-7xl px-6 py-8">
+      <CategoryMenu />
       {isAuthenticated && (
         <AppNav
           email={(profile?.email as string) || ""}
@@ -102,6 +120,12 @@ export default function ProductsPage() {
             {isAuthenticated ? "View My Purchases" : "Sign In"}
           </Link>
         </div>
+
+        {(mainCategory || subCategory || category) && (
+          <p className="mb-3 text-sm text-[var(--muted)]">
+            Filtered by: {mainCategory || subCategory || category}
+          </p>
+        )}
 
         <form onSubmit={onSearch} className="mb-6 grid gap-3 md:grid-cols-[1fr,200px,auto]">
           <input
@@ -186,4 +210,3 @@ export default function ProductsPage() {
     </main>
   );
 }
-

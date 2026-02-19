@@ -26,7 +26,9 @@ public class CacheConfig implements CachingConfigurer {
             ObjectMapper objectMapper,
             @Value("${cache.product-by-id-ttl:120s}") Duration productByIdTtl,
             @Value("${cache.product-list-ttl:45s}") Duration productListTtl,
-            @Value("${cache.product-deleted-list-ttl:30s}") Duration productDeletedListTtl
+            @Value("${cache.product-deleted-list-ttl:30s}") Duration productDeletedListTtl,
+            @Value("${cache.category-list-ttl:120s}") Duration categoryListTtl,
+            @Value("${cache.deleted-category-list-ttl:90s}") Duration deletedCategoryListTtl
     ) {
         ObjectMapper cacheObjectMapper = objectMapper.copy();
         cacheObjectMapper.addMixIn(PageImpl.class, PageImplMixin.class);
@@ -49,7 +51,9 @@ public class CacheConfig implements CachingConfigurer {
                 .withInitialCacheConfigurations(Map.of(
                         "productById", defaultConfig.entryTtl(productByIdTtl),
                         "productsList", defaultConfig.entryTtl(productListTtl),
-                        "deletedProductsList", defaultConfig.entryTtl(productDeletedListTtl)
+                        "deletedProductsList", defaultConfig.entryTtl(productDeletedListTtl),
+                        "categoriesList", defaultConfig.entryTtl(categoryListTtl),
+                        "deletedCategoriesList", defaultConfig.entryTtl(deletedCategoryListTtl)
                 ))
                 .build();
     }
@@ -65,4 +69,3 @@ public class CacheConfig implements CachingConfigurer {
         }
     }
 }
-

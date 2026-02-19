@@ -9,4 +9,5 @@ import java.util.UUID;
 
 public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpecificationExecutor<Product> {
     List<Product> findByParentProductIdAndDeletedFalseAndActiveTrue(UUID parentProductId);
+    boolean existsByCategories_IdAndDeletedFalseAndActiveTrue(UUID categoryId);
 }

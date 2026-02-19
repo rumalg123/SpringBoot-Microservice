@@ -19,6 +19,8 @@ public record ProductResponse(
         BigDecimal discountedPrice,
         BigDecimal sellingPrice,
         UUID vendorId,
+        String mainCategory,
+        Set<String> subCategories,
         Set<String> categories,
         ProductType productType,
         List<ProductVariationAttributeResponse> variations,
