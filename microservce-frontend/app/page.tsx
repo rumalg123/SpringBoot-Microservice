@@ -122,7 +122,9 @@ export default function LandingPage() {
           </div>
           <div className="grid gap-3 rounded-2xl border border-white/25 bg-white/8 p-5 text-sm">
             <p className="text-xs tracking-[0.2em] text-zinc-200">FEATURED</p>
-            {heroProducts.length === 0 && <p className="text-zinc-200">Loading featured products...</p>}
+            {status === "loading" && <p className="text-zinc-200">Loading featured products...</p>}
+            {status === "error" && <p className="text-amber-200">Featured products unavailable.</p>}
+            {status === "ready" && heroProducts.length === 0 && <p className="text-zinc-200">No featured products yet.</p>}
             {heroProducts.map((p) => (
               <Link
                 href={`/products/${p.id}`}

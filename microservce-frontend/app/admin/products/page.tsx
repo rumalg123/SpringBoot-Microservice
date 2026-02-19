@@ -52,11 +52,16 @@ type Category = {
 
 type PagedResponse<T> = {
   content: T[];
-  number: number;
-  totalPages: number;
-  totalElements: number;
-  first: boolean;
-  last: boolean;
+  number?: number;
+  totalPages?: number;
+  totalElements?: number;
+  first?: boolean;
+  last?: boolean;
+  page?: {
+    number?: number;
+    totalPages?: number;
+    totalElements?: number;
+  };
 };
 
 type ProductFormState = {
@@ -101,7 +106,7 @@ function parseCsv(value: string): string[] {
 
 const MAX_IMAGE_COUNT = 5;
 const MAX_IMAGE_SIZE_BYTES = 1_048_576;
-const MAX_IMAGE_DIMENSION = 1200;
+const MAX_IMAGE_DIMENSION = 540;
 
 function resolveImageUrl(imageName: string): string | null {
   const base = (process.env.NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL || "").trim();
@@ -134,7 +139,7 @@ async function validateImageFile(file: File): Promise<void> {
     image.src = url;
   });
   if (dimensions.width > MAX_IMAGE_DIMENSION || dimensions.height > MAX_IMAGE_DIMENSION) {
-    throw new Error(`${file.name} must be at most 540x540`);
+    throw new Error(`${file.name} must be at most ${MAX_IMAGE_DIMENSION}x${MAX_IMAGE_DIMENSION}`);
   }
 }
 
@@ -165,6 +170,18 @@ function money(value: number) {
 function parseNumber(value: string): number | null {
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
+}
+
+function getPageMeta<T>(pageInfo: PagedResponse<T> | null) {
+  if (!pageInfo) {
+    return { totalElements: 0, first: true, last: true };
+  }
+  const pageNumber = pageInfo.number ?? pageInfo.page?.number ?? 0;
+  const totalPages = pageInfo.totalPages ?? pageInfo.page?.totalPages ?? 1;
+  const totalElements = pageInfo.totalElements ?? pageInfo.page?.totalElements ?? pageInfo.content.length;
+  const first = pageInfo.first ?? pageNumber <= 0;
+  const last = pageInfo.last ?? pageNumber >= Math.max(totalPages - 1, 0);
+  return { totalElements, first, last };
 }
 
 export default function AdminProductsPage() {
@@ -615,12 +632,14 @@ export default function AdminProductsPage() {
   const rows = showDeleted ? deletedPage?.content || [] : activePage?.content || [];
   const pageInfo = showDeleted ? deletedPage : activePage;
   const parentCategories = categories.filter((c) => c.type === "PARENT");
+  const subCategories = categories.filter((c) => c.type === "SUB");
   const selectedParent = parentCategories.find((c) => c.name === form.mainCategoryName) || null;
   const subCategoryOptions = categories.filter(
     (c) => c.type === "SUB" && c.parentCategoryId && selectedParent && c.parentCategoryId === selectedParent.id
   );
 
   const title = showDeleted ? "Deleted Products" : "Active Products";
+  const pageMeta = getPageMeta(pageInfo);
   const filteredParentProducts = parentProducts.filter((p) => {
     const needle = parentSearch.trim().toLowerCase();
     if (!needle) return true;
@@ -678,12 +697,37 @@ export default function AdminProductsPage() {
             placeholder="SKU"
             className="rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm"
           />
-          <input
+          <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            placeholder="Category"
             className="rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm"
-          />
+          >
+            <option value="">All Categories</option>
+            {parentCategories.length > 0 && (
+              <optgroup label="Main Categories">
+                {parentCategories
+                  .slice()
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((item) => (
+                    <option key={item.id} value={item.name}>
+                      {item.name}
+                    </option>
+                  ))}
+              </optgroup>
+            )}
+            {subCategories.length > 0 && (
+              <optgroup label="Sub Categories">
+                {subCategories
+                  .slice()
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((item) => (
+                    <option key={item.id} value={item.name}>
+                      {item.name}
+                    </option>
+                  ))}
+              </optgroup>
+            )}
+          </select>
           <select
             value={type}
             onChange={(e) => setType(e.target.value as ProductType | "")}
@@ -772,33 +816,33 @@ export default function AdminProductsPage() {
 
             <div className="mt-3 flex items-center justify-between">
               <p className="text-xs text-[var(--muted)]">
-                {pageInfo ? `${pageInfo.totalElements} total` : "0 total"}
+                {`${pageMeta.totalElements} total`}
               </p>
               <div className="flex gap-2">
                 <button
                   onClick={() => {
-                    if (!pageInfo || pageInfo.first) return;
+                    if (!pageInfo || pageMeta.first) return;
                     if (showDeleted) {
                       void loadDeleted(Math.max(deletedPageIndex - 1, 0));
                     } else {
                       void loadActive(Math.max(page - 1, 0));
                     }
                   }}
-                  disabled={!pageInfo || pageInfo.first}
+                  disabled={!pageInfo || pageMeta.first}
                   className="rounded-md border border-[var(--line)] bg-white px-3 py-1 text-sm disabled:opacity-50"
                 >
                   Prev
                 </button>
                 <button
                   onClick={() => {
-                    if (!pageInfo || pageInfo.last) return;
+                    if (!pageInfo || pageMeta.last) return;
                     if (showDeleted) {
                       void loadDeleted(deletedPageIndex + 1);
                     } else {
                       void loadActive(page + 1);
                     }
                   }}
-                  disabled={!pageInfo || pageInfo.last}
+                  disabled={!pageInfo || pageMeta.last}
                   className="rounded-md border border-[var(--line)] bg-white px-3 py-1 text-sm disabled:opacity-50"
                 >
                   Next

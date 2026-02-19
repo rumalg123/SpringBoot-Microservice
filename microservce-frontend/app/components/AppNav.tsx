@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 type Props = {
   email?: string;
@@ -9,6 +10,10 @@ type Props = {
 };
 
 export default function AppNav({ email, canViewAdmin = false, onLogout }: Props) {
+  const pathname = usePathname();
+  const navClass = (href: string) =>
+    `rounded-full border px-4 py-2 text-sm ${pathname === href || pathname.startsWith(`${href}/`) ? "border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--ink)]" : "border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] hover:bg-[var(--brand-soft)]"}`;
+
   return (
     <header className="card-surface mb-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl px-4 py-3">
       <div className="space-y-1">
@@ -18,20 +23,20 @@ export default function AppNav({ email, canViewAdmin = false, onLogout }: Props)
       <div className="flex flex-wrap items-center gap-2">
         <Link
           href="/products"
-          className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-4 py-2 text-sm text-[var(--ink)] hover:bg-[var(--brand-soft)]"
+          className={navClass("/products")}
         >
           Shop
         </Link>
         <Link
           href="/orders"
-          className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-4 py-2 text-sm text-[var(--ink)] hover:bg-[var(--brand-soft)]"
+          className={navClass("/orders")}
         >
           Purchases
         </Link>
         {canViewAdmin && (
           <Link
             href="/admin/orders"
-            className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-4 py-2 text-sm text-[var(--ink)] hover:bg-[var(--brand-soft)]"
+            className={navClass("/admin/orders")}
           >
             Admin Orders
           </Link>
@@ -39,14 +44,14 @@ export default function AppNav({ email, canViewAdmin = false, onLogout }: Props)
         {canViewAdmin && (
           <Link
             href="/admin/products"
-            className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-4 py-2 text-sm text-[var(--ink)] hover:bg-[var(--brand-soft)]"
+            className={navClass("/admin/products")}
           >
             Admin Products
           </Link>
         )}
         <Link
           href="/profile"
-          className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-4 py-2 text-sm text-[var(--ink)] hover:bg-[var(--brand-soft)]"
+          className={navClass("/profile")}
         >
           My Profile
         </Link>

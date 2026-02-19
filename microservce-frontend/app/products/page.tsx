@@ -173,6 +173,10 @@ function ProductsPageContent() {
             value={category}
             onChange={(e) => {
               setCategory(e.target.value);
+              if (!e.target.value) {
+                setMainCategory("");
+                setSubCategory("");
+              }
               setPage(0);
             }}
             className="rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm capitalize"

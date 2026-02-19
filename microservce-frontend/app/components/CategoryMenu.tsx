@@ -48,12 +48,12 @@ export default function CategoryMenu() {
   return (
     <nav className="mb-5 rounded-2xl border border-[var(--line)] bg-white px-3 py-2">
       <div className="flex items-center gap-3">
-        <div className="group relative">
+        <div className="group relative pb-2">
           <button className="inline-flex rounded-full border border-[var(--line)] bg-[var(--surface)] px-4 py-1.5 text-sm font-semibold text-[var(--ink)] hover:bg-[var(--brand-soft)]">
             All Categories
           </button>
-          <div className="pointer-events-none absolute left-0 top-full z-30 hidden min-w-64 pt-2 group-hover:block">
-            <div className="pointer-events-auto rounded-xl border border-[var(--line)] bg-white p-2 shadow-2xl">
+          <div className="absolute left-0 top-full z-30 hidden min-w-64 group-hover:block">
+            <div className="rounded-xl border border-[var(--line)] bg-white p-2 shadow-2xl">
               <Link
                 href="/products"
                 className="mb-1 block rounded-lg px-3 py-2 text-sm font-semibold text-[var(--ink)] hover:bg-[var(--brand-soft)]"
@@ -72,8 +72,8 @@ export default function CategoryMenu() {
                       {children.length > 0 && <span className="text-xs text-[var(--muted)]">›</span>}
                     </Link>
                     {children.length > 0 && (
-                      <div className="pointer-events-none absolute left-full top-0 z-40 hidden min-w-56 pl-2 group-hover/parent:block">
-                        <div className="pointer-events-auto rounded-xl border border-[var(--line)] bg-white p-2 shadow-2xl">
+                      <div className="absolute left-[calc(100%-8px)] top-0 z-40 hidden min-w-56 group-hover/parent:block">
+                        <div className="rounded-xl border border-[var(--line)] bg-white p-2 shadow-2xl">
                           {children.map((sub) => (
                             <Link
                               key={sub.id}

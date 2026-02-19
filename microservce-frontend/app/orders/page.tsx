@@ -88,10 +88,6 @@ export default function OrdersPage() {
       router.replace("/");
       return;
     }
-    if (canViewAdmin) {
-      router.replace("/admin/orders");
-      return;
-    }
 
     const run = async () => {
       try {
@@ -104,7 +100,7 @@ export default function OrdersPage() {
       }
     };
     void run();
-  }, [router, sessionStatus, isAuthenticated, canViewAdmin, ensureCustomer, loadOrders, loadProducts]);
+  }, [router, sessionStatus, isAuthenticated, ensureCustomer, loadOrders, loadProducts]);
 
   const createOrder = async (e: FormEvent) => {
     e.preventDefault();
