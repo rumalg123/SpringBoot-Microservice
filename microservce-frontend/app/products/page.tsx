@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import AppNav from "../components/AppNav";
@@ -29,7 +29,7 @@ function money(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
 }
 
-export default function ProductsPage() {
+function ProductsPageContent() {
   const searchParams = useSearchParams();
   const { isAuthenticated, profile, logout, canViewAdmin } = useAuthSession();
   const [products, setProducts] = useState<ProductSummary[]>([]);
@@ -208,5 +208,13 @@ export default function ProductsPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+export default function ProductsPage() {
+  return (
+    <Suspense fallback={<main className="mx-auto min-h-screen max-w-7xl px-6 py-8 text-[var(--muted)]">Loading products...</main>}>
+      <ProductsPageContent />
+    </Suspense>
   );
 }
