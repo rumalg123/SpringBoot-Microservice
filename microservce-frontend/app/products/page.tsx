@@ -25,6 +25,12 @@ type ProductPageResponse = {
   number: number;
   totalPages: number;
 };
+type Category = {
+  id: string;
+  name: string;
+  type: "PARENT" | "SUB";
+  parentCategoryId: string | null;
+};
 
 function money(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
@@ -48,6 +54,7 @@ function ProductsPageContent() {
   const searchParams = useSearchParams();
   const { isAuthenticated, profile, logout, canViewAdmin } = useAuthSession();
   const [products, setProducts] = useState<ProductSummary[]>([]);
+  const [allCategories, setAllCategories] = useState<Category[]>([]);
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
@@ -66,6 +73,21 @@ function ProductsPageContent() {
     setCategory(cat);
     setPage(0);
   }, [searchParams]);
+
+  useEffect(() => {
+    const run = async () => {
+      try {
+        const apiBase = process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me";
+        const res = await fetch(`${apiBase}/categories`, { cache: "no-store" });
+        if (!res.ok) return;
+        const data = (await res.json()) as Category[];
+        setAllCategories(data || []);
+      } catch {
+        setAllCategories([]);
+      }
+    };
+    void run();
+  }, []);
 
   useEffect(() => {
     const run = async () => {
@@ -96,13 +118,10 @@ function ProductsPageContent() {
     void run();
   }, [search, category, mainCategory, subCategory, page]);
 
-  const uniqueCategories = useMemo(() => {
-    const all = new Set<string>();
-    for (const p of products) {
-      (p.categories || []).forEach((c) => all.add(c));
-    }
-    return Array.from(all).sort();
-  }, [products]);
+  const uniqueCategories = useMemo(
+    () => Array.from(new Set(allCategories.map((c) => c.name))).sort((a, b) => a.localeCompare(b)),
+    [allCategories]
+  );
 
   const onSearch = (e: FormEvent) => {
     e.preventDefault();
