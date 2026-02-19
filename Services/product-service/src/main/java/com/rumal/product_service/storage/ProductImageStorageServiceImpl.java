@@ -26,7 +26,7 @@ import java.util.regex.Pattern;
 public class ProductImageStorageServiceImpl implements ProductImageStorageService {
 
     private static final long MAX_FILE_SIZE_BYTES = 1_048_576;
-    private static final int MAX_DIMENSION = 540;
+    private static final int MAX_DIMENSION = 1200;
     private static final int MAX_IMAGES_PER_REQUEST = 5;
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of("jpg", "jpeg", "png", "webp");
     private static final Pattern KEY_PATTERN = Pattern.compile("^products/[A-Za-z0-9-]+\\.(jpg|jpeg|png|webp)$");
@@ -132,7 +132,7 @@ public class ProductImageStorageServiceImpl implements ProductImageStorageServic
                 throw new ValidationException("Invalid image content");
             }
             if (image.getWidth() > MAX_DIMENSION || image.getHeight() > MAX_DIMENSION) {
-                throw new ValidationException("Image dimensions must be at most 540x540");
+                throw new ValidationException("Image dimensions must be at most 1200x1200");
             }
         } catch (IOException ex) {
             throw new ValidationException("Failed to read image for validation");
