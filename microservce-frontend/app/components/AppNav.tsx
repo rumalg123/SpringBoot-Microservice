@@ -18,9 +18,9 @@ export default function AppNav({ email, canViewAdmin = false, onLogout }: Props)
     pathname === href || pathname.startsWith(`${href}/`);
 
   const navLinkClass = (href: string) =>
-    `px-4 py-2 text-sm font-medium rounded-lg transition-colors ${isActive(href)
-      ? "bg-[var(--brand)] text-white"
-      : "text-[var(--ink)] hover:bg-[var(--brand-soft)] hover:text-[var(--brand)]"
+    `px-4 py-2 text-sm font-medium rounded-lg transition-colors no-underline ${isActive(href)
+      ? "bg-[var(--brand)] text-white shadow-md"
+      : "text-gray-300 hover:bg-white/10 hover:text-white"
     }`;
 
   return (

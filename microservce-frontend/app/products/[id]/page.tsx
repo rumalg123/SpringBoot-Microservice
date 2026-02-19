@@ -197,12 +197,12 @@ export default function ProductDetailPage() {
 
       <main className="mx-auto max-w-7xl px-4 py-4">
         {/* Breadcrumb */}
-        <nav className="mb-4 flex items-center gap-2 text-sm text-[var(--muted)]">
-          <Link href="/" className="text-[var(--muted)] no-underline hover:text-[var(--brand)]">Home</Link>
-          <span>›</span>
-          <Link href="/products" className="text-[var(--muted)] no-underline hover:text-[var(--brand)]">Products</Link>
-          <span>›</span>
-          <span className="line-clamp-1 text-[var(--ink)]">{displayProduct.name}</span>
+        <nav className="breadcrumb">
+          <Link href="/">Home</Link>
+          <span className="breadcrumb-sep">›</span>
+          <Link href="/products">Products</Link>
+          <span className="breadcrumb-sep">›</span>
+          <span className="breadcrumb-current line-clamp-1">{displayProduct.name}</span>
         </nav>
 
         {/* Product Detail Card */}
@@ -237,8 +237,8 @@ export default function ProductDetailPage() {
                         key={`${img}-${index}`}
                         onClick={() => setSelectedImageIndex(index)}
                         className={`aspect-square overflow-hidden rounded-lg border-2 transition ${selectedImageIndex === index
-                            ? "border-[var(--brand)] shadow-md"
-                            : "border-[var(--line)] hover:border-[var(--brand)]"
+                          ? "border-[var(--brand)] shadow-md"
+                          : "border-[var(--line)] hover:border-[var(--brand)]"
                           }`}
                       >
                         {imageUrl ? (

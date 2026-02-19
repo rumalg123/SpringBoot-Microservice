@@ -149,14 +149,15 @@ export default function LandingPage() {
               <div className="flex flex-wrap gap-3">
                 <Link
                   href="/products"
-                  className="inline-flex items-center gap-2 rounded-lg bg-white px-6 py-3 text-sm font-bold text-[var(--brand)] no-underline transition hover:shadow-lg"
+                  className="inline-flex items-center gap-2 rounded-lg bg-white px-6 py-3 text-sm font-bold no-underline shadow-sm transition hover:shadow-lg"
+                  style={{ color: 'var(--brand)' }}
                 >
                   🛍️ Shop Now
                 </Link>
                 <button
                   onClick={() => void session.signup("/products")}
                   disabled={session.status === "loading" || session.status === "idle"}
-                  className="rounded-lg border-2 border-white px-6 py-3 text-sm font-bold text-white transition hover:bg-white/15 disabled:opacity-50"
+                  className="rounded-lg border-2 border-white bg-white/10 px-6 py-3 text-sm font-bold text-white transition hover:bg-white/25 disabled:opacity-50"
                 >
                   Create Account
                 </button>
