@@ -7,7 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.interceptor.CacheErrorHandler;
-import org.springframework.cache.annotation.CachingConfigurer;
+import org.springframework.cache.annotation.CachingConfigurerSupport;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.domain.PageImpl;
@@ -25,7 +25,7 @@ import java.time.Duration;
 import java.util.Map;
 
 @Configuration
-public class CacheConfig implements CachingConfigurer {
+public class CacheConfig extends CachingConfigurerSupport {
     private static final Logger log = LoggerFactory.getLogger(CacheConfig.class);
 
     @Bean
@@ -36,7 +36,8 @@ public class CacheConfig implements CachingConfigurer {
             @Value("${cache.product-list-ttl:45s}") Duration productListTtl,
             @Value("${cache.product-deleted-list-ttl:30s}") Duration productDeletedListTtl,
             @Value("${cache.category-list-ttl:120s}") Duration categoryListTtl,
-            @Value("${cache.deleted-category-list-ttl:90s}") Duration deletedCategoryListTtl
+            @Value("${cache.deleted-category-list-ttl:90s}") Duration deletedCategoryListTtl,
+            @Value("${cache.key-prefix:ps:v2::}") String cacheKeyPrefix
     ) {
         ObjectMapper cacheObjectMapper = objectMapper.copy();
         cacheObjectMapper.addMixIn(PageImpl.class, PageImplMixin.class);
@@ -48,6 +49,7 @@ public class CacheConfig implements CachingConfigurer {
 
         RedisCacheConfiguration defaultConfig = RedisCacheConfiguration.defaultCacheConfig()
                 .disableCachingNullValues()
+                .computePrefixWith(cacheName -> cacheKeyPrefix + cacheName + "::")
                 .serializeValuesWith(
                         RedisSerializationContext.SerializationPair.fromSerializer(
                                 valueSerializer
@@ -66,8 +68,9 @@ public class CacheConfig implements CachingConfigurer {
                 .build();
     }
 
+    @Override
     @Bean
-    public CacheErrorHandler cacheErrorHandler() {
+    public CacheErrorHandler errorHandler() {
         return new CacheErrorHandler() {
             @Override
             public void handleCacheGetError(RuntimeException exception, Cache cache, Object key) {

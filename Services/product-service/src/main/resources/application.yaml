@@ -36,6 +36,7 @@ logging:
 
 cache:
   clear-on-startup: ${CACHE_CLEAR_ON_STARTUP:true}
+  key-prefix: ${CACHE_KEY_PREFIX:ps:v2::}
   product-by-id-ttl: ${CACHE_PRODUCT_BY_ID_TTL:120s}
   product-list-ttl: ${CACHE_PRODUCT_LIST_TTL:45s}
   product-deleted-list-ttl: ${CACHE_PRODUCT_DELETED_LIST_TTL:30s}

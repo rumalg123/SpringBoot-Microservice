@@ -102,10 +102,6 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    @Cacheable(
-            cacheNames = "productsList",
-            key = "'p=' + #pageable.pageNumber + '::s=' + #pageable.pageSize + '::sort=' + #pageable.sort.toString() + '::q=' + #q + '::sku=' + #sku + '::cat=' + #category + '::main=' + #mainCategory + '::sub=' + #subCategory + '::vendor=' + #vendorId + '::type=' + #type + '::min=' + #minSellingPrice + '::max=' + #maxSellingPrice"
-    )
     public Page<ProductSummaryResponse> list(
             Pageable pageable,
             String q,
@@ -125,10 +121,6 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    @Cacheable(
-            cacheNames = "deletedProductsList",
-            key = "'p=' + #pageable.pageNumber + '::s=' + #pageable.pageSize + '::sort=' + #pageable.sort.toString() + '::q=' + #q + '::sku=' + #sku + '::cat=' + #category + '::main=' + #mainCategory + '::sub=' + #subCategory + '::vendor=' + #vendorId + '::type=' + #type + '::min=' + #minSellingPrice + '::max=' + #maxSellingPrice"
-    )
     public Page<ProductSummaryResponse> listDeleted(
             Pageable pageable,
             String q,
