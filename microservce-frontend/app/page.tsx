@@ -65,7 +65,7 @@ export default function LandingPage() {
     const run = async () => {
       try {
         const apiBase = process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me";
-        const res = await fetch(`${apiBase}/products?page=0&size=8&type=PARENT`, { cache: "no-store" });
+        const res = await fetch(`${apiBase}/products?page=0&size=8`, { cache: "no-store" });
         if (!res.ok) throw new Error("Failed to load products");
         const data = (await res.json()) as ProductPageResponse;
         setProducts(data.content || []);

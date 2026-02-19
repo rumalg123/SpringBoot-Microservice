@@ -80,9 +80,30 @@ type ProductFormState = {
   mainCategoryName: string;
   subCategoryNames: string[];
   productType: ProductType;
-  variationsCsv: string;
   sku: string;
   active: boolean;
+};
+
+type VariationDraft = {
+  id: string;
+  parentId: string;
+  parentLabel: string;
+  mainCategoryName: string;
+  subCategoryNames: string[];
+  payload: {
+    name: string;
+    shortDescription: string;
+    description: string;
+    images: string[];
+    regularPrice: number;
+    discountedPrice: number | null;
+    vendorId: string | null;
+    categories: string[];
+    productType: "VARIATION";
+    variations: Array<{ name: string; value: string }>;
+    sku: string;
+    active: boolean;
+  };
 };
 
 const emptyForm: ProductFormState = {
@@ -96,21 +117,29 @@ const emptyForm: ProductFormState = {
   mainCategoryName: "",
   subCategoryNames: [],
   productType: "SINGLE",
-  variationsCsv: "",
   sku: "",
   active: true,
 };
 
-function parseCsv(value: string): string[] {
-  return value
-    .split(",")
-    .map((v) => v.trim())
-    .filter(Boolean);
-}
-
 const MAX_IMAGE_COUNT = 5;
 const MAX_IMAGE_SIZE_BYTES = 1_048_576;
 const MAX_IMAGE_DIMENSION = 1200;
+
+function normalizeVariationAttributeName(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function dedupeVariationAttributeNames(values: string[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of values) {
+    const normalized = normalizeVariationAttributeName(raw);
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    out.push(normalized);
+  }
+  return out;
+}
 
 function resolveImageUrl(imageName: string): string | null {
   const base = (process.env.NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL || "").trim();
@@ -145,26 +174,6 @@ async function validateImageFile(file: File): Promise<void> {
   if (dimensions.width > MAX_IMAGE_DIMENSION || dimensions.height > MAX_IMAGE_DIMENSION) {
     throw new Error(`${file.name} must be at most ${MAX_IMAGE_DIMENSION}x${MAX_IMAGE_DIMENSION}`);
   }
-}
-
-function parseVariations(value: string) {
-  return parseCsv(value)
-    .map((entry) => {
-      const [name, ...rest] = entry.split(":");
-      const variationName = (name || "").trim();
-      const variationValue = rest.join(":").trim();
-      if (!variationName || !variationValue) return null;
-      return { name: variationName, value: variationValue };
-    })
-    .filter((v): v is { name: string; value: string } => Boolean(v));
-}
-
-function buildVariationsForProductType(productType: ProductType, raw: string) {
-  if (productType === "SINGLE") return [];
-  if (productType === "PARENT") {
-    return parseCsv(raw).map((name) => ({ name, value: "" }));
-  }
-  return parseVariations(raw);
 }
 
 function money(value: number) {
@@ -204,13 +213,17 @@ export default function AdminProductsPage() {
   const [status, setStatus] = useState("Loading admin products...");
   const [showDeleted, setShowDeleted] = useState(false);
   const [form, setForm] = useState<ProductFormState>(emptyForm);
+  const [parentAttributeNames, setParentAttributeNames] = useState<string[]>([]);
+  const [newParentAttributeName, setNewParentAttributeName] = useState("");
   const [uploadingImages, setUploadingImages] = useState(false);
   const [dragImageIndex, setDragImageIndex] = useState<number | null>(null);
   const [parentProducts, setParentProducts] = useState<ProductSummary[]>([]);
   const [variationParentId, setVariationParentId] = useState("");
+  const [selectedVariationParent, setSelectedVariationParent] = useState<ProductSummary | null>(null);
   const [parentSearch, setParentSearch] = useState("");
   const [parentVariationAttributes, setParentVariationAttributes] = useState<string[]>([]);
   const [variationAttributeValues, setVariationAttributeValues] = useState<Record<string, string>>({});
+  const [variationDrafts, setVariationDrafts] = useState<VariationDraft[]>([]);
   const [categoryForm, setCategoryForm] = useState<{ id?: string; name: string; type: "PARENT" | "SUB"; parentCategoryId: string }>({
     name: "",
     type: "PARENT",
@@ -273,7 +286,7 @@ export default function AdminProductsPage() {
     if (!session.apiClient) return;
     const params = new URLSearchParams();
     params.set("page", "0");
-    params.set("size", "200");
+    params.set("size", "1000");
     params.set("sort", "name,ASC");
     params.set("type", "PARENT");
     const res = await session.apiClient.get(`/products?${params.toString()}`);
@@ -340,18 +353,312 @@ export default function AdminProductsPage() {
         mainCategoryName: p.mainCategory || "",
         subCategoryNames: p.subCategories || [],
         productType: p.productType,
-        variationsCsv:
-          p.productType === "PARENT"
-            ? p.variations.map((v) => v.name).join(", ")
-            : p.variations.map((v) => `${v.name}:${v.value}`).join(", "),
         sku: p.sku,
         active: p.active,
       });
+      if (p.productType === "PARENT") {
+        setParentAttributeNames(dedupeVariationAttributeNames((p.variations || []).map((v) => v.name)));
+        setVariationParentId("");
+        setSelectedVariationParent(null);
+        setParentSearch("");
+        setParentVariationAttributes([]);
+        setVariationAttributeValues({});
+        setVariationDrafts([]);
+      } else if (p.productType === "VARIATION") {
+        const attributes = dedupeVariationAttributeNames((p.variations || []).map((v) => v.name));
+        const values: Record<string, string> = {};
+        for (const v of p.variations || []) {
+          values[normalizeVariationAttributeName(v.name)] = (v.value || "").trim();
+        }
+        const selectedParent = parentProducts.find((candidate) => candidate.id === p.parentProductId) || null;
+        setParentAttributeNames([]);
+        setVariationParentId(p.parentProductId || "");
+        setSelectedVariationParent(selectedParent);
+        setParentSearch(selectedParent ? selectedParent.name : "");
+        setParentVariationAttributes(attributes);
+        setVariationAttributeValues(values);
+        setVariationDrafts([]);
+      } else {
+        setParentAttributeNames([]);
+        setVariationParentId("");
+        setSelectedVariationParent(null);
+        setParentSearch("");
+        setParentVariationAttributes([]);
+        setVariationAttributeValues({});
+        setVariationDrafts([]);
+      }
+      setNewParentAttributeName("");
       setStatus("Editor loaded.");
       toast.success("Product loaded in editor");
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Failed to load product details.");
       toast.error(err instanceof Error ? err.message : "Failed to load product details");
+    }
+  };
+
+  const buildCommonPayload = () => ({
+    name: form.name.trim(),
+    shortDescription: form.shortDescription.trim(),
+    description: form.description.trim(),
+    images: form.images,
+    regularPrice: Number(form.regularPrice),
+    discountedPrice: form.discountedPrice.trim() ? Number(form.discountedPrice) : null,
+    vendorId: form.vendorId.trim() ? form.vendorId.trim() : null,
+    categories: [form.mainCategoryName, ...form.subCategoryNames].filter(Boolean),
+    sku: form.sku.trim(),
+    active: form.active,
+  });
+
+  const buildVariationPairs = () => {
+    const pairs = parentVariationAttributes.map((name) => ({
+      name,
+      value: (variationAttributeValues[name] || "").trim(),
+    }));
+    if (pairs.length === 0) {
+      throw new Error("Selected parent has no variation attributes");
+    }
+    if (pairs.every((pair) => !pair.value)) {
+      throw new Error("Enter at least one attribute value");
+    }
+    return pairs;
+  };
+
+  const variationSignature = (pairs: Array<{ name: string; value: string }>) =>
+    pairs
+      .map((pair) => `${normalizeVariationAttributeName(pair.name)}=${(pair.value || "").trim().toLowerCase()}`)
+      .sort()
+      .join("|");
+
+  const resetVariationInputsForNextChild = () => {
+    const emptyValues: Record<string, string> = {};
+    parentVariationAttributes.forEach((name) => {
+      emptyValues[name] = "";
+    });
+    setVariationAttributeValues(emptyValues);
+    setForm((old) => ({
+      ...old,
+      id: undefined,
+      sku: "",
+    }));
+  };
+
+  const addVariationDraft = () => {
+    if (!variationParentId.trim()) {
+      toast.error("Select a parent product");
+      return;
+    }
+    if (priceValidationMessage) {
+      toast.error(priceValidationMessage);
+      return;
+    }
+    if (form.images.length === 0) {
+      toast.error("Upload at least one image");
+      return;
+    }
+    try {
+      const pairs = buildVariationPairs();
+      const signature = variationSignature(pairs);
+      const duplicateInQueue = variationDrafts.some(
+        (draft) => draft.parentId === variationParentId.trim() && variationSignature(draft.payload.variations) === signature
+      );
+      if (duplicateInQueue) {
+        toast.error("Same attribute combination is already in the queue");
+        return;
+      }
+
+      const payload = {
+        ...buildCommonPayload(),
+        productType: "VARIATION" as const,
+        variations: pairs,
+      };
+      const parentLabel = selectedVariationParent
+        ? `${selectedVariationParent.name} (${selectedVariationParent.sku})`
+        : variationParentId.trim();
+      setVariationDrafts((old) => [
+        ...old,
+        {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          parentId: variationParentId.trim(),
+          parentLabel,
+          mainCategoryName: form.mainCategoryName,
+          subCategoryNames: [...form.subCategoryNames],
+          payload,
+        },
+      ]);
+      setStatus("Variation added to queue.");
+      toast.success("Child variation added");
+      resetVariationInputsForNextChild();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unable to add variation";
+      setStatus(message);
+      toast.error(message);
+    }
+  };
+
+  const updateVariationDraftPayload = (draftId: string, patch: Partial<VariationDraft["payload"]>) => {
+    setVariationDrafts((old) =>
+      old.map((draft) =>
+        draft.id === draftId
+          ? {
+              ...draft,
+              payload: {
+                ...draft.payload,
+                ...patch,
+              },
+            }
+          : draft
+      )
+    );
+  };
+
+  const updateVariationDraftAttributeValue = (draftId: string, attributeName: string, value: string) => {
+    setVariationDrafts((old) =>
+      old.map((draft) => {
+        if (draft.id !== draftId) return draft;
+        return {
+          ...draft,
+          payload: {
+            ...draft.payload,
+            variations: draft.payload.variations.map((pair) =>
+              normalizeVariationAttributeName(pair.name) === normalizeVariationAttributeName(attributeName)
+                ? { ...pair, value }
+                : pair
+            ),
+          },
+        };
+      })
+    );
+  };
+
+  const removeVariationDraft = (draftId: string) => {
+    setVariationDrafts((old) => old.filter((draft) => draft.id !== draftId));
+  };
+
+  const loadVariationDraftToForm = (draftId: string) => {
+    const draft = variationDrafts.find((item) => item.id === draftId);
+    if (!draft) return;
+    const selectedParent = parentProducts.find((candidate) => candidate.id === draft.parentId) || null;
+    setVariationParentId(draft.parentId);
+    setSelectedVariationParent(selectedParent);
+    setParentSearch(selectedParent ? selectedParent.name : draft.parentLabel);
+    const attributes = dedupeVariationAttributeNames(draft.payload.variations.map((pair) => pair.name));
+    const values: Record<string, string> = {};
+    for (const pair of draft.payload.variations) {
+      values[normalizeVariationAttributeName(pair.name)] = pair.value || "";
+    }
+    setParentVariationAttributes(attributes);
+    setVariationAttributeValues(values);
+    setForm({
+      id: undefined,
+      name: draft.payload.name,
+      shortDescription: draft.payload.shortDescription,
+      description: draft.payload.description,
+      images: [...draft.payload.images],
+      regularPrice: String(draft.payload.regularPrice),
+      discountedPrice: draft.payload.discountedPrice === null ? "" : String(draft.payload.discountedPrice),
+      vendorId: draft.payload.vendorId || "",
+      mainCategoryName: draft.mainCategoryName,
+      subCategoryNames: [...draft.subCategoryNames],
+      productType: "VARIATION",
+      sku: draft.payload.sku,
+      active: draft.payload.active,
+    });
+    setVariationDrafts((old) => old.filter((item) => item.id !== draftId));
+    setStatus("Queued variation loaded into editor.");
+    toast.success("Queued variation loaded for editing");
+  };
+
+  const validateVariationDraft = (draft: VariationDraft): string | null => {
+    if (!draft.parentId.trim()) return "Parent product is missing";
+    if (!draft.payload.name.trim()) return "Product name is required";
+    if (!draft.payload.shortDescription.trim()) return "Short description is required";
+    if (!draft.payload.description.trim()) return "Description is required";
+    if (!draft.payload.sku.trim()) return "SKU is required";
+    if (!draft.payload.images || draft.payload.images.length === 0) return "At least one image is required";
+    if (!Number.isFinite(draft.payload.regularPrice) || draft.payload.regularPrice <= 0) return "Regular price must be greater than 0";
+    if (
+      draft.payload.discountedPrice !== null
+      && (!Number.isFinite(draft.payload.discountedPrice) || draft.payload.discountedPrice < 0)
+    ) {
+      return "Discounted price must be 0 or greater";
+    }
+    if (
+      draft.payload.discountedPrice !== null
+      && draft.payload.discountedPrice > draft.payload.regularPrice
+    ) {
+      return "Discounted price cannot be greater than regular price";
+    }
+    if (!draft.payload.categories || draft.payload.categories.length === 0) return "At least one category is required";
+    if (!draft.payload.variations || draft.payload.variations.length === 0) return "Variation attributes are required";
+    if (draft.payload.variations.every((pair) => !(pair.value || "").trim())) {
+      return "At least one attribute value is required";
+    }
+    return null;
+  };
+
+  const createQueuedVariations = async () => {
+    if (!session.apiClient) return;
+    if (variationDrafts.length === 0) {
+      toast.error("Add at least one child variation");
+      return;
+    }
+    const queueSignatures = new Set<string>();
+    for (let i = 0; i < variationDrafts.length; i++) {
+      const draft = variationDrafts[i];
+      const error = validateVariationDraft(draft);
+      if (error) {
+        toast.error(`Queue item ${i + 1}: ${error}`);
+        return;
+      }
+      const normalizedPairs = draft.payload.variations.map((pair) => ({
+        name: normalizeVariationAttributeName(pair.name),
+        value: (pair.value || "").trim(),
+      }));
+      const signatureKey = `${draft.parentId}::${variationSignature(normalizedPairs)}`;
+      if (queueSignatures.has(signatureKey)) {
+        toast.error(`Queue item ${i + 1}: duplicate attribute combination for selected parent`);
+        return;
+      }
+      queueSignatures.add(signatureKey);
+    }
+    setStatus(`Creating ${variationDrafts.length} variation product(s)...`);
+    try {
+      for (const draft of variationDrafts) {
+        const requestPayload = {
+          ...draft.payload,
+          name: draft.payload.name.trim(),
+          shortDescription: draft.payload.shortDescription.trim(),
+          description: draft.payload.description.trim(),
+          regularPrice: Number(draft.payload.regularPrice),
+          discountedPrice: draft.payload.discountedPrice === null ? null : Number(draft.payload.discountedPrice),
+          vendorId: draft.payload.vendorId && draft.payload.vendorId.trim() ? draft.payload.vendorId.trim() : null,
+          categories: (draft.payload.categories || []).map((name) => name.trim()).filter(Boolean),
+          sku: draft.payload.sku.trim(),
+          variations: draft.payload.variations.map((pair) => ({
+            name: normalizeVariationAttributeName(pair.name),
+            value: (pair.value || "").trim(),
+          })),
+        };
+        await session.apiClient.post(`/admin/products/${draft.parentId}/variations`, requestPayload);
+      }
+      setStatus(`${variationDrafts.length} variation product(s) created.`);
+      toast.success(`${variationDrafts.length} variation product(s) created`);
+      setVariationDrafts([]);
+      setVariationParentId("");
+      setSelectedVariationParent(null);
+      setParentSearch("");
+      setParentVariationAttributes([]);
+      setVariationAttributeValues({});
+      setForm((old) => ({
+        ...emptyForm,
+        productType: "VARIATION",
+        mainCategoryName: old.mainCategoryName,
+        subCategoryNames: old.subCategoryNames,
+      }));
+      await Promise.all([reloadCurrentView(), loadParentProducts()]);
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Variation create failed.");
+      toast.error(err instanceof Error ? err.message : "Variation create failed");
     }
   };
 
@@ -367,23 +674,52 @@ export default function AdminProductsPage() {
       return;
     }
 
-    const payload = {
-      name: form.name.trim(),
-      shortDescription: form.shortDescription.trim(),
-      description: form.description.trim(),
-      images: form.images,
-      regularPrice: Number(form.regularPrice),
-      discountedPrice: form.discountedPrice.trim() ? Number(form.discountedPrice) : null,
-      vendorId: form.vendorId.trim() ? form.vendorId.trim() : null,
-      categories: [form.mainCategoryName, ...form.subCategoryNames].filter(Boolean),
-      productType: form.productType,
-      variations: buildVariationsForProductType(form.productType, form.variationsCsv),
-      sku: form.sku.trim(),
-      active: form.active,
-    };
+    if (form.productType === "VARIATION" && !form.id) {
+      addVariationDraft();
+      return;
+    }
 
-    setStatus(form.id ? "Updating product..." : "Creating product...");
     try {
+      let payload: {
+        name: string;
+        shortDescription: string;
+        description: string;
+        images: string[];
+        regularPrice: number;
+        discountedPrice: number | null;
+        vendorId: string | null;
+        categories: string[];
+        productType: ProductType;
+        variations: Array<{ name: string; value: string }>;
+        sku: string;
+        active: boolean;
+      };
+      if (form.productType === "PARENT") {
+        const attributes = dedupeVariationAttributeNames(parentAttributeNames);
+        if (attributes.length === 0) {
+          toast.error("Add at least one parent attribute");
+          return;
+        }
+        payload = {
+          ...buildCommonPayload(),
+          productType: "PARENT",
+          variations: attributes.map((name) => ({ name, value: "" })),
+        };
+      } else if (form.productType === "VARIATION") {
+        payload = {
+          ...buildCommonPayload(),
+          productType: "VARIATION",
+          variations: buildVariationPairs(),
+        };
+      } else {
+        payload = {
+          ...buildCommonPayload(),
+          productType: "SINGLE",
+          variations: [],
+        };
+      }
+
+      setStatus(form.id ? "Updating product..." : "Creating product...");
       if (form.id) {
         await session.apiClient.put(`/admin/products/${form.id}`, payload);
         setStatus("Product updated.");
@@ -394,6 +730,14 @@ export default function AdminProductsPage() {
         toast.success("Product created");
       }
       setForm(emptyForm);
+      setParentAttributeNames([]);
+      setNewParentAttributeName("");
+      setVariationParentId("");
+      setSelectedVariationParent(null);
+      setParentSearch("");
+      setParentVariationAttributes([]);
+      setVariationAttributeValues({});
+      setVariationDrafts([]);
       await Promise.all([loadActive(0), loadDeleted(0)]);
       setShowDeleted(false);
     } catch (err) {
@@ -402,68 +746,24 @@ export default function AdminProductsPage() {
     }
   };
 
-  const createVariation = async () => {
-    if (!session.apiClient || !variationParentId.trim()) return;
-    if (priceValidationMessage) {
-      toast.error(priceValidationMessage);
-      return;
-    }
-    if (form.images.length === 0) {
-      toast.error("Upload at least one image");
-      return;
-    }
-    if (parentVariationAttributes.length === 0) {
-      toast.error("Selected parent has no variation attributes");
-      return;
-    }
-    const variationPairs = parentVariationAttributes.map((name) => ({
-      name,
-      value: (variationAttributeValues[name] || "").trim(),
-    }));
-    if (variationPairs.some((pair) => !pair.value)) {
-      toast.error("Enter values for all parent variation attributes");
-      return;
-    }
-    const payload = {
-      name: form.name.trim(),
-      shortDescription: form.shortDescription.trim(),
-      description: form.description.trim(),
-      images: form.images,
-      regularPrice: Number(form.regularPrice),
-      discountedPrice: form.discountedPrice.trim() ? Number(form.discountedPrice) : null,
-      vendorId: form.vendorId.trim() ? form.vendorId.trim() : null,
-      categories: [form.mainCategoryName, ...form.subCategoryNames].filter(Boolean),
-      productType: "VARIATION",
-      variations: variationPairs,
-      sku: form.sku.trim(),
-      active: form.active,
-    };
-
-    setStatus("Creating variation product...");
-    try {
-      await session.apiClient.post(`/admin/products/${variationParentId.trim()}/variations`, payload);
-      setStatus("Variation created.");
-      toast.success("Variation created");
-      setVariationParentId("");
-      setParentVariationAttributes([]);
-      setVariationAttributeValues({});
-      setForm(emptyForm);
-      await reloadCurrentView();
-    } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Variation create failed.");
-      toast.error(err instanceof Error ? err.message : "Variation create failed");
-    }
-  };
-
   const onSelectVariationParent = async (parentId: string) => {
+    if (variationDrafts.length > 0 && variationDrafts.some((draft) => draft.parentId !== parentId)) {
+      setVariationDrafts([]);
+      toast("Variation queue cleared because parent product changed.");
+    }
     setVariationParentId(parentId);
+    const selected = parentProducts.find((candidate) => candidate.id === parentId) || null;
+    setSelectedVariationParent(selected);
+    if (selected) {
+      setParentSearch(selected.name);
+    }
     setParentVariationAttributes([]);
     setVariationAttributeValues({});
     if (!session.apiClient || !parentId) return;
     try {
       const res = await session.apiClient.get(`/products/${parentId}`);
       const parent = res.data as ProductDetail;
-      const attrs = (parent.variations || []).map((v) => v.name).filter(Boolean);
+      const attrs = dedupeVariationAttributeNames((parent.variations || []).map((v) => v.name).filter(Boolean));
       setParentVariationAttributes(attrs);
       const initial: Record<string, string> = {};
       attrs.forEach((name) => {
@@ -472,12 +772,27 @@ export default function AdminProductsPage() {
       setVariationAttributeValues(initial);
       setForm((old) => ({
         ...old,
+        productType: "VARIATION",
         mainCategoryName: parent.mainCategory || old.mainCategoryName,
         subCategoryNames: parent.subCategories || old.subCategoryNames,
       }));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to load parent product");
     }
+  };
+
+  const addParentAttribute = () => {
+    const normalized = normalizeVariationAttributeName(newParentAttributeName);
+    if (!normalized) return;
+    setParentAttributeNames((old) => {
+      if (old.includes(normalized)) return old;
+      return [...old, normalized];
+    });
+    setNewParentAttributeName("");
+  };
+
+  const removeParentAttribute = (name: string) => {
+    setParentAttributeNames((old) => old.filter((candidate) => candidate !== name));
   };
 
   const softDelete = async (id: string) => {
@@ -861,7 +1176,17 @@ export default function AdminProductsPage() {
                   <h2 className="text-2xl text-[var(--ink)]">{form.id ? "Update Product" : "Create Product"}</h2>
                   {form.id && (
                     <button
-                      onClick={() => setForm(emptyForm)}
+                      onClick={() => {
+                        setForm(emptyForm);
+                        setParentAttributeNames([]);
+                        setNewParentAttributeName("");
+                        setVariationParentId("");
+                        setSelectedVariationParent(null);
+                        setParentSearch("");
+                        setParentVariationAttributes([]);
+                        setVariationAttributeValues({});
+                        setVariationDrafts([]);
+                      }}
                       className="rounded-md border border-[var(--line)] bg-white px-2 py-1 text-xs"
                     >
                       Reset
@@ -939,7 +1264,22 @@ export default function AdminProductsPage() {
                   </div>
                   <select
                     value={form.productType}
-                    onChange={(e) => setForm((o) => ({ ...o, productType: e.target.value as ProductType, variationsCsv: "" }))}
+                    onChange={(e) => {
+                      const nextType = e.target.value as ProductType;
+                      setForm((o) => ({ ...o, productType: nextType }));
+                      if (nextType !== "PARENT") {
+                        setParentAttributeNames([]);
+                        setNewParentAttributeName("");
+                      }
+                      if (nextType !== "VARIATION") {
+                        setVariationParentId("");
+                        setSelectedVariationParent(null);
+                        setParentSearch("");
+                        setParentVariationAttributes([]);
+                        setVariationAttributeValues({});
+                        setVariationDrafts([]);
+                      }
+                    }}
                     className="rounded-lg border border-[var(--line)] px-3 py-2"
                   >
                     <option value="SINGLE">SINGLE</option>
@@ -1009,79 +1349,244 @@ export default function AdminProductsPage() {
                   )}
                   <input value={form.vendorId} onChange={(e) => setForm((o) => ({ ...o, vendorId: e.target.value }))} placeholder="Vendor UUID (optional)" className="rounded-lg border border-[var(--line)] px-3 py-2" />
                   {form.productType === "PARENT" && (
-                    <input
-                      value={form.variationsCsv}
-                      onChange={(e) => setForm((o) => ({ ...o, variationsCsv: e.target.value }))}
-                      placeholder="Parent attributes CSV: color,size,material"
-                      className="rounded-lg border border-[var(--line)] px-3 py-2"
-                      required
-                    />
+                    <div className="rounded-lg border border-[var(--line)] p-3">
+                      <p className="text-xs font-semibold text-[var(--ink)]">Variation Attributes</p>
+                      <p className="mt-1 text-[11px] text-[var(--muted)]">
+                        Add attribute names for this parent product (example: color, size, material).
+                      </p>
+                      <div className="mt-2 flex gap-2">
+                        <input
+                          value={newParentAttributeName}
+                          onChange={(e) => setNewParentAttributeName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              addParentAttribute();
+                            }
+                          }}
+                          placeholder="Attribute name"
+                          className="flex-1 rounded-lg border border-[var(--line)] px-3 py-2"
+                        />
+                        <button type="button" onClick={addParentAttribute} className="rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-xs">
+                          Add
+                        </button>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {parentAttributeNames.length === 0 && (
+                          <p className="text-xs text-[var(--muted)]">No attributes added yet.</p>
+                        )}
+                        {parentAttributeNames.map((name) => (
+                          <span
+                            key={name}
+                            className="inline-flex items-center gap-2 rounded-full border border-[var(--line)] bg-[var(--bg)] px-3 py-1 text-xs text-[var(--ink)]"
+                          >
+                            {name}
+                            <button
+                              type="button"
+                              onClick={() => removeParentAttribute(name)}
+                              className="rounded-full border border-[var(--line)] bg-white px-1.5 text-[10px] leading-4"
+                            >
+                              x
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                   )}
                   {form.productType === "VARIATION" && (
-                    <input
-                      value={form.variationsCsv}
-                      onChange={(e) => setForm((o) => ({ ...o, variationsCsv: e.target.value }))}
-                      placeholder="Variation values: color:red,size:XL"
-                      className="rounded-lg border border-[var(--line)] px-3 py-2"
-                      required
-                    />
+                    <div className="rounded-lg border border-[var(--line)] p-3">
+                      <p className="text-xs font-semibold text-[var(--ink)]">Child Variation Setup</p>
+                      <p className="mt-1 text-[11px] text-[var(--muted)]">
+                        Select a parent product, then fill attribute values. At least one value is required.
+                      </p>
+                      <input
+                        value={parentSearch}
+                        onChange={(e) => setParentSearch(e.target.value)}
+                        placeholder="Search parent by name or SKU"
+                        className="mt-2 w-full rounded-lg border border-[var(--line)] px-3 py-2 text-sm"
+                      />
+                      <div className="mt-2 max-h-40 overflow-auto rounded-lg border border-[var(--line)] bg-white">
+                        {filteredParentProducts.length === 0 && (
+                          <p className="px-3 py-2 text-xs text-[var(--muted)]">No matching parent products.</p>
+                        )}
+                        {filteredParentProducts.slice(0, 20).map((p) => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => {
+                              void onSelectVariationParent(p.id);
+                            }}
+                            className={`flex w-full items-center justify-between px-3 py-2 text-left text-xs transition hover:bg-[var(--brand-soft)] ${
+                              variationParentId === p.id ? "bg-[var(--brand-soft)]" : ""
+                            }`}
+                          >
+                            <span className="text-[var(--ink)]">{p.name}</span>
+                            <span className="text-[var(--muted)]">{p.sku}</span>
+                          </button>
+                        ))}
+                      </div>
+                      {selectedVariationParent && (
+                        <p className="mt-2 text-xs text-[var(--muted)]">
+                          Selected parent: <span className="font-semibold text-[var(--ink)]">{selectedVariationParent.name}</span> ({selectedVariationParent.sku})
+                        </p>
+                      )}
+                      {parentVariationAttributes.length > 0 && (
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                          {parentVariationAttributes.map((attributeName) => (
+                            <input
+                              key={attributeName}
+                              value={variationAttributeValues[attributeName] || ""}
+                              onChange={(e) =>
+                                setVariationAttributeValues((old) => ({
+                                  ...old,
+                                  [attributeName]: e.target.value,
+                                }))
+                              }
+                              placeholder={`${attributeName} (optional)`}
+                              className="rounded-lg border border-[var(--line)] px-3 py-2 text-sm"
+                            />
+                          ))}
+                        </div>
+                      )}
+                      {parentVariationAttributes.length === 0 && (
+                        <p className="mt-2 text-xs text-[var(--muted)]">
+                          Select a parent product to load variation attributes.
+                        </p>
+                      )}
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button type="button" onClick={addVariationDraft} disabled={Boolean(priceValidationMessage)} className="btn-brand rounded-lg px-3 py-2 text-xs font-semibold disabled:opacity-50">
+                          Add Another Variation
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void createQueuedVariations();
+                          }}
+                          disabled={variationDrafts.length === 0 || Boolean(priceValidationMessage)}
+                          className="rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-xs font-semibold disabled:opacity-50"
+                        >
+                          Create Queued Variations ({variationDrafts.length})
+                        </button>
+                        {variationDrafts.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setVariationDrafts([])}
+                            className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700"
+                          >
+                            Clear Queue
+                          </button>
+                        )}
+                      </div>
+                      {variationDrafts.length > 0 && (
+                        <div className="mt-3 rounded-lg border border-[var(--line)] bg-[var(--bg)] p-2">
+                          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
+                            Queued Variations
+                          </p>
+                          <div className="grid gap-2">
+                            {variationDrafts.map((draft) => (
+                              <div key={draft.id} className="rounded-md border border-[var(--line)] bg-white p-2 text-xs">
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="truncate text-[var(--ink)]">
+                                    Parent: <span className="font-semibold">{draft.parentLabel}</span>
+                                  </p>
+                                  <div className="flex gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => loadVariationDraftToForm(draft.id)}
+                                      className="rounded border border-[var(--line)] bg-white px-2 py-0.5 text-[10px]"
+                                    >
+                                      Load To Form
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => removeVariationDraft(draft.id)}
+                                      className="rounded border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] text-red-700"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                </div>
+                                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                                  <input
+                                    value={draft.payload.name}
+                                    onChange={(e) => updateVariationDraftPayload(draft.id, { name: e.target.value })}
+                                    placeholder="Variation name"
+                                    className="rounded border border-[var(--line)] px-2 py-1.5"
+                                  />
+                                  <input
+                                    value={draft.payload.sku}
+                                    onChange={(e) => updateVariationDraftPayload(draft.id, { sku: e.target.value })}
+                                    placeholder="Variation SKU"
+                                    className="rounded border border-[var(--line)] px-2 py-1.5"
+                                  />
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0.01"
+                                    value={draft.payload.regularPrice}
+                                    onChange={(e) => {
+                                      const next = Number(e.target.value);
+                                      updateVariationDraftPayload(draft.id, { regularPrice: Number.isFinite(next) ? next : 0 });
+                                    }}
+                                    placeholder="Regular price"
+                                    className="rounded border border-[var(--line)] px-2 py-1.5"
+                                  />
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={draft.payload.discountedPrice === null ? "" : draft.payload.discountedPrice}
+                                    onChange={(e) => {
+                                      const raw = e.target.value.trim();
+                                      if (!raw) {
+                                        updateVariationDraftPayload(draft.id, { discountedPrice: null });
+                                        return;
+                                      }
+                                      const next = Number(raw);
+                                      updateVariationDraftPayload(draft.id, { discountedPrice: Number.isFinite(next) ? next : null });
+                                    }}
+                                    placeholder="Discounted price"
+                                    className="rounded border border-[var(--line)] px-2 py-1.5"
+                                  />
+                                </div>
+                                <label className="mt-2 inline-flex items-center gap-2 text-[11px] text-[var(--muted)]">
+                                  <input
+                                    type="checkbox"
+                                    checked={draft.payload.active}
+                                    onChange={(e) => updateVariationDraftPayload(draft.id, { active: e.target.checked })}
+                                  />
+                                  Active
+                                </label>
+                                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                                  {draft.payload.variations.map((pair) => (
+                                    <input
+                                      key={`${draft.id}-${pair.name}`}
+                                      value={pair.value}
+                                      onChange={(e) => updateVariationDraftAttributeValue(draft.id, pair.name, e.target.value)}
+                                      placeholder={`${pair.name} (optional)`}
+                                      className="rounded border border-[var(--line)] px-2 py-1.5"
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   )}
                   <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
                     <input type="checkbox" checked={form.active} onChange={(e) => setForm((o) => ({ ...o, active: e.target.checked }))} />
                     Active
                   </label>
                   <button type="submit" disabled={Boolean(priceValidationMessage)} className="btn-brand rounded-lg px-3 py-2 font-semibold disabled:opacity-50">
-                    {form.id ? "Update Product" : "Create Product"}
+                    {form.productType === "VARIATION" && !form.id
+                      ? "Add Child Variation"
+                      : form.id
+                        ? "Update Product"
+                        : "Create Product"}
                   </button>
                 </form>
-              </section>
-
-              <section className="card-surface rounded-2xl p-5">
-                <h3 className="text-xl text-[var(--ink)]">Create Variation For Parent</h3>
-                <p className="mt-1 text-xs text-[var(--muted)]">
-                  Fill the editor fields above for child product data, then select parent and attribute values.
-                </p>
-                <input
-                  value={parentSearch}
-                  onChange={(e) => setParentSearch(e.target.value)}
-                  placeholder="Search parent by name or SKU"
-                  className="mt-3 w-full rounded-lg border border-[var(--line)] px-3 py-2 text-sm"
-                />
-                <select
-                  value={variationParentId}
-                  onChange={(e) => {
-                    void onSelectVariationParent(e.target.value);
-                  }}
-                  className="mt-3 w-full rounded-lg border border-[var(--line)] px-3 py-2 text-sm"
-                >
-                  <option value="">Select Parent Product</option>
-                  {filteredParentProducts.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} ({p.sku})
-                    </option>
-                  ))}
-                </select>
-                {parentVariationAttributes.length > 0 && (
-                  <div className="mt-3 grid gap-2">
-                    {parentVariationAttributes.map((attributeName) => (
-                      <input
-                        key={attributeName}
-                        value={variationAttributeValues[attributeName] || ""}
-                        onChange={(e) =>
-                          setVariationAttributeValues((old) => ({
-                            ...old,
-                            [attributeName]: e.target.value,
-                          }))
-                        }
-                        placeholder={`${attributeName} value`}
-                        className="rounded-lg border border-[var(--line)] px-3 py-2 text-sm"
-                      />
-                    ))}
-                  </div>
-                )}
-                <button onClick={() => void createVariation()} disabled={Boolean(priceValidationMessage)} className="btn-brand mt-3 rounded-lg px-3 py-2 text-sm font-semibold disabled:opacity-50">
-                  Create Variation
-                </button>
               </section>
 
               <section className="card-surface rounded-2xl p-5">

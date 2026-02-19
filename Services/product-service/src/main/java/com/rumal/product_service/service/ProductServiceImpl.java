@@ -238,6 +238,9 @@ public class ProductServiceImpl implements ProductService {
         }
         if (type != null) {
             spec = spec.and((root, query, cb) -> cb.equal(root.get("productType"), type));
+        } else {
+            // Public/product listings should not include child variation rows by default.
+            spec = spec.and((root, query, cb) -> cb.notEqual(root.get("productType"), ProductType.VARIATION));
         }
         if (StringUtils.hasText(category)) {
             String normalizedCategory = category.trim().toLowerCase();
@@ -424,10 +427,14 @@ public class ProductServiceImpl implements ProductService {
             if (variations.isEmpty()) {
                 throw new ValidationException("variations are required when productType=VARIATION");
             }
+            boolean hasAtLeastOneValue = false;
             for (ProductVariationAttribute attribute : variations) {
-                if (attribute.getValue().isEmpty()) {
-                    throw new ValidationException("variation values are required when productType=VARIATION");
+                if (!attribute.getValue().isEmpty()) {
+                    hasAtLeastOneValue = true;
                 }
+            }
+            if (!hasAtLeastOneValue) {
+                throw new ValidationException("At least one variation attribute value is required when productType=VARIATION");
             }
         }
     }
@@ -445,6 +452,31 @@ public class ProductServiceImpl implements ProductService {
         if (!childNames.equals(parentNames)) {
             throw new ValidationException("Variation attributes must match parent attributes exactly: " + parentNames);
         }
+
+        String candidateSignature = buildVariationSignature(parentNames, variation);
+        boolean duplicateExists = productRepository.findByParentProductIdAndDeletedFalseAndActiveTrue(parent.getId())
+                .stream()
+                .filter(existing -> existing.getProductType() == ProductType.VARIATION)
+                .filter(existing -> !java.util.Objects.equals(existing.getId(), variation.getId()))
+                .anyMatch(existing -> buildVariationSignature(parentNames, existing).equals(candidateSignature));
+        if (duplicateExists) {
+            throw new ValidationException("Variation with the same attribute values already exists for this parent product");
+        }
+    }
+
+    private String buildVariationSignature(java.util.Set<String> expectedAttributeNames, Product product) {
+        java.util.Map<String, String> valuesByName = new java.util.HashMap<>();
+        for (ProductVariationAttribute attribute : product.getVariations()) {
+            valuesByName.put(attribute.getName(), normalizeVariationValue(attribute.getValue()));
+        }
+        return expectedAttributeNames.stream()
+                .sorted()
+                .map(name -> name + "=" + valuesByName.getOrDefault(name, ""))
+                .collect(java.util.stream.Collectors.joining("|"));
+    }
+
+    private String normalizeVariationValue(String value) {
+        return value == null ? "" : value.trim().toLowerCase();
     }
 
     private ProductResponse toResponse(Product p) {
