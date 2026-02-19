@@ -1,5 +1,6 @@
 package com.rumal.api_gateway.config;
 
+import org.jspecify.annotations.NullMarked;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
 import org.springframework.http.server.reactive.ServerHttpRequest;
@@ -9,6 +10,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
+@NullMarked
 @Component
 public class AuthHeaderRelayFilter implements GlobalFilter, Ordered {
 
@@ -43,6 +45,9 @@ public class AuthHeaderRelayFilter implements GlobalFilter, Ordered {
                     String namespacedEmail = auth.getToken().getClaimAsString(claimsNamespace + "email");
                     String fallbackEmail = auth.getToken().getClaimAsString("email");
                     Boolean emailVerified = auth.getToken().getClaimAsBoolean("email_verified");
+                    if (emailVerified == null) {
+                        emailVerified = auth.getToken().getClaimAsBoolean(claimsNamespace + "email_verified");
+                    }
                     final String resolvedEmail = (namespacedEmail != null && !namespacedEmail.isBlank())
                             ? namespacedEmail
                             : fallbackEmail;
@@ -54,9 +59,12 @@ public class AuthHeaderRelayFilter implements GlobalFilter, Ordered {
                     if (resolvedEmail != null && !resolvedEmail.isBlank()) {
                         requestBuilder.headers(headers -> headers.set("X-Auth0-Email", resolvedEmail));
                     }
-                    requestBuilder.headers(headers ->
-                            headers.set("X-Auth0-Email-Verified", String.valueOf(Boolean.TRUE.equals(emailVerified))));
-                    if (internalSharedSecret != null && !internalSharedSecret.isBlank()) {
+                    if (emailVerified != null) {
+                        Boolean finalEmailVerified = emailVerified;
+                        requestBuilder.headers(headers ->
+                                headers.set("X-Auth0-Email-Verified", String.valueOf(finalEmailVerified)));
+                    }
+                    if (!internalSharedSecret.isBlank()) {
                         requestBuilder.headers(headers -> headers.set("X-Internal-Auth", internalSharedSecret));
                     }
 

@@ -75,7 +75,7 @@ public class SecurityConfig {
                 .cast(JwtAuthenticationToken.class)
                 .map(JwtAuthenticationToken::getToken)
                 .map(jwt -> (AuthorizationResult) new AuthorizationDecision(hasAdminPermission(jwt) || hasAdminRole(jwt)))
-                .defaultIfEmpty((AuthorizationResult) new AuthorizationDecision(false));
+                .defaultIfEmpty(new AuthorizationDecision(false));
     }
 
     private Mono<AuthorizationResult> hasVerifiedEmailAccess(Mono<Authentication> authentication, AuthorizationContext context) {
@@ -84,8 +84,22 @@ public class SecurityConfig {
                 .filter(auth -> auth instanceof JwtAuthenticationToken)
                 .cast(JwtAuthenticationToken.class)
                 .map(JwtAuthenticationToken::getToken)
-                .map(jwt -> (AuthorizationResult) new AuthorizationDecision(Boolean.TRUE.equals(jwt.getClaimAsBoolean("email_verified"))))
-                .defaultIfEmpty((AuthorizationResult) new AuthorizationDecision(false));
+                .map(jwt -> (AuthorizationResult) new AuthorizationDecision(isEmailVerifiedOrUnknown(jwt)))
+                .defaultIfEmpty(new AuthorizationDecision(false));
+    }
+
+    private boolean isEmailVerifiedOrUnknown(Jwt jwt) {
+        Boolean standard = jwt.getClaimAsBoolean("email_verified");
+        if (standard != null) {
+            return standard;
+        }
+
+        Boolean namespaced = jwt.getClaimAsBoolean(claimsNamespace + "email_verified");
+        if (namespaced != null) {
+            return namespaced;
+        }
+
+        return true;
     }
 
     private boolean hasAdminPermission(Jwt jwt) {
@@ -98,6 +112,6 @@ public class SecurityConfig {
         if (roles == null || roles.isEmpty()) {
             roles = jwt.getClaimAsStringList("roles");
         }
-        return roles != null && roles.stream().anyMatch(role -> "admin".equalsIgnoreCase(role));
+        return roles != null && roles.stream().anyMatch("admin"::equalsIgnoreCase);
     }
 }

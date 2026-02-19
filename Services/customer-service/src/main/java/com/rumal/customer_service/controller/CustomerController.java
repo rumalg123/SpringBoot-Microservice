@@ -77,7 +77,7 @@ public class CustomerController {
     }
 
     private void verifyEmailVerified(String emailVerified) {
-        if (!Boolean.parseBoolean(emailVerified)) {
+        if (emailVerified != null && "false".equalsIgnoreCase(emailVerified.trim())) {
             throw new UnauthorizedException("Email is not verified");
         }
     }

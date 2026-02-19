@@ -178,6 +178,7 @@ export function useAuthSession() {
       await client.loginWithRedirect({
         appState: { returnTo },
         authorizationParams: {
+          prompt: "login",
           audience: env.audience || undefined,
           scope: "openid profile email",
         },
@@ -192,6 +193,7 @@ export function useAuthSession() {
       await client.loginWithRedirect({
         appState: { returnTo },
         authorizationParams: {
+          prompt: "login",
           screen_hint: "signup",
           connection: env.connection || undefined,
           audience: env.audience || undefined,
