@@ -110,7 +110,7 @@ function parseCsv(value: string): string[] {
 
 const MAX_IMAGE_COUNT = 5;
 const MAX_IMAGE_SIZE_BYTES = 1_048_576;
-const MAX_IMAGE_DIMENSION = 540;
+const MAX_IMAGE_DIMENSION = 1200;
 
 function resolveImageUrl(imageName: string): string | null {
   const base = (process.env.NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL || "").trim();
