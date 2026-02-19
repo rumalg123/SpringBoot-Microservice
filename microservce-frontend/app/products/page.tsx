@@ -2,6 +2,7 @@
 
 import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import AppNav from "../components/AppNav";
 import CategoryMenu from "../components/CategoryMenu";
@@ -27,6 +28,20 @@ type ProductPageResponse = {
 
 function money(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
+}
+
+function resolveImageUrl(imageName: string | null): string | null {
+  if (!imageName) return null;
+  const base = (process.env.NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL || "").trim();
+  if (base) {
+    return `${base.replace(/\/+$/, "")}/${imageName.replace(/^\/+/, "")}`;
+  }
+  const apiBase = (process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me").trim();
+  const encoded = imageName
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+  return `${apiBase.replace(/\/+$/, "")}/products/images/${encoded}`;
 }
 
 function ProductsPageContent() {
@@ -163,8 +178,21 @@ function ProductsPageContent() {
               className="card-surface animate-rise rounded-2xl p-4 transition hover:-translate-y-1"
               style={{ animationDelay: `${idx * 50}ms` }}
             >
-              <div className="mb-3 h-40 rounded-xl bg-[linear-gradient(150deg,#eee6dc,#f8f4ef)] p-3 text-xs text-[var(--muted)]">
-                {p.mainImage || "image-placeholder.jpg"}
+              <div className="mb-3 h-40 overflow-hidden rounded-xl bg-[linear-gradient(150deg,#eee6dc,#f8f4ef)] p-1 text-xs text-[var(--muted)]">
+                {resolveImageUrl(p.mainImage) ? (
+                  <Image
+                    src={resolveImageUrl(p.mainImage) || ""}
+                    alt={p.name}
+                    width={400}
+                    height={240}
+                    className="h-full w-full rounded-lg object-cover"
+                    unoptimized
+                  />
+                ) : (
+                  <div className="grid h-full w-full place-items-center rounded-lg bg-[#f3ece2] px-2 text-center">
+                    image-placeholder.jpg
+                  </div>
+                )}
               </div>
               <p className="line-clamp-1 text-lg font-semibold text-[var(--ink)]">{p.name}</p>
               <p className="mt-1 line-clamp-2 text-sm text-[var(--muted)]">{p.shortDescription}</p>

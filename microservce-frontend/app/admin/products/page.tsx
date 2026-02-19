@@ -162,6 +162,11 @@ function money(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
 }
 
+function parseNumber(value: string): number | null {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
 export default function AdminProductsPage() {
   const router = useRouter();
   const session = useAuthSession();
@@ -330,6 +335,10 @@ export default function AdminProductsPage() {
   const submitProduct = async (e: FormEvent) => {
     e.preventDefault();
     if (!session.apiClient) return;
+    if (priceValidationMessage) {
+      toast.error(priceValidationMessage);
+      return;
+    }
     if (form.images.length === 0) {
       toast.error("Upload at least one image");
       return;
@@ -372,6 +381,10 @@ export default function AdminProductsPage() {
 
   const createVariation = async () => {
     if (!session.apiClient || !variationParentId.trim()) return;
+    if (priceValidationMessage) {
+      toast.error(priceValidationMessage);
+      return;
+    }
     if (form.images.length === 0) {
       toast.error("Upload at least one image");
       return;
@@ -613,6 +626,12 @@ export default function AdminProductsPage() {
     if (!needle) return true;
     return p.name.toLowerCase().includes(needle) || p.sku.toLowerCase().includes(needle);
   });
+  const regularPriceValue = parseNumber(form.regularPrice);
+  const discountedPriceValue = form.discountedPrice.trim() ? parseNumber(form.discountedPrice) : null;
+  const priceValidationMessage =
+    regularPriceValue !== null && discountedPriceValue !== null && discountedPriceValue > regularPriceValue
+      ? "Discounted price cannot be greater than regular price."
+      : null;
 
   return (
     <main className="mx-auto min-h-screen max-w-7xl px-6 py-8">
@@ -919,6 +938,9 @@ export default function AdminProductsPage() {
                   <input type="number" step="0.01" min="0.01" value={form.regularPrice} onChange={(e) => setForm((o) => ({ ...o, regularPrice: e.target.value }))} placeholder="Regular Price" className="rounded-lg border border-[var(--line)] px-3 py-2" required />
                   <input type="number" step="0.01" min="0" value={form.discountedPrice} onChange={(e) => setForm((o) => ({ ...o, discountedPrice: e.target.value }))} placeholder="Discounted Price" className="rounded-lg border border-[var(--line)] px-3 py-2" />
                 </div>
+                {priceValidationMessage && (
+                  <p className="text-xs font-semibold text-red-600">{priceValidationMessage}</p>
+                )}
                 <input value={form.vendorId} onChange={(e) => setForm((o) => ({ ...o, vendorId: e.target.value }))} placeholder="Vendor UUID (optional)" className="rounded-lg border border-[var(--line)] px-3 py-2" />
                 {form.productType === "PARENT" && (
                   <input
@@ -942,7 +964,7 @@ export default function AdminProductsPage() {
                   <input type="checkbox" checked={form.active} onChange={(e) => setForm((o) => ({ ...o, active: e.target.checked }))} />
                   Active
                 </label>
-                <button type="submit" className="btn-brand rounded-lg px-3 py-2 font-semibold">
+                <button type="submit" disabled={Boolean(priceValidationMessage)} className="btn-brand rounded-lg px-3 py-2 font-semibold disabled:opacity-50">
                   {form.id ? "Update Product" : "Create Product"}
                 </button>
               </form>
@@ -991,7 +1013,7 @@ export default function AdminProductsPage() {
                   ))}
                 </div>
               )}
-              <button onClick={() => void createVariation()} className="btn-brand mt-3 rounded-lg px-3 py-2 text-sm font-semibold">
+              <button onClick={() => void createVariation()} disabled={Boolean(priceValidationMessage)} className="btn-brand mt-3 rounded-lg px-3 py-2 text-sm font-semibold disabled:opacity-50">
                 Create Variation
               </button>
             </section>

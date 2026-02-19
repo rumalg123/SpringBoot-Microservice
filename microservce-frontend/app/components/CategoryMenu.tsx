@@ -48,6 +48,12 @@ export default function CategoryMenu() {
   return (
     <nav className="mb-5 overflow-x-auto rounded-2xl border border-[var(--line)] bg-white px-3 py-2">
       <div className="flex min-w-max items-center gap-2">
+        <Link
+          href="/products"
+          className="inline-flex rounded-full border border-[var(--line)] bg-white px-3 py-1.5 text-sm font-semibold text-[var(--ink)] hover:bg-[var(--brand-soft)]"
+        >
+          All
+        </Link>
         {parents.map((parent) => {
           const children = subsByParent.get(parent.id) || [];
           return (

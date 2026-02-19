@@ -50,3 +50,7 @@ object-storage:
   access-key: ${OBJECT_STORAGE_ACCESS_KEY:}
   secret-key: ${OBJECT_STORAGE_SECRET_KEY:}
   bucket: ${OBJECT_STORAGE_BUCKET:}
+
+internal:
+  auth:
+    shared-secret: ${INTERNAL_AUTH_SHARED_SECRET:}

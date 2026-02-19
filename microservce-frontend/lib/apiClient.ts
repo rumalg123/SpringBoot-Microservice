@@ -40,8 +40,21 @@ export function createApiClient(options: CreateApiClientOptions): AxiosInstance 
       const status = error.response?.status;
       const statusText = error.response?.statusText;
       const data = error.response?.data;
-      const body = typeof data === "string" ? data : JSON.stringify(data);
-      const message = status ? `${status} ${statusText}: ${body}` : error.message;
+      const extractMessage = (payload: unknown): string => {
+        if (typeof payload === "string") return payload;
+        if (payload && typeof payload === "object") {
+          const obj = payload as Record<string, unknown>;
+          if (typeof obj.message === "string" && obj.message.trim()) return obj.message;
+          if (typeof obj.error === "string" && obj.error.trim()) return obj.error;
+        }
+        return "";
+      };
+      const detail = extractMessage(data);
+      const message = status
+        ? detail
+          ? `${status} ${statusText}: ${detail}`
+          : `${status} ${statusText}`
+        : error.message;
 
       if (options.onError) {
         options.onError(message);

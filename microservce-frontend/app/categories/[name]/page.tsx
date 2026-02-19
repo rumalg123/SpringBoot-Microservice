@@ -6,6 +6,9 @@ export default async function CategoryProductsPage({
   params: Promise<{ name: string }>;
 }) {
   const { name } = await params;
-  redirect(`/products?category=${encodeURIComponent(decodeURIComponent(name))}`);
+  const decoded = decodeURIComponent(name || "").trim();
+  if (!decoded || decoded.toLowerCase() === "all") {
+    redirect("/products");
+  }
+  redirect(`/products?category=${encodeURIComponent(decoded)}`);
 }
-
