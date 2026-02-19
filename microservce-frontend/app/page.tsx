@@ -39,14 +39,14 @@ export default function LandingPage() {
             <div className="flex flex-wrap gap-3">
               <button
                 onClick={() => void session.login("/orders")}
-                disabled={session.status !== "ready"}
+                disabled={session.status === "loading" || session.status === "idle"}
                 className="rounded-full bg-orange-500 px-5 py-2 text-sm font-semibold text-white transition hover:bg-orange-400 disabled:opacity-50"
               >
                 Login
               </button>
               <button
                 onClick={() => void session.signup("/orders")}
-                disabled={session.status !== "ready"}
+                disabled={session.status === "loading" || session.status === "idle"}
                 className="rounded-full border border-white/40 bg-white/5 px-5 py-2 text-sm font-semibold text-white transition hover:bg-white/10 disabled:opacity-50"
               >
                 Create Account

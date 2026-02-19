@@ -107,12 +107,17 @@ export function useAuthSession() {
       try {
         setStatus("loading");
         const auth0 = await getAuth0();
+        setClient(auth0);
         const params = new URLSearchParams(window.location.search);
         const auth0Error = params.get("error");
         const auth0ErrorDescription = params.get("error_description");
         if (auth0Error) {
           setStatus("error");
           setError(auth0ErrorDescription || auth0Error);
+          setIsAuthenticated(false);
+          setProfile(null);
+          setCanViewAdmin(false);
+          setEmailVerified(null);
           window.history.replaceState({}, document.title, window.location.pathname);
           return;
         }
@@ -129,7 +134,6 @@ export function useAuthSession() {
         }
 
         const authed = await auth0.isAuthenticated();
-        setClient(auth0);
         setIsAuthenticated(authed);
         if (authed) {
           const user = await auth0.getUser();
