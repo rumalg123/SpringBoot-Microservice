@@ -11,6 +11,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
 
 import java.net.URI;
+import java.util.Locale;
 
 @Configuration
 @EnableConfigurationProperties(ObjectStorageProperties.class)
@@ -19,13 +20,32 @@ public class ObjectStorageConfig {
     @Bean
     @ConditionalOnProperty(prefix = "object-storage", name = "enabled", havingValue = "true")
     public S3Client objectStorageS3Client(ObjectStorageProperties properties) {
+        String endpoint = normalizeEndpoint(properties.endpoint());
         return S3Client.builder()
                 .credentialsProvider(StaticCredentialsProvider.create(
                         AwsBasicCredentials.create(properties.accessKey(), properties.secretKey())
                 ))
                 .region(Region.of(properties.region()))
-                .endpointOverride(URI.create(properties.endpoint()))
+                .endpointOverride(URI.create(endpoint))
                 .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
                 .build();
+    }
+
+    private String normalizeEndpoint(String rawEndpoint) {
+        if (rawEndpoint == null || rawEndpoint.isBlank()) {
+            throw new IllegalStateException("object-storage.endpoint is required when object storage is enabled");
+        }
+        String value = rawEndpoint.trim();
+        if ((value.startsWith("\"") && value.endsWith("\"")) || (value.startsWith("'") && value.endsWith("'"))) {
+            value = value.substring(1, value.length() - 1).trim();
+        }
+        String keyPrefix = "object_storage_endpoint=";
+        if (value.toLowerCase(Locale.ROOT).startsWith(keyPrefix)) {
+            value = value.substring(keyPrefix.length()).trim();
+        }
+        if (!value.startsWith("http://") && !value.startsWith("https://")) {
+            throw new IllegalStateException("object-storage.endpoint must start with http:// or https://");
+        }
+        return value;
     }
 }
