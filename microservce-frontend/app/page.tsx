@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuthSession } from "../lib/authSession";
 import CategoryMenu from "./components/CategoryMenu";
@@ -26,6 +27,20 @@ function money(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
 }
 
+function resolveImageUrl(imageName: string | null): string | null {
+  if (!imageName) return null;
+  const base = (process.env.NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL || "").trim();
+  if (base) {
+    return `${base.replace(/\/+$/, "")}/${imageName.replace(/^\/+/, "")}`;
+  }
+  const apiBase = (process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me").trim();
+  const encoded = imageName
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+  return `${apiBase.replace(/\/+$/, "")}/products/images/${encoded}`;
+}
+
 export default function LandingPage() {
   const router = useRouter();
   const session = useAuthSession();
@@ -42,7 +57,7 @@ export default function LandingPage() {
     const run = async () => {
       try {
         const apiBase = process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me";
-        const res = await fetch(`${apiBase}/products?page=0&size=4`, { cache: "no-store" });
+        const res = await fetch(`${apiBase}/products?page=0&size=4&type=PARENT`, { cache: "no-store" });
         if (!res.ok) throw new Error("Failed to load products");
         const data = (await res.json()) as ProductPageResponse;
         setProducts(data.content || []);
@@ -146,8 +161,21 @@ export default function LandingPage() {
               className="card-surface rounded-2xl p-4 transition hover:-translate-y-0.5"
               style={{ animationDelay: `${idx * 60}ms` }}
             >
-              <div className="mb-3 h-40 rounded-xl bg-[linear-gradient(145deg,#ece5da,#f8f4ee)] p-3 text-xs text-[var(--muted)]">
-                {product.mainImage || "product-image.jpg"}
+              <div className="mb-3 h-40 overflow-hidden rounded-xl bg-[linear-gradient(145deg,#ece5da,#f8f4ee)] p-1 text-xs text-[var(--muted)]">
+                {resolveImageUrl(product.mainImage) ? (
+                  <Image
+                    src={resolveImageUrl(product.mainImage) || ""}
+                    alt={product.name}
+                    width={400}
+                    height={240}
+                    className="h-full w-full rounded-lg object-cover"
+                    unoptimized
+                  />
+                ) : (
+                  <div className="grid h-full w-full place-items-center rounded-lg bg-[#f3ece2] px-2 text-center">
+                    product-image.jpg
+                  </div>
+                )}
               </div>
               <p className="line-clamp-1 text-lg font-semibold text-[var(--ink)]">{product.name}</p>
               <p className="mt-1 line-clamp-2 text-sm text-[var(--muted)]">{product.shortDescription}</p>
