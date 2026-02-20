@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, DragEvent, FormEvent, useCallback, useEffect, useState } from "react";
+import { ChangeEvent, DragEvent, FormEvent, KeyboardEvent, WheelEvent, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -199,6 +199,16 @@ function money(value: number) {
 function parseNumber(value: string): number | null {
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
+}
+
+function preventNumberInputScroll(e: WheelEvent<HTMLInputElement>) {
+  e.currentTarget.blur();
+}
+
+function preventNumberInputArrows(e: KeyboardEvent<HTMLInputElement>) {
+  if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+    e.preventDefault();
+  }
 }
 
 function getPageMeta<T>(pageInfo: PagedResponse<T> | null) {
@@ -1644,11 +1654,34 @@ export default function AdminProductsPage() {
                   <div className="grid grid-cols-2 gap-2">
                     <div className="form-group">
                       <label className="form-label">Regular Price</label>
-                      <input type="number" step="0.01" min="0.01" value={form.regularPrice} onChange={(e) => setForm((o) => ({ ...o, regularPrice: e.target.value }))} placeholder="0.00" className="rounded-lg border border-[var(--line)] px-3 py-2" required />
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        step="0.01"
+                        min="0.01"
+                        value={form.regularPrice}
+                        onChange={(e) => setForm((o) => ({ ...o, regularPrice: e.target.value }))}
+                        onWheel={preventNumberInputScroll}
+                        onKeyDown={preventNumberInputArrows}
+                        placeholder="0.00"
+                        className="rounded-lg border border-[var(--line)] px-3 py-2"
+                        required
+                      />
                     </div>
                     <div className="form-group">
                       <label className="form-label">Discounted Price</label>
-                      <input type="number" step="0.01" min="0" value={form.discountedPrice} onChange={(e) => setForm((o) => ({ ...o, discountedPrice: e.target.value }))} placeholder="Optional" className="rounded-lg border border-[var(--line)] px-3 py-2" />
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        step="0.01"
+                        min="0"
+                        value={form.discountedPrice}
+                        onChange={(e) => setForm((o) => ({ ...o, discountedPrice: e.target.value }))}
+                        onWheel={preventNumberInputScroll}
+                        onKeyDown={preventNumberInputArrows}
+                        placeholder="Optional"
+                        className="rounded-lg border border-[var(--line)] px-3 py-2"
+                      />
                     </div>
                   </div>
                   {priceValidationMessage && (
@@ -1894,6 +1927,7 @@ export default function AdminProductsPage() {
                                   />
                                   <input
                                     type="number"
+                                    inputMode="decimal"
                                     step="0.01"
                                     min="0.01"
                                     value={draft.payload.regularPrice}
@@ -1901,11 +1935,14 @@ export default function AdminProductsPage() {
                                       const next = Number(e.target.value);
                                       updateVariationDraftPayload(draft.id, { regularPrice: Number.isFinite(next) ? next : 0 });
                                     }}
+                                    onWheel={preventNumberInputScroll}
+                                    onKeyDown={preventNumberInputArrows}
                                     placeholder="Regular price"
                                     className="rounded border border-[var(--line)] px-2 py-1.5"
                                   />
                                   <input
                                     type="number"
+                                    inputMode="decimal"
                                     step="0.01"
                                     min="0"
                                     value={draft.payload.discountedPrice === null ? "" : draft.payload.discountedPrice}
@@ -1918,6 +1955,8 @@ export default function AdminProductsPage() {
                                       const next = Number(raw);
                                       updateVariationDraftPayload(draft.id, { discountedPrice: Number.isFinite(next) ? next : null });
                                     }}
+                                    onWheel={preventNumberInputScroll}
+                                    onKeyDown={preventNumberInputArrows}
                                     placeholder="Discounted price"
                                     className="rounded border border-[var(--line)] px-2 py-1.5"
                                   />

@@ -58,8 +58,8 @@ export default function LandingPage() {
   const [authActionPending, setAuthActionPending] = useState<"login" | "signup" | null>(null);
 
   useEffect(() => {
-    if (session.status === "ready" && session.isAuthenticated) {
-      router.replace(session.canViewAdmin ? "/admin/orders" : "/products");
+    if (session.status === "ready" && session.isAuthenticated && !session.canViewAdmin) {
+      router.replace("/products");
     }
   }, [router, session.isAuthenticated, session.status, session.canViewAdmin]);
 
