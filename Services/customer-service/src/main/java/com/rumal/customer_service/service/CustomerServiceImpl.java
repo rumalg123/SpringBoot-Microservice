@@ -6,6 +6,7 @@ import com.rumal.customer_service.dto.CreateCustomerRequest;
 import com.rumal.customer_service.dto.CustomerResponse;
 import com.rumal.customer_service.dto.RegisterIdentityCustomerRequest;
 import com.rumal.customer_service.dto.RegisterCustomerRequest;
+import com.rumal.customer_service.dto.UpdateCustomerProfileRequest;
 import com.rumal.customer_service.entity.Customer;
 import com.rumal.customer_service.exception.DuplicateResourceException;
 import com.rumal.customer_service.exception.ResourceNotFoundException;
@@ -14,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.util.UUID;
 
@@ -135,6 +137,27 @@ public class CustomerServiceImpl implements CustomerService {
                         .build()
         );
 
+        return toResponse(saved);
+    }
+
+    @Override
+    @CachePut(cacheNames = "customerByKeycloak", key = "#keycloakId")
+    public CustomerResponse updateProfile(String keycloakId, UpdateCustomerProfileRequest request) {
+        if (!StringUtils.hasText(keycloakId)) {
+            throw new ResourceNotFoundException("Customer not found for keycloak id");
+        }
+
+        Customer customer = customerRepository.findByKeycloakId(keycloakId)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found for keycloak id"));
+
+        String normalizedName = request.name().trim();
+        customer.setName(normalizedName);
+
+        if (StringUtils.hasText(customer.getKeycloakId())) {
+            keycloakManagementService.updateUserName(customer.getKeycloakId(), normalizedName);
+        }
+
+        Customer saved = customerRepository.save(customer);
         return toResponse(saved);
     }
 

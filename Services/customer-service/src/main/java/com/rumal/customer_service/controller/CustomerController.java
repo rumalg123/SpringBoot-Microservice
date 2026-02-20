@@ -5,6 +5,7 @@ import com.rumal.customer_service.dto.CreateCustomerRequest;
 import com.rumal.customer_service.dto.CustomerResponse;
 import com.rumal.customer_service.dto.RegisterIdentityCustomerRequest;
 import com.rumal.customer_service.dto.RegisterCustomerRequest;
+import com.rumal.customer_service.dto.UpdateCustomerProfileRequest;
 import com.rumal.customer_service.exception.UnauthorizedException;
 import com.rumal.customer_service.security.InternalRequestVerifier;
 import com.rumal.customer_service.service.CustomerService;
@@ -69,6 +70,21 @@ public class CustomerController {
             throw new UnauthorizedException("Missing authentication header");
         }
         return customerService.getByKeycloakId(userSub);
+    }
+
+    @PutMapping("/me")
+    public CustomerResponse updateMe(
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Email-Verified", required = false) String userEmailVerified,
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @Valid @RequestBody UpdateCustomerProfileRequest request
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        verifyEmailVerified(userEmailVerified);
+        if (userSub == null || userSub.isBlank()) {
+            throw new UnauthorizedException("Missing authentication header");
+        }
+        return customerService.updateProfile(userSub, request);
     }
 
     @GetMapping("/by-email")

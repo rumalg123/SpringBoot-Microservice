@@ -29,9 +29,12 @@ export default function ProfilePage() {
     logout,
     emailVerified,
   } = session;
+
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [status, setStatus] = useState("Loading account...");
   const [resendingVerification, setResendingVerification] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
 
   useEffect(() => {
     if (sessionStatus !== "ready") return;
@@ -48,12 +51,15 @@ export default function ProfilePage() {
       try {
         await ensureCustomer();
         const response = await apiClient.get("/customers/me");
-        setCustomer(response.data as Customer);
+        const loaded = response.data as Customer;
+        setCustomer(loaded);
+        setEditName(loaded.name || "");
         setStatus("Account loaded.");
       } catch (err) {
         setStatus(err instanceof Error ? err.message : "Failed to load account");
       }
     };
+
     void run();
   }, [router, sessionStatus, isAuthenticated, canViewAdmin, apiClient, ensureCustomer]);
 
@@ -66,10 +72,42 @@ export default function ProfilePage() {
       setStatus("Verification email sent. Please verify and sign in again.");
       toast.success("Verification email sent");
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Failed to resend verification email.");
-      toast.error(err instanceof Error ? err.message : "Failed to resend verification email");
+      const message = err instanceof Error ? err.message : "Failed to resend verification email.";
+      setStatus(message);
+      toast.error(message);
     } finally {
       setResendingVerification(false);
+    }
+  };
+
+  const saveProfile = async () => {
+    if (!apiClient || !customer || savingProfile) return;
+
+    const normalizedName = editName.trim();
+    if (!normalizedName) {
+      toast.error("Name is required");
+      return;
+    }
+    if (normalizedName === customer.name) {
+      setStatus("No changes to save.");
+      return;
+    }
+
+    setSavingProfile(true);
+    setStatus("Saving profile...");
+    try {
+      const response = await apiClient.put("/customers/me", { name: normalizedName });
+      const updated = response.data as Customer;
+      setCustomer(updated);
+      setEditName(updated.name || normalizedName);
+      setStatus("Profile updated.");
+      toast.success("Profile updated");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to update profile";
+      setStatus(message);
+      toast.error(message);
+    } finally {
+      setSavingProfile(false);
     }
   };
 
@@ -77,7 +115,7 @@ export default function ProfilePage() {
     return (
       <div className="min-h-screen bg-[var(--bg)]">
         <div className="mx-auto max-w-7xl px-4 py-10 text-center text-[var(--muted)]">
-          <div className="mx-auto w-12 h-12 animate-spin rounded-full border-4 border-[var(--line)] border-t-[var(--brand)]" />
+          <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-[var(--line)] border-t-[var(--brand)]" />
           <p className="mt-4">Loading...</p>
         </div>
       </div>
@@ -93,26 +131,29 @@ export default function ProfilePage() {
       <AppNav
         email={(profile?.email as string) || ""}
         canViewAdmin={canViewAdmin}
-        onLogout={() => { void logout(); }}
+        onLogout={() => {
+          void logout();
+        }}
       />
 
       <main className="mx-auto max-w-7xl px-4 py-4">
-        {/* Breadcrumbs */}
         <nav className="breadcrumb">
           <Link href="/">Home</Link>
-          <span className="breadcrumb-sep">›</span>
+          <span className="breadcrumb-sep">&gt;</span>
           <span className="breadcrumb-current">My Profile</span>
         </nav>
 
         {emailVerified === false && (
           <section className="mb-4 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            <span className="text-xl">⚠️</span>
+            <span className="text-lg font-semibold">!</span>
             <div className="flex-1">
               <p className="font-semibold">Email Not Verified</p>
               <p className="text-xs">Profile and order actions are blocked until verification.</p>
             </div>
             <button
-              onClick={() => { void resendVerification(); }}
+              onClick={() => {
+                void resendVerification();
+              }}
               disabled={resendingVerification}
               className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-60"
             >
@@ -121,29 +162,26 @@ export default function ProfilePage() {
           </section>
         )}
 
-        {/* Page Header */}
         <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-[var(--ink)]">👤 My Profile</h1>
-            <p className="mt-0.5 text-sm text-[var(--muted)]">Manage your account and view your details</p>
+            <h1 className="text-2xl font-bold text-[var(--ink)]">My Profile</h1>
+            <p className="mt-0.5 text-sm text-[var(--muted)]">Manage your account and view your details.</p>
           </div>
           <div className="flex gap-2">
             <Link href="/products" className="btn-primary no-underline px-4 py-2.5 text-sm">
-              🛍️ Shop
+              Shop
             </Link>
             <Link href="/orders" className="btn-outline no-underline px-4 py-2.5 text-sm">
-              📦 Orders
+              Orders
             </Link>
           </div>
         </div>
 
-        {/* Profile Cards */}
         <div className="grid gap-5 md:grid-cols-2">
-          {/* Customer Profile Card */}
           <article className="animate-rise rounded-xl bg-white p-6 shadow-sm">
             <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--brand-soft)] text-xl">
-                👤
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--brand-soft)] text-xl font-semibold">
+                P
               </div>
               <div>
                 <p className="text-xs font-bold uppercase tracking-wider text-[var(--muted)]">Customer Profile</p>
@@ -157,24 +195,52 @@ export default function ProfilePage() {
               <div className="space-y-4">
                 <div className="rounded-lg bg-[#fafafa] px-4 py-3">
                   <p className="text-xs text-[var(--muted)]">Full Name</p>
-                  <p className="mt-0.5 text-sm font-semibold text-[var(--ink)]">{customer?.name || "—"}</p>
+                  <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <input
+                      value={editName}
+                      onChange={(event) => setEditName(event.target.value)}
+                      disabled={savingProfile || emailVerified === false}
+                      className="w-full rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-sm text-[var(--ink)] outline-none focus:border-[var(--brand)] disabled:cursor-not-allowed disabled:opacity-60"
+                      placeholder="Enter your full name"
+                    />
+                    <button
+                      onClick={() => {
+                        void saveProfile();
+                      }}
+                      disabled={
+                        savingProfile
+                        || emailVerified === false
+                        || !customer
+                        || !editName.trim()
+                        || editName.trim() === customer.name
+                      }
+                      className="rounded-lg bg-[var(--brand)] px-3 py-2 text-xs font-semibold text-white hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {savingProfile ? "Saving..." : "Save"}
+                    </button>
+                  </div>
                 </div>
+
                 <div className="rounded-lg bg-[#fafafa] px-4 py-3">
                   <p className="text-xs text-[var(--muted)]">Email</p>
-                  <p className="mt-0.5 text-sm font-semibold text-[var(--ink)]">{customer?.email || "—"}</p>
+                  <p className="mt-0.5 text-sm font-semibold text-[var(--ink)]">{customer?.email || "-"}</p>
                 </div>
+
                 <div className="rounded-lg bg-[#fafafa] px-4 py-3">
                   <p className="text-xs text-[var(--muted)]">Customer ID</p>
-                  <p className="mt-0.5 break-all font-mono text-xs text-[var(--ink)]">{customer?.id || "—"}</p>
+                  <p className="mt-0.5 break-all font-mono text-xs text-[var(--ink)]">{customer?.id || "-"}</p>
                 </div>
+
                 <div className="rounded-lg bg-[#fafafa] px-4 py-3">
                   <p className="text-xs text-[var(--muted)]">Member Since</p>
                   <p className="mt-0.5 text-sm font-semibold text-[var(--ink)]">
                     {customer?.createdAt
                       ? new Date(customer.createdAt).toLocaleDateString("en-US", {
-                        year: "numeric", month: "long", day: "numeric",
-                      })
-                      : "—"}
+                          year: "numeric",
+                          month: "long",
+                          day: "numeric",
+                        })
+                      : "-"}
                   </p>
                 </div>
               </div>
@@ -188,11 +254,10 @@ export default function ProfilePage() {
             )}
           </article>
 
-          {/* Session Info Card */}
           <article className="animate-rise rounded-xl bg-white p-6 shadow-sm" style={{ animationDelay: "100ms" }}>
             <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--accent-soft)] text-xl">
-                🔐
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--accent-soft)] text-xl font-semibold">
+                S
               </div>
               <div>
                 <p className="text-xs font-bold uppercase tracking-wider text-[var(--muted)]">Session Info</p>
@@ -203,31 +268,36 @@ export default function ProfilePage() {
             <div className="space-y-4">
               <div className="rounded-lg bg-[#fafafa] px-4 py-3">
                 <p className="text-xs text-[var(--muted)]">Auth Email</p>
-                <p className="mt-0.5 text-sm font-semibold text-[var(--ink)]">{(profile?.email as string) || "—"}</p>
+                <p className="mt-0.5 text-sm font-semibold text-[var(--ink)]">{(profile?.email as string) || "-"}</p>
               </div>
+
               <div className="rounded-lg bg-[#fafafa] px-4 py-3">
                 <p className="text-xs text-[var(--muted)]">Auth Name</p>
-                <p className="mt-0.5 text-sm font-semibold text-[var(--ink)]">{(profile?.name as string) || "—"}</p>
+                <p className="mt-0.5 text-sm font-semibold text-[var(--ink)]">{(profile?.name as string) || "-"}</p>
               </div>
+
               <div className="rounded-lg bg-[#fafafa] px-4 py-3">
                 <p className="text-xs text-[var(--muted)]">Role</p>
                 <p className="mt-0.5">
-                  <span className={`rounded-full px-3 py-1 text-xs font-bold ${canViewAdmin
-                    ? "bg-purple-100 text-purple-700"
-                    : "bg-green-100 text-green-700"
-                    }`}>
-                    {canViewAdmin ? "👑 Admin" : "🛒 Customer"}
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-bold ${
+                      canViewAdmin ? "bg-purple-100 text-purple-700" : "bg-green-100 text-green-700"
+                    }`}
+                  >
+                    {canViewAdmin ? "Admin" : "Customer"}
                   </span>
                 </p>
               </div>
+
               <div className="rounded-lg bg-[#fafafa] px-4 py-3">
                 <p className="text-xs text-[var(--muted)]">Email Verified</p>
                 <p className="mt-0.5">
-                  <span className={`rounded-full px-3 py-1 text-xs font-bold ${emailVerified
-                    ? "bg-green-100 text-green-700"
-                    : "bg-amber-100 text-amber-700"
-                    }`}>
-                    {emailVerified ? "✓ Verified" : "⚠ Not Verified"}
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-bold ${
+                      emailVerified ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
+                    }`}
+                  >
+                    {emailVerified ? "Verified" : "Not Verified"}
                   </span>
                 </p>
               </div>

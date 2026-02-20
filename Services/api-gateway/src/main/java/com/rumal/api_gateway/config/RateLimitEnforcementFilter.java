@@ -108,7 +108,7 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
                 && method == HttpMethod.POST) {
             return new Policy("register", registerRateLimiter, ipKeyResolver);
         }
-        if ("/customers/me".equals(path) && method == HttpMethod.GET) {
+        if ("/customers/me".equals(path) && (method == HttpMethod.GET || method == HttpMethod.PUT)) {
             return new Policy("customer-me", customerMeRateLimiter, userOrIpKeyResolver);
         }
         if ("/orders/me".equals(path) && method == HttpMethod.POST) {

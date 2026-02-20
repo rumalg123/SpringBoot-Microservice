@@ -120,6 +120,33 @@ public class KeycloakManagementService {
         }
     }
 
+    public void updateUserName(String userId, String fullName) {
+        if (!StringUtils.hasText(userId)) {
+            throw new KeycloakRequestException("Keycloak user id is required");
+        }
+        if (!StringUtils.hasText(fullName)) {
+            throw new KeycloakRequestException("Keycloak full name is required");
+        }
+
+        String normalizedName = fullName.trim();
+        NameParts parts = splitName(normalizedName);
+
+        try (Keycloak keycloak = newAdminClient()) {
+            var userResource = keycloak.realm(realm).users().get(userId);
+            UserRepresentation user = userResource.toRepresentation();
+            if (user == null || !StringUtils.hasText(user.getId())) {
+                throw new KeycloakRequestException("Keycloak user not found for id: " + userId);
+            }
+            user.setFirstName(parts.firstName());
+            user.setLastName(parts.lastName());
+            userResource.update(user);
+        } catch (NotFoundException ex) {
+            throw new KeycloakRequestException("Keycloak user not found for id: " + userId, ex);
+        } catch (WebApplicationException ex) {
+            throw new KeycloakRequestException("Keycloak user update failed: " + ex.getMessage(), ex);
+        }
+    }
+
     private Keycloak newAdminClient() {
         return KeycloakBuilder.builder()
                 .serverUrl(serverUrl)
@@ -183,6 +210,17 @@ public class KeycloakManagementService {
         return candidate.isBlank() ? null : candidate;
     }
 
+    private NameParts splitName(String fullName) {
+        String normalized = fullName.trim().replaceAll("\\s+", " ");
+        int firstSpace = normalized.indexOf(' ');
+        if (firstSpace < 0) {
+            return new NameParts(normalized, "");
+        }
+        String first = normalized.substring(0, firstSpace).trim();
+        String last = normalized.substring(firstSpace + 1).trim();
+        return new NameParts(first, last);
+    }
+
     private String resolveBaseUrlFromIssuer(String issuerUri) {
         if (!StringUtils.hasText(issuerUri)) {
             throw new IllegalArgumentException("keycloak.issuer-uri is required");
@@ -196,5 +234,8 @@ public class KeycloakManagementService {
             throw new IllegalArgumentException("Issuer URI must contain '/realms/' segment: " + issuerUri);
         }
         return normalized.substring(0, realmsSegmentIndex);
+    }
+
+    private record NameParts(String firstName, String lastName) {
     }
 }

@@ -7,6 +7,7 @@ type UserProfile = Record<string, unknown> | null;
 type TokenClaims = KeycloakTokenParsed & Record<string, unknown>;
 
 let keycloakSingleton: KeycloakInstance | null = null;
+let keycloakInitPromise: Promise<boolean> | null = null;
 
 const env = {
   url: process.env.NEXT_PUBLIC_KEYCLOAK_URL || "",
@@ -142,7 +143,7 @@ function resolveReturnTo(returnTo: string): string {
   }
 }
 
-async function getKeycloak(): Promise<KeycloakInstance> {
+function getKeycloak(): KeycloakInstance {
   if (keycloakSingleton) return keycloakSingleton;
   keycloakSingleton = new Keycloak({
     url: env.url,
@@ -150,6 +151,25 @@ async function getKeycloak(): Promise<KeycloakInstance> {
     clientId: env.clientId,
   });
   return keycloakSingleton;
+}
+
+function initKeycloakOnce(client: KeycloakInstance): Promise<boolean> {
+  if (keycloakInitPromise) {
+    return keycloakInitPromise;
+  }
+
+  keycloakInitPromise = client
+    .init({
+      onLoad: "check-sso",
+      pkceMethod: "S256",
+      checkLoginIframe: false,
+    })
+    .catch((error) => {
+      keycloakInitPromise = null;
+      throw error;
+    });
+
+  return keycloakInitPromise;
 }
 
 export function useAuthSession() {
@@ -174,7 +194,7 @@ export function useAuthSession() {
 
       try {
         setStatus("loading");
-        const keycloak = await getKeycloak();
+        const keycloak = getKeycloak();
         setClient(keycloak);
 
         const params = new URLSearchParams(window.location.search);
@@ -184,11 +204,7 @@ export function useAuthSession() {
           setError(keycloakErrorDescription || keycloakError || "");
         }
 
-        const authenticated = await keycloak.init({
-          onLoad: "check-sso",
-          pkceMethod: "S256",
-          checkLoginIframe: false,
-        });
+        const authenticated = await initKeycloakOnce(keycloak);
 
         setIsAuthenticated(Boolean(authenticated));
         if (authenticated) {
