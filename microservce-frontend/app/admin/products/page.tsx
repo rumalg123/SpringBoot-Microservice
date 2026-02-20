@@ -15,6 +15,7 @@ type ProductType = "SINGLE" | "PARENT" | "VARIATION";
 
 type ProductSummary = {
   id: string;
+  slug: string;
   name: string;
   shortDescription: string;
   mainImage: string | null;
@@ -31,6 +32,7 @@ type ProductDetail = {
   id: string;
   parentProductId: string | null;
   name: string;
+  slug: string;
   shortDescription: string;
   description: string;
   images: string[];
@@ -49,6 +51,7 @@ type ProductDetail = {
 type Category = {
   id: string;
   name: string;
+  slug: string;
   type: "PARENT" | "SUB";
   parentCategoryId: string | null;
   deleted?: boolean;
@@ -71,6 +74,7 @@ type PagedResponse<T> = {
 type ProductFormState = {
   id?: string;
   name: string;
+  slug: string;
   shortDescription: string;
   description: string;
   images: string[];
@@ -92,6 +96,7 @@ type VariationDraft = {
   subCategoryNames: string[];
   payload: {
     name: string;
+    slug: string;
     shortDescription: string;
     description: string;
     images: string[];
@@ -108,6 +113,7 @@ type VariationDraft = {
 
 const emptyForm: ProductFormState = {
   name: "",
+  slug: "",
   shortDescription: "",
   description: "",
   images: [],
@@ -124,9 +130,19 @@ const emptyForm: ProductFormState = {
 const MAX_IMAGE_COUNT = 5;
 const MAX_IMAGE_SIZE_BYTES = 1_048_576;
 const MAX_IMAGE_DIMENSION = 1200;
+type SlugStatus = "idle" | "checking" | "available" | "taken" | "invalid";
 
 function normalizeVariationAttributeName(value: string): string {
   return value.trim().toLowerCase();
+}
+
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-+/g, "-");
 }
 
 function dedupeVariationAttributeNames(values: string[]): string[] {
@@ -224,11 +240,16 @@ export default function AdminProductsPage() {
   const [parentVariationAttributes, setParentVariationAttributes] = useState<string[]>([]);
   const [variationAttributeValues, setVariationAttributeValues] = useState<Record<string, string>>({});
   const [variationDrafts, setVariationDrafts] = useState<VariationDraft[]>([]);
-  const [categoryForm, setCategoryForm] = useState<{ id?: string; name: string; type: "PARENT" | "SUB"; parentCategoryId: string }>({
+  const [categoryForm, setCategoryForm] = useState<{ id?: string; name: string; slug: string; type: "PARENT" | "SUB"; parentCategoryId: string }>({
     name: "",
+    slug: "",
     type: "PARENT",
     parentCategoryId: "",
   });
+  const [productSlugTouched, setProductSlugTouched] = useState(false);
+  const [categorySlugTouched, setCategorySlugTouched] = useState(false);
+  const [productSlugStatus, setProductSlugStatus] = useState<SlugStatus>("idle");
+  const [categorySlugStatus, setCategorySlugStatus] = useState<SlugStatus>("idle");
   const [confirmAction, setConfirmAction] = useState<{ type: "product" | "category"; id: string; name: string } | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [filtersSubmitting, setFiltersSubmitting] = useState(false);
@@ -346,6 +367,66 @@ export default function AdminProductsPage() {
     void run();
   }, [router, session.status, session.isAuthenticated, session.canViewAdmin, loadActive, loadDeleted, loadCategories, loadDeletedCategories, loadParentProducts]);
 
+  useEffect(() => {
+    if (productSlugTouched) return;
+    const generated = slugify(form.name).slice(0, 180);
+    setForm((old) => (old.slug === generated ? old : { ...old, slug: generated }));
+  }, [form.name, productSlugTouched]);
+
+  useEffect(() => {
+    if (categorySlugTouched) return;
+    const generated = slugify(categoryForm.name).slice(0, 130);
+    setCategoryForm((old) => (old.slug === generated ? old : { ...old, slug: generated }));
+  }, [categoryForm.name, categorySlugTouched]);
+
+  useEffect(() => {
+    const apiClient = session.apiClient;
+    if (!apiClient) return;
+    const normalized = slugify(form.slug).slice(0, 180);
+    if (!normalized) {
+      setProductSlugStatus("invalid");
+      return;
+    }
+    setProductSlugStatus("checking");
+    const timer = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams();
+        params.set("slug", normalized);
+        if (form.id) params.set("excludeId", form.id);
+        const res = await apiClient.get(`/products/slug-available?${params.toString()}`);
+        const available = Boolean((res.data as { available?: boolean })?.available);
+        setProductSlugStatus(available ? "available" : "taken");
+      } catch {
+        setProductSlugStatus("idle");
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [session.apiClient, form.slug, form.id]);
+
+  useEffect(() => {
+    const apiClient = session.apiClient;
+    if (!apiClient) return;
+    const normalized = slugify(categoryForm.slug).slice(0, 130);
+    if (!normalized) {
+      setCategorySlugStatus("invalid");
+      return;
+    }
+    setCategorySlugStatus("checking");
+    const timer = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams();
+        params.set("slug", normalized);
+        if (categoryForm.id) params.set("excludeId", categoryForm.id);
+        const res = await apiClient.get(`/categories/slug-available?${params.toString()}`);
+        const available = Boolean((res.data as { available?: boolean })?.available);
+        setCategorySlugStatus(available ? "available" : "taken");
+      } catch {
+        setCategorySlugStatus("idle");
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [session.apiClient, categoryForm.slug, categoryForm.id]);
+
   const applyFilters = async (e: FormEvent) => {
     e.preventDefault();
     if (filtersSubmitting) return;
@@ -372,6 +453,7 @@ export default function AdminProductsPage() {
       setForm({
         id: p.id,
         name: p.name,
+        slug: p.slug || "",
         shortDescription: p.shortDescription,
         description: p.description,
         images: p.images,
@@ -384,6 +466,8 @@ export default function AdminProductsPage() {
         sku: p.sku,
         active: p.active,
       });
+      setProductSlugTouched(true);
+      setProductSlugStatus("available");
       if (p.productType === "PARENT") {
         setParentAttributeNames(dedupeVariationAttributeNames((p.variations || []).map((v) => v.name)));
         setVariationParentId("");
@@ -428,6 +512,7 @@ export default function AdminProductsPage() {
 
   const buildCommonPayload = () => ({
     name: form.name.trim(),
+    slug: slugify(form.slug).slice(0, 180),
     shortDescription: form.shortDescription.trim(),
     description: form.description.trim(),
     images: form.images,
@@ -469,8 +554,11 @@ export default function AdminProductsPage() {
     setForm((old) => ({
       ...old,
       id: undefined,
+      slug: "",
       sku: "",
     }));
+    setProductSlugTouched(false);
+    setProductSlugStatus("idle");
   };
 
   const addVariationDraft = () => {
@@ -486,8 +574,28 @@ export default function AdminProductsPage() {
       toast.error("Upload at least one image");
       return;
     }
+    if (!slugify(form.slug)) {
+      toast.error("Slug is required");
+      return;
+    }
+    if (productSlugStatus === "checking") {
+      toast.error("Wait until slug availability check completes");
+      return;
+    }
+    if (productSlugStatus === "taken" || productSlugStatus === "invalid") {
+      toast.error("Choose a unique valid slug");
+      return;
+    }
     try {
       const pairs = buildVariationPairs();
+      const normalizedSlug = slugify(form.slug).slice(0, 180);
+      const duplicateSlugInQueue = variationDrafts.some(
+        (draft) => slugify(draft.payload.slug).slice(0, 180) === normalizedSlug
+      );
+      if (duplicateSlugInQueue) {
+        toast.error("This slug is already in the variation queue");
+        return;
+      }
       const signature = variationSignature(pairs);
       const duplicateInQueue = variationDrafts.some(
         (draft) => draft.parentId === variationParentId.trim() && variationSignature(draft.payload.variations) === signature
@@ -582,6 +690,7 @@ export default function AdminProductsPage() {
     setForm({
       id: undefined,
       name: draft.payload.name,
+      slug: draft.payload.slug,
       shortDescription: draft.payload.shortDescription,
       description: draft.payload.description,
       images: [...draft.payload.images],
@@ -594,6 +703,8 @@ export default function AdminProductsPage() {
       sku: draft.payload.sku,
       active: draft.payload.active,
     });
+    setProductSlugTouched(true);
+    setProductSlugStatus("available");
     setVariationDrafts((old) => old.filter((item) => item.id !== draftId));
     setStatus("Queued variation loaded into editor.");
     toast.success("Queued variation loaded for editing");
@@ -602,6 +713,7 @@ export default function AdminProductsPage() {
   const validateVariationDraft = (draft: VariationDraft): string | null => {
     if (!draft.parentId.trim()) return "Parent product is missing";
     if (!draft.payload.name.trim()) return "Product name is required";
+    if (!slugify(draft.payload.slug)) return "Slug is required";
     if (!draft.payload.shortDescription.trim()) return "Short description is required";
     if (!draft.payload.description.trim()) return "Description is required";
     if (!draft.payload.sku.trim()) return "SKU is required";
@@ -635,6 +747,7 @@ export default function AdminProductsPage() {
       return;
     }
     const queueSignatures = new Set<string>();
+    const queueSlugs = new Set<string>();
     for (let i = 0; i < variationDrafts.length; i++) {
       const draft = variationDrafts[i];
       const error = validateVariationDraft(draft);
@@ -642,6 +755,12 @@ export default function AdminProductsPage() {
         toast.error(`Queue item ${i + 1}: ${error}`);
         return;
       }
+      const normalizedSlug = slugify(draft.payload.slug).slice(0, 180);
+      if (queueSlugs.has(normalizedSlug)) {
+        toast.error(`Queue item ${i + 1}: duplicate slug in queue`);
+        return;
+      }
+      queueSlugs.add(normalizedSlug);
       const normalizedPairs = draft.payload.variations.map((pair) => ({
         name: normalizeVariationAttributeName(pair.name),
         value: (pair.value || "").trim(),
@@ -660,6 +779,7 @@ export default function AdminProductsPage() {
         const requestPayload = {
           ...draft.payload,
           name: draft.payload.name.trim(),
+          slug: slugify(draft.payload.slug).slice(0, 180),
           shortDescription: draft.payload.shortDescription.trim(),
           description: draft.payload.description.trim(),
           regularPrice: Number(draft.payload.regularPrice),
@@ -688,6 +808,8 @@ export default function AdminProductsPage() {
         mainCategoryName: old.mainCategoryName,
         subCategoryNames: old.subCategoryNames,
       }));
+      setProductSlugTouched(false);
+      setProductSlugStatus("idle");
       await Promise.all([reloadCurrentView(), loadParentProducts()]);
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Variation create failed.");
@@ -709,6 +831,18 @@ export default function AdminProductsPage() {
       toast.error("Upload at least one image");
       return;
     }
+    if (!slugify(form.slug)) {
+      toast.error("Slug is required");
+      return;
+    }
+    if (productSlugStatus === "checking") {
+      toast.error("Wait until slug availability check completes");
+      return;
+    }
+    if (productSlugStatus === "taken" || productSlugStatus === "invalid") {
+      toast.error("Choose a unique valid slug");
+      return;
+    }
 
     if (form.productType === "VARIATION" && !form.id) {
       addVariationDraft();
@@ -719,6 +853,7 @@ export default function AdminProductsPage() {
     try {
       let payload: {
         name: string;
+        slug: string;
         shortDescription: string;
         description: string;
         images: string[];
@@ -767,6 +902,8 @@ export default function AdminProductsPage() {
         toast.success("Product created");
       }
       setForm(emptyForm);
+      setProductSlugTouched(false);
+      setProductSlugStatus("idle");
       setParentAttributeNames([]);
       setNewParentAttributeName("");
       setVariationParentId("");
@@ -877,9 +1014,22 @@ export default function AdminProductsPage() {
     if (!session.apiClient) return;
     if (savingCategory) return;
     if (!categoryForm.name.trim()) return;
+    if (!slugify(categoryForm.slug)) {
+      toast.error("Category slug is required");
+      return;
+    }
+    if (categorySlugStatus === "checking") {
+      toast.error("Wait until category slug availability check completes");
+      return;
+    }
+    if (categorySlugStatus === "taken" || categorySlugStatus === "invalid") {
+      toast.error("Choose a unique valid category slug");
+      return;
+    }
     setSavingCategory(true);
     const payload = {
       name: categoryForm.name.trim(),
+      slug: slugify(categoryForm.slug).slice(0, 130),
       type: categoryForm.type,
       parentCategoryId: categoryForm.type === "SUB" ? categoryForm.parentCategoryId || null : null,
     };
@@ -892,7 +1042,9 @@ export default function AdminProductsPage() {
         await session.apiClient.post("/admin/categories", payload);
         toast.success("Category created");
       }
-      setCategoryForm({ name: "", type: "PARENT", parentCategoryId: "" });
+      setCategoryForm({ name: "", slug: "", type: "PARENT", parentCategoryId: "" });
+      setCategorySlugTouched(false);
+      setCategorySlugStatus("idle");
       await Promise.all([loadCategories(), loadDeletedCategories()]);
       setStatus("Category operation complete.");
     } catch (err) {
@@ -1041,6 +1193,8 @@ export default function AdminProductsPage() {
   const productRowActionBusy = Boolean(loadingProductId) || confirmLoading || Boolean(restoringProductId) || listLoading;
   const categoryMutationBusy = savingCategory || confirmLoading || Boolean(restoringCategoryId);
   const categoryLockedByParent = form.productType === "VARIATION";
+  const productSlugBlocked = productSlugStatus === "checking" || productSlugStatus === "taken" || productSlugStatus === "invalid";
+  const categorySlugBlocked = categorySlugStatus === "checking" || categorySlugStatus === "taken" || categorySlugStatus === "invalid";
 
   return (
     <div className="min-h-screen bg-[var(--bg)]">
@@ -1256,6 +1410,8 @@ export default function AdminProductsPage() {
                       type="button"
                       onClick={() => {
                         setForm(emptyForm);
+                        setProductSlugTouched(false);
+                        setProductSlugStatus("idle");
                         setParentAttributeNames([]);
                         setNewParentAttributeName("");
                         setVariationParentId("");
@@ -1275,7 +1431,36 @@ export default function AdminProductsPage() {
                 <form onSubmit={submitProduct} className="grid gap-3 text-sm">
                   <div className="form-group">
                     <label className="form-label">Product Name</label>
-                    <input value={form.name} onChange={(e) => setForm((o) => ({ ...o, name: e.target.value }))} placeholder="e.g. Nike Air Max 90" className="rounded-lg border border-[var(--line)] px-3 py-2" required />
+                    <input
+                      value={form.name}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setForm((o) => ({ ...o, name: value }));
+                      }}
+                      placeholder="e.g. Nike Air Max 90"
+                      className="rounded-lg border border-[var(--line)] px-3 py-2"
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Slug</label>
+                    <input
+                      value={form.slug}
+                      onChange={(e) => {
+                        setProductSlugTouched(true);
+                        setForm((o) => ({ ...o, slug: slugify(e.target.value).slice(0, 180) }));
+                      }}
+                      placeholder="product-url-slug"
+                      className="rounded-lg border border-[var(--line)] px-3 py-2"
+                      required
+                    />
+                    <p className="mt-1 text-[11px] text-[var(--muted)]">
+                      {productSlugStatus === "checking" && "Checking slug..."}
+                      {productSlugStatus === "available" && "Slug is available"}
+                      {productSlugStatus === "taken" && "Slug is already taken"}
+                      {productSlugStatus === "invalid" && "Enter a valid slug"}
+                      {productSlugStatus === "idle" && "Slug is used in product URL"}
+                    </p>
                   </div>
                   <div className="form-group">
                     <label className="form-label">Short Description</label>
@@ -1555,7 +1740,7 @@ export default function AdminProductsPage() {
                         <button
                           type="button"
                           onClick={addVariationDraft}
-                          disabled={Boolean(priceValidationMessage) || productMutationBusy || Boolean(selectingVariationParentId)}
+                          disabled={Boolean(priceValidationMessage) || productMutationBusy || Boolean(selectingVariationParentId) || productSlugBlocked}
                           className="btn-brand rounded-lg px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           Add Another Variation
@@ -1619,6 +1804,14 @@ export default function AdminProductsPage() {
                                     value={draft.payload.name}
                                     onChange={(e) => updateVariationDraftPayload(draft.id, { name: e.target.value })}
                                     placeholder="Variation name"
+                                    className="rounded border border-[var(--line)] px-2 py-1.5"
+                                  />
+                                  <input
+                                    value={draft.payload.slug}
+                                    onChange={(e) =>
+                                      updateVariationDraftPayload(draft.id, { slug: slugify(e.target.value).slice(0, 180) })
+                                    }
+                                    placeholder="Variation slug"
                                     className="rounded border border-[var(--line)] px-2 py-1.5"
                                   />
                                   <input
@@ -1689,7 +1882,7 @@ export default function AdminProductsPage() {
                   </label>
                   <button
                     type="submit"
-                    disabled={Boolean(priceValidationMessage) || savingProduct || creatingQueuedVariationBatch || uploadingImages || Boolean(selectingVariationParentId)}
+                    disabled={Boolean(priceValidationMessage) || savingProduct || creatingQueuedVariationBatch || uploadingImages || Boolean(selectingVariationParentId) || productSlugBlocked}
                     className="btn-brand rounded-lg px-3 py-2 font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {savingProduct
@@ -1712,10 +1905,32 @@ export default function AdminProductsPage() {
                 <div className="mt-3 grid gap-2 text-sm">
                   <input
                     value={categoryForm.name}
-                    onChange={(e) => setCategoryForm((o) => ({ ...o, name: e.target.value }))}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setCategoryForm((o) => ({ ...o, name: value }));
+                    }}
                     placeholder="Category name"
                     className="rounded-lg border border-[var(--line)] px-3 py-2"
                   />
+                  <div>
+                    <input
+                      value={categoryForm.slug}
+                      onChange={(e) => {
+                        const value = slugify(e.target.value).slice(0, 130);
+                        setCategorySlugTouched(true);
+                        setCategoryForm((o) => ({ ...o, slug: value }));
+                      }}
+                      placeholder="Category slug"
+                      className="w-full rounded-lg border border-[var(--line)] px-3 py-2"
+                    />
+                    <p className="mt-1 text-[11px] text-[var(--muted)]">
+                      {categorySlugStatus === "checking" && "Checking slug..."}
+                      {categorySlugStatus === "available" && "Slug is available"}
+                      {categorySlugStatus === "taken" && "Slug is already taken"}
+                      {categorySlugStatus === "invalid" && "Enter a valid slug"}
+                      {categorySlugStatus === "idle" && "Slug will be used in category URL"}
+                    </p>
+                  </div>
                   <select
                     value={categoryForm.type}
                     onChange={(e) =>
@@ -1748,7 +1963,7 @@ export default function AdminProductsPage() {
                     <button
                       type="button"
                       onClick={() => void saveCategory()}
-                      disabled={categoryMutationBusy}
+                      disabled={categoryMutationBusy || categorySlugBlocked}
                       className="btn-brand rounded-lg px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {savingCategory ? "Saving..." : categoryForm.id ? "Update Category" : "Create Category"}
@@ -1756,7 +1971,11 @@ export default function AdminProductsPage() {
                     {categoryForm.id && (
                       <button
                         type="button"
-                        onClick={() => setCategoryForm({ name: "", type: "PARENT", parentCategoryId: "" })}
+                        onClick={() => {
+                          setCategoryForm({ name: "", slug: "", type: "PARENT", parentCategoryId: "" });
+                          setCategorySlugTouched(false);
+                          setCategorySlugStatus("idle");
+                        }}
                         disabled={categoryMutationBusy}
                         className="rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-60"
                       >
@@ -1772,18 +1991,23 @@ export default function AdminProductsPage() {
                     {categories.map((c) => (
                       <div key={c.id} className="mb-1 flex items-center justify-between rounded-md px-2 py-1 hover:bg-[var(--brand-soft)]">
                         <span className="text-xs text-[var(--ink)]">
-                          {c.name} ({c.type})
+                          {c.name} ({c.type}) - /{c.slug}
                         </span>
                         <div className="flex gap-1">
                           <button
                             type="button"
                             onClick={() =>
-                              setCategoryForm({
-                                id: c.id,
-                                name: c.name,
-                                type: c.type,
-                                parentCategoryId: c.parentCategoryId || "",
-                              })
+                              {
+                                setCategoryForm({
+                                  id: c.id,
+                                  name: c.name,
+                                  slug: c.slug || "",
+                                  type: c.type,
+                                  parentCategoryId: c.parentCategoryId || "",
+                                });
+                                setCategorySlugTouched(true);
+                                setCategorySlugStatus("available");
+                              }
                             }
                             disabled={categoryMutationBusy}
                             className="rounded border border-[var(--line)] bg-white px-2 py-0.5 text-[10px] disabled:cursor-not-allowed disabled:opacity-60"
@@ -1813,7 +2037,7 @@ export default function AdminProductsPage() {
                     {deletedCategories.map((c) => (
                       <div key={c.id} className="mb-1 flex items-center justify-between rounded-md px-2 py-1">
                         <span className="text-xs text-[var(--ink)]">
-                          {c.name} ({c.type})
+                          {c.name} ({c.type}) - /{c.slug}
                         </span>
                         <button
                           type="button"

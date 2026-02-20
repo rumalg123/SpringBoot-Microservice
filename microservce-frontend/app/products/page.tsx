@@ -12,6 +12,7 @@ import { useAuthSession } from "../../lib/authSession";
 
 type ProductSummary = {
   id: string;
+  slug: string;
   name: string;
   shortDescription: string;
   mainImage: string | null;
@@ -252,7 +253,7 @@ function ProductsPageContent() {
             const discount = calcDiscount(p.regularPrice, p.sellingPrice);
             return (
               <Link
-                href={`/products/${p.id}`}
+                href={`/products/${encodeURIComponent((p.slug || p.id).trim())}`}
                 key={p.id}
                 className="product-card animate-rise relative no-underline"
                 style={{ animationDelay: `${idx * 50}ms` }}

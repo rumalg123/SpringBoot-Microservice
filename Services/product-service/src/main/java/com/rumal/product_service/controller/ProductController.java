@@ -2,6 +2,7 @@ package com.rumal.product_service.controller;
 
 import com.rumal.product_service.dto.ProductResponse;
 import com.rumal.product_service.dto.ProductSummaryResponse;
+import com.rumal.product_service.dto.SlugAvailabilityResponse;
 import com.rumal.product_service.entity.ProductType;
 import com.rumal.product_service.service.ProductService;
 import com.rumal.product_service.storage.ProductImageStorageService;
@@ -35,14 +36,23 @@ public class ProductController {
     private final ProductService productService;
     private final ProductImageStorageService productImageStorageService;
 
-    @GetMapping("/{id}")
-    public ProductResponse getById(@PathVariable UUID id) {
-        return productService.getById(id);
+    @GetMapping("/slug-available")
+    public SlugAvailabilityResponse isSlugAvailable(
+            @RequestParam String slug,
+            @RequestParam(required = false) UUID excludeId
+    ) {
+        boolean available = productService.isSlugAvailable(slug, excludeId);
+        return new SlugAvailabilityResponse(slug, available);
     }
 
-    @GetMapping("/{id}/variations")
-    public List<ProductSummaryResponse> listVariations(@PathVariable UUID id) {
-        return productService.listVariations(id);
+    @GetMapping("/{idOrSlug}")
+    public ProductResponse getByIdOrSlug(@PathVariable String idOrSlug) {
+        return productService.getByIdOrSlug(idOrSlug);
+    }
+
+    @GetMapping("/{idOrSlug}/variations")
+    public List<ProductSummaryResponse> listVariations(@PathVariable String idOrSlug) {
+        return productService.listVariationsByIdOrSlug(idOrSlug);
     }
 
     @GetMapping("/images/**")

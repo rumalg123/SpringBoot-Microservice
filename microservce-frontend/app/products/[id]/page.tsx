@@ -16,6 +16,7 @@ type Variation = {
 
 type ProductDetail = {
   id: string;
+  slug: string;
   parentProductId: string | null;
   name: string;
   shortDescription: string;
@@ -26,7 +27,9 @@ type ProductDetail = {
   sellingPrice: number;
   vendorId: string;
   mainCategory: string | null;
+  mainCategorySlug: string | null;
   subCategories: string[];
+  subCategorySlugs: string[];
   categories: string[];
   productType: string;
   variations: Variation[];
@@ -409,14 +412,21 @@ export default function ProductDetailPage() {
               {/* Categories */}
               <div className="flex flex-wrap gap-2">
                 {displayProduct.mainCategory && (
-                  <span className="rounded-full bg-[var(--brand)] px-3 py-1 text-xs font-semibold text-white">
+                  <Link
+                    href={`/categories/${encodeURIComponent(displayProduct.mainCategorySlug || displayProduct.mainCategory)}`}
+                    className="rounded-full bg-[var(--brand)] px-3 py-1 text-xs font-semibold text-white no-underline"
+                  >
                     {displayProduct.mainCategory}
-                  </span>
+                  </Link>
                 )}
-                {displayProduct.subCategories.map((c) => (
-                  <span key={c} className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium capitalize text-[var(--ink)]">
+                {displayProduct.subCategories.map((c, index) => (
+                  <Link
+                    key={`${c}-${index}`}
+                    href={`/categories/${encodeURIComponent(displayProduct.subCategorySlugs?.[index] || c)}`}
+                    className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium capitalize text-[var(--ink)] no-underline"
+                  >
                     {c}
-                  </span>
+                  </Link>
                 ))}
               </div>
 

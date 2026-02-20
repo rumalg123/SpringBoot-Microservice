@@ -10,12 +10,14 @@ import java.util.UUID;
 
 public interface CategoryRepository extends JpaRepository<Category, UUID> {
     Optional<Category> findByNormalizedName(String normalizedName);
+    Optional<Category> findBySlug(String slug);
     boolean existsByNormalizedName(String normalizedName);
     boolean existsByNormalizedNameAndIdNot(String normalizedName, UUID id);
+    boolean existsBySlug(String slug);
+    boolean existsBySlugAndIdNot(String slug, UUID id);
     List<Category> findByDeletedFalseOrderByNameAsc();
     List<Category> findByDeletedTrueOrderByUpdatedAtDesc();
     List<Category> findByDeletedFalseAndTypeOrderByNameAsc(CategoryType type);
     List<Category> findByDeletedFalseAndParentCategoryIdOrderByNameAsc(UUID parentCategoryId);
     boolean existsByDeletedFalseAndParentCategoryId(UUID parentCategoryId);
 }
-

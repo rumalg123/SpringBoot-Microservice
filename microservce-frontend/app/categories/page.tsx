@@ -9,6 +9,7 @@ import { useAuthSession } from "../../lib/authSession";
 type Category = {
   id: string;
   name: string;
+  slug: string;
   type: "PARENT" | "SUB";
   parentCategoryId: string | null;
 };
@@ -165,7 +166,7 @@ export default function CategoriesPage() {
                 >
                   {/* Category Header Card */}
                   <Link
-                    href={`/products?mainCategory=${encodeURIComponent(parent.name)}`}
+                    href={`/categories/${encodeURIComponent(parent.slug)}`}
                     className="no-underline"
                   >
                     <div className={`relative flex items-center gap-4 bg-gradient-to-r ${style.bg} p-6 text-white transition-transform group-hover:scale-[1.01]`}>
@@ -188,7 +189,7 @@ export default function CategoriesPage() {
                         {children.map((sub) => (
                           <Link
                             key={sub.id}
-                            href={`/products?mainCategory=${encodeURIComponent(parent.name)}&subCategory=${encodeURIComponent(sub.name)}`}
+                            href={`/categories/${encodeURIComponent(sub.slug)}`}
                             className="rounded-full border border-[var(--line)] bg-[var(--bg)] px-3 py-1.5 text-xs font-medium text-[var(--ink)] no-underline transition hover:border-[var(--brand)] hover:bg-[var(--brand-soft)] hover:text-[var(--brand)]"
                           >
                             {sub.name}
@@ -201,7 +202,7 @@ export default function CategoriesPage() {
                   {/* View All Link */}
                   <div className="border-t border-[var(--line)] px-4 py-3">
                     <Link
-                      href={`/products?mainCategory=${encodeURIComponent(parent.name)}`}
+                      href={`/categories/${encodeURIComponent(parent.slug)}`}
                       className="flex items-center justify-between text-sm font-semibold text-[var(--brand)] no-underline hover:underline"
                     >
                       View All Products

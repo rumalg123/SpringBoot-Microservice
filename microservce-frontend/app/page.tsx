@@ -10,6 +10,7 @@ import Footer from "./components/Footer";
 
 type ProductSummary = {
   id: string;
+  slug: string;
   name: string;
   shortDescription: string;
   mainImage: string | null;
@@ -252,7 +253,7 @@ export default function LandingPage() {
                 const discount = calcDiscount(product.regularPrice, product.sellingPrice);
                 return (
                   <Link
-                    href={`/products/${product.id}`}
+                    href={`/products/${encodeURIComponent((product.slug || product.id).trim())}`}
                     key={product.id}
                     className="product-card animate-rise relative no-underline"
                     style={{ animationDelay: `${idx * 80}ms` }}
@@ -334,7 +335,7 @@ export default function LandingPage() {
               const discount = calcDiscount(product.regularPrice, product.sellingPrice);
               return (
                 <Link
-                  href={`/products/${product.id}`}
+                  href={`/products/${encodeURIComponent((product.slug || product.id).trim())}`}
                   key={product.id}
                   className="product-card animate-rise relative no-underline"
                   style={{ animationDelay: `${idx * 60}ms` }}

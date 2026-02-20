@@ -12,9 +12,11 @@ public record UpsertCategoryRequest(
         @Size(max = 100, message = "name must be at most 100 characters")
         String name,
 
+        @Size(max = 130, message = "slug must be at most 130 characters")
+        String slug,
+
         @NotNull(message = "type is required")
         CategoryType type,
 
         UUID parentCategoryId
 ) {}
-

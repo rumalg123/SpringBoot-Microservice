@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 type Category = {
   id: string;
   name: string;
+  slug: string;
   type: "PARENT" | "SUB";
   parentCategoryId: string | null;
 };
@@ -92,7 +93,7 @@ export default function CategoryMenu() {
                 return (
                   <div key={parent.id} className="group/parent relative">
                     <Link
-                      href={`/products?mainCategory=${encodeURIComponent(parent.name)}`}
+                      href={`/categories/${encodeURIComponent(parent.slug)}`}
                       className="flex items-center justify-between rounded-lg px-3 py-2.5 text-sm text-[var(--ink)] no-underline transition hover:bg-[var(--brand-soft)]"
                     >
                       <span className="flex items-center gap-2">
@@ -107,7 +108,7 @@ export default function CategoryMenu() {
                           {children.map((sub) => (
                             <Link
                               key={sub.id}
-                              href={`/products?mainCategory=${encodeURIComponent(parent.name)}&subCategory=${encodeURIComponent(sub.name)}`}
+                              href={`/categories/${encodeURIComponent(sub.slug)}`}
                               className="block rounded-lg px-3 py-2 text-sm text-[var(--ink)] no-underline transition hover:bg-[var(--brand-soft)]"
                             >
                               {sub.name}
@@ -127,7 +128,7 @@ export default function CategoryMenu() {
         {parents.map((parent) => (
           <Link
             key={parent.id}
-            href={`/products?mainCategory=${encodeURIComponent(parent.name)}`}
+            href={`/categories/${encodeURIComponent(parent.slug)}`}
             className="category-pill shrink-0 no-underline"
           >
             <span>{getCategoryIcon(parent.name)}</span>

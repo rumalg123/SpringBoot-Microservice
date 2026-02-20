@@ -9,6 +9,7 @@ import java.util.UUID;
 
 public record ProductSummaryResponse(
         UUID id,
+        String slug,
         String name,
         String shortDescription,
         String mainImage,

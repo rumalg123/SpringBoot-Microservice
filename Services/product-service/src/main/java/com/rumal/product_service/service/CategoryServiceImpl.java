@@ -39,9 +39,15 @@ public class CategoryServiceImpl implements CategoryService {
         if (categoryRepository.existsByNormalizedName(normalizedName)) {
             throw new ValidationException("Category name must be unique: " + request.name());
         }
+        String requestedSlug = normalizeRequestedSlug(request.slug());
+        boolean autoSlug = requestedSlug.isEmpty();
+        String baseSlug = autoSlug ? SlugUtils.toSlug(request.name()) : requestedSlug;
+        if (!autoSlug && categoryRepository.existsBySlug(baseSlug)) {
+            throw new ValidationException("Category slug must be unique: " + baseSlug);
+        }
 
         Category category = Category.builder().build();
-        applyRequest(category, request);
+        applyRequest(category, request, baseSlug, autoSlug);
         return toResponse(categoryRepository.save(category));
     }
 
@@ -59,8 +65,14 @@ public class CategoryServiceImpl implements CategoryService {
         if (categoryRepository.existsByNormalizedNameAndIdNot(normalizedName, id)) {
             throw new ValidationException("Category name must be unique: " + request.name());
         }
+        String requestedSlug = normalizeRequestedSlug(request.slug());
+        boolean autoSlug = requestedSlug.isEmpty();
+        String baseSlug = autoSlug ? SlugUtils.toSlug(request.name()) : requestedSlug;
+        if (!autoSlug && categoryRepository.existsBySlugAndIdNot(baseSlug, id)) {
+            throw new ValidationException("Category slug must be unique: " + baseSlug);
+        }
 
-        applyRequest(category, request);
+        applyRequest(category, request, baseSlug, autoSlug);
         return toResponse(categoryRepository.save(category));
     }
 
@@ -142,9 +154,22 @@ public class CategoryServiceImpl implements CategoryService {
                 .toList();
     }
 
-    private void applyRequest(Category category, UpsertCategoryRequest request) {
+    @Override
+    public boolean isSlugAvailable(String slug, UUID excludeId) {
+        String normalizedSlug = normalizeRequestedSlug(slug);
+        if (normalizedSlug.isEmpty()) {
+            return false;
+        }
+        if (excludeId == null) {
+            return !categoryRepository.existsBySlug(normalizedSlug);
+        }
+        return !categoryRepository.existsBySlugAndIdNot(normalizedSlug, excludeId);
+    }
+
+    private void applyRequest(Category category, UpsertCategoryRequest request, String baseSlug, boolean autoSlug) {
         String normalizedName = normalizeName(request.name());
         UUID parentId = request.parentCategoryId();
+        String resolvedSlug = resolveUniqueSlug(baseSlug, category.getId(), autoSlug);
 
         if (request.type() == CategoryType.PARENT) {
             if (parentId != null) {
@@ -164,6 +189,7 @@ public class CategoryServiceImpl implements CategoryService {
         }
 
         category.setName(request.name().trim());
+        category.setSlug(resolvedSlug);
         category.setNormalizedName(normalizedName);
         category.setType(request.type());
         category.setParentCategoryId(parentId);
@@ -181,10 +207,43 @@ public class CategoryServiceImpl implements CategoryService {
         return name.trim().toLowerCase(Locale.ROOT);
     }
 
+    private String normalizeRequestedSlug(String slug) {
+        String normalized = SlugUtils.toSlug(slug);
+        return normalized.length() > 130 ? normalized.substring(0, 130) : normalized;
+    }
+
+    private String resolveUniqueSlug(String baseSlug, UUID existingId, boolean allowAutoSuffix) {
+        String seed = baseSlug == null || baseSlug.isBlank() ? "category" : baseSlug;
+        String normalizedSeed = seed.length() > 130 ? seed.substring(0, 130) : seed;
+        if (isSlugAvailable(normalizedSeed, existingId)) {
+            return normalizedSeed;
+        }
+        if (!allowAutoSuffix) {
+            throw new ValidationException("Category slug must be unique: " + normalizedSeed);
+        }
+        int suffix = 2;
+        while (suffix < 100_000) {
+            String candidate = appendSlugSuffix(normalizedSeed, suffix, 130);
+            if (isSlugAvailable(candidate, existingId)) {
+                return candidate;
+            }
+            suffix++;
+        }
+        throw new ValidationException("Unable to generate a unique category slug");
+    }
+
+    private String appendSlugSuffix(String slug, int suffix, int maxLen) {
+        String suffixPart = "-" + suffix;
+        int allowedBaseLength = Math.max(1, maxLen - suffixPart.length());
+        String base = slug.length() > allowedBaseLength ? slug.substring(0, allowedBaseLength) : slug;
+        return base + suffixPart;
+    }
+
     private CategoryResponse toResponse(Category category) {
         return new CategoryResponse(
                 category.getId(),
                 category.getName(),
+                category.getSlug(),
                 category.getType(),
                 category.getParentCategoryId(),
                 category.isDeleted(),

@@ -37,7 +37,8 @@ import java.util.UUID;
                 @Index(name = "idx_products_product_type", columnList = "product_type"),
                 @Index(name = "idx_products_active", columnList = "is_active"),
                 @Index(name = "idx_products_deleted", columnList = "is_deleted"),
-                @Index(name = "idx_products_sku", columnList = "sku")
+                @Index(name = "idx_products_sku", columnList = "sku"),
+                @Index(name = "idx_products_slug", columnList = "slug")
         }
 )
 @Getter
@@ -53,6 +54,9 @@ public class Product {
 
     @Column(nullable = false, length = 150)
     private String name;
+
+    @Column(nullable = false, length = 180, unique = true)
+    private String slug;
 
     @Column(name = "short_description", nullable = false, length = 300)
     private String shortDescription;

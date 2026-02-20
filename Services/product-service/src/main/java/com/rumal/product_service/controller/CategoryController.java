@@ -1,6 +1,7 @@
 package com.rumal.product_service.controller;
 
 import com.rumal.product_service.dto.CategoryResponse;
+import com.rumal.product_service.dto.SlugAvailabilityResponse;
 import com.rumal.product_service.entity.CategoryType;
 import com.rumal.product_service.service.CategoryService;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,15 @@ public class CategoryController {
 
     private final CategoryService categoryService;
 
+    @GetMapping("/slug-available")
+    public SlugAvailabilityResponse isSlugAvailable(
+            @RequestParam String slug,
+            @RequestParam(required = false) UUID excludeId
+    ) {
+        boolean available = categoryService.isSlugAvailable(slug, excludeId);
+        return new SlugAvailabilityResponse(slug, available);
+    }
+
     @GetMapping
     public List<CategoryResponse> list(
             @RequestParam(required = false) CategoryType type,
@@ -27,4 +37,3 @@ public class CategoryController {
         return categoryService.listActive(type, parentCategoryId);
     }
 }
-

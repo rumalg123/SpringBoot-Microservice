@@ -12,7 +12,7 @@ public interface CategoryService {
     CategoryResponse update(UUID id, UpsertCategoryRequest request);
     void softDelete(UUID id);
     CategoryResponse restore(UUID id);
+    boolean isSlugAvailable(String slug, UUID excludeId);
     List<CategoryResponse> listActive(CategoryType type, UUID parentCategoryId);
     List<CategoryResponse> listDeleted();
 }
-

@@ -25,7 +25,8 @@ import java.util.UUID;
         indexes = {
                 @Index(name = "idx_categories_type", columnList = "category_type"),
                 @Index(name = "idx_categories_parent", columnList = "parent_category_id"),
-                @Index(name = "idx_categories_deleted", columnList = "is_deleted")
+                @Index(name = "idx_categories_deleted", columnList = "is_deleted"),
+                @Index(name = "idx_categories_slug", columnList = "slug")
         }
 )
 @Getter
@@ -41,6 +42,9 @@ public class Category {
 
     @Column(nullable = false, length = 100, unique = true)
     private String name;
+
+    @Column(nullable = false, length = 130, unique = true)
+    private String slug;
 
     @Column(name = "normalized_name", nullable = false, length = 100, unique = true)
     private String normalizedName;
@@ -67,4 +71,3 @@ public class Category {
     @Column(nullable = false)
     private Instant updatedAt;
 }
-

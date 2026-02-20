@@ -33,6 +33,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -87,29 +88,63 @@ public class ProductServiceImpl implements ProductService {
     @Cacheable(cacheNames = "productById", key = "#id")
     public ProductResponse getById(UUID id) {
         Product product = getActiveEntityById(id);
-        if (!product.isActive()) {
-            throw new ResourceNotFoundException("Product not found: " + id);
-        }
-        if (product.getProductType() == ProductType.VARIATION && product.getParentProductId() != null) {
-            Product parent = getActiveEntityById(product.getParentProductId());
-            if (!parent.isActive()) {
-                throw new ResourceNotFoundException("Product not found: " + id);
+        return toPublicResponse(product);
+    }
+
+    @Override
+    @Cacheable(cacheNames = "productById", key = "'slug::' + #slug")
+    public ProductResponse getBySlug(String slug) {
+        Product product = getActiveEntityBySlug(slug);
+        return toPublicResponse(product);
+    }
+
+    @Override
+    public ProductResponse getByIdOrSlug(String idOrSlug) {
+        UUID parsedId = tryParseUuid(idOrSlug);
+        if (parsedId != null) {
+            try {
+                return getById(parsedId);
+            } catch (ResourceNotFoundException ignored) {
+                // Fall through to slug lookup.
             }
         }
-        return toResponse(product);
+        return getBySlug(idOrSlug);
+    }
+
+    @Override
+    public boolean isSlugAvailable(String slug, UUID excludeId) {
+        String normalizedSlug = normalizeRequestedSlug(slug);
+        if (normalizedSlug.isEmpty()) {
+            return false;
+        }
+        if (excludeId == null) {
+            return !productRepository.existsBySlug(normalizedSlug);
+        }
+        return !productRepository.existsBySlugAndIdNot(normalizedSlug, excludeId);
     }
 
     @Override
     @Cacheable(cacheNames = "productsList", key = "'variations::' + #parentId")
     public List<ProductSummaryResponse> listVariations(UUID parentId) {
         Product parent = getActiveEntityById(parentId);
+        return listVariationsForParent(parent);
+    }
+
+    @Override
+    @Cacheable(cacheNames = "productsList", key = "'variationsByAny::' + #parentIdOrSlug")
+    public List<ProductSummaryResponse> listVariationsByIdOrSlug(String parentIdOrSlug) {
+        Product parent = resolveProductByIdOrSlug(parentIdOrSlug);
+        return listVariationsForParent(parent);
+    }
+
+    private List<ProductSummaryResponse> listVariationsForParent(Product parent) {
         if (parent.getProductType() != ProductType.PARENT) {
             throw new ValidationException("Variations are available only for parent products");
         }
         if (!parent.isActive()) {
-            throw new ResourceNotFoundException("Product not found: " + parentId);
+            throw new ResourceNotFoundException("Product not found: " + parent.getId());
         }
-        return productRepository.findByParentProductIdAndDeletedFalseAndActiveTrue(parentId)
+        return productRepository.findByParentProductIdAndDeletedFalseAndActiveTrue(parent.getId())
                 .stream()
                 .filter(product -> product.getProductType() == ProductType.VARIATION)
                 .map(this::toSummaryResponse)
@@ -190,7 +225,7 @@ public class ProductServiceImpl implements ProductService {
     @Caching(evict = {
             @CacheEvict(cacheNames = "productsList", allEntries = true),
             @CacheEvict(cacheNames = "deletedProductsList", allEntries = true),
-            @CacheEvict(cacheNames = "productById", key = "#id")
+            @CacheEvict(cacheNames = "productById", allEntries = true)
     })
     public ProductResponse update(UUID id, UpsertProductRequest request) {
         Product product = getActiveEntityById(id);
@@ -216,7 +251,7 @@ public class ProductServiceImpl implements ProductService {
     @Caching(evict = {
             @CacheEvict(cacheNames = "productsList", allEntries = true),
             @CacheEvict(cacheNames = "deletedProductsList", allEntries = true),
-            @CacheEvict(cacheNames = "productById", key = "#id")
+            @CacheEvict(cacheNames = "productById", allEntries = true)
     })
     public void softDelete(UUID id) {
         Product product = getActiveEntityById(id);
@@ -230,7 +265,7 @@ public class ProductServiceImpl implements ProductService {
     @Caching(evict = {
             @CacheEvict(cacheNames = "productsList", allEntries = true),
             @CacheEvict(cacheNames = "deletedProductsList", allEntries = true),
-            @CacheEvict(cacheNames = "productById", key = "#id")
+            @CacheEvict(cacheNames = "productById", allEntries = true)
     })
     public ProductResponse restore(UUID id) {
         Product product = productRepository.findById(id)
@@ -248,6 +283,28 @@ public class ProductServiceImpl implements ProductService {
         return productRepository.findById(id)
                 .filter(product -> !product.isDeleted())
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + id));
+    }
+
+    private Product getActiveEntityBySlug(String slug) {
+        String normalizedSlug = normalizeRequestedSlug(slug);
+        if (normalizedSlug.isEmpty()) {
+            throw new ResourceNotFoundException("Product not found: " + slug);
+        }
+        return productRepository.findBySlug(normalizedSlug)
+                .filter(product -> !product.isDeleted())
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + slug));
+    }
+
+    private Product resolveProductByIdOrSlug(String idOrSlug) {
+        UUID parsedId = tryParseUuid(idOrSlug);
+        if (parsedId != null) {
+            try {
+                return getActiveEntityById(parsedId);
+            } catch (ResourceNotFoundException ignored) {
+                // Try slug as fallback.
+            }
+        }
+        return getActiveEntityBySlug(idOrSlug);
     }
 
     private Specification<Product> buildFilterSpec(
@@ -353,6 +410,10 @@ public class ProductServiceImpl implements ProductService {
 
     private void applyUpsertRequest(Product product, UpsertProductRequest request, UUID parentProductId, Product parentProduct) {
         String normalizedName = request.name().trim();
+        String requestedSlug = normalizeRequestedSlug(request.slug());
+        boolean autoSlug = requestedSlug.isEmpty();
+        String baseSlug = autoSlug ? SlugUtils.toSlug(normalizedName) : requestedSlug;
+        String resolvedSlug = resolveUniqueSlug(baseSlug, product.getId(), autoSlug);
         String normalizedShortDescription = request.shortDescription().trim();
         String normalizedDescription = request.description().trim();
         String normalizedSku = request.sku().trim();
@@ -369,6 +430,7 @@ public class ProductServiceImpl implements ProductService {
         validateMainAndSubCategories(resolvedCategories);
 
         product.setName(normalizedName);
+        product.setSlug(resolvedSlug);
         product.setShortDescription(normalizedShortDescription);
         product.setDescription(normalizedDescription);
         product.setImages(normalizedImages);
@@ -588,7 +650,7 @@ public class ProductServiceImpl implements ProductService {
         boolean duplicateExists = productRepository.findByParentProductIdAndDeletedFalseAndActiveTrue(parent.getId())
                 .stream()
                 .filter(existing -> existing.getProductType() == ProductType.VARIATION)
-                .filter(existing -> !java.util.Objects.equals(existing.getId(), variation.getId()))
+                .filter(existing -> !Objects.equals(existing.getId(), variation.getId()))
                 .anyMatch(existing -> buildVariationSignature(parentNames, existing).equals(candidateSignature));
         if (duplicateExists) {
             throw new ValidationException("Variation with the same attribute values already exists for this parent product");
@@ -627,11 +689,68 @@ public class ProductServiceImpl implements ProductService {
         return value == null ? "" : value.stripTrailingZeros().toPlainString();
     }
 
+    private ProductResponse toPublicResponse(Product product) {
+        if (!product.isActive()) {
+            throw new ResourceNotFoundException("Product not found: " + product.getId());
+        }
+        if (product.getProductType() == ProductType.VARIATION && product.getParentProductId() != null) {
+            Product parent = getActiveEntityById(product.getParentProductId());
+            if (!parent.isActive()) {
+                throw new ResourceNotFoundException("Product not found: " + product.getId());
+            }
+        }
+        return toResponse(product);
+    }
+
+    private UUID tryParseUuid(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return null;
+        }
+        try {
+            return UUID.fromString(raw.trim());
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
+    }
+
+    private String normalizeRequestedSlug(String slug) {
+        String normalized = SlugUtils.toSlug(slug);
+        return normalized.length() > 180 ? normalized.substring(0, 180) : normalized;
+    }
+
+    private String resolveUniqueSlug(String baseSlug, UUID existingId, boolean allowAutoSuffix) {
+        String seed = StringUtils.hasText(baseSlug) ? baseSlug : "product";
+        String normalizedSeed = seed.length() > 180 ? seed.substring(0, 180) : seed;
+        if (isSlugAvailable(normalizedSeed, existingId)) {
+            return normalizedSeed;
+        }
+        if (!allowAutoSuffix) {
+            throw new ValidationException("Product slug must be unique: " + normalizedSeed);
+        }
+        int suffix = 2;
+        while (suffix < 100_000) {
+            String candidate = appendSlugSuffix(normalizedSeed, suffix, 180);
+            if (isSlugAvailable(candidate, existingId)) {
+                return candidate;
+            }
+            suffix++;
+        }
+        throw new ValidationException("Unable to generate a unique product slug");
+    }
+
+    private String appendSlugSuffix(String slug, int suffix, int maxLen) {
+        String suffixPart = "-" + suffix;
+        int allowedBaseLength = Math.max(1, maxLen - suffixPart.length());
+        String base = slug.length() > allowedBaseLength ? slug.substring(0, allowedBaseLength) : slug;
+        return base + suffixPart;
+    }
+
     private ProductResponse toResponse(Product p) {
         return new ProductResponse(
                 p.getId(),
                 p.getParentProductId(),
                 p.getName(),
+                p.getSlug(),
                 p.getShortDescription(),
                 p.getDescription(),
                 List.copyOf(p.getImages()),
@@ -640,7 +759,9 @@ public class ProductServiceImpl implements ProductService {
                 resolveSellingPrice(p),
                 p.getVendorId(),
                 resolveMainCategoryName(p.getCategories()),
+                resolveMainCategorySlug(p.getCategories()),
                 resolveSubCategoryNames(p.getCategories()),
+                resolveSubCategorySlugs(p.getCategories()),
                 p.getCategories().stream().map(Category::getName).collect(java.util.stream.Collectors.toSet()),
                 p.getProductType(),
                 p.getVariations().stream()
@@ -659,6 +780,7 @@ public class ProductServiceImpl implements ProductService {
         String mainImage = p.getImages().isEmpty() ? null : p.getImages().getFirst();
         return new ProductSummaryResponse(
                 p.getId(),
+                p.getSlug(),
                 p.getName(),
                 p.getShortDescription(),
                 mainImage,
@@ -690,10 +812,25 @@ public class ProductServiceImpl implements ProductService {
                 .orElse(null);
     }
 
+    private String resolveMainCategorySlug(Set<Category> categories) {
+        return categories.stream()
+                .filter(c -> c.getType() == com.rumal.product_service.entity.CategoryType.PARENT)
+                .map(Category::getSlug)
+                .findFirst()
+                .orElse(null);
+    }
+
     private Set<String> resolveSubCategoryNames(Set<Category> categories) {
         return categories.stream()
                 .filter(c -> c.getType() == com.rumal.product_service.entity.CategoryType.SUB)
                 .map(Category::getName)
+                .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
+    }
+
+    private Set<String> resolveSubCategorySlugs(Set<Category> categories) {
+        return categories.stream()
+                .filter(c -> c.getType() == com.rumal.product_service.entity.CategoryType.SUB)
+                .map(Category::getSlug)
                 .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
     }
 }

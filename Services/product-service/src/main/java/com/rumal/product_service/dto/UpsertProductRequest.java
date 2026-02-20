@@ -18,6 +18,9 @@ public record UpsertProductRequest(
         @Size(max = 150, message = "name must be at most 150 characters")
         String name,
 
+        @Size(max = 180, message = "slug must be at most 180 characters")
+        String slug,
+
         @NotBlank(message = "shortDescription is required")
         @Size(max = 300, message = "shortDescription must be at most 300 characters")
         String shortDescription,

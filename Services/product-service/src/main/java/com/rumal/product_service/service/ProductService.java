@@ -15,7 +15,11 @@ public interface ProductService {
     ProductResponse create(UpsertProductRequest request);
     ProductResponse createVariation(UUID parentId, UpsertProductRequest request);
     ProductResponse getById(UUID id);
+    ProductResponse getBySlug(String slug);
+    ProductResponse getByIdOrSlug(String idOrSlug);
+    boolean isSlugAvailable(String slug, UUID excludeId);
     List<ProductSummaryResponse> listVariations(UUID parentId);
+    List<ProductSummaryResponse> listVariationsByIdOrSlug(String parentIdOrSlug);
     Page<ProductSummaryResponse> list(Pageable pageable, String q, String sku, String category, String mainCategory, String subCategory, UUID vendorId, ProductType type, BigDecimal minSellingPrice, BigDecimal maxSellingPrice, boolean includeOrphanParents);
     Page<ProductSummaryResponse> listDeleted(Pageable pageable, String q, String sku, String category, String mainCategory, String subCategory, UUID vendorId, ProductType type, BigDecimal minSellingPrice, BigDecimal maxSellingPrice);
     ProductResponse update(UUID id, UpsertProductRequest request);
