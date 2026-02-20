@@ -19,10 +19,14 @@ public class AuthHeaderRelayFilter implements GlobalFilter, Ordered {
 
     public AuthHeaderRelayFilter(
             @Value("${internal.auth.shared-secret:}") String internalSharedSecret,
-            @Value("${auth0.claims-namespace:https://auth0.rumalg.me/claims/}") String claimsNamespace
+            @Value("${keycloak.claims-namespace:}") String claimsNamespace
     ) {
         this.internalSharedSecret = internalSharedSecret;
-        this.claimsNamespace = claimsNamespace.endsWith("/") ? claimsNamespace : claimsNamespace + "/";
+        if (claimsNamespace.isBlank()) {
+            this.claimsNamespace = "";
+        } else {
+            this.claimsNamespace = claimsNamespace.endsWith("/") ? claimsNamespace : claimsNamespace + "/";
+        }
     }
 
     @Override
@@ -42,10 +46,12 @@ public class AuthHeaderRelayFilter implements GlobalFilter, Ordered {
                 .cast(JwtAuthenticationToken.class)
                 .map(auth -> {
                     String subject = auth.getToken().getSubject();
-                    String namespacedEmail = auth.getToken().getClaimAsString(claimsNamespace + "email");
+                    String namespacedEmail = claimsNamespace.isBlank()
+                            ? null
+                            : auth.getToken().getClaimAsString(claimsNamespace + "email");
                     String fallbackEmail = auth.getToken().getClaimAsString("email");
                     Boolean emailVerified = auth.getToken().getClaimAsBoolean("email_verified");
-                    if (emailVerified == null) {
+                    if (emailVerified == null && !claimsNamespace.isBlank()) {
                         emailVerified = auth.getToken().getClaimAsBoolean(claimsNamespace + "email_verified");
                     }
                     final String resolvedEmail = (namespacedEmail != null && !namespacedEmail.isBlank())

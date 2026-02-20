@@ -21,6 +21,9 @@ import org.springframework.security.web.server.SecurityWebFilterChain;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Stream;
 
 @Configuration
 @EnableWebFluxSecurity
@@ -32,12 +35,16 @@ public class SecurityConfig {
 
     public SecurityConfig(
             @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}") String issuerUri,
-            @Value("${auth0.audience}") String audience,
-            @Value("${auth0.claims-namespace:https://auth0.rumalg.me/claims/}") String claimsNamespace
+            @Value("${keycloak.audience}") String audience,
+            @Value("${keycloak.claims-namespace:}") String claimsNamespace
     ) {
         this.issuerUri = issuerUri;
         this.audience = audience;
-        this.claimsNamespace = claimsNamespace.endsWith("/") ? claimsNamespace : claimsNamespace + "/";
+        if (claimsNamespace.isBlank()) {
+            this.claimsNamespace = "";
+        } else {
+            this.claimsNamespace = claimsNamespace.endsWith("/") ? claimsNamespace : claimsNamespace + "/";
+        }
     }
 
     @Bean
@@ -96,9 +103,11 @@ public class SecurityConfig {
             return standard;
         }
 
-        Boolean namespaced = jwt.getClaimAsBoolean(claimsNamespace + "email_verified");
-        if (namespaced != null) {
-            return namespaced;
+        if (!claimsNamespace.isBlank()) {
+            Boolean namespaced = jwt.getClaimAsBoolean(claimsNamespace + "email_verified");
+            if (namespaced != null) {
+                return namespaced;
+            }
         }
 
         return true;
@@ -110,10 +119,57 @@ public class SecurityConfig {
     }
 
     private boolean hasAdminRole(Jwt jwt) {
-        List<String> roles = jwt.getClaimAsStringList(claimsNamespace + "roles");
-        if (roles == null || roles.isEmpty()) {
-            roles = jwt.getClaimAsStringList("roles");
+        if (!claimsNamespace.isBlank()) {
+            List<String> namespacedRoles = jwt.getClaimAsStringList(claimsNamespace + "roles");
+            if (containsAdminRole(namespacedRoles)) {
+                return true;
+            }
         }
+
+        if (containsAdminRole(jwt.getClaimAsStringList("roles"))) {
+            return true;
+        }
+
+        if (containsAdminRole(extractRoles(jwt.getClaim("realm_access")))) {
+            return true;
+        }
+
+        Map<String, Object> resourceAccess = jwt.getClaim("resource_access");
+        if (resourceAccess == null || resourceAccess.isEmpty()) {
+            return false;
+        }
+
+        List<String> resourceClients = Stream.of(audience, jwt.getClaimAsString("azp"), "account")
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .distinct()
+                .toList();
+
+        for (String resourceClient : resourceClients) {
+            if (containsAdminRole(extractRoles(resourceAccess.get(resourceClient)))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private boolean containsAdminRole(List<String> roles) {
         return roles != null && roles.stream().anyMatch("admin"::equalsIgnoreCase);
+    }
+
+    private List<String> extractRoles(Object claimValue) {
+        if (!(claimValue instanceof Map<?, ?> map)) {
+            return List.of();
+        }
+        Object rolesValue = map.get("roles");
+        if (!(rolesValue instanceof List<?> rawRoles)) {
+            return List.of();
+        }
+        return rawRoles.stream()
+                .filter(String.class::isInstance)
+                .map(String.class::cast)
+                .toList();
     }
 }

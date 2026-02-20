@@ -1,8 +1,7 @@
 package com.rumal.customer_service.service;
 
-
-import com.rumal.customer_service.auth.Auth0ManagementService;
-import com.rumal.customer_service.auth.Auth0UserExistsException;
+import com.rumal.customer_service.auth.KeycloakManagementService;
+import com.rumal.customer_service.auth.KeycloakUserExistsException;
 import com.rumal.customer_service.dto.CreateCustomerRequest;
 import com.rumal.customer_service.dto.CustomerResponse;
 import com.rumal.customer_service.dto.RegisterAuth0CustomerRequest;
@@ -23,7 +22,7 @@ import java.util.UUID;
 public class CustomerServiceImpl implements CustomerService {
 
     private final CustomerRepository customerRepository;
-    private final Auth0ManagementService auth0ManagementService;
+    private final KeycloakManagementService keycloakManagementService;
 
     @Override
     public CustomerResponse getByEmail(String email) {
@@ -76,9 +75,9 @@ public class CustomerServiceImpl implements CustomerService {
 
         String auth0Id;
         try {
-            auth0Id = auth0ManagementService.createUser(email, request.password(), request.name().trim());
-        } catch (Auth0UserExistsException ex) {
-            auth0Id = auth0ManagementService.getUserIdByEmail(email);
+            auth0Id = keycloakManagementService.createUser(email, request.password(), request.name().trim());
+        } catch (KeycloakUserExistsException ex) {
+            auth0Id = keycloakManagementService.getUserIdByEmail(email);
         }
 
         Customer saved = customerRepository.save(
@@ -102,7 +101,7 @@ public class CustomerServiceImpl implements CustomerService {
         String resolvedName = request != null ? request.name() : null;
 
         if (resolvedEmail == null || resolvedEmail.isBlank()) {
-            var user = auth0ManagementService.getUserById(auth0Id);
+            var user = keycloakManagementService.getUserById(auth0Id);
             resolvedEmail = user.email();
             if (resolvedName == null || resolvedName.isBlank()) {
                 resolvedName = user.name();
@@ -115,8 +114,9 @@ public class CustomerServiceImpl implements CustomerService {
 
         String normalizedEmail = resolvedEmail.trim().toLowerCase();
 
-        if (customerRepository.existsByAuth0Id(auth0Id)) {
-            return getByAuth0Id(auth0Id);
+        Customer existingByAuth0 = customerRepository.findByAuth0Id(auth0Id).orElse(null);
+        if (existingByAuth0 != null) {
+            return toResponse(existingByAuth0);
         }
 
         if (customerRepository.existsByEmail(normalizedEmail)) {

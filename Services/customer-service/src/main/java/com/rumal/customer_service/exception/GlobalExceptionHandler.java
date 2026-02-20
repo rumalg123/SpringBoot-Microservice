@@ -7,7 +7,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import com.rumal.customer_service.auth.Auth0RequestException;
+import com.rumal.customer_service.auth.KeycloakRequestException;
 
 import java.time.Instant;
 import java.util.HashMap;
@@ -44,8 +44,8 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(body);
     }
 
-    @ExceptionHandler(Auth0RequestException.class)
-    public ResponseEntity<?> auth0Error(Auth0RequestException ex) {
+    @ExceptionHandler(KeycloakRequestException.class)
+    public ResponseEntity<?> keycloakError(KeycloakRequestException ex) {
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(error(ex.getMessage()));
     }
 

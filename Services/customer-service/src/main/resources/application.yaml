@@ -26,13 +26,12 @@ eureka:
     service-url:
       defaultZone: ${EUREKA_URL:http://discovery-server:8761/eureka/}
 
-auth0:
-  domain: ${AUTH0_DOMAIN:rumalg001.us.auth0.com}
-  mgmt:
-    client-id: ${AUTH0_MGMT_CLIENT_ID:}
-    client-secret: ${AUTH0_MGMT_CLIENT_SECRET:}
-    audience: ${AUTH0_MGMT_AUDIENCE:https://rumalg001.us.auth0.com/api/v2/}
-  connection: ${AUTH0_CONNECTION:Username-Password-Authentication}
+keycloak:
+  issuer-uri: ${KEYCLOAK_ISSUER_URI:https://keycloak.rumalg.me/realms/rumal}
+  realm: ${KEYCLOAK_REALM:rumal}
+  admin:
+    client-id: ${KEYCLOAK_ADMIN_CLIENT_ID:}
+    client-secret: ${KEYCLOAK_ADMIN_CLIENT_SECRET:}
 
 internal:
   auth:

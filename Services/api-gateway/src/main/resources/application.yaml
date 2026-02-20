@@ -14,7 +14,7 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${AUTH0_ISSUER_URI:https://rumalg001.us.auth0.com/}
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:https://keycloak.rumalg.me/realms/rumal}
 
   cloud:
     gateway:
@@ -83,14 +83,13 @@ eureka:
     service-url:
       defaultZone: ${EUREKA_URL:http://discovery-server:8761/eureka/}
 
-auth0:
-  domain: ${AUTH0_DOMAIN:rumalg001.us.auth0.com}
-  audience: ${AUTH0_AUDIENCE:https://auth0.rumalg.me/}
-  claims-namespace: ${AUTH0_CLAIMS_NAMESPACE:https://auth0.rumalg.me/claims/}
-  mgmt:
-    client-id: ${AUTH0_MGMT_CLIENT_ID:}
-    client-secret: ${AUTH0_MGMT_CLIENT_SECRET:}
-    audience: ${AUTH0_MGMT_AUDIENCE:https://rumalg001.us.auth0.com/api/v2/}
+keycloak:
+  realm: ${KEYCLOAK_REALM:rumal}
+  audience: ${KEYCLOAK_AUDIENCE:rumal-api}
+  claims-namespace: ${KEYCLOAK_CLAIMS_NAMESPACE:}
+  admin:
+    client-id: ${KEYCLOAK_ADMIN_CLIENT_ID:}
+    client-secret: ${KEYCLOAK_ADMIN_CLIENT_SECRET:}
 
 internal:
   auth:
