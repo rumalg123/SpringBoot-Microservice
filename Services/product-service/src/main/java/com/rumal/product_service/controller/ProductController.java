@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 
@@ -62,7 +63,7 @@ public class ProductController {
         String key = new AntPathMatcher().extractPathWithinPattern(bestPattern, path);
         StoredImage image = productImageStorageService.getImage(key);
         return ResponseEntity.ok()
-                .cacheControl(CacheControl.noCache())
+                .cacheControl(CacheControl.maxAge(Duration.ofDays(365)).cachePublic().immutable())
                 .contentType(MediaType.parseMediaType(image.contentType()))
                 .body(image.bytes());
     }

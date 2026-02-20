@@ -124,6 +124,7 @@ public class ProductImageStorageServiceImpl implements ProductImageStorageServic
             PutObjectRequest request = PutObjectRequest.builder()
                     .bucket(properties.bucket())
                     .key(key)
+                    .cacheControl("public, max-age=31536000, immutable")
                     .contentType(resolveContentType(file, extension))
                     .build();
 
