@@ -1,181 +1,172 @@
 package com.rumal.customer_service.auth;
 
-import com.rumal.customer_service.auth.dto.CreateKeycloakUserRequest;
-import com.rumal.customer_service.auth.dto.KeycloakAccessTokenResponse;
 import com.rumal.customer_service.auth.dto.KeycloakUser;
-import com.rumal.customer_service.auth.dto.KeycloakUserRepresentation;
+import jakarta.ws.rs.NotFoundException;
+import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.core.Response;
+import org.keycloak.OAuth2Constants;
+import org.keycloak.admin.client.Keycloak;
+import org.keycloak.admin.client.KeycloakBuilder;
+import org.keycloak.admin.client.resource.UsersResource;
+import org.keycloak.representations.idm.CredentialRepresentation;
+import org.keycloak.representations.idm.UserRepresentation;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
-import org.springframework.web.reactive.function.BodyInserters;
-import org.springframework.web.reactive.function.client.WebClient;
-import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.util.List;
 
 @Service
 public class KeycloakManagementService {
 
-    private final WebClient webClient;
+    private final String serverUrl;
     private final String realm;
     private final String adminRealm;
     private final String clientId;
     private final String clientSecret;
 
     public KeycloakManagementService(
-            WebClient.Builder webClientBuilder,
             @Value("${keycloak.issuer-uri}") String issuerUri,
             @Value("${keycloak.realm}") String realm,
             @Value("${KEYCLOAK_ADMIN_REALM:${keycloak.realm}}") String adminRealm,
             @Value("${keycloak.admin.client-id}") String clientId,
             @Value("${keycloak.admin.client-secret}") String clientSecret
     ) {
-        this.webClient = webClientBuilder.baseUrl(resolveBaseUrlFromIssuer(issuerUri)).build();
+        this.serverUrl = resolveBaseUrlFromIssuer(issuerUri);
         this.realm = realm;
         this.adminRealm = adminRealm;
         this.clientId = clientId;
         this.clientSecret = clientSecret;
+        if (!StringUtils.hasText(this.clientId) || !StringUtils.hasText(this.clientSecret)) {
+            throw new IllegalStateException("KEYCLOAK_ADMIN_CLIENT_ID and KEYCLOAK_ADMIN_CLIENT_SECRET must be configured");
+        }
     }
 
     public String createUser(String email, String password, String name) {
-        String token = getAccessToken();
-        try {
-            ResponseEntity<Void> response = webClient.post()
-                    .uri("/admin/realms/{realm}/users", realm)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .bodyValue(new CreateKeycloakUserRequest(email, name, password))
-                    .retrieve()
-                    .toBodilessEntity()
-                    .block();
-
-            if (response == null) {
-                throw new KeycloakRequestException("Keycloak returned an empty create-user response");
+        String normalizedEmail = email.trim().toLowerCase();
+        try (Keycloak keycloak = newAdminClient()) {
+            UserRepresentation user = new UserRepresentation();
+            user.setUsername(normalizedEmail);
+            user.setEmail(normalizedEmail);
+            user.setEnabled(true);
+            user.setEmailVerified(false);
+            if (StringUtils.hasText(name)) {
+                user.setFirstName(name.trim());
             }
 
-            String userId = extractUserIdFromLocation(response.getHeaders().getFirst(HttpHeaders.LOCATION));
-            if (StringUtils.hasText(userId)) {
-                return userId;
+            CredentialRepresentation credential = new CredentialRepresentation();
+            credential.setType(CredentialRepresentation.PASSWORD);
+            credential.setValue(password);
+            credential.setTemporary(false);
+            user.setCredentials(List.of(credential));
+
+            try (Response response = keycloak.realm(realm).users().create(user)) {
+                int status = response.getStatus();
+                if (status == Response.Status.CREATED.getStatusCode()) {
+                    String userId = extractUserIdFromLocation(response.getHeaderString("Location"));
+                    if (StringUtils.hasText(userId)) {
+                        return userId;
+                    }
+                    return getUserIdByEmail(normalizedEmail);
+                }
+                if (status == Response.Status.CONFLICT.getStatusCode()) {
+                    throw new KeycloakUserExistsException("Keycloak user already exists for email: " + normalizedEmail);
+                }
+                throw new KeycloakRequestException("Keycloak user creation failed (" + status + "): " + readResponseBody(response));
             }
-            return getUserIdByEmail(email);
-        } catch (WebClientResponseException ex) {
-            if (ex.getStatusCode() == HttpStatus.CONFLICT) {
-                throw new KeycloakUserExistsException("Keycloak user already exists for email: " + email);
+        } catch (WebApplicationException ex) {
+            Response response = ex.getResponse();
+            if (response != null && response.getStatus() == Response.Status.CONFLICT.getStatusCode()) {
+                throw new KeycloakUserExistsException("Keycloak user already exists for email: " + normalizedEmail);
             }
             throw new KeycloakRequestException("Keycloak user creation failed: " + ex.getMessage(), ex);
         }
     }
 
     public String getUserIdByEmail(String email) {
-        String token = getAccessToken();
         String normalizedEmail = email.trim().toLowerCase();
-        try {
-            List<KeycloakUserRepresentation> users = webClient.get()
-                    .uri(uriBuilder -> uriBuilder
-                            .path("/admin/realms/{realm}/users")
-                            .queryParam("email", normalizedEmail)
-                            .queryParam("exact", true)
-                            .build(realm))
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
-                    .retrieve()
-                    .bodyToMono(new ParameterizedTypeReference<List<KeycloakUserRepresentation>>() {
-                    })
-                    .block();
-
+        try (Keycloak keycloak = newAdminClient()) {
+            UsersResource usersResource = keycloak.realm(realm).users();
+            List<UserRepresentation> users = usersResource.searchByEmail(normalizedEmail, true);
             if (users == null || users.isEmpty()) {
                 throw new KeycloakRequestException("Keycloak user not found for email: " + normalizedEmail);
             }
 
-            KeycloakUserRepresentation match = users.stream()
+            UserRepresentation match = users.stream()
                     .filter(user -> normalizedEmail.equalsIgnoreCase(resolveEmail(user)))
                     .findFirst()
                     .orElse(users.getFirst());
 
-            if (match == null || !StringUtils.hasText(match.id())) {
+            if (match == null || !StringUtils.hasText(match.getId())) {
                 throw new KeycloakRequestException("Keycloak user id is missing for email: " + normalizedEmail);
             }
-
-            return match.id();
-        } catch (WebClientResponseException ex) {
+            return match.getId();
+        } catch (WebApplicationException ex) {
             throw new KeycloakRequestException("Keycloak user lookup failed: " + ex.getMessage(), ex);
         }
     }
 
     public KeycloakUser getUserById(String userId) {
-        String token = getAccessToken();
-        try {
-            KeycloakUserRepresentation user = webClient.get()
-                    .uri("/admin/realms/{realm}/users/{id}", realm, userId)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
-                    .retrieve()
-                    .bodyToMono(KeycloakUserRepresentation.class)
-                    .block();
-
-            if (user == null || !StringUtils.hasText(user.id())) {
+        try (Keycloak keycloak = newAdminClient()) {
+            UserRepresentation user = keycloak.realm(realm).users().get(userId).toRepresentation();
+            if (user == null || !StringUtils.hasText(user.getId())) {
                 throw new KeycloakRequestException("Keycloak user not found for id: " + userId);
             }
-
-            return new KeycloakUser(user.id(), resolveEmail(user), resolveDisplayName(user));
-        } catch (WebClientResponseException ex) {
+            return new KeycloakUser(user.getId(), resolveEmail(user), resolveDisplayName(user));
+        } catch (NotFoundException ex) {
+            throw new KeycloakRequestException("Keycloak user not found for id: " + userId, ex);
+        } catch (WebApplicationException ex) {
             throw new KeycloakRequestException("Keycloak user lookup failed: " + ex.getMessage(), ex);
         }
     }
 
-    private String getAccessToken() {
-        if (!StringUtils.hasText(clientId) || !StringUtils.hasText(clientSecret)) {
-            throw new KeycloakRequestException("Keycloak admin client credentials are not configured");
+    private Keycloak newAdminClient() {
+        return KeycloakBuilder.builder()
+                .serverUrl(serverUrl)
+                .realm(adminRealm)
+                .clientId(clientId)
+                .clientSecret(clientSecret)
+                .grantType(OAuth2Constants.CLIENT_CREDENTIALS)
+                .build();
+    }
+
+    private String readResponseBody(Response response) {
+        if (response == null || !response.hasEntity()) {
+            return "no response body";
         }
-
         try {
-            KeycloakAccessTokenResponse token = webClient.post()
-                    .uri("/realms/{realm}/protocol/openid-connect/token", adminRealm)
-                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                    .body(BodyInserters.fromFormData("client_id", clientId)
-                            .with("client_secret", clientSecret)
-                            .with("grant_type", "client_credentials"))
-                    .retrieve()
-                    .bodyToMono(KeycloakAccessTokenResponse.class)
-                    .block();
-
-            if (token == null || !StringUtils.hasText(token.accessToken())) {
-                throw new KeycloakRequestException("Keycloak access token is empty");
-            }
-            return token.accessToken();
-        } catch (WebClientResponseException ex) {
-            throw new KeycloakRequestException("Keycloak token request failed: " + ex.getMessage(), ex);
+            String body = response.readEntity(String.class);
+            return StringUtils.hasText(body) ? body : "no response body";
+        } catch (Exception ignored) {
+            return "unable to parse response body";
         }
     }
 
-    private String resolveEmail(KeycloakUserRepresentation user) {
+    private String resolveEmail(UserRepresentation user) {
         if (user == null) {
             return "";
         }
-        if (StringUtils.hasText(user.email())) {
-            return user.email().trim().toLowerCase();
+        if (StringUtils.hasText(user.getEmail())) {
+            return user.getEmail().trim().toLowerCase();
         }
-        if (StringUtils.hasText(user.username())) {
-            return user.username().trim().toLowerCase();
+        if (StringUtils.hasText(user.getUsername())) {
+            return user.getUsername().trim().toLowerCase();
         }
         return "";
     }
 
-    private String resolveDisplayName(KeycloakUserRepresentation user) {
+    private String resolveDisplayName(UserRepresentation user) {
         if (user == null) {
             return "";
         }
-        String firstName = StringUtils.hasText(user.firstName()) ? user.firstName().trim() : "";
-        String lastName = StringUtils.hasText(user.lastName()) ? user.lastName().trim() : "";
+        String firstName = StringUtils.hasText(user.getFirstName()) ? user.getFirstName().trim() : "";
+        String lastName = StringUtils.hasText(user.getLastName()) ? user.getLastName().trim() : "";
         String fullName = (firstName + " " + lastName).trim();
         if (!fullName.isBlank()) {
             return fullName;
         }
-        if (StringUtils.hasText(user.username())) {
-            return user.username().trim();
+        if (StringUtils.hasText(user.getUsername())) {
+            return user.getUsername().trim();
         }
         return resolveEmail(user);
     }

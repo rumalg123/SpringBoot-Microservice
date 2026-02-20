@@ -33,9 +33,9 @@ public class AuthHeaderRelayFilter implements GlobalFilter, Ordered {
     public Mono<Void> filter(ServerWebExchange exchange, org.springframework.cloud.gateway.filter.GatewayFilterChain chain) {
         ServerHttpRequest sanitizedRequest = exchange.getRequest().mutate()
                 .headers(headers -> {
-                    headers.remove("X-Auth0-Sub");
-                    headers.remove("X-Auth0-Email");
-                    headers.remove("X-Auth0-Email-Verified");
+                    headers.remove("X-User-Sub");
+                    headers.remove("X-User-Email");
+                    headers.remove("X-User-Email-Verified");
                     headers.remove("X-Internal-Auth");
                 })
                 .build();
@@ -60,15 +60,15 @@ public class AuthHeaderRelayFilter implements GlobalFilter, Ordered {
 
                     ServerHttpRequest.Builder requestBuilder = sanitizedExchange.getRequest().mutate();
                     if (subject != null && !subject.isBlank()) {
-                        requestBuilder.headers(headers -> headers.set("X-Auth0-Sub", subject));
+                        requestBuilder.headers(headers -> headers.set("X-User-Sub", subject));
                     }
                     if (resolvedEmail != null && !resolvedEmail.isBlank()) {
-                        requestBuilder.headers(headers -> headers.set("X-Auth0-Email", resolvedEmail));
+                        requestBuilder.headers(headers -> headers.set("X-User-Email", resolvedEmail));
                     }
                     if (emailVerified != null) {
                         Boolean finalEmailVerified = emailVerified;
                         requestBuilder.headers(headers ->
-                                headers.set("X-Auth0-Email-Verified", String.valueOf(finalEmailVerified)));
+                                headers.set("X-User-Email-Verified", String.valueOf(finalEmailVerified)));
                     }
                     if (!internalSharedSecret.isBlank()) {
                         requestBuilder.headers(headers -> headers.set("X-Internal-Auth", internalSharedSecret));

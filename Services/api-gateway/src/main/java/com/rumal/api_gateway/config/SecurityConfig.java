@@ -18,28 +18,30 @@ import org.springframework.security.authorization.AuthorizationResult;
 import org.springframework.security.web.server.authorization.AuthorizationContext;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.web.server.SecurityWebFilterChain;
+import org.springframework.util.StringUtils;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.stream.Stream;
 
 @Configuration
 @EnableWebFluxSecurity
 public class SecurityConfig {
 
     private final String issuerUri;
-    private final String audience;
+    private final String audienceConfig;
+    private final boolean acceptAzpAsAudience;
     private final String claimsNamespace;
 
     public SecurityConfig(
             @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}") String issuerUri,
             @Value("${keycloak.audience}") String audience,
+            @Value("${keycloak.accept-azp-as-audience:true}") boolean acceptAzpAsAudience,
             @Value("${keycloak.claims-namespace:}") String claimsNamespace
     ) {
         this.issuerUri = issuerUri;
-        this.audience = audience;
+        this.audienceConfig = audience;
+        this.acceptAzpAsAudience = acceptAzpAsAudience;
         if (claimsNamespace.isBlank()) {
             this.claimsNamespace = "";
         } else {
@@ -57,8 +59,8 @@ public class SecurityConfig {
                         .pathMatchers(HttpMethod.GET, "/categories", "/categories/**").permitAll()
                         .pathMatchers("/actuator/health", "/actuator/info", "/customers/register").permitAll()
                         .pathMatchers("/auth/logout", "/auth/resend-verification").authenticated()
-                        .pathMatchers("/customers/me", "/customers/register-auth0", "/orders/me", "/orders/me/**")
-                        .access(this::hasVerifiedEmailAccess)
+                        .pathMatchers("/customers/me", "/customers/register-identity", "/orders/me", "/orders/me/**")
+                        .access(this::hasCustomerAccess)
                         .pathMatchers("/admin/**").access(this::hasAdminAccess)
                         .pathMatchers("/customer-service/**", "/order-service/**", "/admin-service/**", "/product-service/**", "/discovery-server/**").denyAll()
                         .pathMatchers("/customers/**", "/orders/**").denyAll()
@@ -72,7 +74,7 @@ public class SecurityConfig {
     public ReactiveJwtDecoder jwtDecoder() {
         NimbusReactiveJwtDecoder jwtDecoder = NimbusReactiveJwtDecoder.withIssuerLocation(issuerUri).build();
         OAuth2TokenValidator<Jwt> withIssuer = JwtValidators.createDefaultWithIssuer(issuerUri);
-        OAuth2TokenValidator<Jwt> withAudience = new AudienceValidator(audience);
+        OAuth2TokenValidator<Jwt> withAudience = new AudienceValidator(audienceConfig, acceptAzpAsAudience);
         jwtDecoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(withIssuer, withAudience));
         return jwtDecoder;
     }
@@ -83,21 +85,23 @@ public class SecurityConfig {
                 .filter(auth -> auth instanceof JwtAuthenticationToken)
                 .cast(JwtAuthenticationToken.class)
                 .map(JwtAuthenticationToken::getToken)
-                .map(jwt -> (AuthorizationResult) new AuthorizationDecision(hasAdminPermission(jwt) || hasAdminRole(jwt)))
+                .map(jwt -> (AuthorizationResult) new AuthorizationDecision(hasRole(jwt, "super_admin")))
                 .defaultIfEmpty(new AuthorizationDecision(false));
     }
 
-    private Mono<AuthorizationResult> hasVerifiedEmailAccess(Mono<Authentication> authentication, AuthorizationContext context) {
+    private Mono<AuthorizationResult> hasCustomerAccess(Mono<Authentication> authentication, AuthorizationContext context) {
         return authentication
                 .filter(Authentication::isAuthenticated)
                 .filter(auth -> auth instanceof JwtAuthenticationToken)
                 .cast(JwtAuthenticationToken.class)
                 .map(JwtAuthenticationToken::getToken)
-                .map(jwt -> (AuthorizationResult) new AuthorizationDecision(isEmailVerifiedOrUnknown(jwt)))
+                .map(jwt -> (AuthorizationResult) new AuthorizationDecision(
+                        isEmailVerified(jwt) && hasRole(jwt, "customer")
+                ))
                 .defaultIfEmpty(new AuthorizationDecision(false));
     }
 
-    private boolean isEmailVerifiedOrUnknown(Jwt jwt) {
+    private boolean isEmailVerified(Jwt jwt) {
         Boolean standard = jwt.getClaimAsBoolean("email_verified");
         if (standard != null) {
             return standard;
@@ -110,27 +114,25 @@ public class SecurityConfig {
             }
         }
 
-        return true;
+        return false;
     }
 
-    private boolean hasAdminPermission(Jwt jwt) {
-        List<String> permissions = jwt.getClaimAsStringList("permissions");
-        return permissions != null && permissions.contains("read:admin-orders");
-    }
-
-    private boolean hasAdminRole(Jwt jwt) {
-        if (!claimsNamespace.isBlank()) {
-            List<String> namespacedRoles = jwt.getClaimAsStringList(claimsNamespace + "roles");
-            if (containsAdminRole(namespacedRoles)) {
-                return true;
-            }
+    private boolean hasRole(Jwt jwt, String requiredRole) {
+        if (!StringUtils.hasText(requiredRole)) {
+            return false;
         }
+        String normalizedRole = requiredRole.trim();
 
-        if (containsAdminRole(jwt.getClaimAsStringList("roles"))) {
+        if (containsRole(jwt.getClaimAsStringList("roles"), normalizedRole)) {
             return true;
         }
 
-        if (containsAdminRole(extractRoles(jwt.getClaim("realm_access")))) {
+        if (!claimsNamespace.isBlank()
+                && containsRole(jwt.getClaimAsStringList(claimsNamespace + "roles"), normalizedRole)) {
+            return true;
+        }
+
+        if (containsRole(extractRoles(jwt.getClaim("realm_access")), normalizedRole)) {
             return true;
         }
 
@@ -139,15 +141,8 @@ public class SecurityConfig {
             return false;
         }
 
-        List<String> resourceClients = Stream.of(audience, jwt.getClaimAsString("azp"), "account")
-                .filter(Objects::nonNull)
-                .map(String::trim)
-                .filter(value -> !value.isBlank())
-                .distinct()
-                .toList();
-
-        for (String resourceClient : resourceClients) {
-            if (containsAdminRole(extractRoles(resourceAccess.get(resourceClient)))) {
+        for (Object clientAccess : resourceAccess.values()) {
+            if (containsRole(extractRoles(clientAccess), normalizedRole)) {
                 return true;
             }
         }
@@ -155,8 +150,8 @@ public class SecurityConfig {
         return false;
     }
 
-    private boolean containsAdminRole(List<String> roles) {
-        return roles != null && roles.stream().anyMatch("admin"::equalsIgnoreCase);
+    private boolean containsRole(List<String> roles, String requiredRole) {
+        return roles != null && roles.stream().anyMatch(requiredRole::equalsIgnoreCase);
     }
 
     private List<String> extractRoles(Object claimValue) {

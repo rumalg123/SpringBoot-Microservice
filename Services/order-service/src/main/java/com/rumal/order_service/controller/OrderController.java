@@ -46,39 +46,48 @@ public class OrderController {
 
     @GetMapping("/me")
     public Page<OrderResponse> listMine(
-            @RequestHeader("X-Auth0-Sub") String auth0Id,
-            @RequestHeader(value = "X-Auth0-Email-Verified", required = false) String emailVerified,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Email-Verified", required = false) String userEmailVerified,
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         internalRequestVerifier.verify(internalAuth);
-        verifyEmailVerified(emailVerified);
-        return orderService.listForAuth0Id(auth0Id, pageable);
+        verifyEmailVerified(userEmailVerified);
+        if (userSub == null || userSub.isBlank()) {
+            throw new UnauthorizedException("Missing authentication header");
+        }
+        return orderService.listForKeycloakId(userSub, pageable);
     }
 
     @PostMapping("/me")
     @ResponseStatus(HttpStatus.CREATED)
     public OrderResponse createMine(
-            @RequestHeader("X-Auth0-Sub") String auth0Id,
-            @RequestHeader(value = "X-Auth0-Email-Verified", required = false) String emailVerified,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Email-Verified", required = false) String userEmailVerified,
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @Valid @RequestBody CreateMyOrderRequest req
     ) {
         internalRequestVerifier.verify(internalAuth);
-        verifyEmailVerified(emailVerified);
-        return orderService.createForAuth0(auth0Id, req);
+        verifyEmailVerified(userEmailVerified);
+        if (userSub == null || userSub.isBlank()) {
+            throw new UnauthorizedException("Missing authentication header");
+        }
+        return orderService.createForKeycloak(userSub, req);
     }
 
     @GetMapping("/me/{id}")
     public OrderDetailsResponse detailsMine(
-            @RequestHeader("X-Auth0-Sub") String auth0Id,
-            @RequestHeader(value = "X-Auth0-Email-Verified", required = false) String emailVerified,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Email-Verified", required = false) String userEmailVerified,
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
-        verifyEmailVerified(emailVerified);
-        return orderService.getMyDetails(auth0Id, id);
+        verifyEmailVerified(userEmailVerified);
+        if (userSub == null || userSub.isBlank()) {
+            throw new UnauthorizedException("Missing authentication header");
+        }
+        return orderService.getMyDetails(userSub, id);
     }
 
     @GetMapping("/{id}/details")
@@ -87,7 +96,7 @@ public class OrderController {
     }
 
     private void verifyEmailVerified(String emailVerified) {
-        if (emailVerified != null && "false".equalsIgnoreCase(emailVerified.trim())) {
+        if (emailVerified == null || !"true".equalsIgnoreCase(emailVerified.trim())) {
             throw new UnauthorizedException("Email is not verified");
         }
     }

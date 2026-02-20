@@ -1,5 +1,6 @@
 package com.rumal.customer_service.dto;
 
-public record RegisterAuth0CustomerRequest(
+public record RegisterIdentityCustomerRequest(
         String name
-) {}
+) {
+}

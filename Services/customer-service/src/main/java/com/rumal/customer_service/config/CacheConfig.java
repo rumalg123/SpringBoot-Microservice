@@ -1,6 +1,5 @@
 package com.rumal.customer_service.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.CachingConfigurer;
 import org.springframework.context.annotation.Bean;
@@ -8,8 +7,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
-import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
+import org.springframework.data.redis.serializer.GenericJacksonJsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
+import tools.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 
 import java.time.Duration;
 import java.util.Map;
@@ -20,12 +20,14 @@ public class CacheConfig implements CachingConfigurer {
     @Bean
     public RedisCacheManager cacheManager(
             RedisConnectionFactory redisConnectionFactory,
-            ObjectMapper objectMapper,
-            @Value("${cache.customer-by-auth0-ttl:120s}") Duration customerByAuth0Ttl
+            @Value("${cache.customer-by-keycloak-ttl:120s}") Duration customerByKeycloakTtl
     ) {
-        GenericJackson2JsonRedisSerializer valueSerializer = GenericJackson2JsonRedisSerializer.builder()
-                .objectMapper(objectMapper.copy())
-                .defaultTyping(true)
+        GenericJacksonJsonRedisSerializer valueSerializer = GenericJacksonJsonRedisSerializer.builder()
+                .enableDefaultTyping(BasicPolymorphicTypeValidator.builder()
+                        .allowIfSubType("com.rumal")
+                        .allowIfSubType("java.util")
+                        .allowIfSubType("java.time")
+                        .build())
                 .build();
 
         RedisCacheConfiguration defaultConfig = RedisCacheConfiguration.defaultCacheConfig()
@@ -39,7 +41,7 @@ public class CacheConfig implements CachingConfigurer {
         return RedisCacheManager.builder(redisConnectionFactory)
                 .cacheDefaults(defaultConfig.entryTtl(Duration.ofSeconds(60)))
                 .withInitialCacheConfigurations(Map.of(
-                        "customerByAuth0", defaultConfig.entryTtl(customerByAuth0Ttl)
+                        "customerByKeycloak", defaultConfig.entryTtl(customerByKeycloakTtl)
                 ))
                 .build();
     }

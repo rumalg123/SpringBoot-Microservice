@@ -40,8 +40,8 @@ public class OrderService {
     private final OrderAggregationProperties props;
 
     @Caching(evict = {
-            @CacheEvict(cacheNames = "ordersByAuth0", allEntries = true),
-            @CacheEvict(cacheNames = "orderDetailsByAuth0", allEntries = true)
+            @CacheEvict(cacheNames = "ordersByKeycloak", allEntries = true),
+            @CacheEvict(cacheNames = "orderDetailsByKeycloak", allEntries = true)
     })
     public OrderResponse create(CreateOrderRequest req) {
         customerClient.assertCustomerExists(req.customerId());
@@ -53,11 +53,11 @@ public class OrderService {
     }
 
     @Caching(evict = {
-            @CacheEvict(cacheNames = "ordersByAuth0", allEntries = true),
-            @CacheEvict(cacheNames = "orderDetailsByAuth0", allEntries = true)
+            @CacheEvict(cacheNames = "ordersByKeycloak", allEntries = true),
+            @CacheEvict(cacheNames = "orderDetailsByKeycloak", allEntries = true)
     })
-    public OrderResponse createForAuth0(String auth0Id, CreateMyOrderRequest req) {
-        CustomerSummary customer = customerClient.getCustomerByAuth0Id(auth0Id);
+    public OrderResponse createForKeycloak(String keycloakId, CreateMyOrderRequest req) {
+        CustomerSummary customer = customerClient.getCustomerByKeycloakId(keycloakId);
         ProductSummary product = resolvePurchasableProduct(req.productId());
 
         Order saved = orderRepository.save(buildOrder(customer.id(), product, req.quantity()));
@@ -84,11 +84,11 @@ public class OrderService {
     }
 
     @Cacheable(
-            cacheNames = "ordersByAuth0",
-            key = "#auth0Id + '::' + #pageable.pageNumber + '::' + #pageable.pageSize + '::' + #pageable.sort.toString()"
+            cacheNames = "ordersByKeycloak",
+            key = "#keycloakId + '::' + #pageable.pageNumber + '::' + #pageable.pageSize + '::' + #pageable.sort.toString()"
     )
-    public Page<OrderResponse> listForAuth0Id(String auth0Id, Pageable pageable) {
-        CustomerSummary customer = customerClient.getCustomerByAuth0Id(auth0Id);
+    public Page<OrderResponse> listForKeycloakId(String keycloakId, Pageable pageable) {
+        CustomerSummary customer = customerClient.getCustomerByKeycloakId(keycloakId);
         return list(customer.id(), pageable);
     }
 
@@ -122,9 +122,9 @@ public class OrderService {
         );
     }
 
-    @Cacheable(cacheNames = "orderDetailsByAuth0", key = "#auth0Id + '::' + #orderId")
-    public OrderDetailsResponse getMyDetails(String auth0Id, UUID orderId) {
-        CustomerSummary customer = customerClient.getCustomerByAuth0Id(auth0Id);
+    @Cacheable(cacheNames = "orderDetailsByKeycloak", key = "#keycloakId + '::' + #orderId")
+    public OrderDetailsResponse getMyDetails(String keycloakId, UUID orderId) {
+        CustomerSummary customer = customerClient.getCustomerByKeycloakId(keycloakId);
         Order o = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId));
 

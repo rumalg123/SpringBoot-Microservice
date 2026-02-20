@@ -4,7 +4,7 @@ import com.rumal.customer_service.auth.KeycloakManagementService;
 import com.rumal.customer_service.auth.KeycloakUserExistsException;
 import com.rumal.customer_service.dto.CreateCustomerRequest;
 import com.rumal.customer_service.dto.CustomerResponse;
-import com.rumal.customer_service.dto.RegisterAuth0CustomerRequest;
+import com.rumal.customer_service.dto.RegisterIdentityCustomerRequest;
 import com.rumal.customer_service.dto.RegisterCustomerRequest;
 import com.rumal.customer_service.entity.Customer;
 import com.rumal.customer_service.exception.DuplicateResourceException;
@@ -35,14 +35,14 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
-    @Cacheable(cacheNames = "customerByAuth0", key = "#auth0Id")
-    public CustomerResponse getByAuth0Id(String auth0Id) {
-        if (auth0Id == null || auth0Id.isBlank()) {
-            throw new ResourceNotFoundException("Customer not found for auth0 id");
+    @Cacheable(cacheNames = "customerByKeycloak", key = "#keycloakId")
+    public CustomerResponse getByKeycloakId(String keycloakId) {
+        if (keycloakId == null || keycloakId.isBlank()) {
+            throw new ResourceNotFoundException("Customer not found for keycloak id");
         }
 
-        Customer c = customerRepository.findByAuth0Id(auth0Id)
-                .orElseThrow(() -> new ResourceNotFoundException("Customer not found for auth0 id"));
+        Customer c = customerRepository.findByKeycloakId(keycloakId)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found for keycloak id"));
 
         return toResponse(c);
     }
@@ -73,18 +73,18 @@ public class CustomerServiceImpl implements CustomerService {
             throw new DuplicateResourceException("Customer already exists with email: " + email);
         }
 
-        String auth0Id;
+        String keycloakId;
         try {
-            auth0Id = keycloakManagementService.createUser(email, request.password(), request.name().trim());
+            keycloakId = keycloakManagementService.createUser(email, request.password(), request.name().trim());
         } catch (KeycloakUserExistsException ex) {
-            auth0Id = keycloakManagementService.getUserIdByEmail(email);
+            keycloakId = keycloakManagementService.getUserIdByEmail(email);
         }
 
         Customer saved = customerRepository.save(
                 Customer.builder()
                         .name(request.name().trim())
                         .email(email)
-                        .auth0Id(auth0Id)
+                        .keycloakId(keycloakId)
                         .build()
         );
 
@@ -92,16 +92,16 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
-    @CachePut(cacheNames = "customerByAuth0", key = "#auth0Id")
-    public CustomerResponse registerAuth0(String auth0Id, String email, RegisterAuth0CustomerRequest request) {
-        if (auth0Id == null || auth0Id.isBlank()) {
-            throw new ResourceNotFoundException("Customer not found for auth0 id");
+    @CachePut(cacheNames = "customerByKeycloak", key = "#keycloakId")
+    public CustomerResponse registerIdentity(String keycloakId, String email, RegisterIdentityCustomerRequest request) {
+        if (keycloakId == null || keycloakId.isBlank()) {
+            throw new ResourceNotFoundException("Customer not found for keycloak id");
         }
         String resolvedEmail = email;
         String resolvedName = request != null ? request.name() : null;
 
         if (resolvedEmail == null || resolvedEmail.isBlank()) {
-            var user = keycloakManagementService.getUserById(auth0Id);
+            var user = keycloakManagementService.getUserById(keycloakId);
             resolvedEmail = user.email();
             if (resolvedName == null || resolvedName.isBlank()) {
                 resolvedName = user.name();
@@ -114,9 +114,9 @@ public class CustomerServiceImpl implements CustomerService {
 
         String normalizedEmail = resolvedEmail.trim().toLowerCase();
 
-        Customer existingByAuth0 = customerRepository.findByAuth0Id(auth0Id).orElse(null);
-        if (existingByAuth0 != null) {
-            return toResponse(existingByAuth0);
+        Customer existingByKeycloak = customerRepository.findByKeycloakId(keycloakId).orElse(null);
+        if (existingByKeycloak != null) {
+            return toResponse(existingByKeycloak);
         }
 
         if (customerRepository.existsByEmail(normalizedEmail)) {
@@ -131,7 +131,7 @@ public class CustomerServiceImpl implements CustomerService {
                 Customer.builder()
                         .name(name)
                         .email(normalizedEmail)
-                        .auth0Id(auth0Id)
+                        .keycloakId(keycloakId)
                         .build()
         );
 

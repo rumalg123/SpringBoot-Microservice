@@ -52,31 +52,21 @@ function toBooleanClaim(value: unknown): boolean | null {
   return null;
 }
 
-function hasScope(claims: Record<string, unknown>, scope: string): boolean {
-  const raw = claims.scope;
-  if (typeof raw !== "string") return false;
-  return raw
-    .split(" ")
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .includes(scope);
+function hasRole(roles: string[], requiredRole: string): boolean {
+  const normalizedRequiredRole = requiredRole.trim().toLowerCase();
+  return roles.some((role) => role.trim().toLowerCase() === normalizedRequiredRole);
 }
 
-function isAdminByClaims(
+function hasRoleByClaims(
   claims: Record<string, unknown> | null,
-  audience: string,
-  clientId: string,
-  namespace: string
+  namespace: string,
+  requiredRole: string
 ): boolean {
-  if (!claims) return false;
-
-  const permissions = toStringArray(claims.permissions);
-  if (permissions.includes("read:admin-orders") || hasScope(claims, "read:admin-orders")) {
-    return true;
-  }
+  const role = requiredRole.trim();
+  if (!claims || !role) return false;
 
   const directRoles = toStringArray(claims.roles);
-  if (directRoles.some((role) => role.toLowerCase() === "admin")) {
+  if (hasRole(directRoles, role)) {
     return true;
   }
 
@@ -84,28 +74,41 @@ function isAdminByClaims(
   if (trimmedNamespace) {
     const normalizedNamespace = trimmedNamespace.endsWith("/") ? trimmedNamespace : `${trimmedNamespace}/`;
     const namespacedRoles = toStringArray(claims[`${normalizedNamespace}roles`]);
-    if (namespacedRoles.some((role) => role.toLowerCase() === "admin")) {
+    if (hasRole(namespacedRoles, role)) {
       return true;
     }
   }
 
   const realmAccess = asObject(claims.realm_access);
   const realmRoles = toStringArray(realmAccess?.roles);
-  if (realmRoles.some((role) => role.toLowerCase() === "admin")) {
+  if (hasRole(realmRoles, role)) {
     return true;
   }
 
   const resourceAccess = asObject(claims.resource_access);
-  const resourceCandidates = [audience.trim(), clientId.trim(), "account"].filter(Boolean);
-  for (const resourceName of resourceCandidates) {
-    const resource = asObject(resourceAccess?.[resourceName]);
-    const resourceRoles = toStringArray(resource?.roles);
-    if (resourceRoles.some((role) => role.toLowerCase() === "admin")) {
+  if (!resourceAccess) return false;
+  for (const resource of Object.values(resourceAccess)) {
+    const resourceRoles = toStringArray(asObject(resource)?.roles);
+    if (hasRole(resourceRoles, role)) {
       return true;
     }
   }
 
   return false;
+}
+
+function isSuperAdminByClaims(
+  claims: Record<string, unknown> | null,
+  namespace: string
+): boolean {
+  return hasRoleByClaims(claims, namespace, "super_admin");
+}
+
+function isCustomerByClaims(
+  claims: Record<string, unknown> | null,
+  namespace: string
+): boolean {
+  return hasRoleByClaims(claims, namespace, "customer");
 }
 
 function resolveEmailVerified(
@@ -123,7 +126,7 @@ function resolveEmailVerified(
     if (namespaced !== null) return namespaced;
   }
 
-  return toBooleanClaim(profile?.email_verified);
+  return toBooleanClaim(profile?.email_verified) ?? false;
 }
 
 function resolveReturnTo(returnTo: string): string {
@@ -156,6 +159,7 @@ export function useAuthSession() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [profile, setProfile] = useState<UserProfile>(null);
   const [canViewAdmin, setCanViewAdmin] = useState(false);
+  const [hasCustomerRole, setHasCustomerRole] = useState(false);
   const [emailVerified, setEmailVerified] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -219,12 +223,16 @@ export function useAuthSession() {
             };
           }
 
+          const superAdmin = isSuperAdminByClaims(parsedClaims, env.claimsNamespace);
+          const customerRole = isCustomerByClaims(parsedClaims, env.claimsNamespace);
           setProfile(userProfile);
-          setCanViewAdmin(isAdminByClaims(parsedClaims, env.audience, env.clientId, env.claimsNamespace));
+          setCanViewAdmin(superAdmin);
+          setHasCustomerRole(customerRole);
           setEmailVerified(resolveEmailVerified(parsedClaims, userProfile, env.claimsNamespace));
         } else {
           setProfile(null);
           setCanViewAdmin(false);
+          setHasCustomerRole(false);
           setEmailVerified(null);
         }
 
@@ -287,7 +295,7 @@ export function useAuthSession() {
   }, [client]);
 
   const ensureCustomer = useCallback(async () => {
-    if (!apiClient || !isAuthenticated) return;
+    if (!apiClient || !isAuthenticated || !hasCustomerRole) return;
 
     try {
       await apiClient.get("/customers/me");
@@ -304,8 +312,8 @@ export function useAuthSession() {
       || (profile?.preferred_username as string)
       || (profile?.email as string)
       || "Customer";
-    await apiClient.post("/customers/register-auth0", { name: profileName });
-  }, [apiClient, isAuthenticated, profile]);
+    await apiClient.post("/customers/register-identity", { name: profileName });
+  }, [apiClient, isAuthenticated, hasCustomerRole, profile]);
 
   const resendVerificationEmail = useCallback(async () => {
     if (!apiClient || !isAuthenticated) return;
@@ -318,6 +326,7 @@ export function useAuthSession() {
     error,
     isAuthenticated,
     canViewAdmin,
+    hasCustomerRole,
     emailVerified,
     profile,
     apiClient,

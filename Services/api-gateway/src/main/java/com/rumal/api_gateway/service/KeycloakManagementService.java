@@ -35,17 +35,14 @@ public class KeycloakManagementService {
         this.adminRealm = adminRealm;
         this.adminClientId = adminClientId;
         this.adminClientSecret = adminClientSecret;
+        if (!StringUtils.hasText(this.adminClientId) || !StringUtils.hasText(this.adminClientSecret)) {
+            throw new IllegalStateException("KEYCLOAK_ADMIN_CLIENT_ID and KEYCLOAK_ADMIN_CLIENT_SECRET must be configured");
+        }
     }
 
     public Mono<Void> resendVerificationEmail(String userId) {
         if (!StringUtils.hasText(userId)) {
             return Mono.error(new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing authenticated user"));
-        }
-        if (!StringUtils.hasText(adminClientId) || !StringUtils.hasText(adminClientSecret)) {
-            return Mono.error(new ResponseStatusException(
-                    HttpStatus.SERVICE_UNAVAILABLE,
-                    "Keycloak admin credentials are not configured"
-            ));
         }
 
         return getAccessToken()

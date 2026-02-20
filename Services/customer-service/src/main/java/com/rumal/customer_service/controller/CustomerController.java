@@ -3,7 +3,7 @@ package com.rumal.customer_service.controller;
 
 import com.rumal.customer_service.dto.CreateCustomerRequest;
 import com.rumal.customer_service.dto.CustomerResponse;
-import com.rumal.customer_service.dto.RegisterAuth0CustomerRequest;
+import com.rumal.customer_service.dto.RegisterIdentityCustomerRequest;
 import com.rumal.customer_service.dto.RegisterCustomerRequest;
 import com.rumal.customer_service.exception.UnauthorizedException;
 import com.rumal.customer_service.security.InternalRequestVerifier;
@@ -35,21 +35,21 @@ public class CustomerController {
         return customerService.register(request);
     }
 
-    @PostMapping("/register-auth0")
+    @PostMapping("/register-identity")
     @ResponseStatus(HttpStatus.CREATED)
-    public CustomerResponse registerAuth0(
-            @RequestHeader("X-Auth0-Sub") String auth0Id,
-            @RequestHeader(value = "X-Auth0-Email", required = false) String email,
-            @RequestHeader(value = "X-Auth0-Email-Verified", required = false) String emailVerified,
+    public CustomerResponse registerIdentity(
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Email", required = false) String userEmail,
+            @RequestHeader(value = "X-User-Email-Verified", required = false) String userEmailVerified,
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
-            @RequestBody(required = false) RegisterAuth0CustomerRequest request
+            @RequestBody(required = false) RegisterIdentityCustomerRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
-        verifyEmailVerified(emailVerified);
-        if (auth0Id == null || auth0Id.isBlank()) {
+        verifyEmailVerified(userEmailVerified);
+        if (userSub == null || userSub.isBlank()) {
             throw new UnauthorizedException("Missing authentication header");
         }
-        return customerService.registerAuth0(auth0Id, email, request);
+        return customerService.registerIdentity(userSub, userEmail, request);
     }
 
     @GetMapping("/{id}")
@@ -59,16 +59,16 @@ public class CustomerController {
 
     @GetMapping("/me")
     public CustomerResponse me(
-            @RequestHeader("X-Auth0-Sub") String auth0Id,
-            @RequestHeader(value = "X-Auth0-Email-Verified", required = false) String emailVerified,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Email-Verified", required = false) String userEmailVerified,
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth
     ) {
         internalRequestVerifier.verify(internalAuth);
-        verifyEmailVerified(emailVerified);
-        if (auth0Id == null || auth0Id.isBlank()) {
+        verifyEmailVerified(userEmailVerified);
+        if (userSub == null || userSub.isBlank()) {
             throw new UnauthorizedException("Missing authentication header");
         }
-        return customerService.getByAuth0Id(auth0Id);
+        return customerService.getByKeycloakId(userSub);
     }
 
     @GetMapping("/by-email")
@@ -77,7 +77,7 @@ public class CustomerController {
     }
 
     private void verifyEmailVerified(String emailVerified) {
-        if (emailVerified != null && "false".equalsIgnoreCase(emailVerified.trim())) {
+        if (emailVerified == null || !"true".equalsIgnoreCase(emailVerified.trim())) {
             throw new UnauthorizedException("Email is not verified");
         }
     }

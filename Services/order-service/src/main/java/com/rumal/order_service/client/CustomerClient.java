@@ -5,7 +5,6 @@ import com.rumal.order_service.exception.ResourceNotFoundException;
 import com.rumal.order_service.exception.ServiceUnavailableException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
@@ -67,21 +66,21 @@ public class CustomerClient {
     }
 
     @Retry(name = "customerService")
-    @CircuitBreaker(name = "customerService", fallbackMethod = "customerFallbackGetCustomerByAuth0")
-    public CustomerSummary getCustomerByAuth0Id(String auth0Id) {
+    @CircuitBreaker(name = "customerService", fallbackMethod = "customerFallbackGetCustomerByKeycloak")
+    public CustomerSummary getCustomerByKeycloakId(String keycloakId) {
         RestClient rc = lbRestClientBuilder.build();
 
         try {
             return rc.get()
                     .uri("http://customer-service/customers/me")
-                    .header("X-Auth0-Sub", auth0Id)
-                    .header("X-Auth0-Email-Verified", "true")
+                    .header("X-User-Sub", keycloakId)
+                    .header("X-User-Email-Verified", "true")
                     .header("X-Internal-Auth", internalSharedSecret)
                     .retrieve()
                     .body(CustomerSummary.class);
         } catch (HttpClientErrorException ex) {
             if (ex.getStatusCode() == HttpStatus.NOT_FOUND) {
-                throw new ResourceNotFoundException("Customer not found for auth0 id");
+                throw new ResourceNotFoundException("Customer not found for keycloak id");
             }
             throw ex;
         }
@@ -89,15 +88,18 @@ public class CustomerClient {
 
 
 
+    @SuppressWarnings("unused")
     public void customerFallback(UUID customerId, Throwable ex) {
-        throw new ServiceUnavailableException("Customer service unavailable. Try again later.", ex);
+        throw new ServiceUnavailableException("Customer service unavailable for customer " + customerId + ". Try again later.", ex);
     }
 
+    @SuppressWarnings("unused")
     public CustomerSummary customerFallbackGetCustomer(UUID customerId, Throwable ex) {
-        throw new ServiceUnavailableException("Customer service unavailable. Try again later.", ex);
+        throw new ServiceUnavailableException("Customer service unavailable for customer " + customerId + ". Try again later.", ex);
     }
 
-    public CustomerSummary customerFallbackGetCustomerByAuth0(String auth0Id, Throwable ex) {
-        throw new ServiceUnavailableException("Customer service unavailable. Try again later.", ex);
+    @SuppressWarnings("unused")
+    public CustomerSummary customerFallbackGetCustomerByKeycloak(String keycloakId, Throwable ex) {
+        throw new ServiceUnavailableException("Customer service unavailable for principal " + keycloakId + ". Try again later.", ex);
     }
 }

@@ -104,7 +104,7 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
     }
 
     private @Nullable Policy resolvePolicy(String path, @Nullable HttpMethod method) {
-        if (("/customers/register".equals(path) || "/customers/register-auth0".equals(path))
+        if (("/customers/register".equals(path) || "/customers/register-identity".equals(path))
                 && method == HttpMethod.POST) {
             return new Policy("register", registerRateLimiter, ipKeyResolver);
         }

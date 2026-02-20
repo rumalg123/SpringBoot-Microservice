@@ -43,7 +43,7 @@ spring:
             - id: customer-register
               uri: lb://customer-service
               predicates:
-                - Path=/customers/register,/customers/register-auth0
+                - Path=/customers/register,/customers/register-identity
             - id: customer-me
               uri: lb://customer-service
               predicates:
@@ -86,10 +86,11 @@ eureka:
 keycloak:
   realm: ${KEYCLOAK_REALM:rumal}
   audience: ${KEYCLOAK_AUDIENCE:rumal-api}
+  accept-azp-as-audience: ${KEYCLOAK_ACCEPT_AZP_AS_AUDIENCE:true}
   claims-namespace: ${KEYCLOAK_CLAIMS_NAMESPACE:}
   admin:
-    client-id: ${KEYCLOAK_ADMIN_CLIENT_ID:}
-    client-secret: ${KEYCLOAK_ADMIN_CLIENT_SECRET:}
+    client-id: ${KEYCLOAK_ADMIN_CLIENT_ID}
+    client-secret: ${KEYCLOAK_ADMIN_CLIENT_SECRET}
 
 internal:
   auth:

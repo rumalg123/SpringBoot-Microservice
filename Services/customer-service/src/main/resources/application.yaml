@@ -30,8 +30,8 @@ keycloak:
   issuer-uri: ${KEYCLOAK_ISSUER_URI:https://keycloak.rumalg.me/realms/rumal}
   realm: ${KEYCLOAK_REALM:rumal}
   admin:
-    client-id: ${KEYCLOAK_ADMIN_CLIENT_ID:}
-    client-secret: ${KEYCLOAK_ADMIN_CLIENT_SECRET:}
+    client-id: ${KEYCLOAK_ADMIN_CLIENT_ID}
+    client-secret: ${KEYCLOAK_ADMIN_CLIENT_SECRET}
 
 internal:
   auth:
@@ -42,4 +42,4 @@ logging:
     level: "%5p [${spring.application.name},traceId=%X{traceId},spanId=%X{spanId}]"
 
 cache:
-  customer-by-auth0-ttl: ${CACHE_CUSTOMER_BY_AUTH0_TTL:120s}
+  customer-by-keycloak-ttl: ${CACHE_CUSTOMER_BY_KEYCLOAK_TTL:120s}

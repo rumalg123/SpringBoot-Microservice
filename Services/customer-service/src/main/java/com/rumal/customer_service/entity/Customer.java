@@ -12,7 +12,7 @@ import java.util.UUID;
         name = "customers",
         uniqueConstraints = {
                 @UniqueConstraint(name = "uk_customers_email", columnNames = "email"),
-                @UniqueConstraint(name = "uk_customers_auth0_id", columnNames = "auth0_id")
+                @UniqueConstraint(name = "uk_customers_keycloak_id", columnNames = "keycloak_id")
         }
 )
 @Getter
@@ -32,8 +32,8 @@ public class Customer {
     @Column(nullable = false, length = 180)
     private String email;
 
-    @Column(name = "auth0_id", length = 120)
-    private String auth0Id;
+    @Column(name = "keycloak_id", length = 120)
+    private String keycloakId;
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)

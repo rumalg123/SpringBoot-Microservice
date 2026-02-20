@@ -1,6 +1,6 @@
-# Spring Boot Microservice Platform
+﻿# Spring Boot Microservice Platform
 
-Full-stack microservice system with Auth0-based user identity, Spring Cloud Gateway, Eureka service discovery, Redis caching/rate-limiting, and a Next.js frontend.
+Full-stack microservice system with Keycloak-based user identity, Spring Cloud Gateway, Eureka service discovery, Redis caching/rate-limiting, and a Next.js frontend.
 
 ## Architecture Overview
 
@@ -21,19 +21,19 @@ flowchart LR
     G --> E[Eureka :8761]
     C --> E
     O --> E
-    G --> A[Auth0 JWT Validation]
-    C --> A2[Auth0 Management API]
+    G --> A[Keycloak JWT Validation]
+    C --> A2[Keycloak Admin API]
 ```
 
 ## Repository Structure
 
 - `Services/discovery-server`: Eureka server
 - `Services/api-gateway`: Spring Cloud Gateway (JWT auth, header relay, rate limiting)
-- `Services/customer-service`: customer domain + Auth0 management integration
+- `Services/customer-service`: customer domain + Keycloak management integration
 - `Services/order-service`: order domain + customer-service integration
 - `Services/admin-service`: admin APIs (aggregates privileged order views)
 - `Services/product-service`: product catalog domain (single/parent/variation products)
-- `microservce-frontend`: Next.js UI (Auth0 SPA flow)
+- `microservce-frontend`: Next.js UI (Keycloak SPA flow)
 - `env/*-sample.env`: environment variable templates
 - `docker-compose.yml`: stack without PostgreSQL containers (external DB expected)
 - `docker-compose-db.yml`: stack with PostgreSQL containers
@@ -46,7 +46,7 @@ flowchart LR
 - PostgreSQL (customer/order/product services)
 - Redis (gateway rate limit + service caches)
 - Resilience4j (order-service -> customer-service calls)
-- Next.js 16 + React 19 + Auth0 SPA SDK
+- Next.js 16 + React 19 + Keycloak JS SDK
 - Docker multi-stage images for all services
 
 ## Service Responsibilities
@@ -57,12 +57,12 @@ flowchart LR
 
 ### api-gateway
 - Public API entrypoint
-- Validates Auth0 JWT issuer + audience
+- Validates Keycloak JWT issuer + audience
 - Exposes only user-scoped endpoints:
-  - `/customers/register`, `/customers/register-auth0`, `/customers/me`
+  - `/customers/register`, `/customers/register-identity`, `/customers/me`
   - `/orders/me`, `/orders/me/**`
 - Enforces `email_verified=true` for:
-  - `/customers/register-auth0`, `/customers/me`
+  - `/customers/register-identity`, `/customers/me`
   - `/orders/me`, `/orders/me/**`
 - Denies raw backend paths (`/customers/**`, `/orders/**`) by default
 - Publicly exposes product catalog read APIs:
@@ -78,8 +78,8 @@ flowchart LR
   - `/admin/orders` (requires `ROLE_admin` or `read:admin-orders` permission)
 - Adds/propagates:
   - `X-Request-Id`
-  - `X-Auth0-Sub`
-  - `X-Auth0-Email`
+  - `X-User-Sub`
+  - `X-User-Email`
   - `X-Internal-Auth` (shared secret for internal trust)
 - Applies Redis-backed route-aware rate limits:
   - register
@@ -98,10 +98,10 @@ flowchart LR
 ### customer-service
 - Customer CRUD/register logic
 - Supports:
-  - direct register (`/customers/register`) using Auth0 Management API
-  - token-based register (`/customers/register-auth0`) for logged-in user bootstrap
-- Caches `customerByAuth0` in Redis
-- Verifies internal trust header on `/customers/me` and `/customers/register-auth0`
+  - direct register (`/customers/register`) using Keycloak Admin API
+  - token-based register (`/customers/register-identity`) for logged-in user bootstrap
+- Caches `customerByKeycloak` in Redis
+- Verifies internal trust header on `/customers/me` and `/customers/register-identity`
 
 ### order-service
 - Create/list/order-details domain operations
@@ -112,8 +112,8 @@ flowchart LR
   - `@CircuitBreaker(customerService)`
   - fallback -> `ServiceUnavailableException`
 - Caches:
-  - `ordersByAuth0`
-  - `orderDetailsByAuth0`
+  - `ordersByKeycloak`
+  - `orderDetailsByKeycloak`
 
 ### admin-service
 - Admin-only APIs exposed through gateway
@@ -139,11 +139,11 @@ flowchart LR
   - variation attributes (only for `VARIATION` type)
 
 ### microservce-frontend
-- Auth0 login/signup/logout using redirect flow
+- Keycloak login/signup/logout using redirect flow
 - Gets access token silently and sends `Authorization: Bearer ...` to gateway
 - On authenticated sessions, auto-bootstrap customer profile:
   - GET `/customers/me`
-  - if 404 -> POST `/customers/register-auth0`
+  - if 404 -> POST `/customers/register-identity`
 - If email is unverified, shows resend verification action:
   - POST `/auth/resend-verification`
 - UI routes:
@@ -156,7 +156,7 @@ flowchart LR
 
 ### Customer
 - `POST /customers/register` (public)
-- `POST /customers/register-auth0` (authenticated)
+- `POST /customers/register-identity` (authenticated)
 - `GET /customers/me` (authenticated)
 
 ### Orders
@@ -186,20 +186,20 @@ flowchart LR
 ```mermaid
 sequenceDiagram
     participant UI as Frontend
-    participant A0 as Auth0
+    participant KC as Keycloak
     participant GW as API Gateway
     participant CS as customer-service
     participant OS as order-service
     participant ADS as admin-service
 
-    UI->>A0: Login/Signup redirect
-    A0-->>UI: Access token (JWT)
+    UI->>KC: Login/Signup redirect
+    KC-->>UI: Access token (JWT)
     UI->>GW: API call + Bearer token
     GW->>GW: Validate issuer + audience
     GW->>GW: Strip client-forged internal headers
-    GW->>CS: Forward + X-Auth0-Sub/X-Auth0-Email/X-Internal-Auth
-    GW->>CS: Forward + X-Auth0-Email-Verified
-    GW->>OS: Forward + X-Auth0-Sub/X-Auth0-Email-Verified/X-Internal-Auth
+    GW->>CS: Forward + X-User-Sub/X-User-Email/X-Internal-Auth
+    GW->>CS: Forward + X-User-Email-Verified
+    GW->>OS: Forward + X-User-Sub/X-User-Email-Verified/X-Internal-Auth
     GW->>ADS: Forward + X-Internal-Auth
     ADS->>OS: Internal service call + shared secret
     OS->>CS: Internal service call + shared secret
@@ -219,8 +219,8 @@ Key points:
 ### Redis usage
 - Gateway: token bucket state for rate limiting
 - Gateway: idempotency key state/response replay cache
-- customer-service: `customerByAuth0`
-- order-service: `ordersByAuth0`, `orderDetailsByAuth0`
+- customer-service: `customerByKeycloak`
+- order-service: `ordersByKeycloak`, `orderDetailsByKeycloak`
 - product-service: `productById`, `productsList`, `deletedProductsList`, `categoriesList`, `deletedCategoriesList`
 
 ### Serialization note
@@ -274,15 +274,16 @@ Copy-Item env/frontend-sample.env env/frontend.env
 ```
 
 Fill required values:
-- Auth0:
-  - `AUTH0_ISSUER_URI`
-  - `AUTH0_AUDIENCE`
-  - `AUTH0_DOMAIN`
-  - `AUTH0_MGMT_CLIENT_ID`
-  - `AUTH0_MGMT_CLIENT_SECRET`
-  - `NEXT_PUBLIC_AUTH0_DOMAIN`
-  - `NEXT_PUBLIC_AUTH0_CLIENT_ID`
-  - `NEXT_PUBLIC_AUTH0_AUDIENCE`
+- Keycloak:
+  - `KEYCLOAK_ISSUER_URI`
+  - `KEYCLOAK_AUDIENCE`
+  - `KEYCLOAK_REALM`
+  - `KEYCLOAK_ADMIN_CLIENT_ID`
+  - `KEYCLOAK_ADMIN_CLIENT_SECRET`
+  - `NEXT_PUBLIC_KEYCLOAK_URL`
+  - `NEXT_PUBLIC_KEYCLOAK_REALM`
+  - `NEXT_PUBLIC_KEYCLOAK_CLIENT_ID`
+  - `NEXT_PUBLIC_KEYCLOAK_AUDIENCE`
 - Internal trust:
   - `INTERNAL_AUTH_SHARED_SECRET` (same value across gateway/customer/order)
 - Product DB:
@@ -363,7 +364,7 @@ cd microservce-frontend && npm run lint
   - Clear stale Redis keys after serializer changes.
 - `401 Invalid internal authentication header`:
   - `INTERNAL_AUTH_SHARED_SECRET` mismatch or missing.
-- Auth0 signup/login generic errors:
+- Keycloak signup/login generic errors:
   - Check tenant settings and prompt customization; verify app/connection config.
 
 ## Production Hardening Checklist
@@ -373,5 +374,6 @@ cd microservce-frontend && npm run lint
 - Lock down CORS to exact origins.
 - Use HTTPS for frontend/gateway and set trusted proxy headers correctly.
 - Rotate `INTERNAL_AUTH_SHARED_SECRET`.
-- Disable Auth0 development keys on any enabled social/enterprise connection.
+- Disable insecure default Keycloak credentials and require strong client secrets.
 - Add structured central logging and metrics dashboards.
+
