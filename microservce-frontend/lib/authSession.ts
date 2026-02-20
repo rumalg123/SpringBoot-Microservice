@@ -53,6 +53,14 @@ function toBooleanClaim(value: unknown): boolean | null {
   return null;
 }
 
+function toTrimmedString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function composeName(first: string, last: string): string {
+  return `${first} ${last}`.trim();
+}
+
 function hasRole(roles: string[], requiredRole: string): boolean {
   const normalizedRequiredRole = requiredRole.trim().toLowerCase();
   return roles.some((role) => role.trim().toLowerCase() === normalizedRequiredRole);
@@ -130,6 +138,34 @@ function resolveEmailVerified(
   return toBooleanClaim(profile?.email_verified) ?? false;
 }
 
+function resolveProfileName(
+  claims: Record<string, unknown> | null,
+  profile: UserProfile
+): string {
+  const claimName = toTrimmedString(claims?.name);
+  if (claimName) return claimName;
+
+  const claimGiven = toTrimmedString(claims?.given_name);
+  const claimFamily = toTrimmedString(claims?.family_name);
+  const claimComposed = composeName(claimGiven, claimFamily);
+  if (claimComposed) return claimComposed;
+
+  const profileName = toTrimmedString(profile?.name);
+  if (profileName) return profileName;
+
+  const profileFirst = toTrimmedString(profile?.firstName);
+  const profileLast = toTrimmedString(profile?.lastName);
+  const profileComposed = composeName(profileFirst, profileLast);
+  if (profileComposed) return profileComposed;
+
+  const preferredUsername = toTrimmedString(claims?.preferred_username)
+    || toTrimmedString(profile?.preferred_username)
+    || toTrimmedString(profile?.username);
+  if (preferredUsername) return preferredUsername;
+
+  return toTrimmedString(claims?.email) || toTrimmedString(profile?.email);
+}
+
 function resolveReturnTo(returnTo: string): string {
   if (typeof window === "undefined") return returnTo;
   const trimmed = returnTo.trim();
@@ -141,6 +177,23 @@ function resolveReturnTo(returnTo: string): string {
     const normalizedPath = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
     return `${window.location.origin}${normalizedPath}`;
   }
+}
+
+function resolveKeycloakBaseUrl(url: string): string {
+  return url.trim().replace(/\/+$/, "");
+}
+
+function buildResetCredentialsUrl(returnTo: string, loginHint?: string): string {
+  const base = resolveKeycloakBaseUrl(env.url);
+  const params = new URLSearchParams({
+    client_id: env.clientId,
+    redirect_uri: resolveReturnTo(returnTo),
+  });
+  const normalizedLoginHint = (loginHint || "").trim();
+  if (normalizedLoginHint) {
+    params.set("login_hint", normalizedLoginHint);
+  }
+  return `${base}/realms/${encodeURIComponent(env.realm)}/login-actions/reset-credentials?${params.toString()}`;
 }
 
 function getKeycloak(): KeycloakInstance {
@@ -158,6 +211,11 @@ function initKeycloakOnce(client: KeycloakInstance): Promise<boolean> {
     return keycloakInitPromise;
   }
 
+  const maybeInitialized = (client as KeycloakInstance & { didInitialize?: boolean }).didInitialize;
+  if (maybeInitialized) {
+    return Promise.resolve(Boolean(client.authenticated));
+  }
+
   keycloakInitPromise = client
     .init({
       onLoad: "check-sso",
@@ -166,6 +224,7 @@ function initKeycloakOnce(client: KeycloakInstance): Promise<boolean> {
     })
     .catch((error) => {
       keycloakInitPromise = null;
+      keycloakSingleton = null;
       throw error;
     });
 
@@ -239,6 +298,14 @@ export function useAuthSession() {
             };
           }
 
+          const resolvedProfileName = resolveProfileName(parsedClaims, userProfile);
+          if (resolvedProfileName) {
+            userProfile = {
+              ...(userProfile || {}),
+              name: resolvedProfileName,
+            };
+          }
+
           const superAdmin = isSuperAdminByClaims(parsedClaims, env.claimsNamespace);
           const customerRole = isCustomerByClaims(parsedClaims, env.claimsNamespace);
           setProfile(userProfile);
@@ -303,6 +370,27 @@ export function useAuthSession() {
     [client]
   );
 
+  const changePassword = useCallback(
+    async (returnTo: string) => {
+      if (!client) return;
+      await client.login({
+        redirectUri: resolveReturnTo(returnTo),
+        action: "UPDATE_PASSWORD",
+      });
+    },
+    [client]
+  );
+
+  const forgotPassword = useCallback(
+    async (returnTo: string, loginHint?: string) => {
+      const target = buildResetCredentialsUrl(returnTo, loginHint);
+      if (typeof window !== "undefined") {
+        window.location.assign(target);
+      }
+    },
+    []
+  );
+
   const logout = useCallback(async () => {
     if (!client) return;
     await client.logout({
@@ -348,6 +436,8 @@ export function useAuthSession() {
     apiClient,
     login,
     signup,
+    changePassword,
+    forgotPassword,
     logout,
     ensureCustomer,
     resendVerificationEmail,

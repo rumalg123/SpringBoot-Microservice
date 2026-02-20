@@ -25,6 +25,7 @@ export default function ProfilePage() {
     apiClient,
     ensureCustomer,
     resendVerificationEmail,
+    changePassword,
     profile,
     logout,
     emailVerified,
@@ -35,6 +36,7 @@ export default function ProfilePage() {
   const [resendingVerification, setResendingVerification] = useState(false);
   const [editName, setEditName] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
+  const [passwordActionPending, setPasswordActionPending] = useState(false);
 
   useEffect(() => {
     if (sessionStatus !== "ready") return;
@@ -111,6 +113,19 @@ export default function ProfilePage() {
     }
   };
 
+  const startChangePassword = async () => {
+    if (passwordActionPending) return;
+    setPasswordActionPending(true);
+    try {
+      await changePassword("/profile");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to open change password flow";
+      setStatus(message);
+      toast.error(message);
+      setPasswordActionPending(false);
+    }
+  };
+
   if (sessionStatus === "loading" || sessionStatus === "idle") {
     return (
       <div className="min-h-screen bg-[var(--bg)]">
@@ -174,6 +189,15 @@ export default function ProfilePage() {
             <Link href="/orders" className="btn-outline no-underline px-4 py-2.5 text-sm">
               Orders
             </Link>
+            <button
+              onClick={() => {
+                void startChangePassword();
+              }}
+              disabled={passwordActionPending}
+              className="btn-outline px-4 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {passwordActionPending ? "Redirecting..." : "Change Password"}
+            </button>
           </div>
         </div>
 

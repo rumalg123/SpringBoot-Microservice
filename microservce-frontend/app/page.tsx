@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import { useAuthSession } from "../lib/authSession";
 import CategoryMenu from "./components/CategoryMenu";
 import Footer from "./components/Footer";
@@ -51,17 +50,10 @@ function calcDiscount(regular: number, selling: number): number | null {
 }
 
 export default function LandingPage() {
-  const router = useRouter();
   const session = useAuthSession();
   const [products, setProducts] = useState<ProductSummary[]>([]);
   const [status, setStatus] = useState("loading");
-  const [authActionPending, setAuthActionPending] = useState<"login" | "signup" | null>(null);
-
-  useEffect(() => {
-    if (session.status === "ready" && session.isAuthenticated && !session.canViewAdmin) {
-      router.replace("/products");
-    }
-  }, [router, session.isAuthenticated, session.status, session.canViewAdmin]);
+  const [authActionPending, setAuthActionPending] = useState<"login" | "signup" | "forgot" | null>(null);
 
   useEffect(() => {
     const run = async () => {
@@ -98,6 +90,16 @@ export default function LandingPage() {
     setAuthActionPending("signup");
     try {
       await session.signup("/products");
+    } finally {
+      setAuthActionPending(null);
+    }
+  };
+
+  const startForgotPassword = async () => {
+    if (authBusy) return;
+    setAuthActionPending("forgot");
+    try {
+      await session.forgotPassword("/");
     } finally {
       setAuthActionPending(null);
     }
@@ -143,6 +145,13 @@ export default function LandingPage() {
               className="hidden rounded-lg border border-white/30 px-5 py-2 text-sm font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50 sm:inline-block"
             >
               {authActionPending === "signup" ? "Redirecting..." : "Sign Up"}
+            </button>
+            <button
+              onClick={() => { void startForgotPassword(); }}
+              disabled={authBusy}
+              className="hidden px-2 py-1 text-xs text-white/80 underline underline-offset-2 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50 sm:inline-block"
+            >
+              {authActionPending === "forgot" ? "Redirecting..." : "Forgot Password?"}
             </button>
           </div>
         </div>

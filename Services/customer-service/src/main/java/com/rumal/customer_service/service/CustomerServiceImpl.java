@@ -102,9 +102,11 @@ public class CustomerServiceImpl implements CustomerService {
         String resolvedEmail = email;
         String resolvedName = request != null ? request.name() : null;
 
-        if (resolvedEmail == null || resolvedEmail.isBlank()) {
+        if (resolvedEmail == null || resolvedEmail.isBlank() || resolvedName == null || resolvedName.isBlank()) {
             var user = keycloakManagementService.getUserById(keycloakId);
-            resolvedEmail = user.email();
+            if (resolvedEmail == null || resolvedEmail.isBlank()) {
+                resolvedEmail = user.email();
+            }
             if (resolvedName == null || resolvedName.isBlank()) {
                 resolvedName = user.name();
             }
