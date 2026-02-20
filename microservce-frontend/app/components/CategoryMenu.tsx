@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 type Category = {
   id: string;
   name: string;
-  slug: string;
+  slug?: string | null;
   type: "PARENT" | "SUB";
   parentCategoryId: string | null;
 };
@@ -32,6 +32,21 @@ function getCategoryIcon(name: string): string {
     if (lower.includes(key)) return icon;
   }
   return "📂";
+}
+
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-+/g, "-");
+}
+
+function toCategorySlug(category: Category): string {
+  const fromSlug = (category.slug || "").trim();
+  if (fromSlug) return slugify(fromSlug);
+  return slugify(category.name || "");
 }
 
 export default function CategoryMenu() {
@@ -93,7 +108,7 @@ export default function CategoryMenu() {
                 return (
                   <div key={parent.id} className="group/parent relative">
                     <Link
-                      href={`/categories/${encodeURIComponent(parent.slug)}`}
+                      href={`/categories/${encodeURIComponent(toCategorySlug(parent))}`}
                       className="flex items-center justify-between rounded-lg px-3 py-2.5 text-sm text-[var(--ink)] no-underline transition hover:bg-[var(--brand-soft)]"
                     >
                       <span className="flex items-center gap-2">
@@ -108,7 +123,7 @@ export default function CategoryMenu() {
                           {children.map((sub) => (
                             <Link
                               key={sub.id}
-                              href={`/categories/${encodeURIComponent(sub.slug)}`}
+                              href={`/categories/${encodeURIComponent(toCategorySlug(sub))}`}
                               className="block rounded-lg px-3 py-2 text-sm text-[var(--ink)] no-underline transition hover:bg-[var(--brand-soft)]"
                             >
                               {sub.name}
@@ -128,7 +143,7 @@ export default function CategoryMenu() {
         {parents.map((parent) => (
           <Link
             key={parent.id}
-            href={`/categories/${encodeURIComponent(parent.slug)}`}
+            href={`/categories/${encodeURIComponent(toCategorySlug(parent))}`}
             className="category-pill shrink-0 no-underline"
           >
             <span>{getCategoryIcon(parent.name)}</span>

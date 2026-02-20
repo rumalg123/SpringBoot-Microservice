@@ -9,7 +9,7 @@ import { useAuthSession } from "../../lib/authSession";
 type Category = {
   id: string;
   name: string;
-  slug: string;
+  slug?: string | null;
   type: "PARENT" | "SUB";
   parentCategoryId: string | null;
 };
@@ -35,6 +35,21 @@ function getCategoryStyle(name: string) {
     if (lower.includes(key)) return style;
   }
   return { bg: "from-gray-500 to-gray-700", accent: "#6b7280", icon: "📂" };
+}
+
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-+/g, "-");
+}
+
+function toCategorySlug(category: Category): string {
+  const fromSlug = (category.slug || "").trim();
+  if (fromSlug) return slugify(fromSlug);
+  return slugify(category.name || "");
 }
 
 export default function CategoriesPage() {
@@ -166,7 +181,7 @@ export default function CategoriesPage() {
                 >
                   {/* Category Header Card */}
                   <Link
-                    href={`/categories/${encodeURIComponent(parent.slug)}`}
+                    href={`/categories/${encodeURIComponent(toCategorySlug(parent))}`}
                     className="no-underline"
                   >
                     <div className={`relative flex items-center gap-4 bg-gradient-to-r ${style.bg} p-6 text-white transition-transform group-hover:scale-[1.01]`}>
@@ -189,7 +204,7 @@ export default function CategoriesPage() {
                         {children.map((sub) => (
                           <Link
                             key={sub.id}
-                            href={`/categories/${encodeURIComponent(sub.slug)}`}
+                            href={`/categories/${encodeURIComponent(toCategorySlug(sub))}`}
                             className="rounded-full border border-[var(--line)] bg-[var(--bg)] px-3 py-1.5 text-xs font-medium text-[var(--ink)] no-underline transition hover:border-[var(--brand)] hover:bg-[var(--brand-soft)] hover:text-[var(--brand)]"
                           >
                             {sub.name}
@@ -202,7 +217,7 @@ export default function CategoriesPage() {
                   {/* View All Link */}
                   <div className="border-t border-[var(--line)] px-4 py-3">
                     <Link
-                      href={`/categories/${encodeURIComponent(parent.slug)}`}
+                      href={`/categories/${encodeURIComponent(toCategorySlug(parent))}`}
                       className="flex items-center justify-between text-sm font-semibold text-[var(--brand)] no-underline hover:underline"
                     >
                       View All Products

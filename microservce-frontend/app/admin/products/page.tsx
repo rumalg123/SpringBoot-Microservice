@@ -234,6 +234,7 @@ export default function AdminProductsPage() {
   const [uploadingImages, setUploadingImages] = useState(false);
   const [dragImageIndex, setDragImageIndex] = useState<number | null>(null);
   const [parentProducts, setParentProducts] = useState<ProductSummary[]>([]);
+  const [loadingParentProducts, setLoadingParentProducts] = useState(false);
   const [variationParentId, setVariationParentId] = useState("");
   const [selectedVariationParent, setSelectedVariationParent] = useState<ProductSummary | null>(null);
   const [parentSearch, setParentSearch] = useState("");
@@ -326,15 +327,20 @@ export default function AdminProductsPage() {
 
   const loadParentProducts = useCallback(async () => {
     if (!session.apiClient) return;
-    const params = new URLSearchParams();
-    params.set("page", "0");
-    params.set("size", "1000");
-    params.set("sort", "name,ASC");
-    params.set("type", "PARENT");
-    params.set("includeOrphanParents", "true");
-    const res = await session.apiClient.get(`/products?${params.toString()}`);
-    const pageData = res.data as PagedResponse<ProductSummary>;
-    setParentProducts((pageData.content || []).filter((p) => p.active));
+    setLoadingParentProducts(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("page", "0");
+      params.set("size", "1000");
+      params.set("sort", "name,ASC");
+      params.set("type", "PARENT");
+      params.set("includeOrphanParents", "true");
+      const res = await session.apiClient.get(`/products?${params.toString()}`);
+      const pageData = res.data as PagedResponse<ProductSummary>;
+      setParentProducts((pageData.content || []).filter((p) => p.active));
+    } finally {
+      setLoadingParentProducts(false);
+    }
   }, [session.apiClient]);
 
   const reloadCurrentView = useCallback(async () => {
@@ -426,6 +432,18 @@ export default function AdminProductsPage() {
     }, 350);
     return () => clearTimeout(timer);
   }, [session.apiClient, categoryForm.slug, categoryForm.id]);
+
+  useEffect(() => {
+    if (form.productType !== "VARIATION") return;
+    void loadParentProducts();
+  }, [form.productType, loadParentProducts]);
+
+  useEffect(() => {
+    if (form.productType !== "VARIATION") return;
+    if (!variationParentId) return;
+    const selected = parentProducts.find((candidate) => candidate.id === variationParentId) || null;
+    setSelectedVariationParent(selected);
+  }, [form.productType, variationParentId, parentProducts]);
 
   const applyFilters = async (e: FormEvent) => {
     e.preventDefault();
@@ -912,7 +930,7 @@ export default function AdminProductsPage() {
       setParentVariationAttributes([]);
       setVariationAttributeValues({});
       setVariationDrafts([]);
-      await Promise.all([loadActive(0), loadDeleted(0)]);
+      await Promise.all([loadActive(0), loadDeleted(0), loadParentProducts()]);
       setShowDeleted(false);
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Save failed.");
@@ -961,6 +979,18 @@ export default function AdminProductsPage() {
     }
   };
 
+  const refreshVariationParents = async () => {
+    try {
+      setStatus("Refreshing parent products...");
+      await loadParentProducts();
+      setStatus("Parent products refreshed.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to refresh parent products";
+      setStatus(message);
+      toast.error(message);
+    }
+  };
+
   const addParentAttribute = () => {
     const normalized = normalizeVariationAttributeName(newParentAttributeName);
     if (!normalized) return;
@@ -983,7 +1013,7 @@ export default function AdminProductsPage() {
       await session.apiClient.delete(`/admin/products/${id}`);
       setStatus("Product soft deleted.");
       toast.success("Product moved to deleted list");
-      await Promise.all([loadActive(0), loadDeleted(0)]);
+      await Promise.all([loadActive(0), loadDeleted(0), loadParentProducts()]);
       setShowDeleted(true);
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Delete failed.");
@@ -1000,7 +1030,7 @@ export default function AdminProductsPage() {
       await session.apiClient.post(`/admin/products/${id}/restore`);
       setStatus("Product restored.");
       toast.success("Product restored");
-      await Promise.all([loadActive(0), loadDeleted(0)]);
+      await Promise.all([loadActive(0), loadDeleted(0), loadParentProducts()]);
       setShowDeleted(false);
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Restore failed.");
@@ -1180,7 +1210,9 @@ export default function AdminProductsPage() {
   const filteredParentProducts = parentProducts.filter((p) => {
     const needle = parentSearch.trim().toLowerCase();
     if (!needle) return true;
-    return p.name.toLowerCase().includes(needle) || p.sku.toLowerCase().includes(needle);
+    return p.name.toLowerCase().includes(needle)
+      || p.sku.toLowerCase().includes(needle)
+      || (p.slug || "").toLowerCase().includes(needle);
   });
   const regularPriceValue = parseNumber(form.regularPrice);
   const discountedPriceValue = form.discountedPrice.trim() ? parseNumber(form.discountedPrice) : null;
@@ -1192,7 +1224,6 @@ export default function AdminProductsPage() {
   const productMutationBusy = savingProduct || creatingQueuedVariationBatch || uploadingImages;
   const productRowActionBusy = Boolean(loadingProductId) || confirmLoading || Boolean(restoringProductId) || listLoading;
   const categoryMutationBusy = savingCategory || confirmLoading || Boolean(restoringCategoryId);
-  const categoryLockedByParent = form.productType === "VARIATION";
   const productSlugBlocked = productSlugStatus === "checking" || productSlugStatus === "taken" || productSlugStatus === "invalid";
   const categorySlugBlocked = categorySlugStatus === "checking" || categorySlugStatus === "taken" || categorySlugStatus === "invalid";
 
@@ -1531,7 +1562,12 @@ export default function AdminProductsPage() {
                     value={form.productType}
                     onChange={(e) => {
                       const nextType = e.target.value as ProductType;
-                      setForm((o) => ({ ...o, productType: nextType }));
+                      setForm((o) => ({
+                        ...o,
+                        productType: nextType,
+                        mainCategoryName: nextType === "VARIATION" ? "" : o.mainCategoryName,
+                        subCategoryNames: nextType === "VARIATION" ? [] : o.subCategoryNames,
+                      }));
                       if (nextType !== "PARENT") {
                         setParentAttributeNames([]);
                         setNewParentAttributeName("");
@@ -1551,57 +1587,56 @@ export default function AdminProductsPage() {
                     <option value="PARENT">PARENT</option>
                     <option value="VARIATION">VARIATION</option>
                   </select>
-                  <select
-                    value={form.mainCategoryName}
-                    onChange={(e) =>
-                      setForm((o) => ({
-                        ...o,
-                        mainCategoryName: e.target.value,
-                        subCategoryNames: [],
-                      }))
-                    }
-                    className="rounded-lg border border-[var(--line)] px-3 py-2"
-                    disabled={categoryLockedByParent || productMutationBusy}
-                    required
-                  >
-                    <option value="">Select Main Category</option>
-                    {parentCategories.map((c) => (
-                      <option key={c.id} value={c.name}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="rounded-lg border border-[var(--line)] p-2">
-                    <p className="mb-1 text-xs text-[var(--muted)]">Sub Categories (multiple)</p>
-                    {categoryLockedByParent && (
-                      <p className="mb-2 text-[11px] text-[var(--muted)]">
-                        Categories are inherited from selected parent product.
-                      </p>
-                    )}
-                    <div className="grid gap-1">
-                      {subCategoryOptions.length === 0 && (
-                        <p className="text-xs text-[var(--muted)]">No sub categories for selected main category.</p>
-                      )}
-                      {subCategoryOptions.map((c) => (
-                        <label key={c.id} className="flex items-center gap-2 text-xs text-[var(--ink)]">
-                          <input
-                            type="checkbox"
-                            checked={form.subCategoryNames.includes(c.name)}
-                            onChange={(e) =>
-                              setForm((o) => ({
-                                ...o,
-                                subCategoryNames: e.target.checked
-                                  ? [...o.subCategoryNames, c.name]
-                                  : o.subCategoryNames.filter((n) => n !== c.name),
-                              }))
-                            }
-                            disabled={categoryLockedByParent || productMutationBusy}
-                          />
-                          {c.name}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
+                  {form.productType !== "VARIATION" && (
+                    <>
+                      <select
+                        value={form.mainCategoryName}
+                        onChange={(e) =>
+                          setForm((o) => ({
+                            ...o,
+                            mainCategoryName: e.target.value,
+                            subCategoryNames: [],
+                          }))
+                        }
+                        className="rounded-lg border border-[var(--line)] px-3 py-2"
+                        disabled={productMutationBusy}
+                        required
+                      >
+                        <option value="">Select Main Category</option>
+                        {parentCategories.map((c) => (
+                          <option key={c.id} value={c.name}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="rounded-lg border border-[var(--line)] p-2">
+                        <p className="mb-1 text-xs text-[var(--muted)]">Sub Categories (multiple)</p>
+                        <div className="grid gap-1">
+                          {subCategoryOptions.length === 0 && (
+                            <p className="text-xs text-[var(--muted)]">No sub categories for selected main category.</p>
+                          )}
+                          {subCategoryOptions.map((c) => (
+                            <label key={c.id} className="flex items-center gap-2 text-xs text-[var(--ink)]">
+                              <input
+                                type="checkbox"
+                                checked={form.subCategoryNames.includes(c.name)}
+                                onChange={(e) =>
+                                  setForm((o) => ({
+                                    ...o,
+                                    subCategoryNames: e.target.checked
+                                      ? [...o.subCategoryNames, c.name]
+                                      : o.subCategoryNames.filter((n) => n !== c.name),
+                                  }))
+                                }
+                                disabled={productMutationBusy}
+                              />
+                              {c.name}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
                   <div className="form-group">
                     <label className="form-label">SKU</label>
                     <input value={form.sku} onChange={(e) => setForm((o) => ({ ...o, sku: e.target.value }))} placeholder="e.g. NK-AM90-BLK-42" className="rounded-lg border border-[var(--line)] px-3 py-2" required />
@@ -1675,16 +1710,34 @@ export default function AdminProductsPage() {
                     <div className="rounded-lg border border-[var(--line)] p-3">
                       <p className="text-xs font-semibold text-[var(--ink)]">Child Variation Setup</p>
                       <p className="mt-1 text-[11px] text-[var(--muted)]">
-                        Select a parent product, then fill all attribute values.
+                        Select a parent product first. Categories are inherited automatically.
                       </p>
-                      <input
-                        value={parentSearch}
-                        onChange={(e) => setParentSearch(e.target.value)}
-                        placeholder="Search parent by name or SKU"
-                        className="mt-2 w-full rounded-lg border border-[var(--line)] px-3 py-2 text-sm"
-                      />
+                      <div className="mt-2 flex gap-2">
+                        <input
+                          value={parentSearch}
+                          onChange={(e) => setParentSearch(e.target.value)}
+                          placeholder="Search parent by name, SKU, or slug"
+                          className="w-full rounded-lg border border-[var(--line)] px-3 py-2 text-sm"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void refreshVariationParents();
+                          }}
+                          disabled={loadingParentProducts || productMutationBusy}
+                          className="rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {loadingParentProducts ? "Refreshing..." : "Refresh"}
+                        </button>
+                      </div>
                       <div className="mt-2 max-h-40 overflow-auto rounded-lg border border-[var(--line)] bg-white">
-                        {filteredParentProducts.length === 0 && (
+                        {loadingParentProducts && (
+                          <p className="px-3 py-2 text-xs text-[var(--muted)]">Loading parent products...</p>
+                        )}
+                        {!loadingParentProducts && parentProducts.length === 0 && (
+                          <p className="px-3 py-2 text-xs text-[var(--muted)]">No active parent products found.</p>
+                        )}
+                        {!loadingParentProducts && parentProducts.length > 0 && filteredParentProducts.length === 0 && (
                           <p className="px-3 py-2 text-xs text-[var(--muted)]">No matching parent products.</p>
                         )}
                         {filteredParentProducts.slice(0, 20).map((p) => (
@@ -1705,9 +1758,28 @@ export default function AdminProductsPage() {
                         ))}
                       </div>
                       {selectedVariationParent && (
-                        <p className="mt-2 text-xs text-[var(--muted)]">
-                          Selected parent: <span className="font-semibold text-[var(--ink)]">{selectedVariationParent.name}</span> ({selectedVariationParent.sku})
-                        </p>
+                        <div className="mt-2 rounded-md border border-[var(--line)] bg-[var(--bg)] px-2 py-1.5 text-xs text-[var(--muted)]">
+                          <p>
+                            Selected parent: <span className="font-semibold text-[var(--ink)]">{selectedVariationParent.name}</span> ({selectedVariationParent.sku})
+                          </p>
+                          {(form.mainCategoryName || form.subCategoryNames.length > 0) && (
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              {form.mainCategoryName && (
+                                <span className="rounded-full bg-[var(--brand)] px-2 py-0.5 text-[10px] font-semibold text-white">
+                                  {form.mainCategoryName}
+                                </span>
+                              )}
+                              {form.subCategoryNames.map((name) => (
+                                <span
+                                  key={`variation-sub-${name}`}
+                                  className="rounded-full border border-[var(--line)] bg-white px-2 py-0.5 text-[10px] text-[var(--ink)]"
+                                >
+                                  {name}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       )}
                       {selectingVariationParentId && (
                         <p className="mt-2 text-xs text-[var(--muted)]">Loading parent attributes...</p>

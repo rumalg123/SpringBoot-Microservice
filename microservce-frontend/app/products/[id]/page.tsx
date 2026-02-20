@@ -74,6 +74,15 @@ function normalizeVariationValue(value: string): string {
   return value.trim().toLowerCase();
 }
 
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-+/g, "-");
+}
+
 export default function ProductDetailPage() {
   const params = useParams<{ id: string }>();
   const { isAuthenticated, profile, logout, canViewAdmin, login, apiClient } = useAuthSession();
@@ -413,7 +422,7 @@ export default function ProductDetailPage() {
               <div className="flex flex-wrap gap-2">
                 {displayProduct.mainCategory && (
                   <Link
-                    href={`/categories/${encodeURIComponent(displayProduct.mainCategorySlug || displayProduct.mainCategory)}`}
+                    href={`/categories/${encodeURIComponent(displayProduct.mainCategorySlug || slugify(displayProduct.mainCategory))}`}
                     className="rounded-full bg-[var(--brand)] px-3 py-1 text-xs font-semibold text-white no-underline"
                   >
                     {displayProduct.mainCategory}
@@ -422,7 +431,7 @@ export default function ProductDetailPage() {
                 {displayProduct.subCategories.map((c, index) => (
                   <Link
                     key={`${c}-${index}`}
-                    href={`/categories/${encodeURIComponent(displayProduct.subCategorySlugs?.[index] || c)}`}
+                    href={`/categories/${encodeURIComponent(displayProduct.subCategorySlugs?.[index] || slugify(c))}`}
                     className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium capitalize text-[var(--ink)] no-underline"
                   >
                     {c}
