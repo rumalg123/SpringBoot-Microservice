@@ -110,7 +110,7 @@ export default function WishlistNavWidget({ apiClient }: Props) {
       </Link>
 
       {desktop && open && (
-        <div className="absolute right-0 top-full z-50 mt-2 hidden w-80 rounded-xl border border-[var(--line)] bg-white p-3 text-[var(--ink)] shadow-2xl md:block">
+        <div className="absolute right-0 top-full z-50 hidden w-80 rounded-xl border border-[var(--line)] bg-white p-3 text-[var(--ink)] shadow-2xl md:block">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-sm font-bold">Wishlist</p>
             <Link href="/wishlist" className="text-xs font-semibold text-[var(--brand)] no-underline hover:underline">

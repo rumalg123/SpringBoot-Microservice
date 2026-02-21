@@ -156,7 +156,7 @@ export default function CartNavWidget({ apiClient, emailVerified }: Props) {
       </Link>
 
       {desktop && open && (
-        <div className="absolute right-0 top-full z-50 mt-2 hidden w-80 rounded-xl border border-[var(--line)] bg-white p-3 text-[var(--ink)] shadow-2xl md:block">
+        <div className="absolute right-0 top-full z-50 hidden w-80 rounded-xl border border-[var(--line)] bg-white p-3 text-[var(--ink)] shadow-2xl md:block">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-sm font-bold">Cart</p>
             <Link href="/cart" className="text-xs font-semibold text-[var(--brand)] no-underline hover:underline">
@@ -182,7 +182,7 @@ export default function CartNavWidget({ apiClient, emailVerified }: Props) {
                     className="block rounded-lg border border-[var(--line)] px-3 py-2 no-underline hover:bg-[#fafafa]"
                   >
                     <p className="line-clamp-1 text-xs font-semibold text-[var(--ink)]">{item.productName}</p>
-                    <p className="text-[11px] text-[var(--muted)]">Qty {item.quantity} • {money(item.lineTotal)}</p>
+                    <p className="text-[11px] text-[var(--muted)]">Qty {item.quantity} | {money(item.lineTotal)}</p>
                   </Link>
                 ))}
               </div>

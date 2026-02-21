@@ -11,29 +11,6 @@ type Category = {
   parentCategoryId: string | null;
 };
 
-const CATEGORY_ICONS: Record<string, string> = {
-  electronics: "📱",
-  fashion: "👗",
-  home: "🏠",
-  beauty: "💄",
-  sports: "⚽",
-  toys: "🧸",
-  books: "📚",
-  food: "🍕",
-  automotive: "🚗",
-  garden: "🌿",
-  health: "💊",
-  office: "💼",
-};
-
-function getCategoryIcon(name: string): string {
-  const lower = name.toLowerCase();
-  for (const [key, icon] of Object.entries(CATEGORY_ICONS)) {
-    if (lower.includes(key)) return icon;
-  }
-  return "📂";
-}
-
 function slugify(value: string): string {
   return value
     .toLowerCase()
@@ -51,6 +28,8 @@ function toCategorySlug(category: Category): string {
 
 export default function CategoryMenu() {
   const [categories, setCategories] = useState<Category[]>([]);
+  const [open, setOpen] = useState(false);
+  const [activeParentId, setActiveParentId] = useState<string>("");
 
   useEffect(() => {
     const run = async () => {
@@ -67,7 +46,11 @@ export default function CategoryMenu() {
     void run();
   }, []);
 
-  const parents = useMemo(() => categories.filter((c) => c.type === "PARENT"), [categories]);
+  const parents = useMemo(
+    () => categories.filter((c) => c.type === "PARENT").sort((a, b) => a.name.localeCompare(b.name)),
+    [categories]
+  );
+
   const subsByParent = useMemo(() => {
     const map = new Map<string, Category[]>();
     for (const sub of categories.filter((c) => c.type === "SUB" && c.parentCategoryId)) {
@@ -82,74 +65,120 @@ export default function CategoryMenu() {
     return map;
   }, [categories]);
 
+  useEffect(() => {
+    if (parents.length === 0) {
+      setActiveParentId("");
+      return;
+    }
+    if (!activeParentId || !parents.some((parent) => parent.id === activeParentId)) {
+      setActiveParentId(parents[0].id);
+    }
+  }, [parents, activeParentId]);
+
   if (parents.length === 0) return null;
 
+  const activeParent = parents.find((parent) => parent.id === activeParentId) || parents[0];
+  const activeSubs = activeParent ? (subsByParent.get(activeParent.id) || []) : [];
+
   return (
-    <nav className="mb-4 overflow-hidden rounded-xl bg-white shadow-sm">
-      {/* Horizontal Category Scroll */}
-      <div className="flex items-center gap-1 overflow-x-auto px-3 py-2.5 hide-scrollbar">
-        {/* All Categories Mega Menu */}
-        <div className="group relative shrink-0 pb-1">
-          <button className="flex items-center gap-2 rounded-lg bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--brand-hover)]">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
-            All Categories
-          </button>
-          <div className="absolute left-0 top-full z-40 hidden min-w-72 pt-1 group-hover:block">
-            <div className="rounded-xl border border-[var(--line)] bg-white p-2 shadow-2xl">
+    <nav className="mb-4 rounded-xl bg-white p-2 shadow-sm">
+      <div
+        className="relative inline-block"
+        onMouseEnter={() => {
+          setOpen(true);
+          if (!activeParentId && parents.length > 0) {
+            setActiveParentId(parents[0].id);
+          }
+        }}
+        onMouseLeave={() => setOpen(false)}
+      >
+        <button
+          type="button"
+          onClick={() => setOpen((current) => !current)}
+          className="flex items-center gap-2 rounded-lg bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--brand-hover)]"
+          aria-expanded={open}
+          aria-label="Browse all categories"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+          All Categories
+        </button>
+
+        {open && (
+          <div className="absolute left-0 top-full z-40 mt-1 w-[min(92vw,760px)] rounded-xl border border-[var(--line)] bg-white shadow-2xl">
+            <div className="border-b border-[var(--line)] p-3">
               <Link
                 href="/products"
-                className="mb-1 flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold text-[var(--ink)] no-underline transition hover:bg-[var(--brand-soft)]"
+                className="inline-flex items-center rounded-lg bg-[var(--brand-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--brand)] no-underline"
               >
-                🏪 All Products
+                View All Products
               </Link>
-              <div className="my-1 h-px bg-[var(--line)]" />
-              {parents.map((parent) => {
-                const children = subsByParent.get(parent.id) || [];
-                return (
-                  <div key={parent.id} className="group/parent relative">
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-[250px_1fr]">
+              <div className="border-b border-[var(--line)] p-2 md:border-b-0 md:border-r">
+                {parents.map((parent) => {
+                  const isActive = activeParent?.id === parent.id;
+                  const childCount = (subsByParent.get(parent.id) || []).length;
+                  return (
                     <Link
+                      key={parent.id}
                       href={`/categories/${encodeURIComponent(toCategorySlug(parent))}`}
-                      className="flex items-center justify-between rounded-lg px-3 py-2.5 text-sm text-[var(--ink)] no-underline transition hover:bg-[var(--brand-soft)]"
+                      onMouseEnter={() => setActiveParentId(parent.id)}
+                      className={`mb-1 flex items-center justify-between rounded-lg px-3 py-2 text-sm no-underline transition ${
+                        isActive
+                          ? "bg-[var(--brand-soft)] text-[var(--brand)]"
+                          : "text-[var(--ink)] hover:bg-[#fafafa]"
+                      }`}
                     >
-                      <span className="flex items-center gap-2">
-                        <span>{getCategoryIcon(parent.name)}</span>
-                        {parent.name}
-                      </span>
-                      {children.length > 0 && <span className="text-xs text-[var(--muted)]">›</span>}
+                      <span className="line-clamp-1">{parent.name}</span>
+                      <span className="text-xs text-[var(--muted)]">{childCount}</span>
                     </Link>
-                    {children.length > 0 && (
-                      <div className="absolute left-full top-0 z-50 hidden min-w-56 pl-1 group-hover/parent:block">
-                        <div className="rounded-xl border border-[var(--line)] bg-white p-2 shadow-2xl">
-                          {children.map((sub) => (
-                            <Link
-                              key={sub.id}
-                              href={`/categories/${encodeURIComponent(toCategorySlug(sub))}`}
-                              className="block rounded-lg px-3 py-2 text-sm text-[var(--ink)] no-underline transition hover:bg-[var(--brand-soft)]"
-                            >
-                              {sub.name}
-                            </Link>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                  );
+                })}
+              </div>
+
+              <div className="p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-xs font-bold uppercase tracking-[0.1em] text-[var(--muted)]">
+                    {activeParent?.name || "Subcategories"}
+                  </p>
+                  {activeParent && (
+                    <Link
+                      href={`/categories/${encodeURIComponent(toCategorySlug(activeParent))}`}
+                      className="text-xs font-semibold text-[var(--brand)] no-underline hover:underline"
+                    >
+                      Open
+                    </Link>
+                  )}
+                </div>
+
+                {activeSubs.length === 0 && (
+                  <p className="rounded-lg bg-[#fafafa] px-3 py-2 text-xs text-[var(--muted)]">
+                    No subcategories.
+                  </p>
+                )}
+
+                {activeSubs.length > 0 && (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {activeSubs.map((sub) => (
+                      <Link
+                        key={sub.id}
+                        href={`/categories/${encodeURIComponent(toCategorySlug(sub))}`}
+                        className="rounded-lg border border-[var(--line)] px-3 py-2 text-sm text-[var(--ink)] no-underline transition hover:border-[var(--brand)] hover:bg-[var(--brand-soft)] hover:text-[var(--brand)]"
+                      >
+                        {sub.name}
+                      </Link>
+                    ))}
                   </div>
-                );
-              })}
+                )}
+              </div>
             </div>
           </div>
-        </div>
-
-        {/* Category Pills */}
-        {parents.map((parent) => (
-          <Link
-            key={parent.id}
-            href={`/categories/${encodeURIComponent(toCategorySlug(parent))}`}
-            className="category-pill shrink-0 no-underline"
-          >
-            <span>{getCategoryIcon(parent.name)}</span>
-            {parent.name}
-          </Link>
-        ))}
+        )}
       </div>
     </nav>
   );
