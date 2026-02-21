@@ -34,23 +34,45 @@ function money(value: number) {
 function resolveImageUrl(imageName: string | null): string | null {
   if (!imageName) return null;
   const base = (process.env.NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL || "").trim();
-  if (base) {
-    return `${base.replace(/\/+$/, "")}/${imageName.replace(/^\/+/, "")}`;
-  }
+  if (base) return `${base.replace(/\/+$/, "")}/${imageName.replace(/^\/+/, "")}`;
   const apiBase = (process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me").trim();
-  const encoded = imageName
-    .split("/")
-    .map((segment) => encodeURIComponent(segment))
-    .join("/");
+  const encoded = imageName.split("/").map((s) => encodeURIComponent(s)).join("/");
   return `${apiBase.replace(/\/+$/, "")}/products/images/${encoded}`;
 }
 
 function calcDiscount(regular: number, selling: number): number | null {
-  if (regular > selling && regular > 0) {
-    return Math.round(((regular - selling) / regular) * 100);
-  }
+  if (regular > selling && regular > 0) return Math.round(((regular - selling) / regular) * 100);
   return null;
 }
+
+/* ── Futuristic Trust Icon SVGs ── */
+const TrustIcons = {
+  ship: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 17H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v3" />
+      <polyline points="9 11 9 6 14 6 14 9" />
+      <rect x="9" y="11" width="14" height="10" rx="2" />
+      <circle cx="12" cy="21" r="1" /><circle cx="20" cy="21" r="1" />
+    </svg>
+  ),
+  lock: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  ),
+  refresh: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+    </svg>
+  ),
+  support: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  ),
+};
 
 export default function LandingPage() {
   const router = useRouter();
@@ -83,19 +105,11 @@ export default function LandingPage() {
   }, []);
 
   useEffect(() => {
-    const resetAuthPending = () => {
-      setAuthActionPending(null);
-    };
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        resetAuthPending();
-      }
-    };
-
+    const resetAuthPending = () => setAuthActionPending(null);
+    const onVisibilityChange = () => { if (document.visibilityState === "visible") resetAuthPending(); };
     window.addEventListener("pageshow", resetAuthPending);
     window.addEventListener("focus", resetAuthPending);
     document.addEventListener("visibilitychange", onVisibilityChange);
-
     return () => {
       window.removeEventListener("pageshow", resetAuthPending);
       window.removeEventListener("focus", resetAuthPending);
@@ -106,39 +120,23 @@ export default function LandingPage() {
   useEffect(() => {
     const onPointerDown = (event: MouseEvent) => {
       if (!searchBoxRef.current) return;
-      if (!searchBoxRef.current.contains(event.target as Node)) {
-        setSearchDropdownOpen(false);
-      }
+      if (!searchBoxRef.current.contains(event.target as Node)) setSearchDropdownOpen(false);
     };
-
     document.addEventListener("mousedown", onPointerDown);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-    };
+    return () => document.removeEventListener("mousedown", onPointerDown);
   }, []);
 
   useEffect(() => {
     const term = searchText.trim();
-    if (term.length < 2) {
-      setSearchSuggestions([]);
-      setSearchSuggestionsLoading(false);
-      return;
-    }
-
+    if (term.length < 2) { setSearchSuggestions([]); setSearchSuggestionsLoading(false); return; }
     let active = true;
     const timer = window.setTimeout(async () => {
       setSearchSuggestionsLoading(true);
       try {
         const apiBase = process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me";
-        const params = new URLSearchParams();
-        params.set("page", "0");
-        params.set("size", "6");
-        params.set("q", term);
-
+        const params = new URLSearchParams({ page: "0", size: "6", q: term });
         const res = await fetch(`${apiBase}/products?${params.toString()}`, { cache: "no-store" });
-        if (!res.ok) {
-          throw new Error("Failed to load search suggestions");
-        }
+        if (!res.ok) throw new Error("Failed");
         const data = (await res.json()) as ProductPageResponse;
         if (!active) return;
         setSearchSuggestions((data.content || []).slice(0, 6));
@@ -146,16 +144,10 @@ export default function LandingPage() {
         if (!active) return;
         setSearchSuggestions([]);
       } finally {
-        if (active) {
-          setSearchSuggestionsLoading(false);
-        }
+        if (active) setSearchSuggestionsLoading(false);
       }
     }, 250);
-
-    return () => {
-      active = false;
-      window.clearTimeout(timer);
-    };
+    return () => { active = false; window.clearTimeout(timer); };
   }, [searchText]);
 
   const dealProducts = useMemo(() => products.filter((p) => p.discountedPrice !== null).slice(0, 4), [products]);
@@ -165,41 +157,22 @@ export default function LandingPage() {
   const startLogin = async () => {
     if (authBusy) return;
     setAuthActionPending("login");
-    try {
-      await session.login("/products");
-    } finally {
-      setAuthActionPending(null);
-    }
+    try { await session.login("/products"); } finally { setAuthActionPending(null); }
   };
-
   const startSignup = async () => {
     if (authBusy) return;
     setAuthActionPending("signup");
-    try {
-      await session.signup("/products");
-    } finally {
-      setAuthActionPending(null);
-    }
+    try { await session.signup("/products"); } finally { setAuthActionPending(null); }
   };
-
   const startForgotPassword = async () => {
     if (authBusy) return;
     setAuthActionPending("forgot");
-    try {
-      await session.forgotPassword("/");
-    } finally {
-      setAuthActionPending(null);
-    }
+    try { await session.forgotPassword("/"); } finally { setAuthActionPending(null); }
   };
-
   const startLogout = async () => {
     if (logoutPending) return;
     setLogoutPending(true);
-    try {
-      await session.logout();
-    } finally {
-      setLogoutPending(false);
-    }
+    try { await session.logout(); } finally { setLogoutPending(false); }
   };
 
   const openSearchResults = (value: string) => {
@@ -222,92 +195,161 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--bg)]">
-      {/* Top Header Bar (simplified for landing) */}
-      <header className="bg-[var(--header-bg)] shadow-lg">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
-          <Link href="/" className="flex items-center gap-2 text-white no-underline">
-            <span className="text-2xl">🛒</span>
+    <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
+      {/* ── Header ── */}
+      <header
+        style={{
+          background: "rgba(8,8,18,0.88)",
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
+          borderBottom: "1px solid rgba(0,212,255,0.1)",
+          position: "sticky",
+          top: 0,
+          zIndex: 50,
+        }}
+      >
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
+          {/* Logo */}
+          <Link href="/" className="flex items-center gap-3 no-underline" style={{ flexShrink: 0 }}>
+            <div
+              style={{
+                width: "36px", height: "36px", borderRadius: "10px",
+                background: "linear-gradient(135deg, #00d4ff, #7c3aed)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontWeight: 900, fontSize: "0.7rem", color: "#fff",
+                boxShadow: "0 0 16px rgba(0,212,255,0.35)",
+              }}
+            >RS</div>
             <div>
-              <p className="text-lg font-bold leading-tight text-white">Rumal Store</p>
-              <p className="text-[10px] tracking-[0.15em] text-gray-400">ONLINE MARKETPLACE</p>
+              <p style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, color: "#fff", fontSize: "1rem", margin: 0 }}>
+                Rumal Store
+              </p>
+              <p style={{ fontSize: "9px", color: "rgba(0,212,255,0.55)", letterSpacing: "0.18em", margin: 0 }}>
+                ONLINE MARKETPLACE
+              </p>
             </div>
           </Link>
-          <div className="mx-6 hidden flex-1 md:block">
-            <div ref={searchBoxRef} className="relative max-w-xl">
-              <form onSubmit={submitSearch} className="flex items-center overflow-hidden rounded-lg bg-white">
+
+          {/* Search */}
+          <div className="mx-4 hidden flex-1 md:block">
+            <div ref={searchBoxRef} style={{ position: "relative", maxWidth: "520px" }}>
+              <form
+                onSubmit={submitSearch}
+                style={{
+                  display: "flex", alignItems: "center", overflow: "hidden",
+                  borderRadius: "12px", border: "1px solid rgba(0,212,255,0.18)",
+                  background: "rgba(255,255,255,0.04)",
+                }}
+              >
+                <span style={{ paddingLeft: "14px", color: "rgba(0,212,255,0.45)", flexShrink: 0 }}>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
+                  </svg>
+                </span>
                 <input
                   type="text"
                   placeholder="Search products, brands and more..."
-                  className="flex-1 border-none px-4 py-2.5 text-sm text-[var(--ink)] outline-none"
+                  style={{
+                    flex: 1, border: "none", background: "transparent",
+                    padding: "11px 12px", fontSize: "0.875rem", color: "#fff", outline: "none",
+                  }}
                   value={searchText}
                   onFocus={() => setSearchDropdownOpen(true)}
-                  onChange={(e) => {
-                    setSearchText(e.target.value);
-                    if (!searchDropdownOpen) {
-                      setSearchDropdownOpen(true);
-                    }
-                  }}
+                  onChange={(e) => { setSearchText(e.target.value); if (!searchDropdownOpen) setSearchDropdownOpen(true); }}
                 />
                 {searchText.trim() && (
                   <button
                     type="button"
-                    onClick={() => {
-                      setSearchText("");
-                      setSearchSuggestions([]);
-                      setSearchDropdownOpen(true);
+                    onClick={() => { setSearchText(""); setSearchSuggestions([]); setSearchDropdownOpen(true); }}
+                    style={{
+                      marginRight: "8px", width: "22px", height: "22px", borderRadius: "50%",
+                      border: "none", background: "rgba(255,255,255,0.1)", color: "#aaa",
+                      fontSize: "0.65rem", cursor: "pointer", display: "flex",
+                      alignItems: "center", justifyContent: "center",
                     }}
-                    className="mr-2 flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-xs text-gray-700 hover:bg-gray-300"
                     aria-label="Clear search"
-                  >
-                    x
-                  </button>
+                  >✕</button>
                 )}
                 <button
                   type="submit"
                   disabled={searchSubmitPending || !searchText.trim()}
-                  className="bg-[var(--brand)] px-5 py-2.5 text-white transition hover:bg-[var(--brand-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+                  style={{
+                    padding: "11px 20px", border: "none",
+                    background: "linear-gradient(135deg, #00d4ff, #7c3aed)",
+                    color: "#fff", fontWeight: 700, fontSize: "0.8rem",
+                    cursor: searchSubmitPending || !searchText.trim() ? "not-allowed" : "pointer",
+                    opacity: !searchText.trim() ? 0.6 : 1,
+                    transition: "opacity 0.2s",
+                    whiteSpace: "nowrap",
+                  }}
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
+                  Search
                 </button>
               </form>
 
               {searchDropdownOpen && (
-                <div className="absolute left-0 right-0 z-40 mt-1 overflow-hidden rounded-lg border border-[var(--line)] bg-white shadow-xl">
+                <div
+                  style={{
+                    position: "absolute", left: 0, right: 0, zIndex: 40, marginTop: "6px",
+                    borderRadius: "12px", border: "1px solid rgba(0,212,255,0.15)",
+                    background: "#111128", boxShadow: "0 16px 48px rgba(0,0,0,0.7)",
+                    overflow: "hidden",
+                  }}
+                >
                   {searchText.trim().length < 2 && (
-                    <p className="px-4 py-3 text-xs text-[var(--muted)]">Type at least 2 characters to search.</p>
+                    <p style={{ padding: "14px 16px", fontSize: "0.8rem", color: "#6868a0", margin: 0 }}>
+                      Type at least 2 characters to search.
+                    </p>
                   )}
-
                   {searchText.trim().length >= 2 && (
                     <>
                       <button
                         type="button"
                         onClick={() => openSearchResults(searchText)}
-                        className="flex w-full items-center justify-between border-b border-[var(--line)] px-4 py-3 text-left text-sm text-[var(--ink)] hover:bg-[var(--brand-soft)]"
+                        style={{
+                          width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+                          padding: "12px 16px", textAlign: "left", fontSize: "0.875rem", color: "#fff",
+                          background: "transparent", border: "none", borderBottom: "1px solid rgba(0,212,255,0.08)",
+                          cursor: "pointer", fontWeight: 600,
+                        }}
                       >
-                        <span>{`Search for "${searchText.trim()}"`}</span>
-                        <span className="text-xs text-[var(--muted)]">Enter</span>
+                        <span>Search for &quot;{searchText.trim()}&quot;</span>
+                        <span style={{ fontSize: "0.7rem", color: "#6868a0" }}>Enter ↵</span>
                       </button>
-
                       {searchSuggestionsLoading && (
-                        <p className="px-4 py-3 text-xs text-[var(--muted)]">Loading suggestions...</p>
+                        <p style={{ padding: "12px 16px", fontSize: "0.8rem", color: "#6868a0", margin: 0 }}>
+                          Loading suggestions...
+                        </p>
                       )}
-
                       {!searchSuggestionsLoading && searchSuggestions.length === 0 && (
-                        <p className="px-4 py-3 text-xs text-[var(--muted)]">No matching products.</p>
+                        <p style={{ padding: "12px 16px", fontSize: "0.8rem", color: "#6868a0", margin: 0 }}>
+                          No matching products.
+                        </p>
                       )}
-
                       {!searchSuggestionsLoading && searchSuggestions.length > 0 && (
-                        <div className="max-h-72 overflow-y-auto">
+                        <div style={{ maxHeight: "280px", overflowY: "auto" }}>
                           {searchSuggestions.map((product) => (
                             <button
                               key={product.id}
                               type="button"
                               onClick={() => openSuggestedProduct(product)}
-                              className="block w-full border-t border-[var(--line)] px-4 py-3 text-left hover:bg-[#fafafa]"
+                              style={{
+                                display: "block", width: "100%",
+                                borderTop: "1px solid rgba(0,212,255,0.06)",
+                                padding: "10px 16px", textAlign: "left",
+                                background: "transparent", border: "none 0",
+                                borderTop: "1px solid rgba(0,212,255,0.06)",
+                                cursor: "pointer", transition: "background 0.12s",
+                              }}
+                              onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(0,212,255,0.05)"; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                             >
-                              <p className="line-clamp-1 text-sm font-semibold text-[var(--ink)]">{product.name}</p>
-                              <p className="line-clamp-1 text-xs text-[var(--muted)]">{product.sku}</p>
+                              <p style={{ margin: 0, fontSize: "0.875rem", fontWeight: 600, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {product.name}
+                              </p>
+                              <p style={{ margin: 0, fontSize: "0.72rem", color: "#6868a0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                SKU: {product.sku}
+                              </p>
                             </button>
                           ))}
                         </div>
@@ -318,26 +360,38 @@ export default function LandingPage() {
               )}
             </div>
           </div>
+
+          {/* Auth Area */}
           {session.isAuthenticated ? (
             <div className="flex flex-wrap items-center justify-end gap-2">
               <WishlistNavWidget apiClient={session.apiClient} />
               <CartNavWidget apiClient={session.apiClient} emailVerified={session.emailVerified} />
-              <span className="hidden rounded-full bg-white/10 px-3 py-1.5 text-xs text-gray-300 md:inline-block">
+              <span
+                className="hidden md:inline-block rounded-full px-3 py-1.5 text-xs font-medium"
+                style={{ background: "rgba(0,212,255,0.07)", border: "1px solid rgba(0,212,255,0.15)", color: "rgba(0,212,255,0.8)" }}
+              >
                 {(session.profile?.email as string) || "User"}
               </span>
               {session.canViewAdmin ? (
-                <Link href="/admin/orders" className="rounded-lg border border-white/30 px-4 py-2 text-sm font-semibold text-white no-underline transition hover:bg-white/10">
+                <Link href="/admin/orders"
+                  className="rounded-xl px-4 py-2 text-xs font-bold no-underline transition"
+                  style={{ border: "1px solid rgba(124,58,237,0.35)", color: "#a78bfa", background: "rgba(124,58,237,0.08)" }}
+                >
                   Admin
                 </Link>
               ) : (
-                <Link href="/profile" className="rounded-lg border border-white/30 px-4 py-2 text-sm font-semibold text-white no-underline transition hover:bg-white/10">
+                <Link href="/profile"
+                  className="rounded-xl px-4 py-2 text-xs font-bold no-underline transition"
+                  style={{ border: "1px solid rgba(0,212,255,0.25)", color: "#00d4ff", background: "rgba(0,212,255,0.06)" }}
+                >
                   Profile
                 </Link>
               )}
               <button
                 onClick={() => { void startLogout(); }}
                 disabled={logoutPending}
-                className="rounded-lg bg-[var(--brand)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[var(--brand-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl px-4 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
+                style={{ background: "linear-gradient(135deg, #00d4ff, #7c3aed)", color: "#fff", border: "none", cursor: "pointer", boxShadow: "0 0 14px rgba(0,212,255,0.2)" }}
               >
                 {logoutPending ? "Logging out..." : "Logout"}
               </button>
@@ -347,21 +401,24 @@ export default function LandingPage() {
               <button
                 onClick={() => { void startLogin(); }}
                 disabled={authBusy}
-                className="rounded-lg bg-[var(--brand)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[var(--brand-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl px-5 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
+                style={{ background: "linear-gradient(135deg, #00d4ff, #7c3aed)", color: "#fff", border: "none", cursor: "pointer", boxShadow: "0 0 14px rgba(0,212,255,0.2)" }}
               >
                 {authActionPending === "login" ? "Redirecting..." : "Login"}
               </button>
               <button
                 onClick={() => { void startSignup(); }}
                 disabled={authBusy}
-                className="rounded-lg border border-white/30 px-5 py-2 text-sm font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl px-5 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
+                style={{ border: "1px solid rgba(0,212,255,0.25)", color: "#00d4ff", background: "rgba(0,212,255,0.06)", cursor: "pointer" }}
               >
                 {authActionPending === "signup" ? "Redirecting..." : "Sign Up"}
               </button>
               <button
                 onClick={() => { void startForgotPassword(); }}
                 disabled={authBusy}
-                className="px-2 py-1 text-xs text-white/80 underline underline-offset-2 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="px-2 py-1 text-xs transition disabled:cursor-not-allowed disabled:opacity-50"
+                style={{ color: "#6868a0", background: "none", border: "none", textDecoration: "underline", textDecorationColor: "rgba(104,104,160,0.4)", cursor: "pointer" }}
               >
                 {authActionPending === "forgot" ? "Redirecting..." : "Forgot Password?"}
               </button>
@@ -370,154 +427,270 @@ export default function LandingPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-4">
+      <main>
         {/* Category Menu */}
-        <CategoryMenu />
+        <div className="mx-auto max-w-7xl px-4 pt-4">
+          <CategoryMenu />
+        </div>
 
-        {/* Hero Banner */}
-        <section className="animate-rise mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-[#ff4747] via-[#ff6b35] to-[#ff8c00] p-8 text-white shadow-xl md:p-12">
-          <div className="relative grid items-center gap-8 md:grid-cols-[1.4fr,0.6fr]">
-            <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
-            <div className="relative space-y-5">
-              <span className="inline-block rounded-full bg-white/20 px-4 py-1.5 text-xs font-bold uppercase tracking-wider backdrop-blur">
-                🔥 Mega Sale Live Now
-              </span>
-              <h1 className="text-3xl font-extrabold leading-tight md:text-5xl">
-                Discover Amazing
-                <br />
-                Deals Every Day
-              </h1>
-              <p className="max-w-lg text-sm text-white/80 md:text-base">
-                Shop thousands of products at unbeatable prices. Free shipping on your first order.
-                {session.isAuthenticated ? " Continue your shopping journey." : " Sign in to start shopping!"}
-              </p>
-              <div className="flex flex-wrap gap-3">
-                <Link
-                  href="/products"
-                  className="inline-flex items-center gap-2 rounded-lg bg-white px-6 py-3 text-sm font-bold no-underline shadow-sm transition hover:shadow-lg"
-                  style={{ color: 'var(--brand)' }}
+        {/* ── HERO SECTION ── */}
+        <section
+          className="animate-rise"
+          style={{
+            position: "relative",
+            overflow: "hidden",
+            background: "linear-gradient(135deg, #060618 0%, #0e0820 40%, #071428 100%)",
+            padding: "0",
+            marginBottom: "0",
+          }}
+        >
+          {/* Decorative orbs */}
+          <div style={{ position: "absolute", top: "-80px", left: "-80px", width: "450px", height: "450px", borderRadius: "50%", background: "radial-gradient(circle, rgba(0,212,255,0.08) 0%, transparent 70%)", pointerEvents: "none" }} />
+          <div style={{ position: "absolute", bottom: "-100px", right: "-60px", width: "500px", height: "500px", borderRadius: "50%", background: "radial-gradient(circle, rgba(124,58,237,0.09) 0%, transparent 70%)", pointerEvents: "none" }} />
+          <div style={{ position: "absolute", top: "30%", left: "40%", width: "200px", height: "200px", borderRadius: "50%", background: "radial-gradient(circle, rgba(0,212,255,0.05) 0%, transparent 70%)", pointerEvents: "none" }} />
+
+          {/* Subtle grid */}
+          <div
+            style={{
+              position: "absolute", inset: 0, pointerEvents: "none",
+              backgroundImage: "linear-gradient(rgba(0,212,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,0.04) 1px, transparent 1px)",
+              backgroundSize: "48px 48px",
+            }}
+          />
+
+          <div className="mx-auto max-w-7xl px-4 py-16 md:py-24" style={{ position: "relative", zIndex: 1 }}>
+            <div className="grid items-center gap-12 md:grid-cols-[1fr,auto]">
+              <div style={{ maxWidth: "680px" }}>
+                {/* Tag pill */}
+                <div
+                  className="mb-6 inline-flex items-center gap-2 rounded-full px-4 py-1.5"
+                  style={{
+                    background: "rgba(0,212,255,0.06)",
+                    border: "1px solid rgba(0,212,255,0.2)",
+                    fontSize: "0.72rem",
+                    fontWeight: 800,
+                    color: "#00d4ff",
+                    letterSpacing: "0.12em",
+                    textTransform: "uppercase",
+                  }}
                 >
-                  🛍️ Shop Now
-                </Link>
-                {session.isAuthenticated ? (
+                  <span
+                    style={{
+                      width: "6px", height: "6px", borderRadius: "50%",
+                      background: "#00d4ff",
+                      boxShadow: "0 0 8px #00d4ff",
+                      display: "inline-block",
+                      animation: "glowPulse 2s ease-in-out infinite",
+                    }}
+                  />
+                  Mega Sale — Live Now
+                </div>
+
+                {/* Headline */}
+                <h1
+                  style={{
+                    fontFamily: "'Syne', sans-serif",
+                    fontSize: "clamp(2.4rem, 6vw, 4.5rem)",
+                    fontWeight: 800,
+                    lineHeight: 1.08,
+                    letterSpacing: "-0.03em",
+                    margin: "0 0 24px",
+                    color: "#fff",
+                  }}
+                >
+                  Your Next-Gen
+                  <br />
+                  <span
+                    style={{
+                      background: "linear-gradient(135deg, #00d4ff 0%, #7c3aed 100%)",
+                      WebkitBackgroundClip: "text",
+                      WebkitTextFillColor: "transparent",
+                      backgroundClip: "text",
+                    }}
+                  >
+                    Shopping Hub
+                  </span>
+                </h1>
+
+                <p style={{ fontSize: "1rem", color: "#8888bb", lineHeight: 1.7, margin: "0 0 36px", maxWidth: "520px" }}>
+                  Discover thousands of premium products at unbeatable prices. Secure payments, lightning-fast delivery, and a shopping experience built for the future.
+                  {session.isAuthenticated ? " Welcome back — your deals are waiting." : " Sign in to unlock your personal store."}
+                </p>
+
+                {/* CTA Buttons */}
+                <div className="flex flex-wrap gap-3">
                   <Link
-                    href={session.canViewAdmin ? "/admin/orders" : "/profile"}
-                    className="rounded-lg border-2 border-white bg-white/10 px-6 py-3 text-sm font-bold text-white no-underline transition hover:bg-white/25"
+                    href="/products"
+                    className="no-underline inline-flex items-center gap-2 rounded-xl px-7 py-3.5 font-bold transition"
+                    style={{
+                      background: "linear-gradient(135deg, #00d4ff, #7c3aed)",
+                      color: "#fff",
+                      fontSize: "0.9rem",
+                      boxShadow: "0 0 28px rgba(0,212,255,0.3)",
+                    }}
                   >
-                    {session.canViewAdmin ? "Go to Admin" : "Go to Profile"}
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" />
+                      <path d="M16 10a4 4 0 0 1-8 0" />
+                    </svg>
+                    Shop Now
                   </Link>
-                ) : (
-                  <button
-                    onClick={() => { void startSignup(); }}
-                    disabled={authBusy}
-                    className="rounded-lg border-2 border-white bg-white/10 px-6 py-3 text-sm font-bold text-white transition hover:bg-white/25 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {authActionPending === "signup" ? "Redirecting..." : "Create Account"}
-                  </button>
-                )}
+                  {session.isAuthenticated ? (
+                    <Link
+                      href={session.canViewAdmin ? "/admin/orders" : "/profile"}
+                      className="no-underline inline-flex items-center gap-2 rounded-xl px-7 py-3.5 font-bold transition"
+                      style={{ border: "1.5px solid rgba(0,212,255,0.3)", color: "#00d4ff", background: "rgba(0,212,255,0.06)", fontSize: "0.9rem" }}
+                    >
+                      {session.canViewAdmin ? "Go to Admin" : "My Profile"}
+                    </Link>
+                  ) : (
+                    <button
+                      onClick={() => { void startSignup(); }}
+                      disabled={authBusy}
+                      className="inline-flex items-center gap-2 rounded-xl px-7 py-3.5 font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
+                      style={{ border: "1.5px solid rgba(0,212,255,0.3)", color: "#00d4ff", background: "rgba(0,212,255,0.06)", fontSize: "0.9rem", cursor: "pointer" }}
+                    >
+                      {authActionPending === "signup" ? "Redirecting..." : "Create Account →"}
+                    </button>
+                  )}
+                </div>
+
+                {/* Stats row */}
+                <div className="mt-10 flex flex-wrap gap-6">
+                  {[
+                    { value: "50K+", label: "Products" },
+                    { value: "99%", label: "Satisfaction" },
+                    { value: "24/7", label: "Support" },
+                  ].map(({ value, label }) => (
+                    <div key={label}>
+                      <p style={{ fontFamily: "'Syne', sans-serif", fontSize: "1.5rem", fontWeight: 800, color: "#00d4ff", margin: "0 0 2px", textShadow: "0 0 16px rgba(0,212,255,0.4)" }}>
+                        {value}
+                      </p>
+                      <p style={{ fontSize: "0.72rem", color: "#6868a0", margin: 0, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em" }}>{label}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Side discount badge */}
+              <div className="hidden md:flex flex-col items-center gap-4">
+                <div
+                  style={{
+                    padding: "32px 28px",
+                    borderRadius: "24px",
+                    border: "1px solid rgba(0,212,255,0.2)",
+                    background: "rgba(0,212,255,0.04)",
+                    backdropFilter: "blur(12px)",
+                    textAlign: "center",
+                    boxShadow: "0 0 40px rgba(0,212,255,0.08)",
+                  }}
+                >
+                  <p style={{ fontSize: "0.7rem", fontWeight: 800, color: "#00d4ff", letterSpacing: "0.16em", textTransform: "uppercase", margin: "0 0 4px" }}>UP TO</p>
+                  <p style={{ fontFamily: "'Syne', sans-serif", fontSize: "5rem", fontWeight: 900, color: "#fff", lineHeight: 1, margin: "0 0 4px", textShadow: "0 0 32px rgba(0,212,255,0.3)" }}>
+                    70<span style={{ color: "#00d4ff" }}>%</span>
+                  </p>
+                  <p style={{ fontSize: "1rem", fontWeight: 800, color: "rgba(255,255,255,0.6)", letterSpacing: "0.08em", margin: 0 }}>OFF TODAY</p>
+                </div>
+                <div
+                  style={{
+                    padding: "14px 20px",
+                    borderRadius: "14px",
+                    border: "1px solid rgba(124,58,237,0.25)",
+                    background: "rgba(124,58,237,0.06)",
+                    textAlign: "center",
+                    fontSize: "0.78rem",
+                    color: "#a78bfa",
+                    fontWeight: 600,
+                  }}
+                >
+                  ✦ Free shipping on orders $25+
+                </div>
               </div>
             </div>
-            <div className="hidden text-center md:block">
-              <div className="inline-block rounded-2xl bg-white/15 p-6 backdrop-blur">
-                <p className="text-5xl font-extrabold">UP TO</p>
-                <p className="text-7xl font-black text-yellow-300">70%</p>
-                <p className="text-2xl font-extrabold">OFF</p>
+          </div>
+        </section>
+
+        {/* ── TRUST BAR ── */}
+        <section className="animate-rise mx-auto max-w-7xl px-4 py-8" style={{ animationDelay: "100ms" }}>
+          <div className="trust-bar">
+            {[
+              { icon: TrustIcons.ship, title: "Free Shipping", desc: "On orders over $25" },
+              { icon: TrustIcons.lock, title: "Secure Payment", desc: "100% encrypted checkout" },
+              { icon: TrustIcons.refresh, title: "Easy Returns", desc: "30-day return policy" },
+              { icon: TrustIcons.support, title: "24/7 Support", desc: "Always here to help you" },
+            ].map(({ icon, title, desc }) => (
+              <div key={title} className="trust-item">
+                <span className="trust-icon">{icon}</span>
+                <div className="trust-text">
+                  <h4>{title}</h4>
+                  <p>{desc}</p>
+                </div>
               </div>
-            </div>
+            ))}
           </div>
         </section>
 
         {session.status === "error" && (
-          <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {session.error}
-          </p>
+          <div className="mx-auto max-w-7xl px-4">
+            <p style={{ borderRadius: "10px", border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.08)", padding: "12px 16px", fontSize: "0.875rem", color: "#f87171", marginBottom: "16px" }}>
+              {session.error}
+            </p>
+          </div>
         )}
 
-        {/* Trust Bar */}
-        <section className="mb-6 animate-rise" style={{ animationDelay: "100ms" }}>
-          <div className="trust-bar">
-            <div className="trust-item">
-              <span className="trust-icon">🚚</span>
-              <div className="trust-text">
-                <h4>Free Shipping</h4>
-                <p>On orders over $25</p>
-              </div>
-            </div>
-            <div className="trust-item">
-              <span className="trust-icon">🔒</span>
-              <div className="trust-text">
-                <h4>Secure Payment</h4>
-                <p>100% secure checkout</p>
-              </div>
-            </div>
-            <div className="trust-item">
-              <span className="trust-icon">🔄</span>
-              <div className="trust-text">
-                <h4>Easy Returns</h4>
-                <p>30-day return policy</p>
-              </div>
-            </div>
-            <div className="trust-item">
-              <span className="trust-icon">💬</span>
-              <div className="trust-text">
-                <h4>24/7 Support</h4>
-                <p>Ready to help you</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Flash Deals */}
+        {/* ── FLASH DEALS ── */}
         {dealProducts.length > 0 && (
-          <section className="mb-8 animate-rise" style={{ animationDelay: "200ms" }}>
+          <section
+            className="animate-rise mx-auto max-w-7xl px-4 pb-12"
+            style={{ animationDelay: "200ms" }}
+          >
             <div className="section-header">
               <div className="flex items-center gap-3">
-                <h2>⚡ Flash Deals</h2>
-                <span className="flash-label">🔥 Limited Time</span>
+                <h2>Flash Deals</h2>
+                <span className="flash-label">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                  </svg>
+                  Limited Time
+                </span>
               </div>
-              <Link href="/products" className="text-sm font-semibold text-[var(--brand)] no-underline hover:underline">
+              <Link href="/products" className="no-underline" style={{ color: "var(--brand)", fontWeight: 700, fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "4px" }}>
                 View All →
               </Link>
             </div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {dealProducts.map((product, idx) => {
                 const discount = calcDiscount(product.regularPrice, product.sellingPrice);
+                const imgUrl = resolveImageUrl(product.mainImage);
                 return (
                   <Link
                     href={`/products/${encodeURIComponent((product.slug || product.id).trim())}`}
                     key={product.id}
-                    className="product-card animate-rise relative no-underline"
+                    className="product-card animate-rise no-underline"
                     style={{ animationDelay: `${idx * 80}ms` }}
                   >
                     {discount && <span className="badge-sale">-{discount}%</span>}
-                    <div className="aspect-square overflow-hidden bg-[#f8f8f8]">
-                      {resolveImageUrl(product.mainImage) ? (
-                        <Image
-                          src={resolveImageUrl(product.mainImage) || ""}
-                          alt={product.name}
-                          width={400}
-                          height={400}
-                          className="product-card-img"
-                          unoptimized
-                        />
+                    <div style={{ position: "relative", aspectRatio: "1/1", overflow: "hidden", background: "var(--surface-2)" }}>
+                      {imgUrl ? (
+                        <Image src={imgUrl} alt={product.name} width={400} height={400} className="product-card-img" unoptimized />
                       ) : (
-                        <div className="grid h-full w-full place-items-center bg-gradient-to-br from-gray-100 to-gray-200 text-3xl">
-                          📦
+                        <div style={{ display: "grid", placeItems: "center", width: "100%", height: "100%", background: "linear-gradient(135deg, #111128, #1c1c38)", color: "#4a4a70", fontSize: "0.8rem", fontWeight: 600 }}>
+                          No Image
                         </div>
                       )}
+                      <div className="product-card-overlay">
+                        <span style={{ background: "linear-gradient(135deg,#00d4ff,#7c3aed)", color: "#fff", padding: "8px 18px", borderRadius: "20px", fontSize: "0.78rem", fontWeight: 800, letterSpacing: "0.04em" }}>
+                          View Deal →
+                        </span>
+                      </div>
                     </div>
                     <div className="product-card-body">
-                      <p className="line-clamp-2 text-sm font-medium text-[var(--ink)]">{product.name}</p>
-                      <div className="mt-2 flex items-center gap-1">
+                      <p style={{ margin: "0 0 6px", fontSize: "0.875rem", fontWeight: 600, color: "var(--ink)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{product.name}</p>
+                      <div style={{ display: "flex", alignItems: "center", gap: "4px", marginBottom: "6px" }}>
                         <span className="price-current">{money(product.sellingPrice)}</span>
-                        {product.discountedPrice !== null && (
-                          <span className="price-original">{money(product.regularPrice)}</span>
-                        )}
+                        {product.discountedPrice !== null && <span className="price-original">{money(product.regularPrice)}</span>}
                       </div>
-                      <div className="mt-1.5">
-                        <span className="star-rating">★★★★★</span>
-                        <span className="star-rating-count">| 1k+ sold</span>
-                      </div>
+                      <div className="star-rating">★★★★★ <span className="star-rating-count">| 1k+ sold</span></div>
                     </div>
                   </Link>
                 );
@@ -526,11 +699,14 @@ export default function LandingPage() {
           </section>
         )}
 
-        {/* Trending Products */}
-        <section className="mb-8 animate-rise" style={{ animationDelay: "300ms" }}>
+        {/* ── TRENDING PRODUCTS ── */}
+        <section
+          className="animate-rise mx-auto max-w-7xl px-4 pb-12"
+          style={{ animationDelay: "300ms" }}
+        >
           <div className="section-header">
-            <h2>🔥 Trending Products</h2>
-            <Link href="/products" className="text-sm font-semibold text-[var(--brand)] no-underline hover:underline">
+            <h2>Trending Products</h2>
+            <Link href="/products" className="no-underline" style={{ color: "var(--brand)", fontWeight: 700, fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "4px" }}>
               View All →
             </Link>
           </div>
@@ -538,11 +714,11 @@ export default function LandingPage() {
           {status === "loading" && (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="overflow-hidden rounded-xl">
-                  <div className="skeleton h-48 w-full" />
-                  <div className="p-4 space-y-2">
-                    <div className="skeleton h-4 w-3/4" />
-                    <div className="skeleton h-5 w-1/2" />
+                <div key={i} style={{ borderRadius: "16px", overflow: "hidden", background: "var(--surface)", border: "1px solid var(--line)" }}>
+                  <div className="skeleton" style={{ height: "220px", width: "100%", borderRadius: 0 }} />
+                  <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <div className="skeleton" style={{ height: "14px", width: "75%" }} />
+                    <div className="skeleton" style={{ height: "18px", width: "50%" }} />
                   </div>
                 </div>
               ))}
@@ -550,13 +726,13 @@ export default function LandingPage() {
           )}
 
           {status === "error" && (
-            <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              ⚠️ Product catalog is unavailable right now. Please try again later.
+            <p style={{ borderRadius: "12px", border: "1px solid rgba(245,158,11,0.25)", background: "rgba(245,158,11,0.08)", padding: "14px 16px", fontSize: "0.875rem", color: "#fbbf24" }}>
+              ⚠ Product catalog is unavailable right now. Please try again later.
             </p>
           )}
 
           {status === "ready" && trendingProducts.length === 0 && (
-            <p className="rounded-xl border border-dashed border-[var(--line)] px-4 py-6 text-center text-sm text-[var(--muted)]">
+            <p style={{ borderRadius: "12px", border: "1px dashed var(--line-bright)", padding: "24px", textAlign: "center", fontSize: "0.875rem", color: "var(--muted)" }}>
               No products available yet. Check back soon!
             </p>
           )}
@@ -564,45 +740,39 @@ export default function LandingPage() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {trendingProducts.map((product, idx) => {
               const discount = calcDiscount(product.regularPrice, product.sellingPrice);
+              const imgUrl = resolveImageUrl(product.mainImage);
               return (
                 <Link
                   href={`/products/${encodeURIComponent((product.slug || product.id).trim())}`}
                   key={product.id}
-                  className="product-card animate-rise relative no-underline"
+                  className="product-card animate-rise no-underline"
                   style={{ animationDelay: `${idx * 60}ms` }}
                 >
                   {discount && <span className="badge-sale">-{discount}%</span>}
-                  <div className="aspect-square overflow-hidden bg-[#f8f8f8]">
-                    {resolveImageUrl(product.mainImage) ? (
-                      <Image
-                        src={resolveImageUrl(product.mainImage) || ""}
-                        alt={product.name}
-                        width={400}
-                        height={400}
-                        className="product-card-img"
-                        unoptimized
-                      />
+                  <div style={{ position: "relative", aspectRatio: "1/1", overflow: "hidden", background: "var(--surface-2)" }}>
+                    {imgUrl ? (
+                      <Image src={imgUrl} alt={product.name} width={400} height={400} className="product-card-img" unoptimized />
                     ) : (
-                      <div className="grid h-full w-full place-items-center bg-gradient-to-br from-gray-100 to-gray-200 text-3xl">
-                        📦
+                      <div style={{ display: "grid", placeItems: "center", width: "100%", height: "100%", background: "linear-gradient(135deg, #111128, #1c1c38)", color: "#4a4a70", fontSize: "0.8rem", fontWeight: 600 }}>
+                        No Image
                       </div>
                     )}
+                    <div className="product-card-overlay">
+                      <span style={{ background: "linear-gradient(135deg,#00d4ff,#7c3aed)", color: "#fff", padding: "8px 18px", borderRadius: "20px", fontSize: "0.78rem", fontWeight: 800 }}>
+                        View Product →
+                      </span>
+                    </div>
                   </div>
                   <div className="product-card-body">
-                    <p className="line-clamp-2 text-sm font-medium text-[var(--ink)]">{product.name}</p>
-                    <p className="mt-1 line-clamp-1 text-xs text-[var(--muted)]">{product.shortDescription}</p>
-                    <div className="mt-2 flex items-center gap-1">
+                    <p style={{ margin: "0 0 4px", fontSize: "0.875rem", fontWeight: 600, color: "var(--ink)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{product.name}</p>
+                    <p style={{ margin: "0 0 8px", fontSize: "0.72rem", color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{product.shortDescription}</p>
+                    <div style={{ display: "flex", alignItems: "center", gap: "4px", marginBottom: "6px" }}>
                       <span className="price-current">{money(product.sellingPrice)}</span>
-                      {product.discountedPrice !== null && (
-                        <span className="price-original">{money(product.regularPrice)}</span>
-                      )}
+                      {product.discountedPrice !== null && <span className="price-original">{money(product.regularPrice)}</span>}
                     </div>
-                    <div className="mt-1.5 flex items-center justify-between">
-                      <div>
-                        <span className="star-rating">★★★★☆</span>
-                        <span className="star-rating-count">4.5</span>
-                      </div>
-                      <span className="text-[10px] text-[var(--muted)]">500+ sold</span>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <span className="star-rating">★★★★☆ <span className="star-rating-count">4.5</span></span>
+                      <span style={{ fontSize: "0.65rem", color: "var(--muted)" }}>500+ sold</span>
                     </div>
                   </div>
                 </Link>
@@ -611,39 +781,71 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* CTA Banner */}
-        <section className="mb-8 animate-rise overflow-hidden rounded-2xl bg-gradient-to-r from-[var(--header-bg)] to-[#2d2d5e] p-8 text-center text-white" style={{ animationDelay: "400ms" }}>
-          <h2 className="text-2xl font-bold text-white md:text-3xl">
-            {session.isAuthenticated ? "Welcome Back!" : "Join Rumal Store Today!"}
-          </h2>
-          <p className="mx-auto mt-2 max-w-xl text-sm text-gray-300">
-            {session.isAuthenticated
-              ? "Continue shopping, check your orders, and manage your account in one place."
-              : "Create your free account and start shopping. Get exclusive deals, track your orders, and enjoy a seamless shopping experience."}
-          </p>
-          <div className="mt-5 flex justify-center gap-3">
-            {session.isAuthenticated ? (
-              <Link
-                href={session.canViewAdmin ? "/admin/orders" : "/profile"}
-                className="rounded-lg bg-[var(--brand)] px-8 py-3 text-sm font-bold text-white no-underline transition hover:bg-[var(--brand-hover)]"
-              >
-                {session.canViewAdmin ? "Open Admin" : "Open Profile"}
-              </Link>
-            ) : (
-              <button
-                onClick={() => { void startSignup(); }}
-                disabled={authBusy}
-                className="rounded-lg bg-[var(--brand)] px-8 py-3 text-sm font-bold text-white transition hover:bg-[var(--brand-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {authActionPending === "signup" ? "Redirecting..." : "Sign Up Free"}
-              </button>
-            )}
-            <Link
-              href="/products"
-              className="rounded-lg border border-white/30 px-8 py-3 text-sm font-bold text-white no-underline transition hover:bg-white/10"
-            >
-              Browse Products
-            </Link>
+        {/* ── CTA BANNER ── */}
+        <section
+          className="animate-rise mx-auto max-w-7xl px-4 pb-16"
+          style={{ animationDelay: "400ms" }}
+        >
+          <div
+            style={{
+              borderRadius: "24px",
+              padding: "56px 40px",
+              textAlign: "center",
+              background: "linear-gradient(135deg, #0a0a22 0%, #12082e 50%, #080e28 100%)",
+              border: "1px solid rgba(0,212,255,0.12)",
+              position: "relative",
+              overflow: "hidden",
+            }}
+          >
+            {/* Decorative orbs */}
+            <div style={{ position: "absolute", top: "-60px", left: "20%", width: "300px", height: "300px", borderRadius: "50%", background: "radial-gradient(circle, rgba(0,212,255,0.07) 0%, transparent 70%)", pointerEvents: "none" }} />
+            <div style={{ position: "absolute", bottom: "-60px", right: "15%", width: "250px", height: "250px", borderRadius: "50%", background: "radial-gradient(circle, rgba(124,58,237,0.08) 0%, transparent 70%)", pointerEvents: "none" }} />
+
+            <div style={{ position: "relative", zIndex: 1 }}>
+              <span style={{ display: "inline-block", fontFamily: "'Syne', sans-serif", fontSize: "2.4rem", fontWeight: 900, lineHeight: 1.15, color: "#fff", marginBottom: "16px" }}>
+                {session.isAuthenticated ? "Welcome Back! 👋" : (
+                  <>
+                    Join{" "}
+                    <span style={{ background: "linear-gradient(135deg, #00d4ff, #7c3aed)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
+                      Rumal Store
+                    </span>{" "}
+                    Today
+                  </>
+                )}
+              </span>
+              <p style={{ fontSize: "0.95rem", color: "#8888bb", margin: "0 auto 36px", maxWidth: "500px", lineHeight: 1.7 }}>
+                {session.isAuthenticated
+                  ? "Continue shopping, check your orders, and manage your account all in one place."
+                  : "Create your free account and unlock exclusive deals, fast checkout, order tracking, and a premium shopping experience."}
+              </p>
+              <div style={{ display: "flex", justifyContent: "center", gap: "14px", flexWrap: "wrap" }}>
+                {session.isAuthenticated ? (
+                  <Link
+                    href={session.canViewAdmin ? "/admin/orders" : "/profile"}
+                    className="no-underline inline-flex items-center gap-2 rounded-xl px-8 py-3.5 font-bold transition"
+                    style={{ background: "linear-gradient(135deg, #00d4ff, #7c3aed)", color: "#fff", fontSize: "0.9rem", boxShadow: "0 0 24px rgba(0,212,255,0.25)" }}
+                  >
+                    {session.canViewAdmin ? "Open Admin →" : "Open Profile →"}
+                  </Link>
+                ) : (
+                  <button
+                    onClick={() => { void startSignup(); }}
+                    disabled={authBusy}
+                    className="inline-flex items-center gap-2 rounded-xl px-8 py-3.5 font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
+                    style={{ background: "linear-gradient(135deg, #00d4ff, #7c3aed)", color: "#fff", fontSize: "0.9rem", cursor: "pointer", border: "none", boxShadow: "0 0 24px rgba(0,212,255,0.25)" }}
+                  >
+                    {authActionPending === "signup" ? "Redirecting..." : "Sign Up Free →"}
+                  </button>
+                )}
+                <Link
+                  href="/products"
+                  className="no-underline inline-flex items-center gap-2 rounded-xl px-8 py-3.5 font-bold transition"
+                  style={{ border: "1.5px solid rgba(0,212,255,0.3)", color: "#00d4ff", background: "rgba(0,212,255,0.06)", fontSize: "0.9rem" }}
+                >
+                  Browse Products
+                </Link>
+              </div>
+            </div>
           </div>
         </section>
       </main>
