@@ -54,6 +54,7 @@ export default function LandingPage() {
   const [products, setProducts] = useState<ProductSummary[]>([]);
   const [status, setStatus] = useState("loading");
   const [authActionPending, setAuthActionPending] = useState<"login" | "signup" | "forgot" | null>(null);
+  const [logoutPending, setLogoutPending] = useState(false);
 
   useEffect(() => {
     const run = async () => {
@@ -105,6 +106,16 @@ export default function LandingPage() {
     }
   };
 
+  const startLogout = async () => {
+    if (logoutPending) return;
+    setLogoutPending(true);
+    try {
+      await session.logout();
+    } finally {
+      setLogoutPending(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[var(--bg)]">
       {/* Top Header Bar (simplified for landing) */}
@@ -131,29 +142,53 @@ export default function LandingPage() {
               </button>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => { void startLogin(); }}
-              disabled={authBusy}
-              className="rounded-lg bg-[var(--brand)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[var(--brand-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {authActionPending === "login" ? "Redirecting..." : "Login"}
-            </button>
-            <button
-              onClick={() => { void startSignup(); }}
-              disabled={authBusy}
-              className="hidden rounded-lg border border-white/30 px-5 py-2 text-sm font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50 sm:inline-block"
-            >
-              {authActionPending === "signup" ? "Redirecting..." : "Sign Up"}
-            </button>
-            <button
-              onClick={() => { void startForgotPassword(); }}
-              disabled={authBusy}
-              className="hidden px-2 py-1 text-xs text-white/80 underline underline-offset-2 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50 sm:inline-block"
-            >
-              {authActionPending === "forgot" ? "Redirecting..." : "Forgot Password?"}
-            </button>
-          </div>
+          {session.isAuthenticated ? (
+            <div className="flex items-center gap-2">
+              <span className="hidden rounded-full bg-white/10 px-3 py-1.5 text-xs text-gray-300 md:inline-block">
+                {(session.profile?.email as string) || "User"}
+              </span>
+              {session.canViewAdmin ? (
+                <Link href="/admin/orders" className="hidden rounded-lg border border-white/30 px-4 py-2 text-sm font-semibold text-white no-underline transition hover:bg-white/10 sm:inline-block">
+                  Admin
+                </Link>
+              ) : (
+                <Link href="/profile" className="hidden rounded-lg border border-white/30 px-4 py-2 text-sm font-semibold text-white no-underline transition hover:bg-white/10 sm:inline-block">
+                  Profile
+                </Link>
+              )}
+              <button
+                onClick={() => { void startLogout(); }}
+                disabled={logoutPending}
+                className="rounded-lg bg-[var(--brand)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[var(--brand-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {logoutPending ? "Logging out..." : "Logout"}
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => { void startLogin(); }}
+                disabled={authBusy}
+                className="rounded-lg bg-[var(--brand)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[var(--brand-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {authActionPending === "login" ? "Redirecting..." : "Login"}
+              </button>
+              <button
+                onClick={() => { void startSignup(); }}
+                disabled={authBusy}
+                className="hidden rounded-lg border border-white/30 px-5 py-2 text-sm font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50 sm:inline-block"
+              >
+                {authActionPending === "signup" ? "Redirecting..." : "Sign Up"}
+              </button>
+              <button
+                onClick={() => { void startForgotPassword(); }}
+                disabled={authBusy}
+                className="hidden px-2 py-1 text-xs text-white/80 underline underline-offset-2 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50 sm:inline-block"
+              >
+                {authActionPending === "forgot" ? "Redirecting..." : "Forgot Password?"}
+              </button>
+            </div>
+          )}
         </div>
       </header>
 

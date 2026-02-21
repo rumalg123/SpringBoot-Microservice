@@ -259,6 +259,8 @@ export function useAuthSession() {
         const params = new URLSearchParams(window.location.search);
         const keycloakError = params.get("error");
         const keycloakErrorDescription = params.get("error_description");
+        const keycloakAction = (params.get("kc_action") || "").trim().toUpperCase();
+        const keycloakActionStatus = (params.get("kc_action_status") || "").trim().toLowerCase();
         if (keycloakError || keycloakErrorDescription) {
           setError(keycloakErrorDescription || keycloakError || "");
         }
@@ -271,6 +273,13 @@ export function useAuthSession() {
             await keycloak.updateToken(30);
           } catch {
             // Best effort token refresh on startup.
+          }
+
+          if (keycloakAction === "UPDATE_PASSWORD" && keycloakActionStatus === "success") {
+            await keycloak.logout({
+              redirectUri: resolveReturnTo("/"),
+            });
+            return;
           }
 
           const parsedClaims =

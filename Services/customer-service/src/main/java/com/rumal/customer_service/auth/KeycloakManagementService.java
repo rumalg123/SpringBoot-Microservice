@@ -130,6 +130,22 @@ public class KeycloakManagementService {
 
         String normalizedName = fullName.trim();
         NameParts parts = splitName(normalizedName);
+        updateUserNames(userId, parts.firstName(), parts.lastName());
+    }
+
+    public void updateUserNames(String userId, String firstName, String lastName) {
+        if (!StringUtils.hasText(userId)) {
+            throw new KeycloakRequestException("Keycloak user id is required");
+        }
+        if (!StringUtils.hasText(firstName)) {
+            throw new KeycloakRequestException("Keycloak first name is required");
+        }
+        if (!StringUtils.hasText(lastName)) {
+            throw new KeycloakRequestException("Keycloak last name is required");
+        }
+
+        String normalizedFirstName = firstName.trim();
+        String normalizedLastName = lastName.trim();
 
         try (Keycloak keycloak = newAdminClient()) {
             var userResource = keycloak.realm(realm).users().get(userId);
@@ -137,8 +153,8 @@ public class KeycloakManagementService {
             if (user == null || !StringUtils.hasText(user.getId())) {
                 throw new KeycloakRequestException("Keycloak user not found for id: " + userId);
             }
-            user.setFirstName(parts.firstName());
-            user.setLastName(parts.lastName());
+            user.setFirstName(normalizedFirstName);
+            user.setLastName(normalizedLastName);
             userResource.update(user);
         } catch (NotFoundException ex) {
             throw new KeycloakRequestException("Keycloak user not found for id: " + userId, ex);

@@ -152,11 +152,13 @@ public class CustomerServiceImpl implements CustomerService {
         Customer customer = customerRepository.findByKeycloakId(keycloakId)
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found for keycloak id"));
 
-        String normalizedName = request.name().trim();
-        customer.setName(normalizedName);
+        String firstName = request.firstName().trim();
+        String lastName = request.lastName().trim();
+        String fullName = (firstName + " " + lastName).trim();
+        customer.setName(fullName);
 
         if (StringUtils.hasText(customer.getKeycloakId())) {
-            keycloakManagementService.updateUserName(customer.getKeycloakId(), normalizedName);
+            keycloakManagementService.updateUserNames(customer.getKeycloakId(), firstName, lastName);
         }
 
         Customer saved = customerRepository.save(customer);

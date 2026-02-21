@@ -15,6 +15,21 @@ type Customer = {
   createdAt: string;
 };
 
+function splitDisplayName(name: string): { firstName: string; lastName: string } {
+  const normalized = name.trim().replace(/\s+/g, " ");
+  if (!normalized) {
+    return { firstName: "", lastName: "" };
+  }
+  const firstSpace = normalized.indexOf(" ");
+  if (firstSpace < 0) {
+    return { firstName: normalized, lastName: "" };
+  }
+  return {
+    firstName: normalized.slice(0, firstSpace).trim(),
+    lastName: normalized.slice(firstSpace + 1).trim(),
+  };
+}
+
 export default function ProfilePage() {
   const router = useRouter();
   const session = useAuthSession();
@@ -34,9 +49,11 @@ export default function ProfilePage() {
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [status, setStatus] = useState("Loading account...");
   const [resendingVerification, setResendingVerification] = useState(false);
-  const [editName, setEditName] = useState("");
+  const [editFirstName, setEditFirstName] = useState("");
+  const [editLastName, setEditLastName] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
   const [passwordActionPending, setPasswordActionPending] = useState(false);
+  const initialNameParts = splitDisplayName(customer?.name || "");
 
   useEffect(() => {
     if (sessionStatus !== "ready") return;
@@ -55,7 +72,9 @@ export default function ProfilePage() {
         const response = await apiClient.get("/customers/me");
         const loaded = response.data as Customer;
         setCustomer(loaded);
-        setEditName(loaded.name || "");
+        const nameParts = splitDisplayName(loaded.name || "");
+        setEditFirstName(nameParts.firstName);
+        setEditLastName(nameParts.lastName);
         setStatus("Account loaded.");
       } catch (err) {
         setStatus(err instanceof Error ? err.message : "Failed to load account");
@@ -85,12 +104,16 @@ export default function ProfilePage() {
   const saveProfile = async () => {
     if (!apiClient || !customer || savingProfile) return;
 
-    const normalizedName = editName.trim();
-    if (!normalizedName) {
-      toast.error("Name is required");
+    const normalizedFirstName = editFirstName.trim();
+    const normalizedLastName = editLastName.trim();
+    if (!normalizedFirstName || !normalizedLastName) {
+      toast.error("First name and last name are required");
       return;
     }
-    if (normalizedName === customer.name) {
+    if (
+      normalizedFirstName === initialNameParts.firstName
+      && normalizedLastName === initialNameParts.lastName
+    ) {
       setStatus("No changes to save.");
       return;
     }
@@ -98,10 +121,15 @@ export default function ProfilePage() {
     setSavingProfile(true);
     setStatus("Saving profile...");
     try {
-      const response = await apiClient.put("/customers/me", { name: normalizedName });
+      const response = await apiClient.put("/customers/me", {
+        firstName: normalizedFirstName,
+        lastName: normalizedLastName,
+      });
       const updated = response.data as Customer;
       setCustomer(updated);
-      setEditName(updated.name || normalizedName);
+      const updatedParts = splitDisplayName(updated.name || `${normalizedFirstName} ${normalizedLastName}`);
+      setEditFirstName(updatedParts.firstName);
+      setEditLastName(updatedParts.lastName);
       setStatus("Profile updated.");
       toast.success("Profile updated");
     } catch (err) {
@@ -122,6 +150,7 @@ export default function ProfilePage() {
       const message = err instanceof Error ? err.message : "Failed to open change password flow";
       setStatus(message);
       toast.error(message);
+    } finally {
       setPasswordActionPending(false);
     }
   };
@@ -218,14 +247,27 @@ export default function ProfilePage() {
             {!canViewAdmin && (
               <div className="space-y-4">
                 <div className="rounded-lg bg-[#fafafa] px-4 py-3">
-                  <p className="text-xs text-[var(--muted)]">Full Name</p>
-                  <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <p className="text-xs text-[var(--muted)]">First Name</p>
+                  <div className="mt-2 flex flex-col gap-2">
                     <input
-                      value={editName}
-                      onChange={(event) => setEditName(event.target.value)}
+                      value={editFirstName}
+                      onChange={(event) => setEditFirstName(event.target.value)}
                       disabled={savingProfile || emailVerified === false}
                       className="w-full rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-sm text-[var(--ink)] outline-none focus:border-[var(--brand)] disabled:cursor-not-allowed disabled:opacity-60"
-                      placeholder="Enter your full name"
+                      placeholder="Enter first name"
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-lg bg-[#fafafa] px-4 py-3">
+                  <p className="text-xs text-[var(--muted)]">Last Name</p>
+                  <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <input
+                      value={editLastName}
+                      onChange={(event) => setEditLastName(event.target.value)}
+                      disabled={savingProfile || emailVerified === false}
+                      className="w-full rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-sm text-[var(--ink)] outline-none focus:border-[var(--brand)] disabled:cursor-not-allowed disabled:opacity-60"
+                      placeholder="Enter last name"
                     />
                     <button
                       onClick={() => {
@@ -235,8 +277,12 @@ export default function ProfilePage() {
                         savingProfile
                         || emailVerified === false
                         || !customer
-                        || !editName.trim()
-                        || editName.trim() === customer.name
+                        || !editFirstName.trim()
+                        || !editLastName.trim()
+                        || (
+                          editFirstName.trim() === initialNameParts.firstName
+                          && editLastName.trim() === initialNameParts.lastName
+                        )
                       }
                       className="rounded-lg bg-[var(--brand)] px-3 py-2 text-xs font-semibold text-white hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
                     >
