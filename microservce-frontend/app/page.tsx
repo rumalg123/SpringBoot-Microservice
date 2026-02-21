@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { useAuthSession } from "../lib/authSession";
 import CategoryMenu from "./components/CategoryMenu";
 import Footer from "./components/Footer";
@@ -50,6 +51,7 @@ function calcDiscount(regular: number, selling: number): number | null {
 }
 
 export default function LandingPage() {
+  const router = useRouter();
   const session = useAuthSession();
   const [products, setProducts] = useState<ProductSummary[]>([]);
   const [status, setStatus] = useState("loading");
@@ -70,6 +72,27 @@ export default function LandingPage() {
       }
     };
     void run();
+  }, []);
+
+  useEffect(() => {
+    const resetAuthPending = () => {
+      setAuthActionPending(null);
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        resetAuthPending();
+      }
+    };
+
+    window.addEventListener("pageshow", resetAuthPending);
+    window.addEventListener("focus", resetAuthPending);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      window.removeEventListener("pageshow", resetAuthPending);
+      window.removeEventListener("focus", resetAuthPending);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
   }, []);
 
   const dealProducts = useMemo(() => products.filter((p) => p.discountedPrice !== null).slice(0, 4), [products]);
@@ -135,24 +158,32 @@ export default function LandingPage() {
                 placeholder="Search products, brands and more..."
                 className="flex-1 border-none px-4 py-2.5 text-sm text-[var(--ink)] outline-none"
                 readOnly
-                onFocus={(e) => { e.target.blur(); window.location.href = "/products"; }}
+                onFocus={(e) => {
+                  e.target.blur();
+                  router.push("/products");
+                }}
               />
-              <button className="bg-[var(--brand)] px-5 py-2.5 text-white transition hover:bg-[var(--brand-hover)]">
+              <button
+                onClick={() => {
+                  router.push("/products");
+                }}
+                className="bg-[var(--brand)] px-5 py-2.5 text-white transition hover:bg-[var(--brand-hover)]"
+              >
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
               </button>
             </div>
           </div>
           {session.isAuthenticated ? (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-2">
               <span className="hidden rounded-full bg-white/10 px-3 py-1.5 text-xs text-gray-300 md:inline-block">
                 {(session.profile?.email as string) || "User"}
               </span>
               {session.canViewAdmin ? (
-                <Link href="/admin/orders" className="hidden rounded-lg border border-white/30 px-4 py-2 text-sm font-semibold text-white no-underline transition hover:bg-white/10 sm:inline-block">
+                <Link href="/admin/orders" className="rounded-lg border border-white/30 px-4 py-2 text-sm font-semibold text-white no-underline transition hover:bg-white/10">
                   Admin
                 </Link>
               ) : (
-                <Link href="/profile" className="hidden rounded-lg border border-white/30 px-4 py-2 text-sm font-semibold text-white no-underline transition hover:bg-white/10 sm:inline-block">
+                <Link href="/profile" className="rounded-lg border border-white/30 px-4 py-2 text-sm font-semibold text-white no-underline transition hover:bg-white/10">
                   Profile
                 </Link>
               )}
@@ -165,7 +196,7 @@ export default function LandingPage() {
               </button>
             </div>
           ) : (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-2">
               <button
                 onClick={() => { void startLogin(); }}
                 disabled={authBusy}
@@ -176,14 +207,14 @@ export default function LandingPage() {
               <button
                 onClick={() => { void startSignup(); }}
                 disabled={authBusy}
-                className="hidden rounded-lg border border-white/30 px-5 py-2 text-sm font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50 sm:inline-block"
+                className="rounded-lg border border-white/30 px-5 py-2 text-sm font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {authActionPending === "signup" ? "Redirecting..." : "Sign Up"}
               </button>
               <button
                 onClick={() => { void startForgotPassword(); }}
                 disabled={authBusy}
-                className="hidden px-2 py-1 text-xs text-white/80 underline underline-offset-2 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50 sm:inline-block"
+                className="px-2 py-1 text-xs text-white/80 underline underline-offset-2 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {authActionPending === "forgot" ? "Redirecting..." : "Forgot Password?"}
               </button>
@@ -211,7 +242,7 @@ export default function LandingPage() {
               </h1>
               <p className="max-w-lg text-sm text-white/80 md:text-base">
                 Shop thousands of products at unbeatable prices. Free shipping on your first order.
-                Sign in to start shopping!
+                {session.isAuthenticated ? " Continue your shopping journey." : " Sign in to start shopping!"}
               </p>
               <div className="flex flex-wrap gap-3">
                 <Link
@@ -221,13 +252,22 @@ export default function LandingPage() {
                 >
                   🛍️ Shop Now
                 </Link>
-                <button
-                  onClick={() => { void startSignup(); }}
-                  disabled={authBusy}
-                  className="rounded-lg border-2 border-white bg-white/10 px-6 py-3 text-sm font-bold text-white transition hover:bg-white/25 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {authActionPending === "signup" ? "Redirecting..." : "Create Account"}
-                </button>
+                {session.isAuthenticated ? (
+                  <Link
+                    href={session.canViewAdmin ? "/admin/orders" : "/profile"}
+                    className="rounded-lg border-2 border-white bg-white/10 px-6 py-3 text-sm font-bold text-white no-underline transition hover:bg-white/25"
+                  >
+                    {session.canViewAdmin ? "Go to Admin" : "Go to Profile"}
+                  </Link>
+                ) : (
+                  <button
+                    onClick={() => { void startSignup(); }}
+                    disabled={authBusy}
+                    className="rounded-lg border-2 border-white bg-white/10 px-6 py-3 text-sm font-bold text-white transition hover:bg-white/25 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {authActionPending === "signup" ? "Redirecting..." : "Create Account"}
+                  </button>
+                )}
               </div>
             </div>
             <div className="hidden text-center md:block">
@@ -426,18 +466,31 @@ export default function LandingPage() {
 
         {/* CTA Banner */}
         <section className="mb-8 animate-rise overflow-hidden rounded-2xl bg-gradient-to-r from-[var(--header-bg)] to-[#2d2d5e] p-8 text-center text-white" style={{ animationDelay: "400ms" }}>
-          <h2 className="text-2xl font-bold text-white md:text-3xl">Join Rumal Store Today!</h2>
+          <h2 className="text-2xl font-bold text-white md:text-3xl">
+            {session.isAuthenticated ? "Welcome Back!" : "Join Rumal Store Today!"}
+          </h2>
           <p className="mx-auto mt-2 max-w-xl text-sm text-gray-300">
-            Create your free account and start shopping. Get exclusive deals, track your orders, and enjoy a seamless shopping experience.
+            {session.isAuthenticated
+              ? "Continue shopping, check your orders, and manage your account in one place."
+              : "Create your free account and start shopping. Get exclusive deals, track your orders, and enjoy a seamless shopping experience."}
           </p>
           <div className="mt-5 flex justify-center gap-3">
-            <button
-              onClick={() => { void startSignup(); }}
-              disabled={authBusy}
-              className="rounded-lg bg-[var(--brand)] px-8 py-3 text-sm font-bold text-white transition hover:bg-[var(--brand-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {authActionPending === "signup" ? "Redirecting..." : "Sign Up Free"}
-            </button>
+            {session.isAuthenticated ? (
+              <Link
+                href={session.canViewAdmin ? "/admin/orders" : "/profile"}
+                className="rounded-lg bg-[var(--brand)] px-8 py-3 text-sm font-bold text-white no-underline transition hover:bg-[var(--brand-hover)]"
+              >
+                {session.canViewAdmin ? "Open Admin" : "Open Profile"}
+              </Link>
+            ) : (
+              <button
+                onClick={() => { void startSignup(); }}
+                disabled={authBusy}
+                className="rounded-lg bg-[var(--brand)] px-8 py-3 text-sm font-bold text-white transition hover:bg-[var(--brand-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {authActionPending === "signup" ? "Redirecting..." : "Sign Up Free"}
+              </button>
+            )}
             <Link
               href="/products"
               className="rounded-lg border border-white/30 px-8 py-3 text-sm font-bold text-white no-underline transition hover:bg-white/10"

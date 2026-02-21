@@ -56,6 +56,27 @@ export default function ProfilePage() {
   const initialNameParts = splitDisplayName(customer?.name || "");
 
   useEffect(() => {
+    const resetPasswordAction = () => {
+      setPasswordActionPending(false);
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        resetPasswordAction();
+      }
+    };
+
+    window.addEventListener("pageshow", resetPasswordAction);
+    window.addEventListener("focus", resetPasswordAction);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      window.removeEventListener("pageshow", resetPasswordAction);
+      window.removeEventListener("focus", resetPasswordAction);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, []);
+
+  useEffect(() => {
     if (sessionStatus !== "ready") return;
     if (!isAuthenticated) {
       router.replace("/");

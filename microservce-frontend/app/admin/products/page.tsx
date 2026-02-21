@@ -952,6 +952,7 @@ export default function AdminProductsPage() {
 
   const onSelectVariationParent = async (parentId: string) => {
     if (selectingVariationParentId) return;
+    if (form.id) return;
     if (variationDrafts.length > 0 && variationDrafts.some((draft) => draft.parentId !== parentId)) {
       setVariationDrafts([]);
       toast("Variation queue cleared because parent product changed.");
@@ -1236,6 +1237,33 @@ export default function AdminProductsPage() {
   const categoryMutationBusy = savingCategory || confirmLoading || Boolean(restoringCategoryId);
   const productSlugBlocked = productSlugStatus === "checking" || productSlugStatus === "taken" || productSlugStatus === "invalid";
   const categorySlugBlocked = categorySlugStatus === "checking" || categorySlugStatus === "taken" || categorySlugStatus === "invalid";
+  const isEditingProduct = Boolean(form.id);
+  const isEditingVariation = isEditingProduct && form.productType === "VARIATION";
+  const canQueueVariation = !isEditingVariation;
+  const variationDraftBlockedReason =
+    !canQueueVariation
+      ? "Queue mode is disabled while editing an existing variation."
+      : Boolean(selectingVariationParentId)
+      ? "Wait until parent attributes finish loading."
+      : !variationParentId.trim()
+      ? "Select a parent product first."
+      : parentVariationAttributes.length === 0
+      ? "Selected parent has no variation attributes."
+      : productSlugStatus === "checking"
+      ? "Wait until slug availability check completes."
+      : productSlugStatus === "taken" || productSlugStatus === "invalid"
+      ? "Choose a unique valid slug."
+      : priceValidationMessage;
+  const canAddVariationDraft =
+    canQueueVariation
+    && !variationDraftBlockedReason
+    && !productMutationBusy
+    && !loadingParentProducts;
+  const canCreateQueuedVariations =
+    canQueueVariation
+    && variationDrafts.length > 0
+    && !creatingQueuedVariationBatch
+    && !savingProduct;
 
   return (
     <div className="min-h-screen bg-[var(--bg)]">
@@ -1251,7 +1279,7 @@ export default function AdminProductsPage() {
         {/* Breadcrumbs */}
         <nav className="breadcrumb">
           <Link href="/">Home</Link>
-          <span className="breadcrumb-sep">›</span>
+          <span className="breadcrumb-sep">&gt;</span>
           <span className="breadcrumb-current">Admin Products</span>
         </nav>
 
@@ -1259,7 +1287,7 @@ export default function AdminProductsPage() {
           <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
             <div>
               <p className="text-xs font-bold uppercase tracking-wider text-[var(--brand)]">ADMIN CATALOG</p>
-              <h1 className="text-2xl font-bold text-[var(--ink)]">📦 Product Operations</h1>
+              <h1 className="text-2xl font-bold text-[var(--ink)]">Product Operations</h1>
             </div>
             <div className="flex gap-2">
               <button
@@ -1345,7 +1373,7 @@ export default function AdminProductsPage() {
           </form>
 
           <div className="grid gap-6 lg:grid-cols-[1.1fr,0.9fr]">
-            <div>
+            <div className="order-2 lg:order-1">
               <h2 className="mb-3 text-2xl text-[var(--ink)]">{title}</h2>
               <div className="overflow-hidden rounded-2xl border border-[var(--line)] bg-white">
                 <table className="w-full text-left text-sm">
@@ -1363,7 +1391,7 @@ export default function AdminProductsPage() {
                       <tr>
                         <td colSpan={5}>
                           <div className="empty-state">
-                            <div className="empty-state-icon">📦</div>
+                            <div className="empty-state-icon">Items</div>
                             <p className="empty-state-title">No products</p>
                             <p className="empty-state-desc">{showDeleted ? "No deleted products" : "Create your first product to get started"}</p>
                           </div>
@@ -1442,10 +1470,18 @@ export default function AdminProductsPage() {
               />
             </div>
 
-            <div className="space-y-4">
+            <div className="order-1 space-y-4 lg:order-2">
               <section className="card-surface rounded-2xl p-5">
                 <div className="mb-3 flex items-center justify-between">
-                  <h2 className="text-2xl text-[var(--ink)]">{form.id ? "Update Product" : "Create Product"}</h2>
+                  <h2 className="text-2xl text-[var(--ink)]">
+                    {form.id
+                      ? form.productType === "VARIATION"
+                        ? "Update Variation"
+                        : "Update Product"
+                      : form.productType === "VARIATION"
+                        ? "Create Child Variations"
+                        : "Create Product"}
+                  </h2>
                   {form.id && (
                     <button
                       type="button"
@@ -1480,6 +1516,7 @@ export default function AdminProductsPage() {
                       }}
                       placeholder="e.g. Nike Air Max 90"
                       className="rounded-lg border border-[var(--line)] px-3 py-2"
+                      disabled={productMutationBusy}
                       required
                     />
                   </div>
@@ -1493,9 +1530,18 @@ export default function AdminProductsPage() {
                       }}
                       placeholder="product-url-slug"
                       className="rounded-lg border border-[var(--line)] px-3 py-2"
+                      disabled={productMutationBusy}
                       required
                     />
-                    <p className="mt-1 text-[11px] text-[var(--muted)]">
+                    <p
+                      className={`mt-1 text-[11px] ${
+                        productSlugStatus === "taken" || productSlugStatus === "invalid"
+                          ? "text-red-600"
+                          : productSlugStatus === "available"
+                            ? "text-emerald-600"
+                            : "text-[var(--muted)]"
+                      }`}
+                    >
                       {productSlugStatus === "checking" && "Checking slug..."}
                       {productSlugStatus === "available" && "Slug is available"}
                       {productSlugStatus === "taken" && "Slug is already taken"}
@@ -1505,11 +1551,11 @@ export default function AdminProductsPage() {
                   </div>
                   <div className="form-group">
                     <label className="form-label">Short Description</label>
-                    <input value={form.shortDescription} onChange={(e) => setForm((o) => ({ ...o, shortDescription: e.target.value }))} placeholder="Brief product summary" className="rounded-lg border border-[var(--line)] px-3 py-2" required />
+                    <input value={form.shortDescription} onChange={(e) => setForm((o) => ({ ...o, shortDescription: e.target.value }))} placeholder="Brief product summary" className="rounded-lg border border-[var(--line)] px-3 py-2" disabled={productMutationBusy} required />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Description</label>
-                    <textarea value={form.description} onChange={(e) => setForm((o) => ({ ...o, description: e.target.value }))} placeholder="Full product description" className="rounded-lg border border-[var(--line)] px-3 py-2" rows={3} required />
+                    <textarea value={form.description} onChange={(e) => setForm((o) => ({ ...o, description: e.target.value }))} placeholder="Full product description" className="rounded-lg border border-[var(--line)] px-3 py-2" rows={3} disabled={productMutationBusy} required />
                   </div>
                   <div className="rounded-lg border border-[var(--line)] p-3">
                     <div className="mb-2 flex items-center justify-between">
@@ -1568,35 +1614,44 @@ export default function AdminProductsPage() {
                       })}
                     </div>
                   </div>
-                  <select
-                    value={form.productType}
-                    onChange={(e) => {
-                      const nextType = e.target.value as ProductType;
-                      setForm((o) => ({
-                        ...o,
-                        productType: nextType,
-                        mainCategoryName: nextType === "VARIATION" ? "" : o.mainCategoryName,
-                        subCategoryNames: nextType === "VARIATION" ? [] : o.subCategoryNames,
-                      }));
-                      if (nextType !== "PARENT") {
-                        setParentAttributeNames([]);
-                        setNewParentAttributeName("");
-                      }
-                      if (nextType !== "VARIATION") {
-                        setVariationParentId("");
-                        setSelectedVariationParent(null);
-                        setParentSearch("");
-                        setParentVariationAttributes([]);
-                        setVariationAttributeValues({});
-                        setVariationDrafts([]);
-                      }
-                    }}
-                    className="rounded-lg border border-[var(--line)] px-3 py-2"
-                  >
-                    <option value="SINGLE">SINGLE</option>
-                    <option value="PARENT">PARENT</option>
-                    <option value="VARIATION">VARIATION</option>
-                  </select>
+                  <div className="form-group">
+                    <label className="form-label">Product Type</label>
+                    <select
+                      value={form.productType}
+                      onChange={(e) => {
+                        const nextType = e.target.value as ProductType;
+                        setForm((o) => ({
+                          ...o,
+                          productType: nextType,
+                          mainCategoryName: nextType === "VARIATION" ? "" : o.mainCategoryName,
+                          subCategoryNames: nextType === "VARIATION" ? [] : o.subCategoryNames,
+                        }));
+                        if (nextType !== "PARENT") {
+                          setParentAttributeNames([]);
+                          setNewParentAttributeName("");
+                        }
+                        if (nextType !== "VARIATION") {
+                          setVariationParentId("");
+                          setSelectedVariationParent(null);
+                          setParentSearch("");
+                          setParentVariationAttributes([]);
+                          setVariationAttributeValues({});
+                          setVariationDrafts([]);
+                        }
+                      }}
+                      className="rounded-lg border border-[var(--line)] px-3 py-2"
+                      disabled={productMutationBusy || isEditingProduct}
+                    >
+                      <option value="SINGLE">SINGLE</option>
+                      <option value="PARENT">PARENT</option>
+                      <option value="VARIATION">VARIATION</option>
+                    </select>
+                    <p className="mt-1 text-[11px] text-[var(--muted)]">
+                      {isEditingProduct
+                        ? "Product type is locked while editing."
+                        : "Select product type first. Variation products inherit categories from their parent."}
+                    </p>
+                  </div>
                   {form.productType !== "VARIATION" && (
                     <>
                       <select
@@ -1649,7 +1704,7 @@ export default function AdminProductsPage() {
                   )}
                   <div className="form-group">
                     <label className="form-label">SKU</label>
-                    <input value={form.sku} onChange={(e) => setForm((o) => ({ ...o, sku: e.target.value }))} placeholder="e.g. NK-AM90-BLK-42" className="rounded-lg border border-[var(--line)] px-3 py-2" required />
+                    <input value={form.sku} onChange={(e) => setForm((o) => ({ ...o, sku: e.target.value }))} placeholder="e.g. NK-AM90-BLK-42" className="rounded-lg border border-[var(--line)] px-3 py-2" disabled={productMutationBusy} required />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="form-group">
@@ -1665,6 +1720,7 @@ export default function AdminProductsPage() {
                         onKeyDown={preventNumberInputArrows}
                         placeholder="0.00"
                         className="rounded-lg border border-[var(--line)] px-3 py-2"
+                        disabled={productMutationBusy}
                         required
                       />
                     </div>
@@ -1681,13 +1737,14 @@ export default function AdminProductsPage() {
                         onKeyDown={preventNumberInputArrows}
                         placeholder="Optional"
                         className="rounded-lg border border-[var(--line)] px-3 py-2"
+                        disabled={productMutationBusy}
                       />
                     </div>
                   </div>
                   {priceValidationMessage && (
                     <p className="text-xs font-semibold text-red-600">{priceValidationMessage}</p>
                   )}
-                  <input value={form.vendorId} onChange={(e) => setForm((o) => ({ ...o, vendorId: e.target.value }))} placeholder="Vendor UUID (optional)" className="rounded-lg border border-[var(--line)] px-3 py-2" />
+                  <input value={form.vendorId} onChange={(e) => setForm((o) => ({ ...o, vendorId: e.target.value }))} placeholder="Vendor UUID (optional)" className="rounded-lg border border-[var(--line)] px-3 py-2" disabled={productMutationBusy} />
                   {form.productType === "PARENT" && (
                     <div className="rounded-lg border border-[var(--line)] p-3">
                       <p className="text-xs font-semibold text-[var(--ink)]">Variation Attributes</p>
@@ -1706,6 +1763,7 @@ export default function AdminProductsPage() {
                           }}
                           placeholder="Attribute name"
                           className="flex-1 rounded-lg border border-[var(--line)] px-3 py-2"
+                          disabled={productMutationBusy}
                         />
                         <button
                           type="button"
@@ -1743,7 +1801,9 @@ export default function AdminProductsPage() {
                     <div className="rounded-lg border border-[var(--line)] p-3">
                       <p className="text-xs font-semibold text-[var(--ink)]">Child Variation Setup</p>
                       <p className="mt-1 text-[11px] text-[var(--muted)]">
-                        Select a parent product first. Categories are inherited automatically.
+                        {isEditingVariation
+                          ? "Editing mode: parent selection is locked. Categories remain inherited from the existing parent."
+                          : "Select a parent product first. Categories are inherited automatically."}
                       </p>
                       <div className="mt-2 flex gap-2">
                         <input
@@ -1751,18 +1811,24 @@ export default function AdminProductsPage() {
                           onChange={(e) => setParentSearch(e.target.value)}
                           placeholder="Search parent by name, SKU, or slug"
                           className="w-full rounded-lg border border-[var(--line)] px-3 py-2 text-sm"
+                          disabled={isEditingVariation || loadingParentProducts || productMutationBusy}
                         />
                         <button
                           type="button"
                           onClick={() => {
                             void refreshVariationParents();
                           }}
-                          disabled={loadingParentProducts || productMutationBusy}
+                          disabled={isEditingVariation || loadingParentProducts || productMutationBusy || Boolean(selectingVariationParentId)}
                           className="rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {loadingParentProducts ? "Refreshing..." : "Refresh"}
                         </button>
                       </div>
+                      {!loadingParentProducts && parentProducts.length > 0 && (
+                        <p className="mt-1 text-[11px] text-[var(--muted)]">
+                          Showing {Math.min(filteredParentProducts.length, 20)} of {parentProducts.length} parent products
+                        </p>
+                      )}
                       <div className="mt-2 max-h-40 overflow-auto rounded-lg border border-[var(--line)] bg-white">
                         {loadingParentProducts && (
                           <p className="px-3 py-2 text-xs text-[var(--muted)]">Loading parent products...</p>
@@ -1780,13 +1846,16 @@ export default function AdminProductsPage() {
                             onClick={() => {
                               void onSelectVariationParent(p.id);
                             }}
-                            disabled={Boolean(selectingVariationParentId) || productMutationBusy}
-                            className={`flex w-full items-center justify-between px-3 py-2 text-left text-xs transition hover:bg-[var(--brand-soft)] ${
+                            disabled={isEditingVariation || Boolean(selectingVariationParentId) || productMutationBusy}
+                            className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs transition hover:bg-[var(--brand-soft)] ${
                               variationParentId === p.id ? "bg-[var(--brand-soft)]" : ""
                             } disabled:cursor-not-allowed disabled:opacity-60`}
                           >
-                            <span className="text-[var(--ink)]">{p.name}</span>
-                            <span className="text-[var(--muted)]">{p.sku}</span>
+                            <span className="min-w-0">
+                              <span className="block truncate text-[var(--ink)]">{p.name}</span>
+                              <span className="block truncate text-[10px] text-[var(--muted)]">/{p.slug || "no-slug"}</span>
+                            </span>
+                            <span className="shrink-0 text-[var(--muted)]">{p.sku}</span>
                           </button>
                         ))}
                       </div>
@@ -1831,6 +1900,7 @@ export default function AdminProductsPage() {
                               }
                               placeholder={`${attributeName} (required)`}
                               className="rounded-lg border border-[var(--line)] px-3 py-2 text-sm"
+                              disabled={productMutationBusy}
                               required
                             />
                           ))}
@@ -1842,38 +1912,45 @@ export default function AdminProductsPage() {
                         </p>
                       )}
                       <div className="mt-3 flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={addVariationDraft}
-                          disabled={Boolean(priceValidationMessage) || productMutationBusy || Boolean(selectingVariationParentId) || productSlugBlocked}
-                          className="btn-brand rounded-lg px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          Add Another Variation
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void createQueuedVariations();
-                          }}
-                          disabled={variationDrafts.length === 0 || Boolean(priceValidationMessage) || creatingQueuedVariationBatch || savingProduct}
-                          className="rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {creatingQueuedVariationBatch
-                            ? `Creating... (${variationDrafts.length})`
-                            : `Create Queued Variations (${variationDrafts.length})`}
-                        </button>
-                        {variationDrafts.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => setVariationDrafts([])}
-                            disabled={creatingQueuedVariationBatch}
-                            className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            Clear Queue
-                          </button>
+                        {canQueueVariation && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={addVariationDraft}
+                              disabled={!canAddVariationDraft}
+                              className="btn-brand rounded-lg px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              Add Another Variation
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                void createQueuedVariations();
+                              }}
+                              disabled={!canCreateQueuedVariations}
+                              className="rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {creatingQueuedVariationBatch
+                                ? `Creating... (${variationDrafts.length})`
+                                : `Create Queued Variations (${variationDrafts.length})`}
+                            </button>
+                            {variationDrafts.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => setVariationDrafts([])}
+                                disabled={creatingQueuedVariationBatch}
+                                className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                Clear Queue
+                              </button>
+                            )}
+                          </>
                         )}
                       </div>
-                      {variationDrafts.length > 0 && (
+                      {canQueueVariation && variationDraftBlockedReason && (
+                        <p className="mt-2 text-xs font-medium text-amber-700">{variationDraftBlockedReason}</p>
+                      )}
+                      {canQueueVariation && variationDrafts.length > 0 && (
                         <div className="mt-3 rounded-lg border border-[var(--line)] bg-[var(--bg)] p-2">
                           <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">
                             Queued Variations
@@ -1988,7 +2065,7 @@ export default function AdminProductsPage() {
                     </div>
                   )}
                   <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
-                    <input type="checkbox" checked={form.active} onChange={(e) => setForm((o) => ({ ...o, active: e.target.checked }))} />
+                    <input type="checkbox" checked={form.active} onChange={(e) => setForm((o) => ({ ...o, active: e.target.checked }))} disabled={productMutationBusy} />
                     Active
                   </label>
                   <button
@@ -2000,6 +2077,8 @@ export default function AdminProductsPage() {
                       ? "Saving..."
                       : form.productType === "VARIATION" && !form.id
                       ? "Add Child Variation"
+                      : form.productType === "VARIATION" && form.id
+                        ? "Update Variation"
                       : form.id
                         ? "Update Product"
                         : "Create Product"}
@@ -2022,6 +2101,7 @@ export default function AdminProductsPage() {
                     }}
                     placeholder="Category name"
                     className="rounded-lg border border-[var(--line)] px-3 py-2"
+                    disabled={categoryMutationBusy}
                   />
                   <div>
                     <input
@@ -2033,8 +2113,17 @@ export default function AdminProductsPage() {
                       }}
                       placeholder="Category slug"
                       className="w-full rounded-lg border border-[var(--line)] px-3 py-2"
+                      disabled={categoryMutationBusy}
                     />
-                    <p className="mt-1 text-[11px] text-[var(--muted)]">
+                    <p
+                      className={`mt-1 text-[11px] ${
+                        categorySlugStatus === "taken" || categorySlugStatus === "invalid"
+                          ? "text-red-600"
+                          : categorySlugStatus === "available"
+                            ? "text-emerald-600"
+                            : "text-[var(--muted)]"
+                      }`}
+                    >
                       {categorySlugStatus === "checking" && "Checking slug..."}
                       {categorySlugStatus === "available" && "Slug is available"}
                       {categorySlugStatus === "taken" && "Slug is already taken"}
@@ -2052,6 +2141,7 @@ export default function AdminProductsPage() {
                       }))
                     }
                     className="rounded-lg border border-[var(--line)] px-3 py-2"
+                    disabled={categoryMutationBusy}
                   >
                     <option value="PARENT">PARENT</option>
                     <option value="SUB">SUB</option>
@@ -2061,6 +2151,7 @@ export default function AdminProductsPage() {
                       value={categoryForm.parentCategoryId}
                       onChange={(e) => setCategoryForm((o) => ({ ...o, parentCategoryId: e.target.value }))}
                       className="rounded-lg border border-[var(--line)] px-3 py-2"
+                      disabled={categoryMutationBusy}
                     >
                       <option value="">Select parent category</option>
                       {parentCategories.map((c) => (

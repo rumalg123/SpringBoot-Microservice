@@ -202,7 +202,7 @@ export default function CategoryProductsPage() {
         <header className="bg-[var(--header-bg)] shadow-lg">
           <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
             <Link href="/" className="flex items-center gap-2 text-white no-underline">
-              <span className="text-2xl">ðŸ›’</span>
+              <span className="inline-grid h-8 w-8 place-items-center rounded-md bg-white/10 text-xs font-bold text-white">RS</span>
               <p className="text-lg font-bold text-white">Rumal Store</p>
             </Link>
             <Link href="/" className="rounded-lg bg-[var(--brand)] px-5 py-2 text-sm font-semibold text-white no-underline transition hover:bg-[var(--brand-hover)]">
@@ -215,9 +215,9 @@ export default function CategoryProductsPage() {
       <main className="mx-auto max-w-7xl px-4 py-4">
         <nav className="breadcrumb">
           <Link href="/">Home</Link>
-          <span className="breadcrumb-sep">â€º</span>
+          <span className="breadcrumb-sep">&gt;</span>
           <Link href="/categories">Categories</Link>
-          <span className="breadcrumb-sep">â€º</span>
+          <span className="breadcrumb-sep">&gt;</span>
           <span className="breadcrumb-current">{activeFilter}</span>
         </nav>
 
@@ -233,7 +233,7 @@ export default function CategoryProductsPage() {
               href={isAuthenticated ? "/orders" : "/"}
               className="btn-outline no-underline text-sm"
             >
-              {isAuthenticated ? "ðŸ“¦ My Orders" : "ðŸ”‘ Sign In"}
+              {isAuthenticated ? "My Orders" : "Sign In"}
             </Link>
           </div>
 
@@ -257,7 +257,7 @@ export default function CategoryProductsPage() {
                   className="mr-2 flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-xs text-gray-600 hover:bg-gray-300 disabled:cursor-not-allowed disabled:opacity-60"
                   title="Clear search"
                 >
-                  Ã—
+                  x
                 </button>
               )}
             </div>
@@ -309,8 +309,8 @@ export default function CategoryProductsPage() {
                           unoptimized
                         />
                       ) : (
-                        <div className="grid h-full w-full place-items-center bg-gradient-to-br from-gray-100 to-gray-200 text-3xl">
-                          ðŸ“¦
+                        <div className="grid h-full w-full place-items-center bg-gradient-to-br from-gray-100 to-gray-200 text-sm font-semibold text-gray-500">
+                          Image
                         </div>
                       )}
                     </div>
@@ -328,7 +328,7 @@ export default function CategoryProductsPage() {
                         )}
                       </div>
                       <div className="mt-1.5 flex items-center justify-between">
-                        <span className="star-rating">â˜…â˜…â˜…â˜…â˜† <span className="star-rating-count">4.5</span></span>
+                        <span className="star-rating">4.5/5 <span className="star-rating-count">4.5</span></span>
                         <span className="text-[10px] text-[var(--muted)]">100+ sold</span>
                       </div>
                     </div>
@@ -339,7 +339,7 @@ export default function CategoryProductsPage() {
 
             {products.length === 0 && status !== "Loading products..." && (
               <div className="empty-state mt-6">
-                <div className="empty-state-icon">ðŸ”</div>
+                <div className="empty-state-icon">Search</div>
                 <p className="empty-state-title">No products found in {activeFilter}</p>
                 <p className="empty-state-desc">Try a different keyword or browse all products</p>
                 <div className="mt-2 flex flex-wrap justify-center gap-2">
