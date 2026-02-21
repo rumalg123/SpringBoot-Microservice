@@ -29,6 +29,8 @@ import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
@@ -37,6 +39,7 @@ import java.util.*;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
 public class OrderService {
 
     private final OrderRepository orderRepository;
@@ -48,6 +51,7 @@ public class OrderService {
             @CacheEvict(cacheNames = "ordersByKeycloak", allEntries = true),
             @CacheEvict(cacheNames = "orderDetailsByKeycloak", allEntries = true)
     })
+    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 30)
     public OrderResponse create(CreateOrderRequest req) {
         customerClient.assertCustomerExists(req.customerId());
         List<ResolvedOrderLine> lines = resolveOrderLines(req.productId(), req.quantity(), req.items());
@@ -62,6 +66,7 @@ public class OrderService {
             @CacheEvict(cacheNames = "ordersByKeycloak", allEntries = true),
             @CacheEvict(cacheNames = "orderDetailsByKeycloak", allEntries = true)
     })
+    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 30)
     public OrderResponse createForKeycloak(String keycloakId, CreateMyOrderRequest req) {
         CustomerSummary customer = customerClient.getCustomerByKeycloakId(keycloakId);
         List<ResolvedOrderLine> lines = resolveOrderLines(req.productId(), req.quantity(), req.items());

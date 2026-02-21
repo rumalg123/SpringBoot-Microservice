@@ -26,6 +26,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
@@ -40,6 +42,7 @@ import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
 public class ProductServiceImpl implements ProductService {
 
     private static final UUID ADMIN_VENDOR_UUID = UUID.fromString("00000000-0000-0000-0000-000000000000");
@@ -49,6 +52,7 @@ public class ProductServiceImpl implements ProductService {
     private final CategoryRepository categoryRepository;
 
     @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     @Caching(evict = {
             @CacheEvict(cacheNames = "productsList", allEntries = true),
             @CacheEvict(cacheNames = "deletedProductsList", allEntries = true),
@@ -64,6 +68,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     @Caching(evict = {
             @CacheEvict(cacheNames = "productsList", allEntries = true),
             @CacheEvict(cacheNames = "deletedProductsList", allEntries = true),
@@ -222,6 +227,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     @Caching(evict = {
             @CacheEvict(cacheNames = "productsList", allEntries = true),
             @CacheEvict(cacheNames = "deletedProductsList", allEntries = true),
@@ -248,6 +254,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     @Caching(evict = {
             @CacheEvict(cacheNames = "productsList", allEntries = true),
             @CacheEvict(cacheNames = "deletedProductsList", allEntries = true),
@@ -262,6 +269,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     @Caching(evict = {
             @CacheEvict(cacheNames = "productsList", allEntries = true),
             @CacheEvict(cacheNames = "deletedProductsList", allEntries = true),

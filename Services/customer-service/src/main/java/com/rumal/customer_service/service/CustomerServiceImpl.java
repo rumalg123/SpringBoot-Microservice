@@ -19,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
@@ -27,6 +28,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
 public class CustomerServiceImpl implements CustomerService {
 
     private final CustomerRepository customerRepository;
@@ -57,6 +59,7 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public CustomerResponse create(CreateCustomerRequest request) {
         String email = request.email().trim().toLowerCase();
 
@@ -75,6 +78,7 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public CustomerResponse register(RegisterCustomerRequest request) {
         String email = request.email().trim().toLowerCase();
 
@@ -102,6 +106,7 @@ public class CustomerServiceImpl implements CustomerService {
 
     @Override
     @CachePut(cacheNames = "customerByKeycloak", key = "#keycloakId")
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public CustomerResponse registerIdentity(String keycloakId, String email, RegisterIdentityCustomerRequest request) {
         if (keycloakId == null || keycloakId.isBlank()) {
             throw new ResourceNotFoundException("Customer not found for keycloak id");
@@ -151,6 +156,7 @@ public class CustomerServiceImpl implements CustomerService {
 
     @Override
     @CachePut(cacheNames = "customerByKeycloak", key = "#keycloakId")
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public CustomerResponse updateProfile(String keycloakId, UpdateCustomerProfileRequest request) {
         if (!StringUtils.hasText(keycloakId)) {
             throw new ResourceNotFoundException("Customer not found for keycloak id");
@@ -180,6 +186,7 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public List<CustomerAddressResponse> listAddressesByKeycloak(String keycloakId) {
         Customer customer = findCustomerByKeycloakId(keycloakId);
         rebalanceDefaults(customer.getId(), null, null);
@@ -189,7 +196,7 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
-    @Transactional
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public CustomerAddressResponse addAddressByKeycloak(String keycloakId, CustomerAddressRequest request) {
         Customer customer = findCustomerByKeycloakId(keycloakId);
 
@@ -211,7 +218,7 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
-    @Transactional
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public CustomerAddressResponse updateAddressByKeycloak(String keycloakId, UUID addressId, CustomerAddressRequest request) {
         Customer customer = findCustomerByKeycloakId(keycloakId);
         CustomerAddress address = findActiveAddress(customer.getId(), addressId);
@@ -235,7 +242,7 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
-    @Transactional
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public void softDeleteAddressByKeycloak(String keycloakId, UUID addressId) {
         Customer customer = findCustomerByKeycloakId(keycloakId);
         CustomerAddress address = findActiveAddress(customer.getId(), addressId);
@@ -247,7 +254,7 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
-    @Transactional
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public CustomerAddressResponse setDefaultShippingByKeycloak(String keycloakId, UUID addressId) {
         Customer customer = findCustomerByKeycloakId(keycloakId);
         findActiveAddress(customer.getId(), addressId);
@@ -256,7 +263,7 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
-    @Transactional
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public CustomerAddressResponse setDefaultBillingByKeycloak(String keycloakId, UUID addressId) {
         Customer customer = findCustomerByKeycloakId(keycloakId);
         findActiveAddress(customer.getId(), addressId);

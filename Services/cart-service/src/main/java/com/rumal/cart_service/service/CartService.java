@@ -21,6 +21,7 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
@@ -32,6 +33,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
 public class CartService {
 
     private final CartRepository cartRepository;
@@ -39,7 +41,7 @@ public class CartService {
     private final OrderClient orderClient;
 
     @Cacheable(cacheNames = "cartByKeycloak", key = "#keycloakId")
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
     public CartResponse getByKeycloakId(String keycloakId) {
         String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
         return cartRepository.findWithItemsByKeycloakId(normalizedKeycloakId)
@@ -50,7 +52,7 @@ public class CartService {
     @Caching(evict = {
             @CacheEvict(cacheNames = "cartByKeycloak", key = "#keycloakId")
     })
-    @Transactional
+    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 20)
     public CartResponse addItem(String keycloakId, AddCartItemRequest request) {
         String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
         int quantityToAdd = sanitizeQuantity(request.quantity());
@@ -87,7 +89,7 @@ public class CartService {
     @Caching(evict = {
             @CacheEvict(cacheNames = "cartByKeycloak", key = "#keycloakId")
     })
-    @Transactional
+    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 20)
     public CartResponse updateItem(String keycloakId, UUID itemId, UpdateCartItemRequest request) {
         String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
         int quantity = sanitizeQuantity(request.quantity());
@@ -112,7 +114,7 @@ public class CartService {
     @Caching(evict = {
             @CacheEvict(cacheNames = "cartByKeycloak", key = "#keycloakId")
     })
-    @Transactional
+    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 20)
     public void removeItem(String keycloakId, UUID itemId) {
         String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
 
@@ -129,7 +131,7 @@ public class CartService {
     @Caching(evict = {
             @CacheEvict(cacheNames = "cartByKeycloak", key = "#keycloakId")
     })
-    @Transactional
+    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 20)
     public void clear(String keycloakId) {
         String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
         cartRepository.findWithItemsByKeycloakIdForUpdate(normalizedKeycloakId)
@@ -142,7 +144,7 @@ public class CartService {
     @Caching(evict = {
             @CacheEvict(cacheNames = "cartByKeycloak", key = "#keycloakId")
     })
-    @Transactional
+    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 20)
     public CheckoutResponse checkout(String keycloakId, CheckoutCartRequest request) {
         String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
         Cart cart = cartRepository.findWithItemsByKeycloakIdForUpdate(normalizedKeycloakId)

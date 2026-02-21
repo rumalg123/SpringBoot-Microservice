@@ -13,6 +13,8 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
@@ -21,12 +23,14 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
 public class CategoryServiceImpl implements CategoryService {
 
     private final CategoryRepository categoryRepository;
     private final ProductRepository productRepository;
 
     @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     @Caching(evict = {
             @CacheEvict(cacheNames = "categoriesList", allEntries = true),
             @CacheEvict(cacheNames = "deletedCategoriesList", allEntries = true),
@@ -52,6 +56,7 @@ public class CategoryServiceImpl implements CategoryService {
     }
 
     @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     @Caching(evict = {
             @CacheEvict(cacheNames = "categoriesList", allEntries = true),
             @CacheEvict(cacheNames = "deletedCategoriesList", allEntries = true),
@@ -77,6 +82,7 @@ public class CategoryServiceImpl implements CategoryService {
     }
 
     @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     @Caching(evict = {
             @CacheEvict(cacheNames = "categoriesList", allEntries = true),
             @CacheEvict(cacheNames = "deletedCategoriesList", allEntries = true),
@@ -102,6 +108,7 @@ public class CategoryServiceImpl implements CategoryService {
     }
 
     @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     @Caching(evict = {
             @CacheEvict(cacheNames = "categoriesList", allEntries = true),
             @CacheEvict(cacheNames = "deletedCategoriesList", allEntries = true),
