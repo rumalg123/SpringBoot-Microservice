@@ -182,6 +182,7 @@ public class CustomerServiceImpl implements CustomerService {
     @Override
     public List<CustomerAddressResponse> listAddressesByKeycloak(String keycloakId) {
         Customer customer = findCustomerByKeycloakId(keycloakId);
+        rebalanceDefaults(customer.getId(), null, null);
         return customerAddressRepository.findByCustomerIdAndDeletedFalseOrderByUpdatedAtDesc(customer.getId()).stream()
                 .map(this::toAddressResponse)
                 .toList();
@@ -353,11 +354,22 @@ public class CustomerServiceImpl implements CustomerService {
         UUID shippingTarget = resolveTargetId(active, preferredShippingId, true);
         UUID billingTarget = resolveTargetId(active, preferredBillingId, false);
 
+        boolean changed = false;
         for (CustomerAddress address : active) {
-            address.setDefaultShipping(address.getId().equals(shippingTarget));
-            address.setDefaultBilling(address.getId().equals(billingTarget));
+            boolean shouldShipping = address.getId().equals(shippingTarget);
+            boolean shouldBilling = address.getId().equals(billingTarget);
+            if (address.isDefaultShipping() != shouldShipping) {
+                address.setDefaultShipping(shouldShipping);
+                changed = true;
+            }
+            if (address.isDefaultBilling() != shouldBilling) {
+                address.setDefaultBilling(shouldBilling);
+                changed = true;
+            }
         }
-        customerAddressRepository.saveAll(active);
+        if (changed) {
+            customerAddressRepository.saveAll(active);
+        }
     }
 
     private UUID resolveTargetId(List<CustomerAddress> active, UUID preferredId, boolean shipping) {
@@ -372,6 +384,6 @@ public class CustomerServiceImpl implements CustomerService {
             }
         }
 
-        return active.get(0).getId();
+        return active.getFirst().getId();
     }
 }

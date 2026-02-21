@@ -49,6 +49,11 @@ type AddressForm = {
   defaultBilling: boolean;
 };
 
+type DefaultAction = {
+  addressId: string;
+  type: "shipping" | "billing";
+};
+
 const emptyAddressForm: AddressForm = {
   label: "",
   recipientName: "",
@@ -106,7 +111,7 @@ export default function ProfilePage() {
   const [savingAddress, setSavingAddress] = useState(false);
   const [addressLoading, setAddressLoading] = useState(false);
   const [deletingAddressId, setDeletingAddressId] = useState<string | null>(null);
-  const [settingDefaultAddressId, setSettingDefaultAddressId] = useState<string | null>(null);
+  const [settingDefaultAddress, setSettingDefaultAddress] = useState<DefaultAction | null>(null);
   const initialNameParts = splitDisplayName(customer?.name || "");
 
   const resetAddressForm = () => {
@@ -207,8 +212,13 @@ export default function ProfilePage() {
   };
 
   const setDefaultAddress = async (addressId: string, type: "shipping" | "billing") => {
-    if (!apiClient || settingDefaultAddressId) return;
-    setSettingDefaultAddressId(addressId);
+    if (!apiClient || settingDefaultAddress) return;
+    const address = addresses.find((item) => item.id === addressId);
+    if (!address) return;
+    if (type === "shipping" && address.defaultShipping) return;
+    if (type === "billing" && address.defaultBilling) return;
+
+    setSettingDefaultAddress({ addressId, type });
     setStatus(type === "shipping" ? "Setting default shipping address..." : "Setting default billing address...");
     try {
       const suffix = type === "shipping" ? "default-shipping" : "default-billing";
@@ -221,7 +231,7 @@ export default function ProfilePage() {
       setStatus(message);
       toast.error(message);
     } finally {
-      setSettingDefaultAddressId(null);
+      setSettingDefaultAddress(null);
     }
   };
 
@@ -714,6 +724,11 @@ export default function ProfilePage() {
                 <div className="grid gap-3">
                   {addresses.map((address) => (
                     <article key={address.id} className="rounded-lg border border-[var(--line)] bg-[#fafafa] p-3">
+                      {(() => {
+                        const isSettingShipping = settingDefaultAddress?.addressId === address.id && settingDefaultAddress.type === "shipping";
+                        const isSettingBilling = settingDefaultAddress?.addressId === address.id && settingDefaultAddress.type === "billing";
+                        const isSingleAddress = addresses.length === 1;
+                        return (
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div>
                           <p className="text-sm font-semibold text-[var(--ink)]">
@@ -746,17 +761,17 @@ export default function ProfilePage() {
                           </button>
                           <button
                             onClick={() => { void setDefaultAddress(address.id, "shipping"); }}
-                            disabled={settingDefaultAddressId !== null || savingAddress || emailVerified === false}
+                            disabled={isSingleAddress || address.defaultShipping || settingDefaultAddress !== null || savingAddress || emailVerified === false}
                             className="rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] text-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
                           >
-                            {settingDefaultAddressId === address.id ? "Saving..." : "Set Shipping"}
+                            {isSettingShipping ? "Saving..." : address.defaultShipping ? "Default Shipping" : "Set Shipping"}
                           </button>
                           <button
                             onClick={() => { void setDefaultAddress(address.id, "billing"); }}
-                            disabled={settingDefaultAddressId !== null || savingAddress || emailVerified === false}
+                            disabled={isSingleAddress || address.defaultBilling || settingDefaultAddress !== null || savingAddress || emailVerified === false}
                             className="rounded border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] text-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                           >
-                            {settingDefaultAddressId === address.id ? "Saving..." : "Set Billing"}
+                            {isSettingBilling ? "Saving..." : address.defaultBilling ? "Default Billing" : "Set Billing"}
                           </button>
                           <button
                             onClick={() => { void deleteAddress(address.id); }}
@@ -767,6 +782,8 @@ export default function ProfilePage() {
                           </button>
                         </div>
                       </div>
+                        );
+                      })()}
                     </article>
                   ))}
                 </div>
