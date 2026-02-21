@@ -20,6 +20,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -29,6 +30,22 @@ import java.util.UUID;
 public class SampleCatalogDataSeeder implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(SampleCatalogDataSeeder.class);
+
+    private static final List<String> IMAGE_POOL = List.of(
+            "2e462316-ad68-4eb4-80dc-9ced0547aa0d.jpg",
+            "356b853e-5d39-471e-b4e1-446862f05728.jpeg",
+            "35fd4211-8e84-40f4-991e-5aa60de88e8c.jpeg",
+            "4e7e5a30-5461-418e-a2d3-e0f625e4863f.png",
+            "4fe8b68e-8cc8-47dc-bf1f-b3953ad4a030.jpg",
+            "514dc848-8f4f-45da-bfb5-b862965e5e20.png",
+            "b87075b8-4ebd-4099-83fc-2581bf70ec50.png",
+            "c1729814-e83e-46f8-9496-aca8c4c32e70.jpeg",
+            "c607a57b-3415-4d74-8541-4add54ddfc4c.jpg",
+            "d74710f0-44fd-4453-a269-f3506c877a00.jpeg",
+            "e87e890b-86e2-43af-a7fc-4ebc6c4de3e1.jpeg",
+            "f24add21-5543-4eaf-a2f9-2ddf173e1d37.jpeg",
+            "f55dc7ac-ca6c-45e0-8719-a3c1354a3c8b.jpg"
+    );
 
     private final CategoryService categoryService;
     private final ProductService productService;
@@ -238,7 +255,65 @@ public class SampleCatalogDataSeeder implements ApplicationRunner {
                 )
         );
 
+        seedPaginationSingles();
+
         log.info("Sample catalog seed completed: categories={}, products={}", categoryRepository.count(), productRepository.count());
+    }
+
+    private void seedPaginationSingles() {
+        int cursor = 0;
+
+        for (int i = 1; i <= 12; i++) {
+            BigDecimal regular = BigDecimal.valueOf(34 + i);
+            BigDecimal discounted = regular.subtract(BigDecimal.valueOf(7)).setScale(2, RoundingMode.HALF_UP);
+            createSingle(
+                    "VoltEdge Gadget " + i,
+                    String.format("seed-voltedge-gadget-%02d", i),
+                    "Portable electronics gadget for daily convenience.",
+                    "VoltEdge Gadget " + i + " is part of the sample catalog batch used for pagination, filters and listing behavior tests.",
+                    String.format("SEED-ELEC-%03d", i),
+                    pickImage(cursor++),
+                    regular.toPlainString(),
+                    discounted.toPlainString(),
+                    Set.of("Electronics", (i % 2 == 0) ? "Accessories" : "Smartphones")
+            );
+        }
+
+        for (int i = 1; i <= 12; i++) {
+            BigDecimal regular = BigDecimal.valueOf(42 + i);
+            BigDecimal discounted = regular.subtract(BigDecimal.valueOf(9)).setScale(2, RoundingMode.HALF_UP);
+            createSingle(
+                    "StreetForm Fashion Basic " + i,
+                    String.format("seed-streetform-fashion-%02d", i),
+                    "Everyday fashion item for fit and comfort.",
+                    "StreetForm Fashion Basic " + i + " is seeded for storefront pagination and sorting tests with consistent product schema.",
+                    String.format("SEED-FASH-%03d", i),
+                    pickImage(cursor++),
+                    regular.toPlainString(),
+                    discounted.toPlainString(),
+                    Set.of("Fashion", (i % 2 == 0) ? "Shoes" : "Men Clothing")
+            );
+        }
+
+        for (int i = 1; i <= 12; i++) {
+            BigDecimal regular = BigDecimal.valueOf(38 + i);
+            BigDecimal discounted = regular.subtract(BigDecimal.valueOf(6)).setScale(2, RoundingMode.HALF_UP);
+            createSingle(
+                    "CasaCraft Home Essential " + i,
+                    String.format("seed-casacraft-home-%02d", i),
+                    "Home utility product with practical design.",
+                    "CasaCraft Home Essential " + i + " is seeded to increase catalog depth for pagination and category page validation.",
+                    String.format("SEED-HOME-%03d", i),
+                    pickImage(cursor++),
+                    regular.toPlainString(),
+                    discounted.toPlainString(),
+                    Set.of("Home & Living", (i % 2 == 0) ? "Kitchen" : "Decor")
+            );
+        }
+    }
+
+    private String pickImage(int index) {
+        return IMAGE_POOL.get(Math.floorMod(index, IMAGE_POOL.size()));
     }
 
     private CategoryResponse createCategory(String name, String slug, CategoryType type, UUID parentCategoryId) {
