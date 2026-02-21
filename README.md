@@ -10,17 +10,21 @@ flowchart LR
     F --> G[API Gateway :8080]
     G --> C[customer-service :8081]
     G --> O[order-service :8082]
+    G --> CA[cart-service :8085]
     G --> AD[admin-service :8083]
     G --> PR[product-service :8084]
     C --> P1[(PostgreSQL customer_db)]
     O --> P2[(PostgreSQL order_db)]
+    CA --> P4[(PostgreSQL cart_db)]
     PR --> P3[(PostgreSQL product_db)]
     G --> R[(Redis)]
     C --> R
     O --> R
+    CA --> R
     G --> E[Eureka :8761]
     C --> E
     O --> E
+    CA --> E
     G --> A[Keycloak JWT Validation]
     C --> A2[Keycloak Admin API]
 ```
@@ -31,6 +35,7 @@ flowchart LR
 - `Services/api-gateway`: Spring Cloud Gateway (JWT auth, header relay, rate limiting)
 - `Services/customer-service`: customer domain + Keycloak management integration
 - `Services/order-service`: order domain + customer-service integration
+- `Services/cart-service`: cart domain + product/order integration
 - `Services/admin-service`: admin APIs (aggregates privileged order views)
 - `Services/product-service`: product catalog domain (single/parent/variation products)
 - `microservce-frontend`: Next.js UI (Keycloak SPA flow)
@@ -43,7 +48,7 @@ flowchart LR
 - Java 21, Spring Boot 4.0.2, Spring Cloud 2025.1.1
 - Spring Cloud Gateway (WebFlux), Spring MVC services
 - Eureka discovery
-- PostgreSQL (customer/order/product services)
+- PostgreSQL (customer/order/cart/product services)
 - Redis (gateway rate limit + service caches)
 - Resilience4j (order-service -> customer-service calls)
 - Next.js 16 + React 19 + Keycloak JS SDK
@@ -61,10 +66,12 @@ flowchart LR
 - Exposes only user-scoped endpoints:
   - `/customers/register`, `/customers/register-identity`, `/customers/me`
   - `/orders/me`, `/orders/me/**`
+  - `/cart/me`, `/cart/me/**`
 - Enforces `email_verified=true` for:
   - `/customers/register-identity`, `/customers/me`
   - `/orders/me`, `/orders/me/**`
-- Denies raw backend paths (`/customers/**`, `/orders/**`) by default
+  - `/cart/me`, `/cart/me/**`
+- Denies raw backend paths (`/customers/**`, `/orders/**`, `/cart/**`) by default
 - Publicly exposes product catalog read APIs:
   - `GET /products`, `GET /products/{id}`
 - Admin-only catalog writes:
@@ -86,6 +93,9 @@ flowchart LR
   - customer-me
   - orders-me-read
   - orders-me-write
+  - cart-me-read
+  - cart-me-write
+  - cart-me-checkout
   - admin-orders
   - products-read
   - admin-products-read
@@ -106,6 +116,7 @@ flowchart LR
 ### order-service
 - Create/list/order-details domain operations
 - `/orders/me*` endpoints are user-scoped
+- Supports both single-line and multi-line order creation payloads (`items[]`) for cart checkout
 - Calls customer-service through load-balanced `RestClient`
 - Resilience:
   - `@Retry(customerService)`
@@ -114,6 +125,16 @@ flowchart LR
 - Caches:
   - `ordersByKeycloak`
   - `orderDetailsByKeycloak`
+
+### cart-service
+- Owns customer cart lifecycle (`/cart/me`)
+- Enforces purchasable-only items (rejects `PARENT`, inactive, invalid price)
+- Stores product snapshots in cart rows and revalidates against product-service during checkout
+- Checkout orchestration:
+  - sends multi-item order payload to order-service
+  - clears cart only after successful order creation
+- Caches:
+  - `cartByKeycloak`
 
 ### admin-service
 - Admin-only APIs exposed through gateway
@@ -148,6 +169,7 @@ flowchart LR
   - POST `/auth/resend-verification`
 - UI routes:
   - `/` landing/login/signup
+  - `/cart` cart review + checkout
   - `/profile` customer profile
   - `/orders` create/list/detail for own orders
   - `/admin/orders` admin paginated order view
@@ -163,6 +185,14 @@ flowchart LR
 - `GET /orders/me` (authenticated)
 - `POST /orders/me` (authenticated)
 - `GET /orders/me/{id}` (authenticated)
+
+### Cart
+- `GET /cart/me` (authenticated)
+- `POST /cart/me/items` (authenticated)
+- `PUT /cart/me/items/{itemId}` (authenticated)
+- `DELETE /cart/me/items/{itemId}` (authenticated)
+- `DELETE /cart/me` (authenticated)
+- `POST /cart/me/checkout` (authenticated)
 
 ### Admin
 - `GET /admin/orders` (authenticated + admin authority)
@@ -190,6 +220,7 @@ sequenceDiagram
     participant GW as API Gateway
     participant CS as customer-service
     participant OS as order-service
+    participant CART as cart-service
     participant ADS as admin-service
 
     UI->>KC: Login/Signup redirect
@@ -200,6 +231,9 @@ sequenceDiagram
     GW->>CS: Forward + X-User-Sub/X-User-Email/X-Internal-Auth
     GW->>CS: Forward + X-User-Email-Verified
     GW->>OS: Forward + X-User-Sub/X-User-Email-Verified/X-Internal-Auth
+    GW->>CART: Forward + X-User-Sub/X-User-Email-Verified/X-Internal-Auth
+    CART->>OS: Internal service call + shared secret
+    CART->>PR: Internal product validation call
     GW->>ADS: Forward + X-Internal-Auth
     ADS->>OS: Internal service call + shared secret
     OS->>CS: Internal service call + shared secret
@@ -208,19 +242,21 @@ sequenceDiagram
 Key points:
 - Backend services do **not** trust incoming internal headers from clients.
 - Gateway sanitizes and rewrites trusted headers.
-- `INTERNAL_AUTH_SHARED_SECRET` must be identical across gateway/customer/order/admin services.
+- `INTERNAL_AUTH_SHARED_SECRET` must be identical across gateway/customer/order/cart/admin services.
 
 ## Data and Caching Design
 
 ### Persistence
 - `customer-service` -> `customer_db`
 - `order-service` -> `order_db`
+- `cart-service` -> `cart_db`
 
 ### Redis usage
 - Gateway: token bucket state for rate limiting
 - Gateway: idempotency key state/response replay cache
 - customer-service: `customerByKeycloak`
 - order-service: `ordersByKeycloak`, `orderDetailsByKeycloak`
+- cart-service: `cartByKeycloak`
 - product-service: `productById`, `productsList`, `deletedProductsList`, `categoriesList`, `deletedCategoriesList`
 
 ### Serialization note
@@ -234,6 +270,9 @@ Configured by environment variables:
 - `RATE_LIMIT_CUSTOMER_ME_REPLENISH`, `RATE_LIMIT_CUSTOMER_ME_BURST`
 - `RATE_LIMIT_ORDERS_ME_REPLENISH`, `RATE_LIMIT_ORDERS_ME_BURST`
 - `RATE_LIMIT_ORDERS_ME_WRITE_REPLENISH`, `RATE_LIMIT_ORDERS_ME_WRITE_BURST`
+- `RATE_LIMIT_CART_ME_REPLENISH`, `RATE_LIMIT_CART_ME_BURST`
+- `RATE_LIMIT_CART_ME_WRITE_REPLENISH`, `RATE_LIMIT_CART_ME_WRITE_BURST`
+- `RATE_LIMIT_CART_ME_CHECKOUT_REPLENISH`, `RATE_LIMIT_CART_ME_CHECKOUT_BURST`
 - `RATE_LIMIT_ADMIN_ORDERS_REPLENISH`, `RATE_LIMIT_ADMIN_ORDERS_BURST`
 - `RATE_LIMIT_PRODUCTS_REPLENISH`, `RATE_LIMIT_PRODUCTS_BURST`
 - `RATE_LIMIT_ADMIN_PRODUCTS_REPLENISH`, `RATE_LIMIT_ADMIN_PRODUCTS_BURST`
@@ -269,6 +308,7 @@ Copy-Item env/common-sample.env env/common.env
 Copy-Item env/eureka-sample.env env/eureka.env
 Copy-Item env/customer-service-sample.env env/customer-service.env
 Copy-Item env/order-service-sample.env env/order-service.env
+Copy-Item env/cart-service-sample.env env/cart-service.env
 Copy-Item env/product-service-sample.env env/product-service.env
 Copy-Item env/frontend-sample.env env/frontend.env
 ```
@@ -285,11 +325,17 @@ Fill required values:
   - `NEXT_PUBLIC_KEYCLOAK_CLIENT_ID`
   - `NEXT_PUBLIC_KEYCLOAK_AUDIENCE`
 - Internal trust:
-  - `INTERNAL_AUTH_SHARED_SECRET` (same value across gateway/customer/order)
+  - `INTERNAL_AUTH_SHARED_SECRET` (same value across gateway/customer/order/cart)
+- Cart DB:
+  - `CART_DB_URL`
+  - `CART_DB_USER`
+  - `CART_DB_PASS`
 - Product DB:
   - `PRODUCT_DB_URL`
   - `PRODUCT_DB_USER`
   - `PRODUCT_DB_PASS`
+- Cart cache:
+  - `CACHE_CART_BY_KEYCLOAK_TTL` (example: `30s`)
 - Admin cache:
   - `CACHE_ADMIN_ORDERS_TTL` (example: `30s`)
 - Product cache:
@@ -314,6 +360,7 @@ Ports:
 - Customer DB: `localhost:5433`
 - Order DB: `localhost:5434`
 - Product DB: `localhost:5435`
+- Cart DB: `localhost:5436`
 
 ### Option B: without PostgreSQL containers
 
@@ -336,6 +383,7 @@ Start infra first (at least Redis, PostgreSQL, Eureka), then in separate termina
 cd Services/discovery-server && ./mvnw spring-boot:run
 cd Services/customer-service && ./mvnw spring-boot:run
 cd Services/order-service && ./mvnw spring-boot:run
+cd Services/cart-service && ./mvnw spring-boot:run
 cd Services/product-service && ./mvnw spring-boot:run
 cd Services/api-gateway && ./mvnw spring-boot:run
 cd microservce-frontend && npm ci && npm run dev
@@ -347,6 +395,7 @@ cd microservce-frontend && npm ci && npm run dev
 cd Services/api-gateway && ./mvnw -q -DskipTests compile
 cd Services/customer-service && ./mvnw -q -DskipTests compile
 cd Services/order-service && ./mvnw -q -DskipTests compile
+cd Services/cart-service && ./mvnw -q -DskipTests compile
 cd Services/product-service && ./mvnw -q -DskipTests compile
 cd Services/admin-service && ./mvnw -q -DskipTests compile
 cd Services/discovery-server && ./mvnw -q -DskipTests compile

@@ -71,6 +71,30 @@ public class RateLimitConfig {
     }
 
     @Bean
+    public RedisRateLimiter cartMeRateLimiter(
+            @Value("${RATE_LIMIT_CART_ME_REPLENISH:30}") int replenishRate,
+            @Value("${RATE_LIMIT_CART_ME_BURST:60}") int burstCapacity
+    ) {
+        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+    }
+
+    @Bean
+    public RedisRateLimiter cartMeWriteRateLimiter(
+            @Value("${RATE_LIMIT_CART_ME_WRITE_REPLENISH:12}") int replenishRate,
+            @Value("${RATE_LIMIT_CART_ME_WRITE_BURST:24}") int burstCapacity
+    ) {
+        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+    }
+
+    @Bean
+    public RedisRateLimiter cartMeCheckoutRateLimiter(
+            @Value("${RATE_LIMIT_CART_ME_CHECKOUT_REPLENISH:6}") int replenishRate,
+            @Value("${RATE_LIMIT_CART_ME_CHECKOUT_BURST:12}") int burstCapacity
+    ) {
+        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+    }
+
+    @Bean
     public RedisRateLimiter adminOrdersRateLimiter(
             @Value("${RATE_LIMIT_ADMIN_ORDERS_REPLENISH:20}") int replenishRate,
             @Value("${RATE_LIMIT_ADMIN_ORDERS_BURST:40}") int burstCapacity

@@ -3,6 +3,7 @@ package com.rumal.order_service.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 @Entity
@@ -33,4 +34,10 @@ public class OrderItem {
 
     @Column(nullable = false)
     private int quantity;
+
+    @Column(name = "unit_price", nullable = false, precision = 19, scale = 2)
+    private BigDecimal unitPrice;
+
+    @Column(name = "line_total", nullable = false, precision = 19, scale = 2)
+    private BigDecimal lineTotal;
 }

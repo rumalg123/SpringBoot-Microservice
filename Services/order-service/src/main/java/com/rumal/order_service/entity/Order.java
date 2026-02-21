@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -30,6 +31,12 @@ public class Order {
 
     @Column(nullable = false)
     private int quantity;
+
+    @Column(name = "item_count", nullable = false)
+    private int itemCount;
+
+    @Column(name = "order_total", nullable = false, precision = 19, scale = 2)
+    private BigDecimal orderTotal;
 
     @Column(name = "shipping_address_id", nullable = false)
     private UUID shippingAddressId;

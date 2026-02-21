@@ -35,6 +35,17 @@ services:
     volumes:
       - order-db-data:/var/lib/postgresql/data
 
+  cart-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: cart_db
+      POSTGRES_USER: cart_user
+      POSTGRES_PASSWORD: cart_pass
+    ports:
+      - "5436:5432"
+    volumes:
+      - cart-db-data:/var/lib/postgresql/data
+
   product-db:
     image: postgres:16-alpine
     environment:
@@ -67,6 +78,17 @@ services:
     env_file:
       - ./env/common.env
       - ./env/order-service.env
+
+  cart-service:
+    build:
+      context: ./Services/cart-service
+    depends_on:
+      - discovery-server
+      - cart-db
+      - redis
+    env_file:
+      - ./env/common.env
+      - ./env/cart-service.env
 
   product-service:
     build:
@@ -112,4 +134,5 @@ services:
 volumes:
   customer-db-data:
   order-db-data:
+  cart-db-data:
   product-db-data:

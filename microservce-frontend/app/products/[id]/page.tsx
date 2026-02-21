@@ -42,15 +42,6 @@ type VariationSummary = {
   variations: Variation[];
 };
 
-type CustomerAddress = {
-  id: string;
-  label: string | null;
-  line1: string;
-  city: string;
-  defaultShipping: boolean;
-  defaultBilling: boolean;
-};
-
 function money(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
 }
@@ -103,13 +94,8 @@ export default function ProductDetailPage() {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [status, setStatus] = useState("Loading product...");
-  const [buyingNow, setBuyingNow] = useState(false);
+  const [addingToCart, setAddingToCart] = useState(false);
   const [signingInToBuy, setSigningInToBuy] = useState(false);
-  const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
-  const [shippingAddressId, setShippingAddressId] = useState("");
-  const [billingAddressId, setBillingAddressId] = useState("");
-  const [billingSameAsShipping, setBillingSameAsShipping] = useState(true);
-  const [addressLoading, setAddressLoading] = useState(false);
 
   useEffect(() => {
     const run = async () => {
@@ -142,43 +128,6 @@ export default function ProductDetailPage() {
     };
     void run();
   }, [params.id]);
-
-  useEffect(() => {
-    if (!isAuthenticated || !apiClient) {
-      setAddresses([]);
-      setShippingAddressId("");
-      setBillingAddressId("");
-      return;
-    }
-
-    let active = true;
-    const run = async () => {
-      setAddressLoading(true);
-      try {
-        const response = await apiClient.get("/customers/me/addresses");
-        if (!active) return;
-        const loaded = (response.data as CustomerAddress[]) || [];
-        setAddresses(loaded);
-
-        const defaultShipping = loaded.find((address) => address.defaultShipping)?.id || loaded[0]?.id || "";
-        const defaultBilling = loaded.find((address) => address.defaultBilling)?.id || defaultShipping;
-        setShippingAddressId((old) => old || defaultShipping);
-        setBillingAddressId((old) => old || defaultBilling);
-      } catch {
-        if (!active) return;
-        setAddresses([]);
-      } finally {
-        if (active) {
-          setAddressLoading(false);
-        }
-      }
-    };
-
-    void run();
-    return () => {
-      active = false;
-    };
-  }, [isAuthenticated, apiClient]);
 
   const parentAttributeNames = useMemo(() => {
     if (!product || product.productType !== "PARENT") return [];
@@ -278,18 +227,13 @@ export default function ProductDetailPage() {
     void run();
   }, [selectedVariationId, product]);
 
-  useEffect(() => {
-    if (!billingSameAsShipping) return;
-    setBillingAddressId(shippingAddressId);
-  }, [billingSameAsShipping, shippingAddressId]);
-
-  const buyNow = async () => {
+  const addToCart = async () => {
     if (!apiClient || !product) return;
-    if (buyingNow) return;
+    if (addingToCart) return;
     if (product.productType === "PARENT") {
       const missingRequired = parentAttributeNames.some((name) => !(selectedAttributes[name] || "").trim());
       if (missingRequired) {
-        toast.error("Select all variation attributes before buying");
+        toast.error("Select all variation attributes before adding to cart");
         return;
       }
     }
@@ -297,30 +241,21 @@ export default function ProductDetailPage() {
       product.productType === "PARENT" ? selectedVariationId.trim() : product.id;
 
     if (!targetProductId) {
-      toast.error("Select a variation before buying");
+      toast.error("Select a variation before adding to cart");
       return;
     }
 
-    const resolvedShippingAddressId = shippingAddressId.trim();
-    const resolvedBillingAddressId = (billingSameAsShipping ? shippingAddressId : billingAddressId).trim();
-    if (!resolvedShippingAddressId || !resolvedBillingAddressId) {
-      toast.error("Select shipping and billing addresses before buying");
-      return;
-    }
-
-    setBuyingNow(true);
+    setAddingToCart(true);
     try {
-      await apiClient.post("/orders/me", {
+      await apiClient.post("/cart/me/items", {
         productId: targetProductId,
         quantity,
-        shippingAddressId: resolvedShippingAddressId,
-        billingAddressId: resolvedBillingAddressId,
       });
-      toast.success("Order placed successfully! 🎉");
+      toast.success("Added to cart");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to place order");
+      toast.error(err instanceof Error ? err.message : "Failed to add product to cart");
     } finally {
-      setBuyingNow(false);
+      setAddingToCart(false);
     }
   };
 
@@ -329,11 +264,8 @@ export default function ProductDetailPage() {
   const allAttributesSelected =
     !requiresVariationSelection || parentAttributeNames.every((name) => (selectedAttributes[name] || "").trim());
   const hasMatchingVariation = !requiresVariationSelection || Boolean(selectedVariationId.trim());
-  const hasRequiredAddresses = Boolean(
-    shippingAddressId.trim() && (billingSameAsShipping || billingAddressId.trim())
-  );
-  const canBuyNow = !buyingNow
-    && hasRequiredAddresses
+  const canAddToCart = !addingToCart
+    && quantity > 0
     && (!requiresVariationSelection || (allAttributesSelected && hasMatchingVariation));
 
   if (!displayProduct) {
@@ -425,7 +357,7 @@ export default function ProductDetailPage() {
                     return (
                       <button
                         key={`${img}-${index}`}
-                        disabled={buyingNow}
+                        disabled={addingToCart}
                         onClick={() => setSelectedImageIndex(index)}
                         className={`aspect-square overflow-hidden rounded-lg border-2 transition disabled:cursor-not-allowed disabled:opacity-60 ${selectedImageIndex === index
                           ? "border-[var(--brand)] shadow-md"
@@ -561,7 +493,7 @@ export default function ProductDetailPage() {
                                   [attributeName]: e.target.value,
                                 }))
                               }
-                              disabled={buyingNow || (variationOptionsByAttribute[attributeName] || []).length === 0}
+                              disabled={addingToCart || (variationOptionsByAttribute[attributeName] || []).length === 0}
                               className="w-full rounded-lg border border-[var(--line)] bg-white px-4 py-3 text-sm text-[var(--ink)] disabled:cursor-not-allowed disabled:opacity-60"
                             >
                               <option value="">Select {attributeName}</option>
@@ -586,72 +518,9 @@ export default function ProductDetailPage() {
                     )}
 
                     <div className="space-y-3">
-                      <label className="block text-xs font-bold uppercase tracking-wider text-[var(--muted)]">
-                        Shipping Address
-                      </label>
-                      {addressLoading && (
-                        <p className="text-xs text-[var(--muted)]">Loading your addresses...</p>
-                      )}
-                      {!addressLoading && addresses.length === 0 && (
-                        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                          Add at least one address in your profile before buying.
-                          {" "}
-                          <Link href="/profile" className="font-semibold underline">
-                            Open Profile
-                          </Link>
-                        </div>
-                      )}
-                      {addresses.length > 0 && (
-                        <>
-                          <select
-                            value={shippingAddressId}
-                            onChange={(e) => {
-                              const selected = e.target.value;
-                              setShippingAddressId(selected);
-                              if (billingSameAsShipping) {
-                                setBillingAddressId(selected);
-                              }
-                            }}
-                            disabled={buyingNow || addressLoading}
-                            className="w-full rounded-lg border border-[var(--line)] bg-white px-4 py-3 text-sm text-[var(--ink)] disabled:cursor-not-allowed disabled:opacity-60"
-                            required
-                          >
-                            <option value="">Select shipping address</option>
-                            {addresses.map((address) => (
-                              <option key={`shipping-${address.id}`} value={address.id}>
-                                {(address.label || "Address")} - {address.line1}, {address.city}
-                              </option>
-                            ))}
-                          </select>
-
-                          <label className="inline-flex items-center gap-2 text-xs text-[var(--muted)]">
-                            <input
-                              type="checkbox"
-                              checked={billingSameAsShipping}
-                              onChange={(e) => setBillingSameAsShipping(e.target.checked)}
-                              disabled={buyingNow || addressLoading}
-                            />
-                            Billing address same as shipping
-                          </label>
-
-                          {!billingSameAsShipping && (
-                            <select
-                              value={billingAddressId}
-                              onChange={(e) => setBillingAddressId(e.target.value)}
-                              disabled={buyingNow || addressLoading}
-                              className="w-full rounded-lg border border-[var(--line)] bg-white px-4 py-3 text-sm text-[var(--ink)] disabled:cursor-not-allowed disabled:opacity-60"
-                              required
-                            >
-                              <option value="">Select billing address</option>
-                              {addresses.map((address) => (
-                                <option key={`billing-${address.id}`} value={address.id}>
-                                  {(address.label || "Address")} - {address.line1}, {address.city}
-                                </option>
-                              ))}
-                            </select>
-                          )}
-                        </>
-                      )}
+                      <p className="text-xs text-[var(--muted)]">
+                        Add this product to your cart and complete checkout from the cart page.
+                      </p>
                     </div>
 
                     {/* Quantity + Buy */}
@@ -661,32 +530,32 @@ export default function ProductDetailPage() {
                           Quantity
                         </label>
                         <div className="qty-stepper">
-                          <button disabled={buyingNow} onClick={() => setQuantity((old) => Math.max(1, old - 1))}>−</button>
+                          <button disabled={addingToCart} onClick={() => setQuantity((old) => Math.max(1, old - 1))}>−</button>
                           <span>{quantity}</span>
-                          <button disabled={buyingNow} onClick={() => setQuantity((old) => old + 1)}>+</button>
+                          <button disabled={addingToCart} onClick={() => setQuantity((old) => old + 1)}>+</button>
                         </div>
                       </div>
                     </div>
 
                     <div className="flex flex-wrap gap-3">
                       <button
-                        disabled={!canBuyNow}
-                        onClick={() => void buyNow()}
+                        disabled={!canAddToCart}
+                        onClick={() => void addToCart()}
                         className="btn-primary flex-1 px-8 py-3 text-base disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        {buyingNow ? "Placing Order..." : "🛒 Buy Now"}
+                        {addingToCart ? "Adding..." : "🛒 Add to Cart"}
                       </button>
                       <Link
-                        href="/orders"
+                        href="/cart"
                         className="btn-outline flex items-center justify-center px-6 py-3 text-sm no-underline"
                       >
-                        📦 My Orders
+                        📦 Open Cart
                       </Link>
                     </div>
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <p className="text-sm text-[var(--muted)]">Sign in to purchase this product</p>
+                    <p className="text-sm text-[var(--muted)]">Sign in to add this product to cart</p>
                     <button
                       disabled={signingInToBuy}
                       onClick={async () => {
@@ -700,7 +569,7 @@ export default function ProductDetailPage() {
                       }}
                       className="btn-primary w-full py-3 text-base disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {signingInToBuy ? "Redirecting..." : "🔑 Sign In to Buy"}
+                      {signingInToBuy ? "Redirecting..." : "🔑 Sign In to Continue"}
                     </button>
                   </div>
                 )}
@@ -721,3 +590,4 @@ export default function ProductDetailPage() {
     </div>
   );
 }
+

@@ -27,6 +27,9 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
     private final RedisRateLimiter customerMeRateLimiter;
     private final RedisRateLimiter ordersMeRateLimiter;
     private final RedisRateLimiter ordersMeWriteRateLimiter;
+    private final RedisRateLimiter cartMeRateLimiter;
+    private final RedisRateLimiter cartMeWriteRateLimiter;
+    private final RedisRateLimiter cartMeCheckoutRateLimiter;
     private final RedisRateLimiter adminOrdersRateLimiter;
     private final RedisRateLimiter productsRateLimiter;
     private final RedisRateLimiter adminProductsRateLimiter;
@@ -39,6 +42,9 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
             @Qualifier("customerMeRateLimiter") RedisRateLimiter customerMeRateLimiter,
             @Qualifier("ordersMeRateLimiter") RedisRateLimiter ordersMeRateLimiter,
             @Qualifier("ordersMeWriteRateLimiter") RedisRateLimiter ordersMeWriteRateLimiter,
+            @Qualifier("cartMeRateLimiter") RedisRateLimiter cartMeRateLimiter,
+            @Qualifier("cartMeWriteRateLimiter") RedisRateLimiter cartMeWriteRateLimiter,
+            @Qualifier("cartMeCheckoutRateLimiter") RedisRateLimiter cartMeCheckoutRateLimiter,
             @Qualifier("adminOrdersRateLimiter") RedisRateLimiter adminOrdersRateLimiter,
             @Qualifier("productsRateLimiter") RedisRateLimiter productsRateLimiter,
             @Qualifier("adminProductsRateLimiter") RedisRateLimiter adminProductsRateLimiter,
@@ -50,6 +56,9 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
         this.customerMeRateLimiter = customerMeRateLimiter;
         this.ordersMeRateLimiter = ordersMeRateLimiter;
         this.ordersMeWriteRateLimiter = ordersMeWriteRateLimiter;
+        this.cartMeRateLimiter = cartMeRateLimiter;
+        this.cartMeWriteRateLimiter = cartMeWriteRateLimiter;
+        this.cartMeCheckoutRateLimiter = cartMeCheckoutRateLimiter;
         this.adminOrdersRateLimiter = adminOrdersRateLimiter;
         this.productsRateLimiter = productsRateLimiter;
         this.adminProductsRateLimiter = adminProductsRateLimiter;
@@ -116,6 +125,17 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
         }
         if (("/orders/me".equals(path) || path.startsWith("/orders/me/")) && method == HttpMethod.GET) {
             return new Policy("orders-me-read", ordersMeRateLimiter, userOrIpKeyResolver);
+        }
+        if ("/cart/me/checkout".equals(path) && method == HttpMethod.POST) {
+            return new Policy("cart-me-checkout", cartMeCheckoutRateLimiter, userOrIpKeyResolver);
+        }
+        if (("/cart/me".equals(path) || "/cart/me/items".equals(path) || path.startsWith("/cart/me/items/"))
+                && (method == HttpMethod.DELETE || method == HttpMethod.PUT || method == HttpMethod.POST)) {
+            return new Policy("cart-me-write", cartMeWriteRateLimiter, userOrIpKeyResolver);
+        }
+        if (("/cart/me".equals(path) || "/cart/me/items".equals(path) || path.startsWith("/cart/me/items/"))
+                && method == HttpMethod.GET) {
+            return new Policy("cart-me-read", cartMeRateLimiter, userOrIpKeyResolver);
         }
         if ("/admin/orders".equals(path) || path.startsWith("/admin/orders/")) {
             return new Policy("admin-orders", adminOrdersRateLimiter, userOrIpKeyResolver);

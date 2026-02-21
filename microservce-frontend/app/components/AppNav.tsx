@@ -107,6 +107,7 @@ export default function AppNav({ email, canViewAdmin = false, onLogout }: Props)
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-1 px-4 py-2">
           <Link href="/" className={navLinkClass("/")}>Home</Link>
           <Link href="/products" className={navLinkClass("/products")}>Shop</Link>
+          <Link href="/cart" className={navLinkClass("/cart")}>Cart</Link>
           <Link href="/orders" className={navLinkClass("/orders")}>My Orders</Link>
           <Link href="/profile" className={navLinkClass("/profile")}>Profile</Link>
           {canViewAdmin && (

@@ -3,6 +3,7 @@ package com.rumal.order_service.service;
 
 import com.rumal.order_service.client.CustomerClient;
 import com.rumal.order_service.client.ProductClient;
+import com.rumal.order_service.dto.CreateOrderItemRequest;
 import com.rumal.order_service.config.CustomerDetailsMode;
 import com.rumal.order_service.config.OrderAggregationProperties;
 import com.rumal.order_service.dto.CreateMyOrderRequest;
@@ -30,9 +31,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -49,10 +50,10 @@ public class OrderService {
     })
     public OrderResponse create(CreateOrderRequest req) {
         customerClient.assertCustomerExists(req.customerId());
-        ProductSummary product = resolvePurchasableProduct(req.productId());
+        List<ResolvedOrderLine> lines = resolveOrderLines(req.productId(), req.quantity(), req.items());
         ResolvedOrderAddresses addresses = resolveOrderAddresses(req.customerId(), req.shippingAddressId(), req.billingAddressId());
 
-        Order saved = orderRepository.save(buildOrder(req.customerId(), product, req.quantity(), addresses));
+        Order saved = orderRepository.save(buildOrder(req.customerId(), lines, addresses));
 
         return toResponse(saved);
     }
@@ -63,10 +64,10 @@ public class OrderService {
     })
     public OrderResponse createForKeycloak(String keycloakId, CreateMyOrderRequest req) {
         CustomerSummary customer = customerClient.getCustomerByKeycloakId(keycloakId);
-        ProductSummary product = resolvePurchasableProduct(req.productId());
+        List<ResolvedOrderLine> lines = resolveOrderLines(req.productId(), req.quantity(), req.items());
         ResolvedOrderAddresses addresses = resolveOrderAddresses(customer.id(), req.shippingAddressId(), req.billingAddressId());
 
-        Order saved = orderRepository.save(buildOrder(customer.id(), product, req.quantity(), addresses));
+        Order saved = orderRepository.save(buildOrder(customer.id(), lines, addresses));
 
         return toResponse(saved);
     }
@@ -78,7 +79,15 @@ public class OrderService {
     }
 
     private OrderResponse toResponse(Order o) {
-        return new OrderResponse(o.getId(), o.getCustomerId(), o.getItem(), o.getQuantity(), o.getCreatedAt());
+        return new OrderResponse(
+                o.getId(),
+                o.getCustomerId(),
+                o.getItem(),
+                o.getQuantity(),
+                o.getItemCount(),
+                normalizeMoney(o.getOrderTotal()),
+                o.getCreatedAt()
+        );
     }
 
     public Page<OrderResponse> list(UUID customerId, Pageable pageable) {
@@ -131,6 +140,8 @@ public class OrderService {
                 o.getCustomerId(),
                 o.getItem(),
                 o.getQuantity(),
+                o.getItemCount(),
+                normalizeMoney(o.getOrderTotal()),
                 o.getCreatedAt(),
                 toItems(o),
                 toAddressResponse(o.getShippingAddressId(), o.getShippingAddress()),
@@ -155,6 +166,8 @@ public class OrderService {
                 o.getCustomerId(),
                 o.getItem(),
                 o.getQuantity(),
+                o.getItemCount(),
+                normalizeMoney(o.getOrderTotal()),
                 o.getCreatedAt(),
                 toItems(o),
                 toAddressResponse(o.getShippingAddressId(), o.getShippingAddress()),
@@ -164,26 +177,42 @@ public class OrderService {
         );
     }
 
-    private Order buildOrder(UUID customerId, ProductSummary product, int quantity, ResolvedOrderAddresses addresses) {
-        String normalizedItem = product.name().trim();
+    private Order buildOrder(UUID customerId, List<ResolvedOrderLine> lines, ResolvedOrderAddresses addresses) {
+        int totalQuantity = lines.stream()
+                .mapToInt(ResolvedOrderLine::quantity)
+                .sum();
+        BigDecimal orderTotal = normalizeMoney(lines.stream()
+                .map(ResolvedOrderLine::lineTotal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add));
+        int itemCount = lines.size();
+        String summaryItem = itemCount == 1
+                ? lines.getFirst().product().name().trim()
+                : "Multiple items";
+
         Order order = Order.builder()
                 .customerId(customerId)
-                .item(normalizedItem)
-                .quantity(quantity)
+                .item(summaryItem)
+                .quantity(totalQuantity)
+                .itemCount(itemCount)
+                .orderTotal(orderTotal)
                 .shippingAddressId(addresses.shippingAddress().id())
                 .billingAddressId(addresses.billingAddress().id())
                 .shippingAddress(toAddressSnapshot(addresses.shippingAddress()))
                 .billingAddress(toAddressSnapshot(addresses.billingAddress()))
                 .build();
 
-        OrderItem orderItem = OrderItem.builder()
-                .order(order)
-                .productId(product.id())
-                .productSku(product.sku())
-                .item(normalizedItem)
-                .quantity(quantity)
-                .build();
-        order.getOrderItems().add(orderItem);
+        for (ResolvedOrderLine line : lines) {
+            OrderItem orderItem = OrderItem.builder()
+                    .order(order)
+                    .productId(line.product().id())
+                    .productSku(line.product().sku())
+                    .item(line.product().name().trim())
+                    .quantity(line.quantity())
+                    .unitPrice(normalizeMoney(line.unitPrice()))
+                    .lineTotal(normalizeMoney(line.lineTotal()))
+                    .build();
+            order.getOrderItems().add(orderItem);
+        }
         return order;
     }
 
@@ -246,7 +275,52 @@ public class OrderService {
         if ("PARENT".equalsIgnoreCase(product.productType())) {
             throw new ValidationException("Parent products cannot be bought directly. Select a variation.");
         }
+        if (product.sellingPrice() == null || product.sellingPrice().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ValidationException("Product has invalid selling price: " + productId);
+        }
         return product;
+    }
+
+    private List<ResolvedOrderLine> resolveOrderLines(
+            UUID productId,
+            Integer quantity,
+            List<CreateOrderItemRequest> items
+    ) {
+        Map<UUID, Integer> normalized = new LinkedHashMap<>();
+        boolean hasItems = items != null && !items.isEmpty();
+
+        if (hasItems) {
+            if (productId != null || quantity != null) {
+                throw new ValidationException("Use either items[] or productId/quantity, not both");
+            }
+            for (CreateOrderItemRequest item : items) {
+                if (item == null || item.productId() == null) {
+                    throw new ValidationException("Each order item must include productId");
+                }
+                if (item.quantity() < 1) {
+                    throw new ValidationException("Each order item quantity must be at least 1");
+                }
+                normalized.merge(item.productId(), item.quantity(), Integer::sum);
+            }
+        } else {
+            if (productId == null) {
+                throw new ValidationException("productId is required when items[] is empty");
+            }
+            int normalizedQuantity = quantity == null ? 0 : quantity;
+            if (normalizedQuantity < 1) {
+                throw new ValidationException("quantity must be at least 1");
+            }
+            normalized.put(productId, normalizedQuantity);
+        }
+
+        return normalized.entrySet().stream()
+                .map(entry -> {
+                    ProductSummary product = resolvePurchasableProduct(entry.getKey());
+                    BigDecimal unitPrice = normalizeMoney(product.sellingPrice());
+                    BigDecimal lineTotal = normalizeMoney(unitPrice.multiply(BigDecimal.valueOf(entry.getValue())));
+                    return new ResolvedOrderLine(product, entry.getValue(), unitPrice, lineTotal);
+                })
+                .toList();
     }
 
     private record ResolvedOrderAddresses(
@@ -255,15 +329,43 @@ public class OrderService {
     ) {
     }
 
+    private record ResolvedOrderLine(
+            ProductSummary product,
+            int quantity,
+            BigDecimal unitPrice,
+            BigDecimal lineTotal
+    ) {
+    }
+
     private List<OrderItemResponse> toItems(Order order) {
         if (order.getOrderItems() == null || order.getOrderItems().isEmpty()) {
             return List.of(
-                    new OrderItemResponse(null, order.getItem(), order.getQuantity())
+                    new OrderItemResponse(
+                            null,
+                            null,
+                            null,
+                            order.getItem(),
+                            order.getQuantity(),
+                            null,
+                            normalizeMoney(order.getOrderTotal())
+                    )
             );
         }
         return order.getOrderItems().stream()
-                .map(i -> new OrderItemResponse(i.getId(), i.getItem(), i.getQuantity()))
+                .map(i -> new OrderItemResponse(
+                        i.getId(),
+                        i.getProductId(),
+                        i.getProductSku(),
+                        i.getItem(),
+                        i.getQuantity(),
+                        normalizeMoney(i.getUnitPrice()),
+                        normalizeMoney(i.getLineTotal())
+                ))
                 .toList();
+    }
+
+    private BigDecimal normalizeMoney(BigDecimal value) {
+        return Objects.requireNonNullElse(value, BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
     }
 
 }
