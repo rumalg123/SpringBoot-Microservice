@@ -25,6 +25,7 @@ import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -76,9 +77,19 @@ public class OrderService {
     }
 
     public Page<OrderResponse> list(UUID customerId, Pageable pageable) {
-        Page<Order> page = (customerId == null)
+        return list(customerId, null, pageable);
+    }
+
+    public Page<OrderResponse> list(UUID customerId, String customerEmail, Pageable pageable) {
+        UUID resolvedCustomerId = customerId;
+        if (StringUtils.hasText(customerEmail)) {
+            CustomerSummary customer = customerClient.getCustomerByEmail(customerEmail.trim());
+            resolvedCustomerId = customer.id();
+        }
+
+        Page<Order> page = (resolvedCustomerId == null)
                 ? orderRepository.findAll(pageable)
-                : orderRepository.findByCustomerId(customerId, pageable);
+                : orderRepository.findByCustomerId(resolvedCustomerId, pageable);
 
         return page.map(this::toResponse);
     }

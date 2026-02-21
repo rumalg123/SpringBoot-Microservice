@@ -36,13 +36,13 @@ export default function AdminOrdersPage() {
   const [ordersPage, setOrdersPage] = useState<AdminOrdersPage | null>(null);
   const [status, setStatus] = useState("Loading session...");
   const [page, setPage] = useState(0);
-  const [customerIdInput, setCustomerIdInput] = useState("");
-  const [customerIdFilter, setCustomerIdFilter] = useState("");
+  const [customerEmailInput, setCustomerEmailInput] = useState("");
+  const [customerEmailFilter, setCustomerEmailFilter] = useState("");
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [filterSubmitting, setFilterSubmitting] = useState(false);
 
   const loadAdminOrders = useCallback(
-    async (targetPage: number, targetCustomerId: string) => {
+    async (targetPage: number, targetCustomerEmail: string) => {
       if (!session.apiClient) return;
       setOrdersLoading(true);
       try {
@@ -50,8 +50,8 @@ export default function AdminOrdersPage() {
         params.set("page", String(targetPage));
         params.set("size", String(DEFAULT_PAGE_SIZE));
         params.set("sort", "createdAt,DESC");
-        if (targetCustomerId.trim()) {
-          params.set("customerId", targetCustomerId.trim());
+        if (targetCustomerEmail.trim()) {
+          params.set("customerEmail", targetCustomerEmail.trim());
         }
 
         const res = await session.apiClient.get(`/admin/orders?${params.toString()}`);
@@ -91,9 +91,9 @@ export default function AdminOrdersPage() {
     if (ordersLoading || filterSubmitting) return;
     setFilterSubmitting(true);
     setStatus("Loading filtered orders...");
-    const nextFilter = customerIdInput.trim();
+    const nextFilter = customerEmailInput.trim();
     try {
-      setCustomerIdFilter(nextFilter);
+      setCustomerEmailFilter(nextFilter);
       await loadAdminOrders(0, nextFilter);
       setStatus("Admin orders loaded.");
     } catch (err) {
@@ -108,8 +108,8 @@ export default function AdminOrdersPage() {
     setFilterSubmitting(true);
     setStatus("Clearing filter...");
     try {
-      setCustomerIdInput("");
-      setCustomerIdFilter("");
+      setCustomerEmailInput("");
+      setCustomerEmailFilter("");
       await loadAdminOrders(0, "");
       setStatus("Admin orders loaded.");
     } catch (err) {
@@ -124,7 +124,7 @@ export default function AdminOrdersPage() {
     if (ordersLoading) return;
     setStatus("Loading page...");
     try {
-      await loadAdminOrders(nextPage, customerIdFilter);
+      await loadAdminOrders(nextPage, customerEmailFilter);
       setStatus("Admin orders loaded.");
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Failed to load admin orders.");
@@ -161,40 +161,37 @@ export default function AdminOrdersPage() {
       />
 
       <main className="mx-auto max-w-7xl px-4 py-4">
-        {/* Breadcrumbs */}
         <nav className="breadcrumb">
           <Link href="/">Home</Link>
-          <span className="breadcrumb-sep">›</span>
+          <span className="breadcrumb-sep">&gt;</span>
           <Link href="/admin/products">Admin</Link>
-          <span className="breadcrumb-sep">›</span>
+          <span className="breadcrumb-sep">&gt;</span>
           <span className="breadcrumb-current">Orders</span>
         </nav>
 
-        {/* Page Header */}
         <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-[var(--brand)]">ADMIN</p>
-            <h1 className="text-2xl font-bold text-[var(--ink)]">📋 All Orders</h1>
+            <h1 className="text-2xl font-bold text-[var(--ink)]">All Orders</h1>
             <p className="mt-0.5 text-sm text-[var(--muted)]">Manage and inspect all customer orders</p>
           </div>
           <span className="rounded-full bg-[var(--brand)] px-3 py-1 text-xs font-bold text-white">{totalElements} total</span>
         </div>
 
         <section className="animate-rise space-y-4 rounded-xl bg-white p-5 shadow-sm">
-          {/* Filter Form */}
           <form onSubmit={applyFilter} className="flex flex-wrap items-center gap-2">
             <div className="relative flex min-w-[280px] flex-1 items-center rounded-lg border border-[var(--line)] bg-white">
               <span className="pl-3 text-[var(--muted)]">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
               </span>
               <input
-                value={customerIdInput}
-                onChange={(e) => setCustomerIdInput(e.target.value)}
-                placeholder="Filter by Customer ID (UUID)..."
+                value={customerEmailInput}
+                onChange={(e) => setCustomerEmailInput(e.target.value)}
+                placeholder="Filter by customer email..."
                 disabled={filterBusy}
                 className="flex-1 border-none bg-transparent px-3 py-2.5 text-sm outline-none"
               />
-              {customerIdInput && (
+              {customerEmailInput && (
                 <button
                   type="button"
                   onClick={() => { void clearFilter(); }}
@@ -202,7 +199,7 @@ export default function AdminOrdersPage() {
                   className="mr-2 flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-xs text-gray-600 hover:bg-gray-300 disabled:cursor-not-allowed disabled:opacity-60"
                   title="Clear filter"
                 >
-                  ×
+                  x
                 </button>
               )}
             </div>
@@ -214,6 +211,7 @@ export default function AdminOrdersPage() {
               {filterBusy ? "Applying..." : "Apply Filter"}
             </button>
           </form>
+          <p className="text-[11px] text-[var(--muted)]">Use full customer email, for example: user@example.com</p>
 
           <div className="overflow-hidden rounded-xl border border-[var(--line)]">
             <table className="admin-table">
@@ -231,9 +229,9 @@ export default function AdminOrdersPage() {
                   <tr>
                     <td colSpan={5}>
                       <div className="empty-state">
-                        <div className="empty-state-icon">📦</div>
+                        <div className="empty-state-icon">Orders</div>
                         <p className="empty-state-title">No orders found</p>
-                        <p className="empty-state-desc">{customerIdFilter ? "Try a different customer ID filter" : "No orders exist yet"}</p>
+                        <p className="empty-state-desc">{customerEmailFilter ? "Try a different customer email filter" : "No orders exist yet"}</p>
                       </div>
                     </td>
                   </tr>
@@ -253,7 +251,6 @@ export default function AdminOrdersPage() {
             </table>
           </div>
 
-          {/* Pagination */}
           <Pagination
             currentPage={currentPage}
             totalPages={totalPages}

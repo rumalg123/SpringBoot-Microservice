@@ -86,6 +86,25 @@ public class CustomerClient {
         }
     }
 
+    @Retry(name = "customerService")
+    @CircuitBreaker(name = "customerService", fallbackMethod = "customerFallbackGetCustomerByEmail")
+    public CustomerSummary getCustomerByEmail(String email) {
+        RestClient rc = lbRestClientBuilder.build();
+        String normalizedEmail = email == null ? "" : email.trim().toLowerCase();
+
+        try {
+            return rc.get()
+                    .uri("http://customer-service/customers/by-email?email={email}", normalizedEmail)
+                    .retrieve()
+                    .body(CustomerSummary.class);
+        } catch (HttpClientErrorException ex) {
+            if (ex.getStatusCode() == HttpStatus.NOT_FOUND) {
+                throw new ResourceNotFoundException("Customer not found: " + normalizedEmail);
+            }
+            throw ex;
+        }
+    }
+
 
 
     @SuppressWarnings("unused")
@@ -101,5 +120,10 @@ public class CustomerClient {
     @SuppressWarnings("unused")
     public CustomerSummary customerFallbackGetCustomerByKeycloak(String keycloakId, Throwable ex) {
         throw new ServiceUnavailableException("Customer service unavailable for principal " + keycloakId + ". Try again later.", ex);
+    }
+
+    @SuppressWarnings("unused")
+    public CustomerSummary customerFallbackGetCustomerByEmail(String email, Throwable ex) {
+        throw new ServiceUnavailableException("Customer service unavailable for email " + email + ". Try again later.", ex);
     }
 }
