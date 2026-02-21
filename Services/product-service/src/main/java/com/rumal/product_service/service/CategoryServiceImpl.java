@@ -28,6 +28,7 @@ public class CategoryServiceImpl implements CategoryService {
 
     private final CategoryRepository categoryRepository;
     private final ProductRepository productRepository;
+    private final ProductCatalogReadModelProjector productCatalogReadModelProjector;
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
@@ -78,7 +79,9 @@ public class CategoryServiceImpl implements CategoryService {
         }
 
         applyRequest(category, request, baseSlug, autoSlug);
-        return toResponse(categoryRepository.save(category));
+        Category saved = categoryRepository.save(category);
+        productCatalogReadModelProjector.rebuildAll();
+        return toResponse(saved);
     }
 
     @Override
@@ -105,6 +108,7 @@ public class CategoryServiceImpl implements CategoryService {
         category.setDeleted(true);
         category.setDeletedAt(Instant.now());
         categoryRepository.save(category);
+        productCatalogReadModelProjector.rebuildAll();
     }
 
     @Override
@@ -132,7 +136,9 @@ public class CategoryServiceImpl implements CategoryService {
 
         category.setDeleted(false);
         category.setDeletedAt(null);
-        return toResponse(categoryRepository.save(category));
+        Category saved = categoryRepository.save(category);
+        productCatalogReadModelProjector.rebuildAll();
+        return toResponse(saved);
     }
 
     @Override

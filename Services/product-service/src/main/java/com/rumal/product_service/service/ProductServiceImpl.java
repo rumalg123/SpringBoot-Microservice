@@ -6,18 +6,15 @@ import com.rumal.product_service.dto.ProductVariationAttributeRequest;
 import com.rumal.product_service.dto.ProductVariationAttributeResponse;
 import com.rumal.product_service.dto.UpsertProductRequest;
 import com.rumal.product_service.entity.Category;
+import com.rumal.product_service.entity.ProductCatalogRead;
 import com.rumal.product_service.entity.Product;
 import com.rumal.product_service.entity.ProductType;
 import com.rumal.product_service.entity.ProductVariationAttribute;
 import com.rumal.product_service.exception.ResourceNotFoundException;
 import com.rumal.product_service.exception.ValidationException;
+import com.rumal.product_service.repo.ProductCatalogReadRepository;
 import com.rumal.product_service.repo.CategoryRepository;
 import com.rumal.product_service.repo.ProductRepository;
-import jakarta.persistence.criteria.CriteriaBuilder;
-import jakarta.persistence.criteria.CriteriaQuery;
-import jakarta.persistence.criteria.JoinType;
-import jakarta.persistence.criteria.Predicate;
-import jakarta.persistence.criteria.Root;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -33,6 +30,7 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -50,6 +48,8 @@ public class ProductServiceImpl implements ProductService {
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
+    private final ProductCatalogReadRepository productCatalogReadRepository;
+    private final ProductCatalogReadModelProjector productCatalogReadModelProjector;
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
@@ -64,7 +64,9 @@ public class ProductServiceImpl implements ProductService {
         }
         Product product = new Product();
         applyUpsertRequest(product, request, null, null);
-        return toResponse(productRepository.save(product));
+        Product saved = productRepository.save(product);
+        productCatalogReadModelProjector.upsert(saved);
+        return toResponse(saved);
     }
 
     @Override
@@ -86,7 +88,10 @@ public class ProductServiceImpl implements ProductService {
         Product variation = new Product();
         applyUpsertRequest(variation, request, parent.getId(), parent);
         validateVariationAgainstParent(parent, variation);
-        return toResponse(productRepository.save(variation));
+        Product saved = productRepository.save(variation);
+        productCatalogReadModelProjector.upsert(saved);
+        productCatalogReadModelProjector.refreshParentVariationFlag(parent.getId());
+        return toResponse(saved);
     }
 
     @Override
@@ -175,7 +180,7 @@ public class ProductServiceImpl implements ProductService {
             BigDecimal maxSellingPrice,
             boolean includeOrphanParents
     ) {
-        Specification<Product> spec = buildFilterSpec(
+        Specification<ProductCatalogRead> spec = buildReadFilterSpec(
                 q,
                 sku,
                 category,
@@ -189,7 +194,7 @@ public class ProductServiceImpl implements ProductService {
         )
                 .and((root, query, cb) -> cb.isFalse(root.get("deleted")))
                 .and((root, query, cb) -> cb.isTrue(root.get("active")));
-        return productRepository.findAll(spec, pageable).map(this::toSummaryResponse);
+        return productCatalogReadRepository.findAll(spec, pageable).map(this::toSummaryResponse);
     }
 
     @Override
@@ -210,7 +215,7 @@ public class ProductServiceImpl implements ProductService {
             BigDecimal minSellingPrice,
             BigDecimal maxSellingPrice
     ) {
-        Specification<Product> spec = buildFilterSpec(
+        Specification<ProductCatalogRead> spec = buildReadFilterSpec(
                 q,
                 sku,
                 category,
@@ -223,7 +228,7 @@ public class ProductServiceImpl implements ProductService {
                 true
         )
                 .and((root, query, cb) -> cb.isTrue(root.get("deleted")));
-        return productRepository.findAll(spec, pageable).map(this::toSummaryResponse);
+        return productCatalogReadRepository.findAll(spec, pageable).map(this::toSummaryResponse);
     }
 
     @Override
@@ -250,7 +255,12 @@ public class ProductServiceImpl implements ProductService {
         if (parentId != null) {
             validateVariationAgainstParent(parent, product);
         }
-        return toResponse(productRepository.save(product));
+        Product saved = productRepository.save(product);
+        productCatalogReadModelProjector.upsert(saved);
+        if (parentId != null) {
+            productCatalogReadModelProjector.refreshParentVariationFlag(parentId);
+        }
+        return toResponse(saved);
     }
 
     @Override
@@ -265,7 +275,11 @@ public class ProductServiceImpl implements ProductService {
         product.setDeleted(true);
         product.setDeletedAt(Instant.now());
         product.setActive(false);
-        productRepository.save(product);
+        Product saved = productRepository.save(product);
+        productCatalogReadModelProjector.upsert(saved);
+        if (saved.getParentProductId() != null) {
+            productCatalogReadModelProjector.refreshParentVariationFlag(saved.getParentProductId());
+        }
     }
 
     @Override
@@ -284,7 +298,12 @@ public class ProductServiceImpl implements ProductService {
         product.setDeleted(false);
         product.setDeletedAt(null);
         product.setActive(true);
-        return toResponse(productRepository.save(product));
+        Product saved = productRepository.save(product);
+        productCatalogReadModelProjector.upsert(saved);
+        if (saved.getParentProductId() != null) {
+            productCatalogReadModelProjector.refreshParentVariationFlag(saved.getParentProductId());
+        }
+        return toResponse(saved);
     }
 
     private Product getActiveEntityById(UUID id) {
@@ -315,7 +334,7 @@ public class ProductServiceImpl implements ProductService {
         return getActiveEntityBySlug(idOrSlug);
     }
 
-    private Specification<Product> buildFilterSpec(
+    private Specification<ProductCatalogRead> buildReadFilterSpec(
             String q,
             String sku,
             String category,
@@ -327,18 +346,18 @@ public class ProductServiceImpl implements ProductService {
             BigDecimal maxSellingPrice,
             boolean includeOrphanParents
     ) {
-        Specification<Product> spec = (root, query, cb) -> cb.conjunction();
+        Specification<ProductCatalogRead> spec = (root, query, cb) -> cb.conjunction();
 
         if (StringUtils.hasText(q)) {
-            String normalized = "%" + q.trim().toLowerCase() + "%";
+            String normalized = "%" + q.trim().toLowerCase(Locale.ROOT) + "%";
             spec = spec.and((root, query, cb) -> cb.or(
-                    cb.like(cb.lower(root.get("name")), normalized),
-                    cb.like(cb.lower(root.get("shortDescription")), normalized),
-                    cb.like(cb.lower(root.get("description")), normalized)
+                    cb.like(root.get("nameLc"), normalized),
+                    cb.like(root.get("shortDescriptionLc"), normalized),
+                    cb.like(root.get("descriptionLc"), normalized)
             ));
         }
         if (StringUtils.hasText(sku)) {
-            spec = spec.and((root, query, cb) -> cb.equal(cb.lower(root.get("sku")), sku.trim().toLowerCase()));
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("skuLc"), sku.trim().toLowerCase(Locale.ROOT)));
         }
         if (vendorId != null) {
             spec = spec.and((root, query, cb) -> cb.equal(root.get("vendorId"), vendorId));
@@ -350,70 +369,31 @@ public class ProductServiceImpl implements ProductService {
             spec = spec.and((root, query, cb) -> cb.notEqual(root.get("productType"), ProductType.VARIATION));
         }
         if (!includeOrphanParents && (type == null || type == ProductType.PARENT)) {
-            spec = spec.and(this::variationRowsWithParentConstraint);
+            spec = spec.and((root, query, cb) -> cb.or(
+                    cb.notEqual(root.get("productType"), ProductType.PARENT),
+                    cb.isTrue(root.get("hasActiveVariationChild"))
+            ));
         }
         if (StringUtils.hasText(category)) {
-            String normalizedCategory = category.trim().toLowerCase();
-            spec = spec.and((root, query, cb) -> {
-                query.distinct(true);
-                return cb.equal(cb.lower(root.joinSet("categories", JoinType.LEFT).get("name")), normalizedCategory);
-            });
+            String encodedToken = "%|" + category.trim().toLowerCase(Locale.ROOT) + "|%";
+            spec = spec.and((root, query, cb) -> cb.like(root.get("categoryTokensLc"), encodedToken));
         }
         if (StringUtils.hasText(mainCategory)) {
-            String normalizedMain = mainCategory.trim().toLowerCase();
-            spec = spec.and((root, query, cb) -> {
-                query.distinct(true);
-                var categoryJoin = root.joinSet("categories", JoinType.LEFT);
-                return cb.and(
-                        cb.equal(categoryJoin.get("type"), com.rumal.product_service.entity.CategoryType.PARENT),
-                        cb.equal(cb.lower(categoryJoin.get("name")), normalizedMain)
-                );
-            });
+            String normalizedMain = mainCategory.trim().toLowerCase(Locale.ROOT);
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("mainCategoryLc"), normalizedMain));
         }
         if (StringUtils.hasText(subCategory)) {
-            String normalizedSub = subCategory.trim().toLowerCase();
-            spec = spec.and((root, query, cb) -> {
-                query.distinct(true);
-                var categoryJoin = root.joinSet("categories", JoinType.LEFT);
-                return cb.and(
-                        cb.equal(categoryJoin.get("type"), com.rumal.product_service.entity.CategoryType.SUB),
-                        cb.equal(cb.lower(categoryJoin.get("name")), normalizedSub)
-                );
-            });
+            String encodedToken = "%|" + subCategory.trim().toLowerCase(Locale.ROOT) + "|%";
+            spec = spec.and((root, query, cb) -> cb.like(root.get("subCategoryTokensLc"), encodedToken));
         }
         if (minSellingPrice != null) {
-            spec = spec.and((root, query, cb) -> cb.greaterThanOrEqualTo(
-                    cb.coalesce(root.get("discountedPrice"), root.get("regularPrice")),
-                    minSellingPrice
-            ));
+            spec = spec.and((root, query, cb) -> cb.greaterThanOrEqualTo(root.get("sellingPrice"), minSellingPrice));
         }
         if (maxSellingPrice != null) {
-            spec = spec.and((root, query, cb) -> cb.lessThanOrEqualTo(
-                    cb.coalesce(root.get("discountedPrice"), root.get("regularPrice")),
-                    maxSellingPrice
-            ));
+            spec = spec.and((root, query, cb) -> cb.lessThanOrEqualTo(root.get("sellingPrice"), maxSellingPrice));
         }
 
         return spec;
-    }
-
-    private Predicate variationRowsWithParentConstraint(Root<Product> root, CriteriaQuery<?> query, CriteriaBuilder cb) {
-        Predicate isParent = cb.equal(root.get("productType"), ProductType.PARENT);
-        Predicate hasChild = hasActiveVariationChild(root, query, cb);
-        return cb.or(cb.not(isParent), cb.and(isParent, hasChild));
-    }
-
-    private Predicate hasActiveVariationChild(Root<Product> root, CriteriaQuery<?> query, CriteriaBuilder cb) {
-        var subQuery = query.subquery(UUID.class);
-        var child = subQuery.from(Product.class);
-        subQuery.select(child.get("id"));
-        subQuery.where(
-                cb.equal(child.get("parentProductId"), root.get("id")),
-                cb.equal(child.get("productType"), ProductType.VARIATION),
-                cb.isFalse(child.get("deleted")),
-                cb.isTrue(child.get("active"))
-        );
-        return cb.exists(subQuery);
     }
 
     private void applyUpsertRequest(Product product, UpsertProductRequest request, UUID parentProductId, Product parentProduct) {
@@ -784,6 +764,27 @@ public class ProductServiceImpl implements ProductService {
         );
     }
 
+    private ProductSummaryResponse toSummaryResponse(ProductCatalogRead row) {
+        return new ProductSummaryResponse(
+                row.getId(),
+                row.getSlug(),
+                row.getName(),
+                row.getShortDescription(),
+                row.getMainImage(),
+                row.getRegularPrice(),
+                row.getDiscountedPrice(),
+                row.getSellingPrice(),
+                row.getSku(),
+                row.getMainCategory(),
+                decodeTokenSet(row.getSubCategoryTokens()),
+                decodeTokenSet(row.getCategoryTokens()),
+                row.getProductType(),
+                row.getVendorId(),
+                row.isActive(),
+                List.of()
+        );
+    }
+
     private ProductSummaryResponse toSummaryResponse(Product p) {
         String mainImage = p.getImages().isEmpty() ? null : p.getImages().getFirst();
         return new ProductSummaryResponse(
@@ -806,6 +807,20 @@ public class ProductServiceImpl implements ProductService {
                         .map(v -> new ProductVariationAttributeResponse(v.getName(), v.getValue()))
                         .toList()
         );
+    }
+
+    private Set<String> decodeTokenSet(String encodedTokens) {
+        if (!StringUtils.hasText(encodedTokens)) {
+            return Set.of();
+        }
+        String[] segments = encodedTokens.split("\\|");
+        Set<String> values = new LinkedHashSet<>();
+        for (String segment : segments) {
+            if (StringUtils.hasText(segment)) {
+                values.add(segment.trim());
+            }
+        }
+        return values;
     }
 
     private BigDecimal resolveSellingPrice(Product p) {
