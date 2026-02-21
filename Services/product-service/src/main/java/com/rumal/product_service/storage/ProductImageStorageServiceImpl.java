@@ -30,7 +30,7 @@ public class ProductImageStorageServiceImpl implements ProductImageStorageServic
     private static final int MAX_DIMENSION = 1200;
     private static final int MAX_IMAGES_PER_REQUEST = 5;
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of("jpg", "jpeg", "png", "webp");
-    private static final Pattern KEY_PATTERN = Pattern.compile("^products/[A-Za-z0-9-]+\\.(jpg|jpeg|png|webp)$");
+    private static final Pattern KEY_PATTERN = Pattern.compile("^(products/)?[A-Za-z0-9-]+\\.(jpg|jpeg|png|webp)$");
 
     private final ObjectStorageProperties properties;
     private final ObjectProvider<S3Client> s3ClientProvider;
@@ -93,17 +93,22 @@ public class ProductImageStorageServiceImpl implements ProductImageStorageServic
             throw new ValidationException("Object storage client is not configured");
         }
         String normalizedKey = normalizeImageKey(key);
-        try {
-            GetObjectRequest request = GetObjectRequest.builder()
-                    .bucket(properties.bucket())
-                    .key(normalizedKey)
-                    .build();
-            var responseBytes = s3Client.getObjectAsBytes(request);
-            String contentType = responseBytes.response().contentType();
-            return new StoredImage(responseBytes.asByteArray(), contentType != null ? contentType : "image/jpeg");
-        } catch (RuntimeException ex) {
-            throw new ValidationException("Image not found");
+        StoredImage direct = fetchImage(s3Client, normalizedKey);
+        if (direct != null) {
+            return direct;
         }
+
+        String alternateKey = normalizedKey.startsWith("products/")
+                ? normalizedKey.substring("products/".length())
+                : "products/" + normalizedKey;
+        if (!alternateKey.equals(normalizedKey)) {
+            StoredImage alternate = fetchImage(s3Client, alternateKey);
+            if (alternate != null) {
+                return alternate;
+            }
+        }
+
+        throw new ValidationException("Image not found");
     }
 
     private String uploadOne(S3Client s3Client, MultipartFile file, String preferredKey) {
@@ -159,6 +164,20 @@ public class ProductImageStorageServiceImpl implements ProductImageStorageServic
             throw new ValidationException("Invalid image key format");
         }
         return normalized;
+    }
+
+    private StoredImage fetchImage(S3Client s3Client, String key) {
+        try {
+            GetObjectRequest request = GetObjectRequest.builder()
+                    .bucket(properties.bucket())
+                    .key(key)
+                    .build();
+            var responseBytes = s3Client.getObjectAsBytes(request);
+            String contentType = responseBytes.response().contentType();
+            return new StoredImage(responseBytes.asByteArray(), contentType != null ? contentType : "image/jpeg");
+        } catch (RuntimeException ignored) {
+            return null;
+        }
     }
 
     private void validateDimensions(MultipartFile file) {

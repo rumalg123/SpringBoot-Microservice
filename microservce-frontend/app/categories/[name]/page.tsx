@@ -62,16 +62,21 @@ function money(value: number) {
 
 function resolveImageUrl(imageName: string | null): string | null {
   if (!imageName) return null;
-  const base = (process.env.NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL || "").trim();
-  if (base) {
-    return `${base.replace(/\/+$/, "")}/${imageName.replace(/^\/+/, "")}`;
-  }
+  const normalized = imageName.replace(/^\/+/, "");
   const apiBase = (process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me").trim();
-  const encoded = imageName
+  const encoded = normalized
     .split("/")
     .map((segment) => encodeURIComponent(segment))
     .join("/");
-  return `${apiBase.replace(/\/+$/, "")}/products/images/${encoded}`;
+  const apiUrl = `${apiBase.replace(/\/+$/, "")}/products/images/${encoded}`;
+  const base = (process.env.NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL || "").trim();
+  if (!base) {
+    return apiUrl;
+  }
+  if (normalized.startsWith("products/")) {
+    return `${base.replace(/\/+$/, "")}/${normalized}`;
+  }
+  return apiUrl;
 }
 
 function calcDiscount(regular: number, selling: number): number | null {

@@ -8,95 +8,51 @@ import AppNav from "../components/AppNav";
 import Footer from "../components/Footer";
 import { useAuthSession } from "../../lib/authSession";
 
-type Customer = {
-  id: string;
-  name: string;
-  email: string;
-  createdAt: string;
-};
-
+type Customer = { id: string; name: string; email: string; createdAt: string };
 type CustomerAddress = {
-  id: string;
-  customerId: string;
-  label: string | null;
-  recipientName: string;
-  phone: string;
-  line1: string;
-  line2: string | null;
-  city: string;
-  state: string;
-  postalCode: string;
-  countryCode: string;
-  defaultShipping: boolean;
-  defaultBilling: boolean;
-  deleted: boolean;
-  createdAt: string;
-  updatedAt: string;
+  id: string; customerId: string; label: string | null; recipientName: string;
+  phone: string; line1: string; line2: string | null; city: string; state: string;
+  postalCode: string; countryCode: string; defaultShipping: boolean; defaultBilling: boolean;
+  deleted: boolean; createdAt: string; updatedAt: string;
 };
-
 type AddressForm = {
-  id?: string;
-  label: string;
-  recipientName: string;
-  phone: string;
-  line1: string;
-  line2: string;
-  city: string;
-  state: string;
-  postalCode: string;
-  countryCode: string;
-  defaultShipping: boolean;
-  defaultBilling: boolean;
+  id?: string; label: string; recipientName: string; phone: string;
+  line1: string; line2: string; city: string; state: string;
+  postalCode: string; countryCode: string; defaultShipping: boolean; defaultBilling: boolean;
 };
-
-type DefaultAction = {
-  addressId: string;
-  type: "shipping" | "billing";
-};
+type DefaultAction = { addressId: string; type: "shipping" | "billing" };
 
 const emptyAddressForm: AddressForm = {
-  label: "",
-  recipientName: "",
-  phone: "",
-  line1: "",
-  line2: "",
-  city: "",
-  state: "",
-  postalCode: "",
-  countryCode: "US",
-  defaultShipping: false,
-  defaultBilling: false,
+  label: "", recipientName: "", phone: "", line1: "", line2: "", city: "",
+  state: "", postalCode: "", countryCode: "US", defaultShipping: false, defaultBilling: false,
 };
 
-function splitDisplayName(name: string): { firstName: string; lastName: string } {
+function splitDisplayName(name: string) {
   const normalized = name.trim().replace(/\s+/g, " ");
-  if (!normalized) {
-    return { firstName: "", lastName: "" };
-  }
+  if (!normalized) return { firstName: "", lastName: "" };
   const firstSpace = normalized.indexOf(" ");
-  if (firstSpace < 0) {
-    return { firstName: normalized, lastName: "" };
-  }
-  return {
-    firstName: normalized.slice(0, firstSpace).trim(),
-    lastName: normalized.slice(firstSpace + 1).trim(),
-  };
+  if (firstSpace < 0) return { firstName: normalized, lastName: "" };
+  return { firstName: normalized.slice(0, firstSpace).trim(), lastName: normalized.slice(firstSpace + 1).trim() };
 }
+
+/* Reusable dark input style */
+const darkInput: React.CSSProperties = {
+  width: "100%", padding: "9px 12px", borderRadius: "9px",
+  border: "1px solid rgba(0,212,255,0.15)", background: "rgba(0,212,255,0.04)",
+  color: "#c8c8e8", fontSize: "0.82rem", outline: "none",
+};
+/* Reusable glass card style */
+const glassCard: React.CSSProperties = {
+  background: "rgba(17,17,40,0.7)", backdropFilter: "blur(16px)",
+  border: "1px solid rgba(0,212,255,0.1)", borderRadius: "18px",
+};
 
 export default function ProfilePage() {
   const router = useRouter();
   const session = useAuthSession();
   const {
-    status: sessionStatus,
-    isAuthenticated,
-    canViewAdmin,
-    apiClient,
-    ensureCustomer,
-    resendVerificationEmail,
-    changePassword,
-    profile,
-    logout,
-    emailVerified,
+    status: sessionStatus, isAuthenticated, canViewAdmin, apiClient, ensureCustomer,
+    resendVerificationEmail, changePassword, profile, logout, emailVerified,
   } = session;
 
   const [customer, setCustomer] = useState<Customer | null>(null);
@@ -114,9 +70,7 @@ export default function ProfilePage() {
   const [settingDefaultAddress, setSettingDefaultAddress] = useState<DefaultAction | null>(null);
   const initialNameParts = splitDisplayName(customer?.name || "");
 
-  const resetAddressForm = () => {
-    setAddressForm(emptyAddressForm);
-  };
+  const resetAddressForm = () => setAddressForm(emptyAddressForm);
 
   const loadAddresses = useCallback(async () => {
     if (!apiClient) return;
@@ -124,53 +78,36 @@ export default function ProfilePage() {
     try {
       const response = await apiClient.get("/customers/me/addresses");
       setAddresses((response.data as CustomerAddress[]) || []);
-    } finally {
-      setAddressLoading(false);
-    }
+    } finally { setAddressLoading(false); }
   }, [apiClient]);
 
   const startEditAddress = (address: CustomerAddress) => {
     setAddressForm({
-      id: address.id,
-      label: address.label || "",
-      recipientName: address.recipientName,
-      phone: address.phone,
-      line1: address.line1,
-      line2: address.line2 || "",
-      city: address.city,
-      state: address.state,
-      postalCode: address.postalCode,
+      id: address.id, label: address.label || "", recipientName: address.recipientName,
+      phone: address.phone, line1: address.line1, line2: address.line2 || "",
+      city: address.city, state: address.state, postalCode: address.postalCode,
       countryCode: (address.countryCode || "US").toUpperCase(),
-      defaultShipping: address.defaultShipping,
-      defaultBilling: address.defaultBilling,
+      defaultShipping: address.defaultShipping, defaultBilling: address.defaultBilling,
     });
   };
 
   const saveAddress = async () => {
     if (!apiClient || savingAddress) return;
-    if (!addressForm.recipientName.trim() || !addressForm.phone.trim() || !addressForm.line1.trim()
-      || !addressForm.city.trim() || !addressForm.state.trim() || !addressForm.postalCode.trim() || !addressForm.countryCode.trim()) {
-      toast.error("Fill all required address fields");
-      return;
+    const { recipientName, phone, line1, city, state, postalCode, countryCode } = addressForm;
+    if (!recipientName.trim() || !phone.trim() || !line1.trim() || !city.trim() || !state.trim() || !postalCode.trim() || !countryCode.trim()) {
+      toast.error("Fill all required address fields"); return;
     }
-
     setSavingAddress(true);
     setStatus(addressForm.id ? "Updating address..." : "Adding address...");
     try {
       const payload = {
         label: addressForm.label.trim() || null,
-        recipientName: addressForm.recipientName.trim(),
-        phone: addressForm.phone.trim(),
-        line1: addressForm.line1.trim(),
-        line2: addressForm.line2.trim() || null,
-        city: addressForm.city.trim(),
-        state: addressForm.state.trim(),
-        postalCode: addressForm.postalCode.trim(),
-        countryCode: addressForm.countryCode.trim().toUpperCase(),
-        defaultShipping: addressForm.defaultShipping,
-        defaultBilling: addressForm.defaultBilling,
+        recipientName: addressForm.recipientName.trim(), phone: addressForm.phone.trim(),
+        line1: addressForm.line1.trim(), line2: addressForm.line2.trim() || null,
+        city: addressForm.city.trim(), state: addressForm.state.trim(),
+        postalCode: addressForm.postalCode.trim(), countryCode: addressForm.countryCode.trim().toUpperCase(),
+        defaultShipping: addressForm.defaultShipping, defaultBilling: addressForm.defaultBilling,
       };
-
       if (addressForm.id) {
         await apiClient.put(`/customers/me/addresses/${addressForm.id}`, payload);
         toast.success("Address updated");
@@ -183,32 +120,22 @@ export default function ProfilePage() {
       setStatus("Address book updated.");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to save address";
-      setStatus(message);
-      toast.error(message);
-    } finally {
-      setSavingAddress(false);
-    }
+      setStatus(message); toast.error(message);
+    } finally { setSavingAddress(false); }
   };
 
   const deleteAddress = async (addressId: string) => {
     if (!apiClient || deletingAddressId) return;
     setDeletingAddressId(addressId);
-    setStatus("Deleting address...");
     try {
       await apiClient.delete(`/customers/me/addresses/${addressId}`);
       toast.success("Address deleted");
-      if (addressForm.id === addressId) {
-        resetAddressForm();
-      }
-      await loadAddresses();
-      setStatus("Address deleted.");
+      if (addressForm.id === addressId) resetAddressForm();
+      await loadAddresses(); setStatus("Address deleted.");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to delete address";
-      setStatus(message);
-      toast.error(message);
-    } finally {
-      setDeletingAddressId(null);
-    }
+      setStatus(message); toast.error(message);
+    } finally { setDeletingAddressId(null); }
   };
 
   const setDefaultAddress = async (addressId: string, type: "shipping" | "billing") => {
@@ -217,55 +144,35 @@ export default function ProfilePage() {
     if (!address) return;
     if (type === "shipping" && address.defaultShipping) return;
     if (type === "billing" && address.defaultBilling) return;
-
     setSettingDefaultAddress({ addressId, type });
-    setStatus(type === "shipping" ? "Setting default shipping address..." : "Setting default billing address...");
     try {
       const suffix = type === "shipping" ? "default-shipping" : "default-billing";
       await apiClient.post(`/customers/me/addresses/${addressId}/${suffix}`);
       toast.success(type === "shipping" ? "Default shipping address updated" : "Default billing address updated");
-      await loadAddresses();
-      setStatus("Address defaults updated.");
+      await loadAddresses(); setStatus("Address defaults updated.");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to set default address";
-      setStatus(message);
-      toast.error(message);
-    } finally {
-      setSettingDefaultAddress(null);
-    }
+      setStatus(message); toast.error(message);
+    } finally { setSettingDefaultAddress(null); }
   };
 
   useEffect(() => {
-    const resetPasswordAction = () => {
-      setPasswordActionPending(false);
-    };
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        resetPasswordAction();
-      }
-    };
-
-    window.addEventListener("pageshow", resetPasswordAction);
-    window.addEventListener("focus", resetPasswordAction);
-    document.addEventListener("visibilitychange", onVisibilityChange);
-
+    const reset = () => setPasswordActionPending(false);
+    const onVis = () => { if (document.visibilityState === "visible") reset(); };
+    window.addEventListener("pageshow", reset);
+    window.addEventListener("focus", reset);
+    document.addEventListener("visibilitychange", onVis);
     return () => {
-      window.removeEventListener("pageshow", resetPasswordAction);
-      window.removeEventListener("focus", resetPasswordAction);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("pageshow", reset);
+      window.removeEventListener("focus", reset);
+      document.removeEventListener("visibilitychange", onVis);
     };
   }, []);
 
   useEffect(() => {
     if (sessionStatus !== "ready") return;
-    if (!isAuthenticated) {
-      router.replace("/");
-      return;
-    }
-    if (canViewAdmin) {
-      return;
-    }
-
+    if (!isAuthenticated) { router.replace("/"); return; }
+    if (canViewAdmin) return;
     const run = async () => {
       if (!apiClient) return;
       try {
@@ -282,519 +189,461 @@ export default function ProfilePage() {
         setStatus(err instanceof Error ? err.message : "Failed to load account");
       }
     };
-
     void run();
   }, [router, sessionStatus, isAuthenticated, canViewAdmin, apiClient, ensureCustomer, loadAddresses]);
 
   const resendVerification = async () => {
     if (resendingVerification) return;
     setResendingVerification(true);
-    setStatus("Requesting verification email...");
     try {
       await resendVerificationEmail();
-      setStatus("Verification email sent. Please verify and sign in again.");
       toast.success("Verification email sent");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to resend verification email.";
-      setStatus(message);
-      toast.error(message);
-    } finally {
-      setResendingVerification(false);
-    }
+      toast.error(err instanceof Error ? err.message : "Failed to resend verification email");
+    } finally { setResendingVerification(false); }
   };
 
   const saveProfile = async () => {
     if (!apiClient || !customer || savingProfile) return;
-
-    const normalizedFirstName = editFirstName.trim();
-    const normalizedLastName = editLastName.trim();
-    if (!normalizedFirstName || !normalizedLastName) {
-      toast.error("First name and last name are required");
-      return;
-    }
-    if (
-      normalizedFirstName === initialNameParts.firstName
-      && normalizedLastName === initialNameParts.lastName
-    ) {
-      setStatus("No changes to save.");
-      return;
-    }
-
+    const f = editFirstName.trim(), l = editLastName.trim();
+    if (!f || !l) { toast.error("First name and last name are required"); return; }
+    if (f === initialNameParts.firstName && l === initialNameParts.lastName) { setStatus("No changes to save."); return; }
     setSavingProfile(true);
-    setStatus("Saving profile...");
     try {
-      const response = await apiClient.put("/customers/me", {
-        firstName: normalizedFirstName,
-        lastName: normalizedLastName,
-      });
+      const response = await apiClient.put("/customers/me", { firstName: f, lastName: l });
       const updated = response.data as Customer;
       setCustomer(updated);
-      const updatedParts = splitDisplayName(updated.name || `${normalizedFirstName} ${normalizedLastName}`);
-      setEditFirstName(updatedParts.firstName);
-      setEditLastName(updatedParts.lastName);
-      setStatus("Profile updated.");
-      toast.success("Profile updated");
+      const parts = splitDisplayName(updated.name || `${f} ${l}`);
+      setEditFirstName(parts.firstName); setEditLastName(parts.lastName);
+      setStatus("Profile updated."); toast.success("Profile updated");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to update profile";
-      setStatus(message);
-      toast.error(message);
-    } finally {
-      setSavingProfile(false);
-    }
+      setStatus(message); toast.error(message);
+    } finally { setSavingProfile(false); }
   };
 
   const startChangePassword = async () => {
     if (passwordActionPending) return;
     setPasswordActionPending(true);
-    try {
-      await changePassword("/profile");
-    } catch (err) {
+    try { await changePassword("/profile"); } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to open change password flow";
-      setStatus(message);
-      toast.error(message);
-    } finally {
-      setPasswordActionPending(false);
-    }
+      setStatus(message); toast.error(message);
+    } finally { setPasswordActionPending(false); }
   };
 
   if (sessionStatus === "loading" || sessionStatus === "idle") {
     return (
-      <div className="min-h-screen bg-[var(--bg)]">
-        <div className="mx-auto max-w-7xl px-4 py-10 text-center text-[var(--muted)]">
-          <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-[var(--line)] border-t-[var(--brand)]" />
-          <p className="mt-4">Loading...</p>
+      <div style={{ minHeight: "100vh", background: "var(--bg)", display: "grid", placeItems: "center" }}>
+        <div style={{ textAlign: "center" }}>
+          <div className="spinner-lg" />
+          <p style={{ marginTop: "16px", color: "var(--muted)", fontSize: "0.875rem" }}>Loading...</p>
         </div>
       </div>
     );
   }
-
-  if (!isAuthenticated) {
-    return null;
-  }
+  if (!isAuthenticated) return null;
 
   return (
-    <div className="min-h-screen bg-[var(--bg)]">
+    <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
       <AppNav
         email={(profile?.email as string) || ""}
         canViewAdmin={canViewAdmin}
         apiClient={apiClient}
         emailVerified={emailVerified}
-        onLogout={() => {
-          void logout();
-        }}
+        onLogout={() => { void logout(); }}
       />
 
       <main className="mx-auto max-w-7xl px-4 py-4">
         <nav className="breadcrumb">
           <Link href="/">Home</Link>
-          <span className="breadcrumb-sep">&gt;</span>
+          <span className="breadcrumb-sep">›</span>
           <span className="breadcrumb-current">My Profile</span>
         </nav>
 
+        {/* Email verification warning */}
         {emailVerified === false && (
-          <section className="mb-4 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            <span className="text-lg font-semibold">!</span>
+          <section
+            className="mb-4 flex items-center gap-3 rounded-xl px-4 py-3 text-sm"
+            style={{ border: "1px solid rgba(245,158,11,0.3)", background: "rgba(245,158,11,0.08)", color: "#fbbf24" }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+              <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
             <div className="flex-1">
-              <p className="font-semibold">Email Not Verified</p>
-              <p className="text-xs">Profile and order actions are blocked until verification.</p>
+              <p style={{ fontWeight: 700, margin: 0 }}>Email Not Verified</p>
+              <p style={{ fontSize: "0.75rem", opacity: 0.8, margin: 0 }}>Profile and order actions are blocked until verification.</p>
             </div>
             <button
-              onClick={() => {
-                void resendVerification();
-              }}
+              onClick={() => { void resendVerification(); }}
               disabled={resendingVerification}
-              className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-60"
+              style={{ background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.35)", color: "#fbbf24", padding: "6px 14px", borderRadius: "8px", fontSize: "0.75rem", fontWeight: 700, cursor: resendingVerification ? "not-allowed" : "pointer" }}
             >
               {resendingVerification ? "Sending..." : "Resend Email"}
             </button>
           </section>
         )}
 
+        {/* Page Header */}
         <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-[var(--ink)]">My Profile</h1>
-            <p className="mt-0.5 text-sm text-[var(--muted)]">Manage your account and view your details.</p>
+            <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: "1.75rem", fontWeight: 800, color: "#fff", margin: 0 }}>
+              My Profile
+            </h1>
+            <p style={{ marginTop: "4px", fontSize: "0.8rem", color: "var(--muted)" }}>Manage your account and addresses</p>
           </div>
-          <div className="flex gap-2">
-            <Link href="/products" className="btn-primary no-underline px-4 py-2.5 text-sm">
+          <div style={{ display: "flex", gap: "10px" }}>
+            <Link href="/products" className="no-underline" style={{ padding: "9px 18px", borderRadius: "10px", background: "linear-gradient(135deg, #00d4ff, #7c3aed)", color: "#fff", fontSize: "0.8rem", fontWeight: 700 }}>
               Shop
             </Link>
-            <Link href="/orders" className="btn-outline no-underline px-4 py-2.5 text-sm">
+            <Link href="/orders" className="no-underline" style={{ padding: "9px 18px", borderRadius: "10px", border: "1px solid rgba(0,212,255,0.25)", background: "rgba(0,212,255,0.06)", color: "#00d4ff", fontSize: "0.8rem", fontWeight: 700 }}>
               Orders
             </Link>
             <button
-              onClick={() => {
-                void startChangePassword();
-              }}
+              onClick={() => { void startChangePassword(); }}
               disabled={passwordActionPending}
-              className="btn-outline px-4 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+              style={{ padding: "9px 18px", borderRadius: "10px", border: "1px solid rgba(0,212,255,0.25)", background: "rgba(0,212,255,0.06)", color: "#00d4ff", fontSize: "0.8rem", fontWeight: 700, cursor: passwordActionPending ? "not-allowed" : "pointer", opacity: passwordActionPending ? 0.5 : 1 }}
             >
               {passwordActionPending ? "Redirecting..." : "Change Password"}
             </button>
           </div>
         </div>
 
-        <div className="grid gap-5 md:grid-cols-2">
-          <article className="animate-rise rounded-xl bg-white p-6 shadow-sm">
-            <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--brand-soft)] text-xl font-semibold">
-                P
+        {/* Top 2 Cards: Profile + Session Info */}
+        <div style={{ display: "grid", gap: "16px", gridTemplateColumns: "1fr 1fr", marginBottom: "20px" }}>
+          {/* Customer Profile Card */}
+          <article className="animate-rise" style={{ ...glassCard, padding: "24px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
+              <div style={{
+                width: "48px", height: "48px", borderRadius: "50%", flexShrink: 0,
+                background: "linear-gradient(135deg, #00d4ff, #7c3aed)",
+                display: "grid", placeItems: "center",
+              }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+                </svg>
               </div>
               <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-[var(--muted)]">Customer Profile</p>
-                <p className="text-sm font-semibold text-[var(--ink)]">
-                  {canViewAdmin ? "Admin Account" : customer?.name || "Loading..."}
+                <p style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--muted)", margin: 0 }}>Customer Profile</p>
+                <p style={{ fontSize: "0.875rem", fontWeight: 700, color: "#fff", margin: 0 }}>
+                  {canViewAdmin ? "Admin Account" : (customer?.name || "Loading...")}
                 </p>
               </div>
             </div>
 
             {!canViewAdmin && (
-              <div className="space-y-4">
-                <div className="rounded-lg bg-[#fafafa] px-4 py-3">
-                  <p className="text-xs text-[var(--muted)]">First Name</p>
-                  <div className="mt-2 flex flex-col gap-2">
-                    <input
-                      value={editFirstName}
-                      onChange={(event) => setEditFirstName(event.target.value)}
-                      disabled={savingProfile || emailVerified === false}
-                      className="w-full rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-sm text-[var(--ink)] outline-none focus:border-[var(--brand)] disabled:cursor-not-allowed disabled:opacity-60"
-                      placeholder="Enter first name"
-                    />
-                  </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                {/* First Name */}
+                <div style={{ borderRadius: "10px", background: "rgba(0,212,255,0.04)", border: "1px solid rgba(0,212,255,0.08)", padding: "10px 14px" }}>
+                  <p style={{ fontSize: "0.65rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 0 6px" }}>First Name</p>
+                  <input
+                    value={editFirstName}
+                    onChange={(e) => setEditFirstName(e.target.value)}
+                    disabled={savingProfile || emailVerified === false}
+                    style={{ ...darkInput, padding: "7px 10px" }}
+                    placeholder="Enter first name"
+                  />
                 </div>
-
-                <div className="rounded-lg bg-[#fafafa] px-4 py-3">
-                  <p className="text-xs text-[var(--muted)]">Last Name</p>
-                  <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                {/* Last Name + Save */}
+                <div style={{ borderRadius: "10px", background: "rgba(0,212,255,0.04)", border: "1px solid rgba(0,212,255,0.08)", padding: "10px 14px" }}>
+                  <p style={{ fontSize: "0.65rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 0 6px" }}>Last Name</p>
+                  <div style={{ display: "flex", gap: "8px" }}>
                     <input
                       value={editLastName}
-                      onChange={(event) => setEditLastName(event.target.value)}
+                      onChange={(e) => setEditLastName(e.target.value)}
                       disabled={savingProfile || emailVerified === false}
-                      className="w-full rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-sm text-[var(--ink)] outline-none focus:border-[var(--brand)] disabled:cursor-not-allowed disabled:opacity-60"
+                      style={{ ...darkInput, flex: 1, padding: "7px 10px" }}
                       placeholder="Enter last name"
                     />
                     <button
-                      onClick={() => {
-                        void saveProfile();
-                      }}
+                      onClick={() => { void saveProfile(); }}
                       disabled={
-                        savingProfile
-                        || emailVerified === false
-                        || !customer
-                        || !editFirstName.trim()
-                        || !editLastName.trim()
-                        || (
-                          editFirstName.trim() === initialNameParts.firstName
-                          && editLastName.trim() === initialNameParts.lastName
-                        )
+                        savingProfile || emailVerified === false || !customer || !editFirstName.trim() || !editLastName.trim()
+                        || (editFirstName.trim() === initialNameParts.firstName && editLastName.trim() === initialNameParts.lastName)
                       }
-                      className="rounded-lg bg-[var(--brand)] px-3 py-2 text-xs font-semibold text-white hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
+                      style={{
+                        padding: "7px 14px", borderRadius: "8px", border: "none", flexShrink: 0,
+                        background: "linear-gradient(135deg, #00d4ff, #7c3aed)",
+                        color: "#fff", fontSize: "0.75rem", fontWeight: 700, cursor: "pointer",
+                        opacity: savingProfile || !editFirstName.trim() || !editLastName.trim() ? 0.5 : 1,
+                      }}
                     >
                       {savingProfile ? "Saving..." : "Save"}
                     </button>
                   </div>
                 </div>
 
-                <div className="rounded-lg bg-[#fafafa] px-4 py-3">
-                  <p className="text-xs text-[var(--muted)]">Email</p>
-                  <p className="mt-0.5 text-sm font-semibold text-[var(--ink)]">{customer?.email || "-"}</p>
-                </div>
-
-                <div className="rounded-lg bg-[#fafafa] px-4 py-3">
-                  <p className="text-xs text-[var(--muted)]">Customer ID</p>
-                  <p className="mt-0.5 break-all font-mono text-xs text-[var(--ink)]">{customer?.id || "-"}</p>
-                </div>
-
-                <div className="rounded-lg bg-[#fafafa] px-4 py-3">
-                  <p className="text-xs text-[var(--muted)]">Member Since</p>
-                  <p className="mt-0.5 text-sm font-semibold text-[var(--ink)]">
-                    {customer?.createdAt
-                      ? new Date(customer.createdAt).toLocaleDateString("en-US", {
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric",
-                        })
-                      : "-"}
-                  </p>
-                </div>
+                {[
+                  { label: "Email", value: customer?.email || "—" },
+                  { label: "Customer ID", value: customer?.id || "—", mono: true },
+                  { label: "Member Since", value: customer?.createdAt ? new Date(customer.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : "—" },
+                ].map(({ label, value, mono }) => (
+                  <div key={label} style={{ borderRadius: "10px", background: "rgba(0,212,255,0.04)", border: "1px solid rgba(0,212,255,0.08)", padding: "10px 14px" }}>
+                    <p style={{ fontSize: "0.65rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 0 3px" }}>{label}</p>
+                    <p style={{ fontSize: "0.82rem", fontWeight: 700, color: "#c8c8e8", fontFamily: mono ? "monospace" : undefined, wordBreak: "break-all", margin: 0 }}>{value}</p>
+                  </div>
+                ))}
               </div>
             )}
 
             {canViewAdmin && (
-              <div className="rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-700">
-                <p className="font-semibold">Admin Account Detected</p>
-                <p className="mt-1 text-xs">Customer profile bootstrap is not required for admin operations.</p>
+              <div style={{ borderRadius: "10px", border: "1px solid rgba(124,58,237,0.25)", background: "rgba(124,58,237,0.08)", padding: "12px 14px", fontSize: "0.82rem", color: "#a78bfa" }}>
+                <p style={{ fontWeight: 700, margin: "0 0 4px" }}>Admin Account Detected</p>
+                <p style={{ fontSize: "0.75rem", opacity: 0.8, margin: 0 }}>Customer profile bootstrap is not required for admin operations.</p>
               </div>
             )}
           </article>
 
-          <article className="animate-rise rounded-xl bg-white p-6 shadow-sm" style={{ animationDelay: "100ms" }}>
-            <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--accent-soft)] text-xl font-semibold">
-                S
+          {/* Session Info Card */}
+          <article className="animate-rise" style={{ ...glassCard, padding: "24px", animationDelay: "80ms" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
+              <div style={{ width: "48px", height: "48px", borderRadius: "50%", flexShrink: 0, background: "rgba(124,58,237,0.2)", border: "1px solid rgba(124,58,237,0.35)", display: "grid", placeItems: "center" }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
               </div>
               <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-[var(--muted)]">Session Info</p>
-                <p className="text-sm font-semibold text-[var(--ink)]">Authentication Details</p>
+                <p style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--muted)", margin: 0 }}>Session Info</p>
+                <p style={{ fontSize: "0.875rem", fontWeight: 700, color: "#fff", margin: 0 }}>Authentication Details</p>
               </div>
             </div>
 
-            <div className="space-y-4">
-              <div className="rounded-lg bg-[#fafafa] px-4 py-3">
-                <p className="text-xs text-[var(--muted)]">Auth Email</p>
-                <p className="mt-0.5 text-sm font-semibold text-[var(--ink)]">{(profile?.email as string) || "-"}</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              {[
+                { label: "Auth Email", value: (profile?.email as string) || "—" },
+                { label: "Auth Name", value: (profile?.name as string) || "—" },
+              ].map(({ label, value }) => (
+                <div key={label} style={{ borderRadius: "10px", background: "rgba(0,212,255,0.04)", border: "1px solid rgba(0,212,255,0.08)", padding: "10px 14px" }}>
+                  <p style={{ fontSize: "0.65rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 0 3px" }}>{label}</p>
+                  <p style={{ fontSize: "0.82rem", fontWeight: 700, color: "#c8c8e8", margin: 0 }}>{value}</p>
+                </div>
+              ))}
+              <div style={{ borderRadius: "10px", background: "rgba(0,212,255,0.04)", border: "1px solid rgba(0,212,255,0.08)", padding: "10px 14px" }}>
+                <p style={{ fontSize: "0.65rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 0 6px" }}>Role</p>
+                <span style={{
+                  borderRadius: "20px", padding: "3px 12px", fontSize: "0.72rem", fontWeight: 800,
+                  background: canViewAdmin ? "rgba(124,58,237,0.15)" : "rgba(34,197,94,0.1)",
+                  border: `1px solid ${canViewAdmin ? "rgba(124,58,237,0.3)" : "rgba(34,197,94,0.25)"}`,
+                  color: canViewAdmin ? "#a78bfa" : "#4ade80",
+                }}>
+                  {canViewAdmin ? "Admin" : "Customer"}
+                </span>
               </div>
-
-              <div className="rounded-lg bg-[#fafafa] px-4 py-3">
-                <p className="text-xs text-[var(--muted)]">Auth Name</p>
-                <p className="mt-0.5 text-sm font-semibold text-[var(--ink)]">{(profile?.name as string) || "-"}</p>
-              </div>
-
-              <div className="rounded-lg bg-[#fafafa] px-4 py-3">
-                <p className="text-xs text-[var(--muted)]">Role</p>
-                <p className="mt-0.5">
-                  <span
-                    className={`rounded-full px-3 py-1 text-xs font-bold ${
-                      canViewAdmin ? "bg-purple-100 text-purple-700" : "bg-green-100 text-green-700"
-                    }`}
-                  >
-                    {canViewAdmin ? "Admin" : "Customer"}
-                  </span>
-                </p>
-              </div>
-
-              <div className="rounded-lg bg-[#fafafa] px-4 py-3">
-                <p className="text-xs text-[var(--muted)]">Email Verified</p>
-                <p className="mt-0.5">
-                  <span
-                    className={`rounded-full px-3 py-1 text-xs font-bold ${
-                      emailVerified ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
-                    }`}
-                  >
-                    {emailVerified ? "Verified" : "Not Verified"}
-                  </span>
-                </p>
+              <div style={{ borderRadius: "10px", background: "rgba(0,212,255,0.04)", border: "1px solid rgba(0,212,255,0.08)", padding: "10px 14px" }}>
+                <p style={{ fontSize: "0.65rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 0 6px" }}>Email Verified</p>
+                <span style={{
+                  borderRadius: "20px", padding: "3px 12px", fontSize: "0.72rem", fontWeight: 800,
+                  background: emailVerified ? "rgba(34,197,94,0.1)" : "rgba(245,158,11,0.1)",
+                  border: `1px solid ${emailVerified ? "rgba(34,197,94,0.25)" : "rgba(245,158,11,0.3)"}`,
+                  color: emailVerified ? "#4ade80" : "#fbbf24",
+                }}>
+                  {emailVerified ? "Verified" : "Not Verified"}
+                </span>
               </div>
             </div>
           </article>
         </div>
 
+        {/* Address Book */}
         {!canViewAdmin && (
-          <section className="mt-5 rounded-xl bg-white p-6 shadow-sm">
-            <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <section style={{ ...glassCard, padding: "24px" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: "12px", marginBottom: "20px" }}>
               <div>
-                <h2 className="text-xl font-bold text-[var(--ink)]">Address Book</h2>
-                <p className="text-xs text-[var(--muted)]">
-                  Manage shipping and billing addresses. Deleted addresses are soft-deleted for order history safety.
-                </p>
+                <h2 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: "1.1rem", color: "#fff", margin: "0 0 4px" }}>Address Book</h2>
+                <p style={{ fontSize: "0.75rem", color: "var(--muted)", margin: 0 }}>Manage shipping and billing addresses.</p>
               </div>
-              <span className="rounded-full bg-[var(--brand)] px-3 py-1 text-xs font-semibold text-white">
+              <span style={{ background: "linear-gradient(135deg, #00d4ff, #7c3aed)", color: "#fff", padding: "3px 12px", borderRadius: "20px", fontSize: "0.72rem", fontWeight: 800 }}>
                 {addresses.length} active
               </span>
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-[0.9fr,1.1fr]">
-              <div className="rounded-lg border border-[var(--line)] p-4">
-                <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
+            <div style={{ display: "grid", gap: "20px", gridTemplateColumns: "0.9fr 1.1fr" }}>
+              {/* Address Form */}
+              <div style={{ borderRadius: "12px", border: "1px solid rgba(0,212,255,0.1)", padding: "16px" }}>
+                <p style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#00d4ff", margin: "0 0 12px" }}>
                   {addressForm.id ? "Edit Address" : "Add Address"}
                 </p>
-                <div className="grid gap-2 text-sm">
-                  <input
-                    value={addressForm.label}
-                    onChange={(e) => setAddressForm((old) => ({ ...old, label: e.target.value }))}
-                    placeholder="Label (Home, Office)"
-                    className="rounded-lg border border-[var(--line)] px-3 py-2"
-                    disabled={savingAddress || emailVerified === false}
-                  />
-                  <input
-                    value={addressForm.recipientName}
-                    onChange={(e) => setAddressForm((old) => ({ ...old, recipientName: e.target.value }))}
-                    placeholder="Recipient name"
-                    className="rounded-lg border border-[var(--line)] px-3 py-2"
-                    disabled={savingAddress || emailVerified === false}
-                    required
-                  />
-                  <input
-                    value={addressForm.phone}
-                    onChange={(e) => setAddressForm((old) => ({ ...old, phone: e.target.value }))}
-                    placeholder="Phone number"
-                    className="rounded-lg border border-[var(--line)] px-3 py-2"
-                    disabled={savingAddress || emailVerified === false}
-                    required
-                  />
-                  <input
-                    value={addressForm.line1}
-                    onChange={(e) => setAddressForm((old) => ({ ...old, line1: e.target.value }))}
-                    placeholder="Address line 1"
-                    className="rounded-lg border border-[var(--line)] px-3 py-2"
-                    disabled={savingAddress || emailVerified === false}
-                    required
-                  />
-                  <input
-                    value={addressForm.line2}
-                    onChange={(e) => setAddressForm((old) => ({ ...old, line2: e.target.value }))}
-                    placeholder="Address line 2 (optional)"
-                    className="rounded-lg border border-[var(--line)] px-3 py-2"
-                    disabled={savingAddress || emailVerified === false}
-                  />
-                  <div className="grid gap-2 sm:grid-cols-2">
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {[
+                    { key: "label", placeholder: "Label (Home, Office)", required: false },
+                    { key: "recipientName", placeholder: "Recipient name *", required: true },
+                    { key: "phone", placeholder: "Phone number *", required: true },
+                    { key: "line1", placeholder: "Address line 1 *", required: true },
+                    { key: "line2", placeholder: "Address line 2 (optional)", required: false },
+                  ].map(({ key, placeholder }) => (
                     <input
-                      value={addressForm.city}
-                      onChange={(e) => setAddressForm((old) => ({ ...old, city: e.target.value }))}
-                      placeholder="City"
-                      className="rounded-lg border border-[var(--line)] px-3 py-2"
+                      key={key}
+                      value={(addressForm as unknown as Record<string, string>)[key]}
+                      onChange={(e) => setAddressForm((old) => ({ ...old, [key]: e.target.value }))}
+                      placeholder={placeholder}
                       disabled={savingAddress || emailVerified === false}
-                      required
+                      style={darkInput}
                     />
-                    <input
-                      value={addressForm.state}
-                      onChange={(e) => setAddressForm((old) => ({ ...old, state: e.target.value }))}
-                      placeholder="State"
-                      className="rounded-lg border border-[var(--line)] px-3 py-2"
-                      disabled={savingAddress || emailVerified === false}
-                      required
-                    />
+                  ))}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                    {[
+                      { key: "city", placeholder: "City *" },
+                      { key: "state", placeholder: "State *" },
+                    ].map(({ key, placeholder }) => (
+                      <input
+                        key={key}
+                        value={(addressForm as unknown as Record<string, string>)[key]}
+                        onChange={(e) => setAddressForm((old) => ({ ...old, [key]: e.target.value }))}
+                        placeholder={placeholder}
+                        disabled={savingAddress || emailVerified === false}
+                        style={darkInput}
+                      />
+                    ))}
                   </div>
-                  <div className="grid gap-2 sm:grid-cols-2">
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
                     <input
                       value={addressForm.postalCode}
                       onChange={(e) => setAddressForm((old) => ({ ...old, postalCode: e.target.value }))}
-                      placeholder="Postal code"
-                      className="rounded-lg border border-[var(--line)] px-3 py-2"
+                      placeholder="Postal code *"
                       disabled={savingAddress || emailVerified === false}
-                      required
+                      style={darkInput}
                     />
                     <input
                       value={addressForm.countryCode}
                       onChange={(e) => setAddressForm((old) => ({ ...old, countryCode: e.target.value.toUpperCase() }))}
-                      placeholder="Country code (US)"
+                      placeholder="Country (US)"
                       maxLength={2}
-                      className="rounded-lg border border-[var(--line)] px-3 py-2"
                       disabled={savingAddress || emailVerified === false}
-                      required
+                      style={darkInput}
                     />
                   </div>
-                  <div className="flex flex-wrap gap-3 pt-1 text-xs text-[var(--muted)]">
-                    <label className="inline-flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={addressForm.defaultShipping}
-                        onChange={(e) => setAddressForm((old) => ({ ...old, defaultShipping: e.target.checked }))}
-                        disabled={savingAddress || emailVerified === false}
-                      />
-                      Set as default shipping
-                    </label>
-                    <label className="inline-flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={addressForm.defaultBilling}
-                        onChange={(e) => setAddressForm((old) => ({ ...old, defaultBilling: e.target.checked }))}
-                        disabled={savingAddress || emailVerified === false}
-                      />
-                      Set as default billing
-                    </label>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", padding: "4px 0" }}>
+                    {[
+                      { key: "defaultShipping", label: "Default Shipping" },
+                      { key: "defaultBilling", label: "Default Billing" },
+                    ].map(({ key, label }) => (
+                      <label key={key} style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "0.78rem", color: "var(--muted)", cursor: "pointer" }}>
+                        <input
+                          type="checkbox"
+                          checked={(addressForm as unknown as Record<string, boolean>)[key]}
+                          onChange={(e) => setAddressForm((old) => ({ ...old, [key]: e.target.checked }))}
+                          disabled={savingAddress || emailVerified === false}
+                          style={{ accentColor: "#00d4ff", width: "14px", height: "14px" }}
+                        />
+                        {label}
+                      </label>
+                    ))}
                   </div>
-                  <div className="mt-2 flex flex-wrap gap-2">
+                  <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
                     <button
                       onClick={() => { void saveAddress(); }}
                       disabled={savingAddress || emailVerified === false}
-                      className="btn-primary px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                      style={{
+                        flex: 1, padding: "10px", borderRadius: "10px", border: "none",
+                        background: savingAddress || emailVerified === false ? "rgba(0,212,255,0.2)" : "linear-gradient(135deg, #00d4ff, #7c3aed)",
+                        color: "#fff", fontSize: "0.82rem", fontWeight: 700,
+                        cursor: savingAddress || emailVerified === false ? "not-allowed" : "pointer",
+                        display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px",
+                      }}
                     >
+                      {savingAddress && <span className="spinner-sm" />}
                       {savingAddress ? "Saving..." : addressForm.id ? "Update Address" : "Add Address"}
                     </button>
                     {addressForm.id && (
                       <button
                         onClick={resetAddressForm}
                         disabled={savingAddress}
-                        className="btn-outline px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                        style={{ padding: "10px 14px", borderRadius: "10px", border: "1px solid rgba(0,212,255,0.2)", background: "transparent", color: "var(--muted)", fontSize: "0.82rem", cursor: "pointer" }}
                       >
-                        Cancel Edit
+                        Cancel
                       </button>
                     )}
                   </div>
                 </div>
               </div>
 
-              <div className="rounded-lg border border-[var(--line)] p-4">
-                <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Saved Addresses</p>
-                {addressLoading && (
-                  <p className="text-sm text-[var(--muted)]">Loading addresses...</p>
-                )}
+              {/* Saved Addresses */}
+              <div style={{ borderRadius: "12px", border: "1px solid rgba(0,212,255,0.08)", padding: "16px" }}>
+                <p style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#7c3aed", margin: "0 0 12px" }}>Saved Addresses</p>
+                {addressLoading && <p style={{ fontSize: "0.82rem", color: "var(--muted)" }}>Loading addresses...</p>}
                 {!addressLoading && addresses.length === 0 && (
-                  <p className="text-sm text-[var(--muted)]">No addresses added yet.</p>
+                  <p style={{ fontSize: "0.82rem", color: "var(--muted)" }}>No addresses added yet.</p>
                 )}
-                <div className="grid gap-3">
-                  {addresses.map((address) => (
-                    <article key={address.id} className="rounded-lg border border-[var(--line)] bg-[#fafafa] p-3">
-                      {(() => {
-                        const isSettingShipping = settingDefaultAddress?.addressId === address.id && settingDefaultAddress.type === "shipping";
-                        const isSettingBilling = settingDefaultAddress?.addressId === address.id && settingDefaultAddress.type === "billing";
-                        const isSingleAddress = addresses.length === 1;
-                        return (
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div>
-                          <p className="text-sm font-semibold text-[var(--ink)]">
-                            {address.label ? `${address.label} - ` : ""}{address.recipientName}
-                          </p>
-                          <p className="text-xs text-[var(--muted)]">{address.phone}</p>
-                          <p className="mt-1 text-xs text-[var(--ink)]">
-                            {address.line1}{address.line2 ? `, ${address.line2}` : ""}, {address.city}, {address.state} {address.postalCode}, {address.countryCode}
-                          </p>
-                          <div className="mt-2 flex flex-wrap gap-1">
-                            {address.defaultShipping && (
-                              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                                Default Shipping
-                              </span>
-                            )}
-                            {address.defaultBilling && (
-                              <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
-                                Default Billing
-                              </span>
-                            )}
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  {addresses.map((address) => {
+                    const isSettingShipping = settingDefaultAddress?.addressId === address.id && settingDefaultAddress.type === "shipping";
+                    const isSettingBilling = settingDefaultAddress?.addressId === address.id && settingDefaultAddress.type === "billing";
+                    const isSingle = addresses.length === 1;
+                    return (
+                      <article
+                        key={address.id}
+                        style={{ borderRadius: "12px", border: "1px solid rgba(0,212,255,0.08)", background: "rgba(0,212,255,0.03)", padding: "12px 14px" }}
+                      >
+                        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: "8px" }}>
+                          <div style={{ flex: 1, minWidth: "140px" }}>
+                            <p style={{ fontWeight: 700, color: "#fff", fontSize: "0.85rem", margin: "0 0 2px" }}>
+                              {address.label ? `${address.label} · ` : ""}{address.recipientName}
+                            </p>
+                            <p style={{ fontSize: "0.72rem", color: "var(--muted)", margin: "0 0 4px" }}>{address.phone}</p>
+                            <p style={{ fontSize: "0.7rem", color: "rgba(200,200,232,0.7)", margin: "0 0 6px", lineHeight: 1.5 }}>
+                              {address.line1}{address.line2 ? `, ${address.line2}` : ""}, {address.city}, {address.state} {address.postalCode}, {address.countryCode}
+                            </p>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                              {address.defaultShipping && (
+                                <span style={{ fontSize: "0.6rem", fontWeight: 700, padding: "2px 8px", borderRadius: "20px", background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.2)", color: "#4ade80" }}>
+                                  Default Shipping
+                                </span>
+                              )}
+                              {address.defaultBilling && (
+                                <span style={{ fontSize: "0.6rem", fontWeight: 700, padding: "2px 8px", borderRadius: "20px", background: "rgba(0,212,255,0.1)", border: "1px solid rgba(0,212,255,0.2)", color: "#00d4ff" }}>
+                                  Default Billing
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                            {/* Edit */}
+                            <button
+                              onClick={() => startEditAddress(address)}
+                              disabled={savingAddress || emailVerified === false}
+                              style={{ padding: "4px 10px", borderRadius: "7px", border: "1px solid rgba(0,212,255,0.2)", background: "rgba(0,212,255,0.05)", color: "#00d4ff", fontSize: "0.62rem", fontWeight: 700, cursor: "pointer" }}
+                            >
+                              Edit
+                            </button>
+                            {/* Set Shipping */}
+                            <button
+                              onClick={() => { void setDefaultAddress(address.id, "shipping"); }}
+                              disabled={isSingle || address.defaultShipping || settingDefaultAddress !== null || savingAddress || emailVerified === false}
+                              style={{ padding: "4px 10px", borderRadius: "7px", border: "1px solid rgba(34,197,94,0.2)", background: "rgba(34,197,94,0.06)", color: "#4ade80", fontSize: "0.62rem", fontWeight: 700, cursor: "pointer", opacity: isSingle || address.defaultShipping ? 0.4 : 1 }}
+                            >
+                              {isSettingShipping ? "Saving..." : address.defaultShipping ? "✓ Shipping" : "Set Shipping"}
+                            </button>
+                            {/* Set Billing */}
+                            <button
+                              onClick={() => { void setDefaultAddress(address.id, "billing"); }}
+                              disabled={isSingle || address.defaultBilling || settingDefaultAddress !== null || savingAddress || emailVerified === false}
+                              style={{ padding: "4px 10px", borderRadius: "7px", border: "1px solid rgba(0,212,255,0.2)", background: "rgba(0,212,255,0.06)", color: "#00d4ff", fontSize: "0.62rem", fontWeight: 700, cursor: "pointer", opacity: isSingle || address.defaultBilling ? 0.4 : 1 }}
+                            >
+                              {isSettingBilling ? "Saving..." : address.defaultBilling ? "✓ Billing" : "Set Billing"}
+                            </button>
+                            {/* Delete */}
+                            <button
+                              onClick={() => { void deleteAddress(address.id); }}
+                              disabled={deletingAddressId !== null || savingAddress || emailVerified === false}
+                              style={{ padding: "4px 10px", borderRadius: "7px", border: "1px solid rgba(239,68,68,0.2)", background: "rgba(239,68,68,0.05)", color: "#ef4444", fontSize: "0.62rem", fontWeight: 700, cursor: deletingAddressId ? "not-allowed" : "pointer" }}
+                            >
+                              {deletingAddressId === address.id ? "Deleting..." : "Delete"}
+                            </button>
                           </div>
                         </div>
-                        <div className="flex flex-wrap gap-1">
-                          <button
-                            onClick={() => startEditAddress(address)}
-                            disabled={savingAddress || emailVerified === false}
-                            className="rounded border border-[var(--line)] bg-white px-2 py-1 text-[10px] disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => { void setDefaultAddress(address.id, "shipping"); }}
-                            disabled={isSingleAddress || address.defaultShipping || settingDefaultAddress !== null || savingAddress || emailVerified === false}
-                            className="rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] text-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            {isSettingShipping ? "Saving..." : address.defaultShipping ? "Default Shipping" : "Set Shipping"}
-                          </button>
-                          <button
-                            onClick={() => { void setDefaultAddress(address.id, "billing"); }}
-                            disabled={isSingleAddress || address.defaultBilling || settingDefaultAddress !== null || savingAddress || emailVerified === false}
-                            className="rounded border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] text-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            {isSettingBilling ? "Saving..." : address.defaultBilling ? "Default Billing" : "Set Billing"}
-                          </button>
-                          <button
-                            onClick={() => { void deleteAddress(address.id); }}
-                            disabled={deletingAddressId !== null || savingAddress || emailVerified === false}
-                            className="rounded border border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            {deletingAddressId === address.id ? "Deleting..." : "Delete"}
-                          </button>
-                        </div>
-                      </div>
-                        );
-                      })()}
-                    </article>
-                  ))}
+                      </article>
+                    );
+                  })}
                 </div>
               </div>
             </div>
           </section>
         )}
 
-        <p className="mt-5 text-xs text-[var(--muted)]">{canViewAdmin ? "Admin account detected." : status}</p>
+        <p style={{ marginTop: "16px", fontSize: "0.72rem", color: "var(--muted-2)" }}>
+          {canViewAdmin ? "Admin account detected." : status}
+        </p>
       </main>
 
       <Footer />

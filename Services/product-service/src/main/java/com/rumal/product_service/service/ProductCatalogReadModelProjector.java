@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -68,7 +69,16 @@ public class ProductCatalogReadModelProjector {
     }
 
     private ProductCatalogRead toReadRow(Product product, Set<UUID> parentIdsWithChildren) {
-        Set<Category> categories = product.getCategories();
+        Set<Category> categories = product.getCategories() == null
+                ? Set.of()
+                : product.getCategories();
+        Instant now = Instant.now();
+        Instant createdAt = product.getCreatedAt() != null
+                ? product.getCreatedAt()
+                : (product.getUpdatedAt() != null ? product.getUpdatedAt() : now);
+        Instant updatedAt = product.getUpdatedAt() != null
+                ? product.getUpdatedAt()
+                : createdAt;
 
         String mainCategory = categories.stream()
                 .filter(category -> category.getType() == CategoryType.PARENT)
@@ -120,8 +130,8 @@ public class ProductCatalogReadModelProjector {
                 .descriptionLc(normalize(product.getDescription()))
                 .skuLc(normalize(product.getSku()))
                 .mainCategoryLc(normalize(mainCategory))
-                .createdAt(product.getCreatedAt())
-                .updatedAt(product.getUpdatedAt())
+                .createdAt(createdAt)
+                .updatedAt(updatedAt)
                 .build();
     }
 

@@ -889,6 +889,17 @@ textarea:focus {
   animation: spin 0.7s linear infinite;
 }
 
+.spinner-lg {
+  display: inline-block;
+  width: 44px;
+  height: 44px;
+  border: 3px solid rgba(0, 212, 255, 0.15);
+  border-top-color: var(--brand);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.2);
+}
+
 /* ─── Breadcrumbs ─── */
 .breadcrumb {
   display: flex;

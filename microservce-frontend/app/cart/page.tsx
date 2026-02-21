@@ -54,33 +54,43 @@ type CheckoutResponse = {
 };
 
 const emptyCart: CartResponse = {
-  id: null,
-  keycloakId: "",
-  items: [],
-  itemCount: 0,
-  totalQuantity: 0,
-  subtotal: 0,
-  createdAt: null,
-  updatedAt: null,
+  id: null, keycloakId: "", items: [], itemCount: 0,
+  totalQuantity: 0, subtotal: 0, createdAt: null, updatedAt: null,
 };
 
 function money(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value || 0);
 }
 
+/* Shared dark select style */
+const darkSelect: React.CSSProperties = {
+  width: "100%",
+  padding: "10px 14px",
+  borderRadius: "10px",
+  border: "1px solid rgba(0,212,255,0.15)",
+  background: "rgba(0,212,255,0.04)",
+  color: "#c8c8e8",
+  fontSize: "0.85rem",
+  outline: "none",
+  appearance: "none",
+  WebkitAppearance: "none",
+};
+
+/* Glass card style */
+const glassCard: React.CSSProperties = {
+  background: "rgba(17,17,40,0.7)",
+  backdropFilter: "blur(16px)",
+  border: "1px solid rgba(0,212,255,0.1)",
+  borderRadius: "16px",
+  padding: "20px",
+};
+
 export default function CartPage() {
   const router = useRouter();
   const session = useAuthSession();
   const {
-    status: sessionStatus,
-    isAuthenticated,
-    canViewAdmin,
-    ensureCustomer,
-    apiClient,
-    profile,
-    logout,
-    emailVerified,
-    resendVerificationEmail,
+    status: sessionStatus, isAuthenticated, canViewAdmin,
+    ensureCustomer, apiClient, profile, logout, emailVerified, resendVerificationEmail,
   } = session;
 
   const [cart, setCart] = useState<CartResponse>(emptyCart);
@@ -100,11 +110,7 @@ export default function CartPage() {
     if (!apiClient) return;
     const res = await apiClient.get("/cart/me");
     const data = (res.data as CartResponse) || emptyCart;
-    setCart({
-      ...emptyCart,
-      ...data,
-      items: data.items || [],
-    });
+    setCart({ ...emptyCart, ...data, items: data.items || [] });
   }, [apiClient]);
 
   const loadAddresses = useCallback(async () => {
@@ -114,9 +120,8 @@ export default function CartPage() {
       const res = await apiClient.get("/customers/me/addresses");
       const loaded = (res.data as CustomerAddress[]) || [];
       setAddresses(loaded);
-
-      const defaultShipping = loaded.find((address) => address.defaultShipping)?.id || loaded[0]?.id || "";
-      const defaultBilling = loaded.find((address) => address.defaultBilling)?.id || defaultShipping;
+      const defaultShipping = loaded.find((a) => a.defaultShipping)?.id || loaded[0]?.id || "";
+      const defaultBilling = loaded.find((a) => a.defaultBilling)?.id || defaultShipping;
       setShippingAddressId((old) => old || defaultShipping);
       setBillingAddressId((old) => old || defaultBilling);
     } finally {
@@ -126,11 +131,7 @@ export default function CartPage() {
 
   useEffect(() => {
     if (sessionStatus !== "ready") return;
-    if (!isAuthenticated) {
-      router.replace("/");
-      return;
-    }
-
+    if (!isAuthenticated) { router.replace("/"); return; }
     const run = async () => {
       try {
         await ensureCustomer();
@@ -151,17 +152,14 @@ export default function CartPage() {
   const busy = updatingItemId !== null || removingItemId !== null || clearingCart || checkingOut;
 
   const updateQuantity = async (itemId: string, quantity: number) => {
-    if (!apiClient || busy) return;
-    if (quantity < 1) return;
+    if (!apiClient || busy || quantity < 1) return;
     setUpdatingItemId(itemId);
     try {
       const res = await apiClient.put(`/cart/me/items/${itemId}`, { quantity });
       setCart((res.data as CartResponse) || emptyCart);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to update quantity");
-    } finally {
-      setUpdatingItemId(null);
-    }
+    } finally { setUpdatingItemId(null); }
   };
 
   const removeItem = async (itemId: string) => {
@@ -173,9 +171,7 @@ export default function CartPage() {
       toast.success("Item removed from cart");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to remove item");
-    } finally {
-      setRemovingItemId(null);
-    }
+    } finally { setRemovingItemId(null); }
   };
 
   const clearCart = async () => {
@@ -187,27 +183,19 @@ export default function CartPage() {
       toast.success("Cart cleared");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to clear cart");
-    } finally {
-      setClearingCart(false);
-    }
+    } finally { setClearingCart(false); }
   };
 
   const checkout = async () => {
     if (!apiClient || busy || cart.items.length === 0) return;
-    const resolvedShippingAddressId = shippingAddressId.trim();
-    const resolvedBillingAddressId = (billingSameAsShipping ? shippingAddressId : billingAddressId).trim();
-
-    if (!resolvedShippingAddressId || !resolvedBillingAddressId) {
-      toast.error("Select shipping and billing addresses");
-      return;
-    }
-
+    const resolvedShipping = shippingAddressId.trim();
+    const resolvedBilling = (billingSameAsShipping ? shippingAddressId : billingAddressId).trim();
+    if (!resolvedShipping || !resolvedBilling) { toast.error("Select shipping and billing addresses"); return; }
     setCheckingOut(true);
     setStatus("Placing order...");
     try {
       const res = await apiClient.post("/cart/me/checkout", {
-        shippingAddressId: resolvedShippingAddressId,
-        billingAddressId: resolvedBillingAddressId,
+        shippingAddressId: resolvedShipping, billingAddressId: resolvedBilling,
       });
       const data = res.data as CheckoutResponse;
       await loadCart();
@@ -218,9 +206,7 @@ export default function CartPage() {
       const message = err instanceof Error ? err.message : "Checkout failed";
       setStatus(message);
       toast.error(message);
-    } finally {
-      setCheckingOut(false);
-    }
+    } finally { setCheckingOut(false); }
   };
 
   const resendVerification = async () => {
@@ -231,32 +217,29 @@ export default function CartPage() {
       toast.success("Verification email sent");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to resend verification email");
-    } finally {
-      setResendingVerification(false);
-    }
+    } finally { setResendingVerification(false); }
   };
 
-  const hasRequiredAddresses = useMemo(() => {
-    return Boolean(shippingAddressId.trim() && (billingSameAsShipping || billingAddressId.trim()));
-  }, [shippingAddressId, billingSameAsShipping, billingAddressId]);
+  const hasRequiredAddresses = useMemo(
+    () => Boolean(shippingAddressId.trim() && (billingSameAsShipping || billingAddressId.trim())),
+    [shippingAddressId, billingSameAsShipping, billingAddressId]
+  );
 
   if (sessionStatus === "loading" || sessionStatus === "idle") {
     return (
-      <div className="min-h-screen bg-[var(--bg)]">
-        <div className="mx-auto max-w-7xl px-4 py-10 text-center text-[var(--muted)]">
-          <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-[var(--line)] border-t-[var(--brand)]" />
-          <p className="mt-4">Loading...</p>
+      <div style={{ minHeight: "100vh", background: "var(--bg)", display: "grid", placeItems: "center" }}>
+        <div style={{ textAlign: "center" }}>
+          <div className="spinner-lg" />
+          <p style={{ marginTop: "16px", color: "var(--muted)", fontSize: "0.875rem" }}>Loading...</p>
         </div>
       </div>
     );
   }
 
-  if (!isAuthenticated) {
-    return null;
-  }
+  if (!isAuthenticated) return null;
 
   return (
-    <div className="min-h-screen bg-[var(--bg)]">
+    <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
       <AppNav
         email={(profile?.email as string) || ""}
         canViewAdmin={canViewAdmin}
@@ -266,16 +249,33 @@ export default function CartPage() {
       />
 
       <main className="mx-auto max-w-7xl px-4 py-4">
+        {/* Email verification warning */}
         {emailVerified === false && (
-          <section className="mb-4 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <section
+            className="mb-4 flex items-center gap-3 rounded-xl px-4 py-3 text-sm"
+            style={{ border: "1px solid rgba(245,158,11,0.3)", background: "rgba(245,158,11,0.08)", color: "#fbbf24" }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
             <div className="flex-1">
               <p className="font-semibold">Email not verified</p>
-              <p className="text-xs">Cart checkout is blocked until your email is verified.</p>
+              <p style={{ fontSize: "0.75rem", opacity: 0.8 }}>Cart checkout is blocked until your email is verified.</p>
             </div>
             <button
               onClick={() => { void resendVerification(); }}
               disabled={resendingVerification}
-              className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-60"
+              style={{
+                background: "rgba(245,158,11,0.2)",
+                border: "1px solid rgba(245,158,11,0.4)",
+                color: "#fbbf24",
+                padding: "6px 14px",
+                borderRadius: "8px",
+                fontSize: "0.75rem",
+                fontWeight: 700,
+                cursor: resendingVerification ? "not-allowed" : "pointer",
+                opacity: resendingVerification ? 0.5 : 1,
+              }}
             >
               {resendingVerification ? "Sending..." : "Resend Email"}
             </button>
@@ -288,30 +288,61 @@ export default function CartPage() {
           <span className="breadcrumb-current">Cart</span>
         </nav>
 
+        {/* Page Header */}
         <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-[var(--ink)]">Your Cart</h1>
-            <p className="mt-0.5 text-sm text-[var(--muted)]">{status}</p>
+            <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: "1.75rem", fontWeight: 800, color: "#fff", margin: 0 }}>
+              Your Cart
+            </h1>
+            <p style={{ marginTop: "4px", fontSize: "0.8rem", color: "var(--muted)" }}>{status}</p>
           </div>
-          <div className="flex gap-2">
-            <Link href="/products" className="btn-outline no-underline px-4 py-2 text-sm">
+          <div style={{ display: "flex", gap: "10px" }}>
+            <Link
+              href="/products"
+              className="no-underline"
+              style={{
+                padding: "9px 18px",
+                borderRadius: "10px",
+                border: "1px solid rgba(0,212,255,0.25)",
+                color: "#00d4ff",
+                background: "rgba(0,212,255,0.06)",
+                fontSize: "0.8rem",
+                fontWeight: 700,
+              }}
+            >
               Continue Shopping
             </Link>
             <button
               onClick={() => { void clearCart(); }}
               disabled={busy || cart.items.length === 0}
-              className="btn-danger px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+              style={{
+                padding: "9px 18px",
+                borderRadius: "10px",
+                border: "1px solid rgba(239,68,68,0.25)",
+                background: "rgba(239,68,68,0.06)",
+                color: "#ef4444",
+                fontSize: "0.8rem",
+                fontWeight: 700,
+                cursor: busy || cart.items.length === 0 ? "not-allowed" : "pointer",
+                opacity: cart.items.length === 0 ? 0.4 : 1,
+              }}
             >
               {clearingCart ? "Clearing..." : "Clear Cart"}
             </button>
           </div>
         </div>
 
-        <div className="grid gap-5 lg:grid-cols-[1.4fr,0.8fr]">
-          <section className="space-y-3">
+        <div style={{ display: "grid", gap: "20px", gridTemplateColumns: "1.4fr 0.8fr" }}>
+          {/* Cart Items */}
+          <section style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             {cart.items.length === 0 && (
               <div className="empty-state">
-                <div className="empty-state-icon">🛒</div>
+                <div className="empty-state-icon">
+                  <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" />
+                    <path d="M16 10a4 4 0 0 1-8 0" />
+                  </svg>
+                </div>
                 <p className="empty-state-title">Cart is empty</p>
                 <p className="empty-state-desc">Add products to your cart before checkout.</p>
                 <Link href="/products" className="btn-primary no-underline px-6 py-2.5 text-sm">
@@ -321,39 +352,49 @@ export default function CartPage() {
             )}
 
             {cart.items.map((item) => (
-              <article key={item.id} className="rounded-xl bg-white p-4 shadow-sm">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="flex-1">
-                    <Link href={`/products/${encodeURIComponent(item.productSlug)}`} className="text-base font-semibold text-[var(--ink)] no-underline hover:text-[var(--brand)]">
+              <article key={item.id} className="animate-rise" style={glassCard}>
+                <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: "12px" }}>
+                  <div style={{ flex: 1, minWidth: "200px" }}>
+                    <Link
+                      href={`/products/${encodeURIComponent(item.productSlug)}`}
+                      className="no-underline"
+                      style={{ fontWeight: 700, color: "#fff", fontSize: "0.95rem", lineHeight: 1.4 }}
+                      onMouseEnter={(e) => { e.currentTarget.style.color = "#00d4ff"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.color = "#fff"; }}
+                    >
                       {item.productName}
                     </Link>
-                    <p className="mt-1 text-xs text-[var(--muted)]">SKU: {item.productSku}</p>
-                    <p className="mt-1 text-sm font-semibold text-[var(--brand)]">
+                    <p style={{ margin: "4px 0 0", fontSize: "0.7rem", color: "var(--muted-2)", fontFamily: "monospace" }}>
+                      SKU: {item.productSku}
+                    </p>
+                    <p style={{ margin: "6px 0 0", fontSize: "0.9rem", fontWeight: 700, color: "#00d4ff" }}>
                       {money(item.unitPrice)} each
                     </p>
-                    <p className="text-xs text-[var(--muted)]">Line total: {money(item.lineTotal)}</p>
+                    <p style={{ margin: "2px 0 0", fontSize: "0.75rem", color: "var(--muted)" }}>
+                      Line total: <strong style={{ color: "#c8c8e8" }}>{money(item.lineTotal)}</strong>
+                    </p>
                   </div>
 
-                  <div className="flex flex-col items-end gap-2">
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "10px" }}>
                     <div className="qty-stepper">
-                      <button
-                        disabled={busy || item.quantity <= 1}
-                        onClick={() => { void updateQuantity(item.id, item.quantity - 1); }}
-                      >
-                        −
-                      </button>
-                      <span>{item.quantity}</span>
-                      <button
-                        disabled={busy}
-                        onClick={() => { void updateQuantity(item.id, item.quantity + 1); }}
-                      >
-                        +
-                      </button>
+                      <button disabled={busy || item.quantity <= 1} onClick={() => { void updateQuantity(item.id, item.quantity - 1); }}>−</button>
+                      <span>{updatingItemId === item.id ? "…" : item.quantity}</span>
+                      <button disabled={busy} onClick={() => { void updateQuantity(item.id, item.quantity + 1); }}>+</button>
                     </div>
                     <button
                       onClick={() => { void removeItem(item.id); }}
                       disabled={busy}
-                      className="btn-outline px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-60"
+                      style={{
+                        padding: "5px 14px",
+                        borderRadius: "8px",
+                        border: "1px solid rgba(239,68,68,0.25)",
+                        background: "rgba(239,68,68,0.06)",
+                        color: "#ef4444",
+                        fontSize: "0.72rem",
+                        fontWeight: 700,
+                        cursor: busy ? "not-allowed" : "pointer",
+                        opacity: busy ? 0.5 : 1,
+                      }}
                     >
                       {removingItemId === item.id ? "Removing..." : "Remove"}
                     </button>
@@ -363,87 +404,125 @@ export default function CartPage() {
             ))}
           </section>
 
-          <aside className="rounded-xl bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-bold text-[var(--ink)]">Checkout</h2>
-            <div className="mt-3 grid gap-2 rounded-lg bg-[#fafafa] p-3 text-sm">
-              <div className="flex items-center justify-between">
-                <span className="text-[var(--muted)]">Distinct items</span>
-                <span>{cart.itemCount}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[var(--muted)]">Total quantity</span>
-                <span>{cart.totalQuantity}</span>
-              </div>
-              <div className="flex items-center justify-between border-t border-[var(--line)] pt-2 font-semibold">
-                <span>Subtotal</span>
-                <span>{money(cart.subtotal)}</span>
+          {/* Checkout Panel */}
+          <aside style={{ ...glassCard, alignSelf: "start", position: "sticky", top: "80px" }}>
+            <h2 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: "1.1rem", color: "#fff", margin: "0 0 16px" }}>
+              Checkout Summary
+            </h2>
+
+            {/* Totals */}
+            <div style={{ borderRadius: "10px", background: "rgba(0,212,255,0.04)", border: "1px solid rgba(0,212,255,0.08)", padding: "12px 14px", marginBottom: "16px" }}>
+              {[
+                { label: "Distinct items", value: String(cart.itemCount) },
+                { label: "Total quantity", value: String(cart.totalQuantity) },
+              ].map(({ label, value }) => (
+                <div key={label} style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "0.82rem" }}>
+                  <span style={{ color: "var(--muted)" }}>{label}</span>
+                  <span style={{ color: "#c8c8e8", fontWeight: 600 }}>{value}</span>
+                </div>
+              ))}
+              <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid rgba(0,212,255,0.1)", paddingTop: "10px", fontWeight: 800 }}>
+                <span style={{ color: "#fff" }}>Subtotal</span>
+                <span style={{ color: "#00d4ff", fontSize: "1rem" }}>{money(cart.subtotal)}</span>
               </div>
             </div>
 
-            <div className="mt-4 space-y-3">
-              {addresses.length === 0 && !addressLoading && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  Add at least one address in your profile before checkout.
-                  {" "}
-                  <Link href="/profile" className="font-semibold underline">Open Profile</Link>
-                </div>
-              )}
-              {addressLoading && (
-                <p className="text-xs text-[var(--muted)]">Loading addresses...</p>
-              )}
+            {/* Address notices */}
+            {addresses.length === 0 && !addressLoading && (
+              <div style={{ borderRadius: "10px", border: "1px solid rgba(245,158,11,0.25)", background: "rgba(245,158,11,0.06)", padding: "10px 12px", fontSize: "0.78rem", color: "#fbbf24", marginBottom: "14px" }}>
+                Add at least one address in your profile before checkout.{" "}
+                <Link href="/profile" style={{ color: "#00d4ff", fontWeight: 700 }}>Open Profile</Link>
+              </div>
+            )}
+            {addressLoading && (
+              <p style={{ fontSize: "0.8rem", color: "var(--muted)", marginBottom: "12px" }}>Loading addresses...</p>
+            )}
 
-              <select
-                value={shippingAddressId}
-                onChange={(e) => {
-                  const selected = e.target.value;
-                  setShippingAddressId(selected);
-                  if (billingSameAsShipping) {
-                    setBillingAddressId(selected);
-                  }
-                }}
-                disabled={busy || addressLoading || addresses.length === 0}
-                className="w-full rounded-lg border border-[var(--line)] bg-white px-3 py-2.5 text-sm"
-              >
-                <option value="">Select shipping address...</option>
-                {addresses.map((address) => (
-                  <option key={`shipping-${address.id}`} value={address.id}>
-                    {(address.label || "Address")} - {address.line1}, {address.city}
-                  </option>
-                ))}
-              </select>
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              {/* Shipping */}
+              <div>
+                <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "6px" }}>
+                  Shipping Address
+                </label>
+                <select
+                  value={shippingAddressId}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setShippingAddressId(v);
+                    if (billingSameAsShipping) setBillingAddressId(v);
+                  }}
+                  disabled={busy || addressLoading || addresses.length === 0}
+                  style={darkSelect}
+                >
+                  <option value="">Select shipping address...</option>
+                  {addresses.map((a) => (
+                    <option key={`shipping-${a.id}`} value={a.id}>
+                      {a.label || "Address"} — {a.line1}, {a.city}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-              <label className="inline-flex items-center gap-2 text-xs text-[var(--muted)]">
+              {/* Billing same toggle */}
+              <label style={{ display: "inline-flex", alignItems: "center", gap: "8px", fontSize: "0.8rem", color: "var(--muted)", cursor: "pointer" }}>
                 <input
                   type="checkbox"
                   checked={billingSameAsShipping}
                   onChange={(e) => setBillingSameAsShipping(e.target.checked)}
                   disabled={busy || addressLoading || addresses.length === 0}
+                  style={{ accentColor: "#00d4ff", width: "14px", height: "14px" }}
                 />
-                Billing address same as shipping
+                Billing same as shipping
               </label>
 
+              {/* Billing address */}
               {!billingSameAsShipping && (
-                <select
-                  value={billingAddressId}
-                  onChange={(e) => setBillingAddressId(e.target.value)}
-                  disabled={busy || addressLoading || addresses.length === 0}
-                  className="w-full rounded-lg border border-[var(--line)] bg-white px-3 py-2.5 text-sm"
-                >
-                  <option value="">Select billing address...</option>
-                  {addresses.map((address) => (
-                    <option key={`billing-${address.id}`} value={address.id}>
-                      {(address.label || "Address")} - {address.line1}, {address.city}
-                    </option>
-                  ))}
-                </select>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "6px" }}>
+                    Billing Address
+                  </label>
+                  <select
+                    value={billingAddressId}
+                    onChange={(e) => setBillingAddressId(e.target.value)}
+                    disabled={busy || addressLoading || addresses.length === 0}
+                    style={darkSelect}
+                  >
+                    <option value="">Select billing address...</option>
+                    {addresses.map((a) => (
+                      <option key={`billing-${a.id}`} value={a.id}>
+                        {a.label || "Address"} — {a.line1}, {a.city}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               )}
 
+              {/* Checkout button */}
               <button
                 onClick={() => { void checkout(); }}
                 disabled={busy || cart.items.length === 0 || !hasRequiredAddresses || emailVerified === false}
-                className="btn-primary w-full py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                style={{
+                  width: "100%",
+                  padding: "12px",
+                  borderRadius: "10px",
+                  border: "none",
+                  background: busy || cart.items.length === 0 || !hasRequiredAddresses || emailVerified === false
+                    ? "rgba(0,212,255,0.2)" : "linear-gradient(135deg, #00d4ff, #7c3aed)",
+                  color: "#fff",
+                  fontSize: "0.9rem",
+                  fontWeight: 800,
+                  cursor: busy || cart.items.length === 0 || !hasRequiredAddresses || emailVerified === false
+                    ? "not-allowed" : "pointer",
+                  boxShadow: "0 0 20px rgba(0,212,255,0.15)",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                  marginTop: "6px",
+                }}
               >
-                {checkingOut ? "Placing order..." : "Checkout"}
+                {checkingOut && <span className="spinner-sm" />}
+                {checkingOut ? "Placing Order..." : "Checkout"}
               </button>
             </div>
           </aside>
