@@ -27,6 +27,7 @@ public class CacheConfig implements CachingConfigurer {
                         .allowIfSubType("com.rumal")
                         .allowIfSubType("java.util")
                         .allowIfSubType("java.time")
+                        .allowIfSubType("java.math")
                         .build())
                 .build();
 

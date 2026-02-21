@@ -32,6 +32,7 @@ public class CacheConfig implements CachingConfigurer {
                         .allowIfSubType("org.springframework.data.domain")
                         .allowIfSubType("java.util")
                         .allowIfSubType("java.time")
+                        .allowIfSubType("java.math")
                         .build())
                 .customize(builder -> builder.addMixIn(PageImpl.class, PageImplMixin.class))
                 .build();
