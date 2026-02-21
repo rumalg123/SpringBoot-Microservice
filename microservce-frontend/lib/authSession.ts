@@ -1,5 +1,5 @@
 import Keycloak, { KeycloakInstance, KeycloakTokenParsed } from "keycloak-js";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createApiClient } from "./apiClient";
 
 type SessionStatus = "idle" | "loading" | "ready" | "error";
@@ -256,6 +256,7 @@ export function useAuthSession() {
   const [canViewAdmin, setCanViewAdmin] = useState(false);
   const [hasCustomerRole, setHasCustomerRole] = useState(false);
   const [emailVerified, setEmailVerified] = useState<boolean | null>(null);
+  const customerBootstrapDoneRef = useRef(false);
 
   useEffect(() => {
     const init = async () => {
@@ -432,7 +433,7 @@ export function useAuthSession() {
   }, [client]);
 
   const ensureCustomer = useCallback(async () => {
-    if (!apiClient || !isAuthenticated || !hasCustomerRole) return;
+    if (!apiClient || !isAuthenticated || !hasCustomerRole || canViewAdmin) return;
 
     try {
       await apiClient.get("/customers/me");
@@ -450,7 +451,36 @@ export function useAuthSession() {
       || (profile?.email as string)
       || "Customer";
     await apiClient.post("/customers/register-identity", { name: profileName });
-  }, [apiClient, isAuthenticated, hasCustomerRole, profile]);
+  }, [apiClient, isAuthenticated, hasCustomerRole, canViewAdmin, profile]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      customerBootstrapDoneRef.current = false;
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (status !== "ready" || customerBootstrapDoneRef.current) return;
+    if (!isAuthenticated || !hasCustomerRole || canViewAdmin || !apiClient) return;
+    if (emailVerified === false) return;
+
+    let cancelled = false;
+    const run = async () => {
+      try {
+        await ensureCustomer();
+        if (!cancelled) {
+          customerBootstrapDoneRef.current = true;
+        }
+      } catch {
+        // Keep page-level bootstrap fallback (orders/profile) if this fails.
+      }
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [status, isAuthenticated, hasCustomerRole, canViewAdmin, apiClient, emailVerified, ensureCustomer]);
 
   const resendVerificationEmail = useCallback(async () => {
     if (!apiClient || !isAuthenticated) return;
