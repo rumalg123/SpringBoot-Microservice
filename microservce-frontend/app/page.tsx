@@ -338,7 +338,6 @@ export default function LandingPage() {
                                 borderTop: "1px solid rgba(0,212,255,0.06)",
                                 padding: "10px 16px", textAlign: "left",
                                 background: "transparent", border: "none 0",
-                                borderTop: "1px solid rgba(0,212,255,0.06)",
                                 cursor: "pointer", transition: "background 0.12s",
                               }}
                               onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(0,212,255,0.05)"; }}
