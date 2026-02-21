@@ -157,6 +157,8 @@ export default function AdminOrdersPage() {
       <AppNav
         email={(session.profile?.email as string) || ""}
         canViewAdmin={session.canViewAdmin}
+        apiClient={session.apiClient}
+        emailVerified={session.emailVerified}
         onLogout={() => { void session.logout(); }}
       />
 

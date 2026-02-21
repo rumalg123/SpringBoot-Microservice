@@ -62,7 +62,7 @@ function calcDiscount(regular: number, selling: number): number | null {
 
 function ProductsPageContent() {
   const searchParams = useSearchParams();
-  const { isAuthenticated, profile, logout, canViewAdmin } = useAuthSession();
+  const { isAuthenticated, profile, logout, canViewAdmin, apiClient, emailVerified } = useAuthSession();
   const [products, setProducts] = useState<ProductSummary[]>([]);
   const [allCategories, setAllCategories] = useState<Category[]>([]);
   const [query, setQuery] = useState("");
@@ -155,6 +155,8 @@ function ProductsPageContent() {
         <AppNav
           email={(profile?.email as string) || ""}
           canViewAdmin={canViewAdmin}
+          apiClient={apiClient}
+          emailVerified={emailVerified}
           onLogout={() => { void logout(); }}
         />
       )}

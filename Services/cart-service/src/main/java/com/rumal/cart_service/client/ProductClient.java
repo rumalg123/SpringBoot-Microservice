@@ -3,10 +3,10 @@ package com.rumal.cart_service.client;
 import com.rumal.cart_service.dto.ProductDetails;
 import com.rumal.cart_service.exception.ResourceNotFoundException;
 import com.rumal.cart_service.exception.ServiceUnavailableException;
+import com.rumal.cart_service.exception.ValidationException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
@@ -32,10 +32,13 @@ public class ProductClient {
                     .retrieve()
                     .body(ProductDetails.class);
         } catch (HttpClientErrorException ex) {
-            if (ex.getStatusCode() == HttpStatus.NOT_FOUND) {
+            if (ex.getStatusCode().value() == 404) {
                 throw new ResourceNotFoundException("Product not found: " + productId);
             }
-            throw ex;
+            if (ex.getStatusCode().is4xxClientError()) {
+                throw new ValidationException(resolveErrorMessage(ex, "Invalid product request"));
+            }
+            throw new ServiceUnavailableException("Product service error for product " + productId + ".", ex);
         }
     }
 
@@ -45,5 +48,25 @@ public class ProductClient {
                 "Product service unavailable for product " + productId + ". Try again later.",
                 ex
         );
+    }
+
+    private String resolveErrorMessage(HttpClientErrorException ex, String fallback) {
+        String body = ex.getResponseBodyAsString();
+        if (body == null || body.isBlank()) {
+            return fallback;
+        }
+        int messageIndex = body.indexOf("\"message\"");
+        if (messageIndex >= 0) {
+            int colonIndex = body.indexOf(':', messageIndex);
+            int quoteStart = body.indexOf('"', colonIndex + 1);
+            int quoteEnd = body.indexOf('"', quoteStart + 1);
+            if (quoteStart >= 0 && quoteEnd > quoteStart) {
+                String message = body.substring(quoteStart + 1, quoteEnd).trim();
+                if (!message.isEmpty()) {
+                    return message;
+                }
+            }
+        }
+        return fallback;
     }
 }

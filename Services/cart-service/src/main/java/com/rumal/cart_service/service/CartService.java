@@ -74,7 +74,8 @@ public class CartService {
             CartItem created = buildCartItem(cart, product, quantityToAdd);
             cart.getItems().add(created);
         } else {
-            existing.setQuantity(existing.getQuantity() + quantityToAdd);
+            int mergedQuantity = sanitizeQuantity(existing.getQuantity() + quantityToAdd);
+            existing.setQuantity(mergedQuantity);
             refreshCartItemSnapshot(existing, product);
             existing.setLineTotal(calculateLineTotal(existing.getUnitPrice(), existing.getQuantity()));
         }

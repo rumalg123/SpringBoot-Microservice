@@ -248,6 +248,8 @@ export default function OrdersPage() {
       <AppNav
         email={(profile?.email as string) || ""}
         canViewAdmin={canViewAdmin}
+        apiClient={apiClient}
+        emailVerified={emailVerified}
         onLogout={() => { void logout(); }}
       />
 

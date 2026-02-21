@@ -260,6 +260,8 @@ export default function CartPage() {
       <AppNav
         email={(profile?.email as string) || ""}
         canViewAdmin={canViewAdmin}
+        apiClient={apiClient}
+        emailVerified={emailVerified}
         onLogout={() => { void logout(); }}
       />
 

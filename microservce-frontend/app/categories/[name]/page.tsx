@@ -80,7 +80,7 @@ function toCategorySlug(category: Category): string {
 export default function CategoryProductsPage() {
   const params = useParams<{ name: string }>();
   const router = useRouter();
-  const { isAuthenticated, profile, logout, canViewAdmin } = useAuthSession();
+  const { isAuthenticated, profile, logout, canViewAdmin, apiClient, emailVerified } = useAuthSession();
 
   const [resolvedCategory, setResolvedCategory] = useState<Category | null>(null);
   const [mainCategory, setMainCategory] = useState("");
@@ -194,6 +194,8 @@ export default function CategoryProductsPage() {
         <AppNav
           email={(profile?.email as string) || ""}
           canViewAdmin={canViewAdmin}
+          apiClient={apiClient}
+          emailVerified={emailVerified}
           onLogout={() => { void logout(); }}
         />
       )}

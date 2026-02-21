@@ -377,6 +377,8 @@ export default function ProfilePage() {
       <AppNav
         email={(profile?.email as string) || ""}
         canViewAdmin={canViewAdmin}
+        apiClient={apiClient}
+        emailVerified={emailVerified}
         onLogout={() => {
           void logout();
         }}

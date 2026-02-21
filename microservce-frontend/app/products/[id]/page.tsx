@@ -85,7 +85,7 @@ function slugify(value: string): string {
 
 export default function ProductDetailPage() {
   const params = useParams<{ id: string }>();
-  const { isAuthenticated, profile, logout, canViewAdmin, login, apiClient } = useAuthSession();
+  const { isAuthenticated, profile, logout, canViewAdmin, login, apiClient, emailVerified } = useAuthSession();
   const [product, setProduct] = useState<ProductDetail | null>(null);
   const [variations, setVariations] = useState<VariationSummary[]>([]);
   const [selectedVariationId, setSelectedVariationId] = useState("");
@@ -275,6 +275,8 @@ export default function ProductDetailPage() {
           <AppNav
             email={(profile?.email as string) || ""}
             canViewAdmin={canViewAdmin}
+            apiClient={apiClient}
+            emailVerified={emailVerified}
             onLogout={() => { void logout(); }}
           />
         )}
@@ -299,6 +301,8 @@ export default function ProductDetailPage() {
         <AppNav
           email={(profile?.email as string) || ""}
           canViewAdmin={canViewAdmin}
+          apiClient={apiClient}
+          emailVerified={emailVerified}
           onLogout={() => { void logout(); }}
         />
       )}

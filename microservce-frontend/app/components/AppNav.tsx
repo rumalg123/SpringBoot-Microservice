@@ -3,14 +3,18 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import type { AxiosInstance } from "axios";
+import CartNavWidget from "./CartNavWidget";
 
 type Props = {
   email?: string;
   canViewAdmin?: boolean;
+  apiClient?: AxiosInstance | null;
+  emailVerified?: boolean | null;
   onLogout: () => void | Promise<void>;
 };
 
-export default function AppNav({ email, canViewAdmin = false, onLogout }: Props) {
+export default function AppNav({ email, canViewAdmin = false, apiClient = null, emailVerified = null, onLogout }: Props) {
   const pathname = usePathname();
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -68,6 +72,7 @@ export default function AppNav({ email, canViewAdmin = false, onLogout }: Props)
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
+          <CartNavWidget apiClient={apiClient} emailVerified={emailVerified} />
           <span className="hidden rounded-full bg-white/10 px-3 py-1.5 text-xs text-gray-300 md:inline-block">
             {email || "User"}
           </span>
