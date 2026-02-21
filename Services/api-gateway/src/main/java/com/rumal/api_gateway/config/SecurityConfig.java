@@ -59,7 +59,7 @@ public class SecurityConfig {
                         .pathMatchers(HttpMethod.GET, "/categories", "/categories/**").permitAll()
                         .pathMatchers("/actuator/health", "/actuator/info", "/customers/register").permitAll()
                         .pathMatchers("/auth/logout", "/auth/resend-verification").authenticated()
-                        .pathMatchers("/customers/me", "/customers/register-identity", "/orders/me", "/orders/me/**")
+                        .pathMatchers("/customers/me", "/customers/me/**", "/customers/register-identity", "/orders/me", "/orders/me/**")
                         .access(this::hasCustomerAccess)
                         .pathMatchers("/admin/**").access(this::hasAdminAccess)
                         .pathMatchers("/customer-service/**", "/order-service/**", "/admin-service/**", "/product-service/**", "/discovery-server/**").denyAll()

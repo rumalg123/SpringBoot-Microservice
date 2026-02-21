@@ -47,7 +47,7 @@ spring:
             - id: customer-me
               uri: lb://customer-service
               predicates:
-                - Path=/customers/me
+                - Path=/customers/me,/customers/me/**
             - id: order-me
               uri: lb://order-service
               predicates:

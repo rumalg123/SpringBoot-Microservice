@@ -7,5 +7,7 @@ import java.util.UUID;
 
 public record CreateMyOrderRequest(
         @NotNull UUID productId,
-        @Min(1) int quantity
+        @Min(1) int quantity,
+        @NotNull UUID shippingAddressId,
+        @NotNull UUID billingAddressId
 ) {}

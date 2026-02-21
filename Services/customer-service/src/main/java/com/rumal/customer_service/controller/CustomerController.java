@@ -2,6 +2,8 @@ package com.rumal.customer_service.controller;
 
 
 import com.rumal.customer_service.dto.CreateCustomerRequest;
+import com.rumal.customer_service.dto.CustomerAddressRequest;
+import com.rumal.customer_service.dto.CustomerAddressResponse;
 import com.rumal.customer_service.dto.CustomerResponse;
 import com.rumal.customer_service.dto.RegisterIdentityCustomerRequest;
 import com.rumal.customer_service.dto.RegisterCustomerRequest;
@@ -14,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -90,6 +93,106 @@ public class CustomerController {
     @GetMapping("/by-email")
     public CustomerResponse getByEmail(@RequestParam String email) {
         return customerService.getByEmail(email);
+    }
+
+    @GetMapping("/{customerId}/addresses/{addressId}")
+    public CustomerAddressResponse getAddressByCustomerId(
+            @PathVariable UUID customerId,
+            @PathVariable UUID addressId
+    ) {
+        return customerService.getAddressByCustomerId(customerId, addressId);
+    }
+
+    @GetMapping("/me/addresses")
+    public List<CustomerAddressResponse> listMyAddresses(
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Email-Verified", required = false) String userEmailVerified,
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        verifyEmailVerified(userEmailVerified);
+        if (userSub == null || userSub.isBlank()) {
+            throw new UnauthorizedException("Missing authentication header");
+        }
+        return customerService.listAddressesByKeycloak(userSub);
+    }
+
+    @PostMapping("/me/addresses")
+    @ResponseStatus(HttpStatus.CREATED)
+    public CustomerAddressResponse addMyAddress(
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Email-Verified", required = false) String userEmailVerified,
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @Valid @RequestBody CustomerAddressRequest request
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        verifyEmailVerified(userEmailVerified);
+        if (userSub == null || userSub.isBlank()) {
+            throw new UnauthorizedException("Missing authentication header");
+        }
+        return customerService.addAddressByKeycloak(userSub, request);
+    }
+
+    @PutMapping("/me/addresses/{addressId}")
+    public CustomerAddressResponse updateMyAddress(
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Email-Verified", required = false) String userEmailVerified,
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @PathVariable UUID addressId,
+            @Valid @RequestBody CustomerAddressRequest request
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        verifyEmailVerified(userEmailVerified);
+        if (userSub == null || userSub.isBlank()) {
+            throw new UnauthorizedException("Missing authentication header");
+        }
+        return customerService.updateAddressByKeycloak(userSub, addressId, request);
+    }
+
+    @DeleteMapping("/me/addresses/{addressId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteMyAddress(
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Email-Verified", required = false) String userEmailVerified,
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @PathVariable UUID addressId
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        verifyEmailVerified(userEmailVerified);
+        if (userSub == null || userSub.isBlank()) {
+            throw new UnauthorizedException("Missing authentication header");
+        }
+        customerService.softDeleteAddressByKeycloak(userSub, addressId);
+    }
+
+    @PostMapping("/me/addresses/{addressId}/default-shipping")
+    public CustomerAddressResponse setDefaultShippingAddress(
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Email-Verified", required = false) String userEmailVerified,
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @PathVariable UUID addressId
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        verifyEmailVerified(userEmailVerified);
+        if (userSub == null || userSub.isBlank()) {
+            throw new UnauthorizedException("Missing authentication header");
+        }
+        return customerService.setDefaultShippingByKeycloak(userSub, addressId);
+    }
+
+    @PostMapping("/me/addresses/{addressId}/default-billing")
+    public CustomerAddressResponse setDefaultBillingAddress(
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Email-Verified", required = false) String userEmailVerified,
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @PathVariable UUID addressId
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        verifyEmailVerified(userEmailVerified);
+        if (userSub == null || userSub.isBlank()) {
+            throw new UnauthorizedException("Missing authentication header");
+        }
+        return customerService.setDefaultBillingByKeycloak(userSub, addressId);
     }
 
     private void verifyEmailVerified(String emailVerified) {

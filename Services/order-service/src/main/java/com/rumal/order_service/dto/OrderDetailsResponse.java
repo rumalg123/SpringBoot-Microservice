@@ -11,6 +11,8 @@ public record OrderDetailsResponse(
         int quantity,
         Instant createdAt,
         List<OrderItemResponse> items,
+        OrderAddressResponse shippingAddress,
+        OrderAddressResponse billingAddress,
 
         CustomerSummary customer,     // can be null in GRACEFUL mode
         List<String> warnings         // can be empty

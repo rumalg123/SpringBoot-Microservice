@@ -7,12 +7,15 @@ import com.rumal.order_service.config.CustomerDetailsMode;
 import com.rumal.order_service.config.OrderAggregationProperties;
 import com.rumal.order_service.dto.CreateMyOrderRequest;
 import com.rumal.order_service.dto.CreateOrderRequest;
+import com.rumal.order_service.dto.CustomerAddressSummary;
 import com.rumal.order_service.dto.CustomerSummary;
+import com.rumal.order_service.dto.OrderAddressResponse;
 import com.rumal.order_service.dto.OrderDetailsResponse;
 import com.rumal.order_service.dto.OrderItemResponse;
 import com.rumal.order_service.dto.OrderResponse;
 import com.rumal.order_service.dto.ProductSummary;
 import com.rumal.order_service.entity.Order;
+import com.rumal.order_service.entity.OrderAddressSnapshot;
 import com.rumal.order_service.entity.OrderItem;
 import com.rumal.order_service.exception.ResourceNotFoundException;
 import com.rumal.order_service.exception.ServiceUnavailableException;
@@ -47,8 +50,9 @@ public class OrderService {
     public OrderResponse create(CreateOrderRequest req) {
         customerClient.assertCustomerExists(req.customerId());
         ProductSummary product = resolvePurchasableProduct(req.productId());
+        ResolvedOrderAddresses addresses = resolveOrderAddresses(req.customerId(), req.shippingAddressId(), req.billingAddressId());
 
-        Order saved = orderRepository.save(buildOrder(req.customerId(), product, req.quantity()));
+        Order saved = orderRepository.save(buildOrder(req.customerId(), product, req.quantity(), addresses));
 
         return toResponse(saved);
     }
@@ -60,8 +64,9 @@ public class OrderService {
     public OrderResponse createForKeycloak(String keycloakId, CreateMyOrderRequest req) {
         CustomerSummary customer = customerClient.getCustomerByKeycloakId(keycloakId);
         ProductSummary product = resolvePurchasableProduct(req.productId());
+        ResolvedOrderAddresses addresses = resolveOrderAddresses(customer.id(), req.shippingAddressId(), req.billingAddressId());
 
-        Order saved = orderRepository.save(buildOrder(customer.id(), product, req.quantity()));
+        Order saved = orderRepository.save(buildOrder(customer.id(), product, req.quantity(), addresses));
 
         return toResponse(saved);
     }
@@ -128,6 +133,8 @@ public class OrderService {
                 o.getQuantity(),
                 o.getCreatedAt(),
                 toItems(o),
+                toAddressResponse(o.getShippingAddressId(), o.getShippingAddress()),
+                toAddressResponse(o.getBillingAddressId(), o.getBillingAddress()),
                 customer,
                 warnings
         );
@@ -150,17 +157,23 @@ public class OrderService {
                 o.getQuantity(),
                 o.getCreatedAt(),
                 toItems(o),
+                toAddressResponse(o.getShippingAddressId(), o.getShippingAddress()),
+                toAddressResponse(o.getBillingAddressId(), o.getBillingAddress()),
                 customer,
                 List.of()
         );
     }
 
-    private Order buildOrder(UUID customerId, ProductSummary product, int quantity) {
+    private Order buildOrder(UUID customerId, ProductSummary product, int quantity, ResolvedOrderAddresses addresses) {
         String normalizedItem = product.name().trim();
         Order order = Order.builder()
                 .customerId(customerId)
                 .item(normalizedItem)
                 .quantity(quantity)
+                .shippingAddressId(addresses.shippingAddress().id())
+                .billingAddressId(addresses.billingAddress().id())
+                .shippingAddress(toAddressSnapshot(addresses.shippingAddress()))
+                .billingAddress(toAddressSnapshot(addresses.billingAddress()))
                 .build();
 
         OrderItem orderItem = OrderItem.builder()
@@ -174,6 +187,57 @@ public class OrderService {
         return order;
     }
 
+    private ResolvedOrderAddresses resolveOrderAddresses(UUID customerId, UUID shippingAddressId, UUID billingAddressId) {
+        if (shippingAddressId == null) {
+            throw new ValidationException("shippingAddressId is required");
+        }
+        if (billingAddressId == null) {
+            throw new ValidationException("billingAddressId is required");
+        }
+
+        CustomerAddressSummary shippingAddress = customerClient.getCustomerAddress(customerId, shippingAddressId);
+        CustomerAddressSummary billingAddress = customerClient.getCustomerAddress(customerId, billingAddressId);
+        if (!customerId.equals(shippingAddress.customerId()) || !customerId.equals(billingAddress.customerId())) {
+            throw new ValidationException("Selected addresses do not belong to the customer");
+        }
+        if (shippingAddress.deleted() || billingAddress.deleted()) {
+            throw new ValidationException("Deleted addresses cannot be used for order placement");
+        }
+        return new ResolvedOrderAddresses(shippingAddress, billingAddress);
+    }
+
+    private OrderAddressSnapshot toAddressSnapshot(CustomerAddressSummary address) {
+        return OrderAddressSnapshot.builder()
+                .label(address.label())
+                .recipientName(address.recipientName())
+                .phone(address.phone())
+                .line1(address.line1())
+                .line2(address.line2())
+                .city(address.city())
+                .state(address.state())
+                .postalCode(address.postalCode())
+                .countryCode(address.countryCode())
+                .build();
+    }
+
+    private OrderAddressResponse toAddressResponse(UUID sourceAddressId, OrderAddressSnapshot address) {
+        if (address == null) {
+            return null;
+        }
+        return new OrderAddressResponse(
+                sourceAddressId,
+                address.getLabel(),
+                address.getRecipientName(),
+                address.getPhone(),
+                address.getLine1(),
+                address.getLine2(),
+                address.getCity(),
+                address.getState(),
+                address.getPostalCode(),
+                address.getCountryCode()
+        );
+    }
+
     private ProductSummary resolvePurchasableProduct(UUID productId) {
         ProductSummary product = productClient.getById(productId);
         if (!product.active()) {
@@ -183,6 +247,12 @@ public class OrderService {
             throw new ValidationException("Parent products cannot be bought directly. Select a variation.");
         }
         return product;
+    }
+
+    private record ResolvedOrderAddresses(
+            CustomerAddressSummary shippingAddress,
+            CustomerAddressSummary billingAddress
+    ) {
     }
 
     private List<OrderItemResponse> toItems(Order order) {

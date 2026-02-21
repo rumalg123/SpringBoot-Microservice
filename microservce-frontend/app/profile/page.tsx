@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import AppNav from "../components/AppNav";
@@ -13,6 +13,54 @@ type Customer = {
   name: string;
   email: string;
   createdAt: string;
+};
+
+type CustomerAddress = {
+  id: string;
+  customerId: string;
+  label: string | null;
+  recipientName: string;
+  phone: string;
+  line1: string;
+  line2: string | null;
+  city: string;
+  state: string;
+  postalCode: string;
+  countryCode: string;
+  defaultShipping: boolean;
+  defaultBilling: boolean;
+  deleted: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type AddressForm = {
+  id?: string;
+  label: string;
+  recipientName: string;
+  phone: string;
+  line1: string;
+  line2: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  countryCode: string;
+  defaultShipping: boolean;
+  defaultBilling: boolean;
+};
+
+const emptyAddressForm: AddressForm = {
+  label: "",
+  recipientName: "",
+  phone: "",
+  line1: "",
+  line2: "",
+  city: "",
+  state: "",
+  postalCode: "",
+  countryCode: "US",
+  defaultShipping: false,
+  defaultBilling: false,
 };
 
 function splitDisplayName(name: string): { firstName: string; lastName: string } {
@@ -53,7 +101,129 @@ export default function ProfilePage() {
   const [editLastName, setEditLastName] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
   const [passwordActionPending, setPasswordActionPending] = useState(false);
+  const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
+  const [addressForm, setAddressForm] = useState<AddressForm>(emptyAddressForm);
+  const [savingAddress, setSavingAddress] = useState(false);
+  const [addressLoading, setAddressLoading] = useState(false);
+  const [deletingAddressId, setDeletingAddressId] = useState<string | null>(null);
+  const [settingDefaultAddressId, setSettingDefaultAddressId] = useState<string | null>(null);
   const initialNameParts = splitDisplayName(customer?.name || "");
+
+  const resetAddressForm = () => {
+    setAddressForm(emptyAddressForm);
+  };
+
+  const loadAddresses = useCallback(async () => {
+    if (!apiClient) return;
+    setAddressLoading(true);
+    try {
+      const response = await apiClient.get("/customers/me/addresses");
+      setAddresses((response.data as CustomerAddress[]) || []);
+    } finally {
+      setAddressLoading(false);
+    }
+  }, [apiClient]);
+
+  const startEditAddress = (address: CustomerAddress) => {
+    setAddressForm({
+      id: address.id,
+      label: address.label || "",
+      recipientName: address.recipientName,
+      phone: address.phone,
+      line1: address.line1,
+      line2: address.line2 || "",
+      city: address.city,
+      state: address.state,
+      postalCode: address.postalCode,
+      countryCode: (address.countryCode || "US").toUpperCase(),
+      defaultShipping: address.defaultShipping,
+      defaultBilling: address.defaultBilling,
+    });
+  };
+
+  const saveAddress = async () => {
+    if (!apiClient || savingAddress) return;
+    if (!addressForm.recipientName.trim() || !addressForm.phone.trim() || !addressForm.line1.trim()
+      || !addressForm.city.trim() || !addressForm.state.trim() || !addressForm.postalCode.trim() || !addressForm.countryCode.trim()) {
+      toast.error("Fill all required address fields");
+      return;
+    }
+
+    setSavingAddress(true);
+    setStatus(addressForm.id ? "Updating address..." : "Adding address...");
+    try {
+      const payload = {
+        label: addressForm.label.trim() || null,
+        recipientName: addressForm.recipientName.trim(),
+        phone: addressForm.phone.trim(),
+        line1: addressForm.line1.trim(),
+        line2: addressForm.line2.trim() || null,
+        city: addressForm.city.trim(),
+        state: addressForm.state.trim(),
+        postalCode: addressForm.postalCode.trim(),
+        countryCode: addressForm.countryCode.trim().toUpperCase(),
+        defaultShipping: addressForm.defaultShipping,
+        defaultBilling: addressForm.defaultBilling,
+      };
+
+      if (addressForm.id) {
+        await apiClient.put(`/customers/me/addresses/${addressForm.id}`, payload);
+        toast.success("Address updated");
+      } else {
+        await apiClient.post("/customers/me/addresses", payload);
+        toast.success("Address added");
+      }
+      resetAddressForm();
+      await loadAddresses();
+      setStatus("Address book updated.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to save address";
+      setStatus(message);
+      toast.error(message);
+    } finally {
+      setSavingAddress(false);
+    }
+  };
+
+  const deleteAddress = async (addressId: string) => {
+    if (!apiClient || deletingAddressId) return;
+    setDeletingAddressId(addressId);
+    setStatus("Deleting address...");
+    try {
+      await apiClient.delete(`/customers/me/addresses/${addressId}`);
+      toast.success("Address deleted");
+      if (addressForm.id === addressId) {
+        resetAddressForm();
+      }
+      await loadAddresses();
+      setStatus("Address deleted.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to delete address";
+      setStatus(message);
+      toast.error(message);
+    } finally {
+      setDeletingAddressId(null);
+    }
+  };
+
+  const setDefaultAddress = async (addressId: string, type: "shipping" | "billing") => {
+    if (!apiClient || settingDefaultAddressId) return;
+    setSettingDefaultAddressId(addressId);
+    setStatus(type === "shipping" ? "Setting default shipping address..." : "Setting default billing address...");
+    try {
+      const suffix = type === "shipping" ? "default-shipping" : "default-billing";
+      await apiClient.post(`/customers/me/addresses/${addressId}/${suffix}`);
+      toast.success(type === "shipping" ? "Default shipping address updated" : "Default billing address updated");
+      await loadAddresses();
+      setStatus("Address defaults updated.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to set default address";
+      setStatus(message);
+      toast.error(message);
+    } finally {
+      setSettingDefaultAddressId(null);
+    }
+  };
 
   useEffect(() => {
     const resetPasswordAction = () => {
@@ -96,6 +266,7 @@ export default function ProfilePage() {
         const nameParts = splitDisplayName(loaded.name || "");
         setEditFirstName(nameParts.firstName);
         setEditLastName(nameParts.lastName);
+        await loadAddresses();
         setStatus("Account loaded.");
       } catch (err) {
         setStatus(err instanceof Error ? err.message : "Failed to load account");
@@ -103,7 +274,7 @@ export default function ProfilePage() {
     };
 
     void run();
-  }, [router, sessionStatus, isAuthenticated, canViewAdmin, apiClient, ensureCustomer]);
+  }, [router, sessionStatus, isAuthenticated, canViewAdmin, apiClient, ensureCustomer, loadAddresses]);
 
   const resendVerification = async () => {
     if (resendingVerification) return;
@@ -395,6 +566,214 @@ export default function ProfilePage() {
             </div>
           </article>
         </div>
+
+        {!canViewAdmin && (
+          <section className="mt-5 rounded-xl bg-white p-6 shadow-sm">
+            <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-bold text-[var(--ink)]">Address Book</h2>
+                <p className="text-xs text-[var(--muted)]">
+                  Manage shipping and billing addresses. Deleted addresses are soft-deleted for order history safety.
+                </p>
+              </div>
+              <span className="rounded-full bg-[var(--brand)] px-3 py-1 text-xs font-semibold text-white">
+                {addresses.length} active
+              </span>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-[0.9fr,1.1fr]">
+              <div className="rounded-lg border border-[var(--line)] p-4">
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
+                  {addressForm.id ? "Edit Address" : "Add Address"}
+                </p>
+                <div className="grid gap-2 text-sm">
+                  <input
+                    value={addressForm.label}
+                    onChange={(e) => setAddressForm((old) => ({ ...old, label: e.target.value }))}
+                    placeholder="Label (Home, Office)"
+                    className="rounded-lg border border-[var(--line)] px-3 py-2"
+                    disabled={savingAddress || emailVerified === false}
+                  />
+                  <input
+                    value={addressForm.recipientName}
+                    onChange={(e) => setAddressForm((old) => ({ ...old, recipientName: e.target.value }))}
+                    placeholder="Recipient name"
+                    className="rounded-lg border border-[var(--line)] px-3 py-2"
+                    disabled={savingAddress || emailVerified === false}
+                    required
+                  />
+                  <input
+                    value={addressForm.phone}
+                    onChange={(e) => setAddressForm((old) => ({ ...old, phone: e.target.value }))}
+                    placeholder="Phone number"
+                    className="rounded-lg border border-[var(--line)] px-3 py-2"
+                    disabled={savingAddress || emailVerified === false}
+                    required
+                  />
+                  <input
+                    value={addressForm.line1}
+                    onChange={(e) => setAddressForm((old) => ({ ...old, line1: e.target.value }))}
+                    placeholder="Address line 1"
+                    className="rounded-lg border border-[var(--line)] px-3 py-2"
+                    disabled={savingAddress || emailVerified === false}
+                    required
+                  />
+                  <input
+                    value={addressForm.line2}
+                    onChange={(e) => setAddressForm((old) => ({ ...old, line2: e.target.value }))}
+                    placeholder="Address line 2 (optional)"
+                    className="rounded-lg border border-[var(--line)] px-3 py-2"
+                    disabled={savingAddress || emailVerified === false}
+                  />
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <input
+                      value={addressForm.city}
+                      onChange={(e) => setAddressForm((old) => ({ ...old, city: e.target.value }))}
+                      placeholder="City"
+                      className="rounded-lg border border-[var(--line)] px-3 py-2"
+                      disabled={savingAddress || emailVerified === false}
+                      required
+                    />
+                    <input
+                      value={addressForm.state}
+                      onChange={(e) => setAddressForm((old) => ({ ...old, state: e.target.value }))}
+                      placeholder="State"
+                      className="rounded-lg border border-[var(--line)] px-3 py-2"
+                      disabled={savingAddress || emailVerified === false}
+                      required
+                    />
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <input
+                      value={addressForm.postalCode}
+                      onChange={(e) => setAddressForm((old) => ({ ...old, postalCode: e.target.value }))}
+                      placeholder="Postal code"
+                      className="rounded-lg border border-[var(--line)] px-3 py-2"
+                      disabled={savingAddress || emailVerified === false}
+                      required
+                    />
+                    <input
+                      value={addressForm.countryCode}
+                      onChange={(e) => setAddressForm((old) => ({ ...old, countryCode: e.target.value.toUpperCase() }))}
+                      placeholder="Country code (US)"
+                      maxLength={2}
+                      className="rounded-lg border border-[var(--line)] px-3 py-2"
+                      disabled={savingAddress || emailVerified === false}
+                      required
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-3 pt-1 text-xs text-[var(--muted)]">
+                    <label className="inline-flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={addressForm.defaultShipping}
+                        onChange={(e) => setAddressForm((old) => ({ ...old, defaultShipping: e.target.checked }))}
+                        disabled={savingAddress || emailVerified === false}
+                      />
+                      Set as default shipping
+                    </label>
+                    <label className="inline-flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={addressForm.defaultBilling}
+                        onChange={(e) => setAddressForm((old) => ({ ...old, defaultBilling: e.target.checked }))}
+                        disabled={savingAddress || emailVerified === false}
+                      />
+                      Set as default billing
+                    </label>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      onClick={() => { void saveAddress(); }}
+                      disabled={savingAddress || emailVerified === false}
+                      className="btn-primary px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {savingAddress ? "Saving..." : addressForm.id ? "Update Address" : "Add Address"}
+                    </button>
+                    {addressForm.id && (
+                      <button
+                        onClick={resetAddressForm}
+                        disabled={savingAddress}
+                        className="btn-outline px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Cancel Edit
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-[var(--line)] p-4">
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Saved Addresses</p>
+                {addressLoading && (
+                  <p className="text-sm text-[var(--muted)]">Loading addresses...</p>
+                )}
+                {!addressLoading && addresses.length === 0 && (
+                  <p className="text-sm text-[var(--muted)]">No addresses added yet.</p>
+                )}
+                <div className="grid gap-3">
+                  {addresses.map((address) => (
+                    <article key={address.id} className="rounded-lg border border-[var(--line)] bg-[#fafafa] p-3">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold text-[var(--ink)]">
+                            {address.label ? `${address.label} - ` : ""}{address.recipientName}
+                          </p>
+                          <p className="text-xs text-[var(--muted)]">{address.phone}</p>
+                          <p className="mt-1 text-xs text-[var(--ink)]">
+                            {address.line1}{address.line2 ? `, ${address.line2}` : ""}, {address.city}, {address.state} {address.postalCode}, {address.countryCode}
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {address.defaultShipping && (
+                              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                                Default Shipping
+                              </span>
+                            )}
+                            {address.defaultBilling && (
+                              <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+                                Default Billing
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          <button
+                            onClick={() => startEditAddress(address)}
+                            disabled={savingAddress || emailVerified === false}
+                            className="rounded border border-[var(--line)] bg-white px-2 py-1 text-[10px] disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => { void setDefaultAddress(address.id, "shipping"); }}
+                            disabled={settingDefaultAddressId !== null || savingAddress || emailVerified === false}
+                            className="rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] text-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {settingDefaultAddressId === address.id ? "Saving..." : "Set Shipping"}
+                          </button>
+                          <button
+                            onClick={() => { void setDefaultAddress(address.id, "billing"); }}
+                            disabled={settingDefaultAddressId !== null || savingAddress || emailVerified === false}
+                            className="rounded border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] text-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {settingDefaultAddressId === address.id ? "Saving..." : "Set Billing"}
+                          </button>
+                          <button
+                            onClick={() => { void deleteAddress(address.id); }}
+                            disabled={deletingAddressId !== null || savingAddress || emailVerified === false}
+                            className="rounded border border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {deletingAddressId === address.id ? "Deleting..." : "Delete"}
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
 
         <p className="mt-5 text-xs text-[var(--muted)]">{canViewAdmin ? "Admin account detected." : status}</p>
       </main>

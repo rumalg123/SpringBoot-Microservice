@@ -26,11 +26,12 @@ public class AdminOrderController {
     public PageResponse<OrderResponse> listOrders(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestParam(required = false) UUID customerId,
+            @RequestParam(required = false) String customerEmail,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "createdAt,DESC") List<String> sort
     ) {
         internalRequestVerifier.verify(internalAuth);
-        return adminOrderService.listOrders(customerId, page, size, sort, internalAuth);
+        return adminOrderService.listOrders(customerId, customerEmail, page, size, sort, internalAuth);
     }
 }

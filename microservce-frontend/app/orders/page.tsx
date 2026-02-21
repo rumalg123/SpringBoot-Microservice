@@ -31,6 +31,21 @@ type OrderDetail = {
   quantity: number;
   createdAt: string;
   items: OrderItem[];
+  shippingAddress?: OrderAddress | null;
+  billingAddress?: OrderAddress | null;
+};
+
+type OrderAddress = {
+  sourceAddressId: string;
+  label: string | null;
+  recipientName: string;
+  phone: string;
+  line1: string;
+  line2: string | null;
+  city: string;
+  state: string;
+  postalCode: string;
+  countryCode: string;
 };
 
 type PagedOrder = {
@@ -46,6 +61,22 @@ type ProductSummary = {
 
 type ProductPageResponse = {
   content: ProductSummary[];
+};
+
+type CustomerAddress = {
+  id: string;
+  customerId: string;
+  label: string | null;
+  recipientName: string;
+  phone: string;
+  line1: string;
+  line2: string | null;
+  city: string;
+  state: string;
+  postalCode: string;
+  countryCode: string;
+  defaultShipping: boolean;
+  defaultBilling: boolean;
 };
 
 export default function OrdersPage() {
@@ -65,8 +96,10 @@ export default function OrdersPage() {
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<ProductSummary[]>([]);
+  const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
   const [status, setStatus] = useState("Loading your purchases...");
-  const [form, setForm] = useState({ productId: "", quantity: 1 });
+  const [form, setForm] = useState({ productId: "", quantity: 1, shippingAddressId: "", billingAddressId: "" });
+  const [billingSameAsShipping, setBillingSameAsShipping] = useState(true);
   const [selectedId, setSelectedId] = useState("");
   const [selectedDetail, setSelectedDetail] = useState<OrderDetail | null>(null);
   const [resendingVerification, setResendingVerification] = useState(false);
@@ -87,6 +120,21 @@ export default function OrdersPage() {
     setProducts((data.content || []).filter((p) => p.productType !== "PARENT"));
   }, []);
 
+  const loadAddresses = useCallback(async () => {
+    if (!apiClient) return;
+    const res = await apiClient.get("/customers/me/addresses");
+    const loaded = (res.data as CustomerAddress[]) || [];
+    setAddresses(loaded);
+
+    const defaultShipping = loaded.find((address) => address.defaultShipping)?.id || loaded[0]?.id || "";
+    const defaultBilling = loaded.find((address) => address.defaultBilling)?.id || defaultShipping;
+    setForm((old) => ({
+      ...old,
+      shippingAddressId: old.shippingAddressId || defaultShipping,
+      billingAddressId: old.billingAddressId || defaultBilling,
+    }));
+  }, [apiClient]);
+
   useEffect(() => {
     if (sessionStatus !== "ready") return;
     if (!isAuthenticated) {
@@ -99,25 +147,42 @@ export default function OrdersPage() {
         await ensureCustomer();
         await loadOrders();
         await loadProducts();
+        await loadAddresses();
         setStatus("Purchase history loaded.");
       } catch (err) {
         setStatus(err instanceof Error ? err.message : "Failed to load purchases.");
       }
     };
     void run();
-  }, [router, sessionStatus, isAuthenticated, ensureCustomer, loadOrders, loadProducts]);
+  }, [router, sessionStatus, isAuthenticated, ensureCustomer, loadOrders, loadProducts, loadAddresses]);
+
+  useEffect(() => {
+    if (!billingSameAsShipping) return;
+    setForm((old) => ({
+      ...old,
+      billingAddressId: old.shippingAddressId,
+    }));
+  }, [billingSameAsShipping, form.shippingAddressId]);
 
   const createOrder = async (e: FormEvent) => {
     e.preventDefault();
     if (!apiClient) return;
     if (status === CREATING_STATUS) return;
+    const shippingAddressId = form.shippingAddressId.trim();
+    const billingAddressId = (billingSameAsShipping ? form.shippingAddressId : form.billingAddressId).trim();
+    if (!shippingAddressId || !billingAddressId) {
+      toast.error("Select shipping and billing addresses");
+      return;
+    }
     setStatus("Creating purchase...");
     try {
       await apiClient.post("/orders/me", {
         productId: form.productId,
         quantity: Number(form.quantity),
+        shippingAddressId,
+        billingAddressId,
       });
-      setForm({ productId: "", quantity: 1 });
+      setForm((old) => ({ ...old, productId: "", quantity: 1 }));
       await loadOrders();
       setStatus("Purchase created.");
       toast.success("Order placed successfully! 🎉");
@@ -290,11 +355,20 @@ export default function OrdersPage() {
                 <span className="text-lg">🛒</span>
                 <h3 className="text-lg font-bold text-[var(--ink)]">Quick Purchase</h3>
               </div>
+              {addresses.length === 0 && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  Add at least one address in your profile before placing an order.
+                  {" "}
+                  <Link href="/profile" className="font-semibold underline">
+                    Open Profile
+                  </Link>
+                </div>
+              )}
               <form className="grid gap-3" onSubmit={createOrder}>
                 <select
                   value={form.productId}
                   onChange={(e) => setForm((old) => ({ ...old, productId: e.target.value }))}
-                  disabled={status === CREATING_STATUS}
+                  disabled={status === CREATING_STATUS || addresses.length === 0}
                   className="rounded-lg border border-[var(--line)] bg-white px-3 py-2.5 text-sm"
                   required
                 >
@@ -305,17 +379,63 @@ export default function OrdersPage() {
                     </option>
                   ))}
                 </select>
+                <select
+                  value={form.shippingAddressId}
+                  onChange={(e) => {
+                    const selected = e.target.value;
+                    setForm((old) => ({
+                      ...old,
+                      shippingAddressId: selected,
+                      billingAddressId: billingSameAsShipping ? selected : old.billingAddressId,
+                    }));
+                  }}
+                  disabled={status === CREATING_STATUS || addresses.length === 0}
+                  className="rounded-lg border border-[var(--line)] bg-white px-3 py-2.5 text-sm"
+                  required
+                >
+                  <option value="">Select shipping address...</option>
+                  {addresses.map((address) => (
+                    <option key={`shipping-${address.id}`} value={address.id}>
+                      {(address.label || "Address")} - {address.line1}, {address.city}
+                    </option>
+                  ))}
+                </select>
+                <label className="inline-flex items-center gap-2 text-xs text-[var(--muted)]">
+                  <input
+                    type="checkbox"
+                    checked={billingSameAsShipping}
+                    onChange={(e) => setBillingSameAsShipping(e.target.checked)}
+                    disabled={status === CREATING_STATUS || addresses.length === 0}
+                  />
+                  Billing address same as shipping
+                </label>
+                {!billingSameAsShipping && (
+                  <select
+                    value={form.billingAddressId}
+                    onChange={(e) => setForm((old) => ({ ...old, billingAddressId: e.target.value }))}
+                    disabled={status === CREATING_STATUS || addresses.length === 0}
+                    className="rounded-lg border border-[var(--line)] bg-white px-3 py-2.5 text-sm"
+                    required
+                  >
+                    <option value="">Select billing address...</option>
+                    {addresses.map((address) => (
+                      <option key={`billing-${address.id}`} value={address.id}>
+                        {(address.label || "Address")} - {address.line1}, {address.city}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <div className="flex gap-3">
                   <input
                     type="number"
                     min={1}
                     value={form.quantity}
                     onChange={(e) => setForm((old) => ({ ...old, quantity: Number(e.target.value) }))}
-                    disabled={status === CREATING_STATUS}
+                    disabled={status === CREATING_STATUS || addresses.length === 0}
                     className="w-24 rounded-lg border border-[var(--line)] bg-white px-3 py-2.5 text-sm"
                     placeholder="Qty"
                   />
-                  <button type="submit" disabled={status === CREATING_STATUS} className="btn-primary flex-1 py-2.5 text-sm inline-flex items-center justify-center gap-2 disabled:opacity-60">
+                  <button type="submit" disabled={status === CREATING_STATUS || addresses.length === 0} className="btn-primary flex-1 py-2.5 text-sm inline-flex items-center justify-center gap-2 disabled:opacity-60">
                     {status === CREATING_STATUS && <span className="spinner-sm" />}
                     {status === CREATING_STATUS ? "Placing..." : "Place Order"}
                   </button>
@@ -357,6 +477,38 @@ export default function OrdersPage() {
                   <p className="text-xs text-[var(--muted)]">
                     Placed: <span className="text-[var(--ink)]">{new Date(selectedDetail.createdAt).toLocaleString()}</span>
                   </p>
+                  {(selectedDetail.shippingAddress || selectedDetail.billingAddress) && (
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {selectedDetail.shippingAddress && (
+                        <div className="rounded border border-[var(--line)] bg-white p-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">Shipping Address</p>
+                          <p className="mt-1 text-xs font-semibold text-[var(--ink)]">
+                            {selectedDetail.shippingAddress.label ? `${selectedDetail.shippingAddress.label} - ` : ""}
+                            {selectedDetail.shippingAddress.recipientName}
+                          </p>
+                          <p className="text-[11px] text-[var(--muted)]">{selectedDetail.shippingAddress.phone}</p>
+                          <p className="text-[11px] text-[var(--ink)]">
+                            {selectedDetail.shippingAddress.line1}
+                            {selectedDetail.shippingAddress.line2 ? `, ${selectedDetail.shippingAddress.line2}` : ""}, {selectedDetail.shippingAddress.city}, {selectedDetail.shippingAddress.state} {selectedDetail.shippingAddress.postalCode}, {selectedDetail.shippingAddress.countryCode}
+                          </p>
+                        </div>
+                      )}
+                      {selectedDetail.billingAddress && (
+                        <div className="rounded border border-[var(--line)] bg-white p-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">Billing Address</p>
+                          <p className="mt-1 text-xs font-semibold text-[var(--ink)]">
+                            {selectedDetail.billingAddress.label ? `${selectedDetail.billingAddress.label} - ` : ""}
+                            {selectedDetail.billingAddress.recipientName}
+                          </p>
+                          <p className="text-[11px] text-[var(--muted)]">{selectedDetail.billingAddress.phone}</p>
+                          <p className="text-[11px] text-[var(--ink)]">
+                            {selectedDetail.billingAddress.line1}
+                            {selectedDetail.billingAddress.line2 ? `, ${selectedDetail.billingAddress.line2}` : ""}, {selectedDetail.billingAddress.city}, {selectedDetail.billingAddress.state} {selectedDetail.billingAddress.postalCode}, {selectedDetail.billingAddress.countryCode}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <div className="overflow-hidden rounded-lg border border-[var(--line)]">
                     <table className="w-full text-left text-xs">
                       <thead className="bg-gray-50 text-[var(--ink)]">

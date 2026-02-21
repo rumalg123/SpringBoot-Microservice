@@ -1,6 +1,7 @@
 package com.rumal.order_service.client;
 
 import com.rumal.order_service.dto.CustomerSummary;
+import com.rumal.order_service.dto.CustomerAddressSummary;
 import com.rumal.order_service.exception.ResourceNotFoundException;
 import com.rumal.order_service.exception.ServiceUnavailableException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
@@ -105,6 +106,23 @@ public class CustomerClient {
         }
     }
 
+    @Retry(name = "customerService")
+    @CircuitBreaker(name = "customerService", fallbackMethod = "customerFallbackGetCustomerAddress")
+    public CustomerAddressSummary getCustomerAddress(UUID customerId, UUID addressId) {
+        RestClient rc = lbRestClientBuilder.build();
+        try {
+            return rc.get()
+                    .uri("http://customer-service/customers/{customerId}/addresses/{addressId}", customerId, addressId)
+                    .retrieve()
+                    .body(CustomerAddressSummary.class);
+        } catch (HttpClientErrorException ex) {
+            if (ex.getStatusCode() == HttpStatus.NOT_FOUND) {
+                throw new ResourceNotFoundException("Address not found: " + addressId);
+            }
+            throw ex;
+        }
+    }
+
 
 
     @SuppressWarnings("unused")
@@ -125,5 +143,13 @@ public class CustomerClient {
     @SuppressWarnings("unused")
     public CustomerSummary customerFallbackGetCustomerByEmail(String email, Throwable ex) {
         throw new ServiceUnavailableException("Customer service unavailable for email " + email + ". Try again later.", ex);
+    }
+
+    @SuppressWarnings("unused")
+    public CustomerAddressSummary customerFallbackGetCustomerAddress(UUID customerId, UUID addressId, Throwable ex) {
+        throw new ServiceUnavailableException(
+                "Customer service unavailable for customer " + customerId + " address " + addressId + ". Try again later.",
+                ex
+        );
     }
 }

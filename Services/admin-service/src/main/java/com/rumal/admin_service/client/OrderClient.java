@@ -35,12 +35,12 @@ public class OrderClient {
         this.objectMapper = objectMapper;
     }
 
-    public PageResponse<OrderResponse> listOrders(UUID customerId, int page, int size, List<String> sort, String internalAuth) {
+    public PageResponse<OrderResponse> listOrders(UUID customerId, String customerEmail, int page, int size, List<String> sort, String internalAuth) {
         RestClient rc = lbRestClientBuilder.build();
 
         try {
             Map<String, Object> rawResponse = rc.get()
-                    .uri(uriBuilder -> buildListOrdersUri(uriBuilder, customerId, page, size, sort))
+                    .uri(uriBuilder -> buildListOrdersUri(uriBuilder, customerId, customerEmail, page, size, sort))
                     .header("X-Internal-Auth", internalAuth)
                     .retrieve()
                     .body(MAP_TYPE);
@@ -91,7 +91,7 @@ public class OrderClient {
         return fallback;
     }
 
-    private URI buildListOrdersUri(UriBuilder uriBuilder, UUID customerId, int page, int size, List<String> sort) {
+    private URI buildListOrdersUri(UriBuilder uriBuilder, UUID customerId, String customerEmail, int page, int size, List<String> sort) {
         UriBuilder builder = uriBuilder
                 .scheme("http")
                 .host("order-service")
@@ -101,6 +101,9 @@ public class OrderClient {
 
         if (customerId != null) {
             builder = builder.queryParam("customerId", customerId);
+        }
+        if (customerEmail != null && !customerEmail.isBlank()) {
+            builder = builder.queryParam("customerEmail", customerEmail.trim());
         }
 
         if (sort != null && !sort.isEmpty()) {

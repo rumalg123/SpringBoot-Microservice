@@ -42,6 +42,15 @@ type VariationSummary = {
   variations: Variation[];
 };
 
+type CustomerAddress = {
+  id: string;
+  label: string | null;
+  line1: string;
+  city: string;
+  defaultShipping: boolean;
+  defaultBilling: boolean;
+};
+
 function money(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
 }
@@ -96,6 +105,11 @@ export default function ProductDetailPage() {
   const [status, setStatus] = useState("Loading product...");
   const [buyingNow, setBuyingNow] = useState(false);
   const [signingInToBuy, setSigningInToBuy] = useState(false);
+  const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
+  const [shippingAddressId, setShippingAddressId] = useState("");
+  const [billingAddressId, setBillingAddressId] = useState("");
+  const [billingSameAsShipping, setBillingSameAsShipping] = useState(true);
+  const [addressLoading, setAddressLoading] = useState(false);
 
   useEffect(() => {
     const run = async () => {
@@ -128,6 +142,43 @@ export default function ProductDetailPage() {
     };
     void run();
   }, [params.id]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !apiClient) {
+      setAddresses([]);
+      setShippingAddressId("");
+      setBillingAddressId("");
+      return;
+    }
+
+    let active = true;
+    const run = async () => {
+      setAddressLoading(true);
+      try {
+        const response = await apiClient.get("/customers/me/addresses");
+        if (!active) return;
+        const loaded = (response.data as CustomerAddress[]) || [];
+        setAddresses(loaded);
+
+        const defaultShipping = loaded.find((address) => address.defaultShipping)?.id || loaded[0]?.id || "";
+        const defaultBilling = loaded.find((address) => address.defaultBilling)?.id || defaultShipping;
+        setShippingAddressId((old) => old || defaultShipping);
+        setBillingAddressId((old) => old || defaultBilling);
+      } catch {
+        if (!active) return;
+        setAddresses([]);
+      } finally {
+        if (active) {
+          setAddressLoading(false);
+        }
+      }
+    };
+
+    void run();
+    return () => {
+      active = false;
+    };
+  }, [isAuthenticated, apiClient]);
 
   const parentAttributeNames = useMemo(() => {
     if (!product || product.productType !== "PARENT") return [];
@@ -227,6 +278,11 @@ export default function ProductDetailPage() {
     void run();
   }, [selectedVariationId, product]);
 
+  useEffect(() => {
+    if (!billingSameAsShipping) return;
+    setBillingAddressId(shippingAddressId);
+  }, [billingSameAsShipping, shippingAddressId]);
+
   const buyNow = async () => {
     if (!apiClient || !product) return;
     if (buyingNow) return;
@@ -245,11 +301,20 @@ export default function ProductDetailPage() {
       return;
     }
 
+    const resolvedShippingAddressId = shippingAddressId.trim();
+    const resolvedBillingAddressId = (billingSameAsShipping ? shippingAddressId : billingAddressId).trim();
+    if (!resolvedShippingAddressId || !resolvedBillingAddressId) {
+      toast.error("Select shipping and billing addresses before buying");
+      return;
+    }
+
     setBuyingNow(true);
     try {
       await apiClient.post("/orders/me", {
         productId: targetProductId,
         quantity,
+        shippingAddressId: resolvedShippingAddressId,
+        billingAddressId: resolvedBillingAddressId,
       });
       toast.success("Order placed successfully! 🎉");
     } catch (err) {
@@ -264,7 +329,12 @@ export default function ProductDetailPage() {
   const allAttributesSelected =
     !requiresVariationSelection || parentAttributeNames.every((name) => (selectedAttributes[name] || "").trim());
   const hasMatchingVariation = !requiresVariationSelection || Boolean(selectedVariationId.trim());
-  const canBuyNow = !buyingNow && (!requiresVariationSelection || (allAttributesSelected && hasMatchingVariation));
+  const hasRequiredAddresses = Boolean(
+    shippingAddressId.trim() && (billingSameAsShipping || billingAddressId.trim())
+  );
+  const canBuyNow = !buyingNow
+    && hasRequiredAddresses
+    && (!requiresVariationSelection || (allAttributesSelected && hasMatchingVariation));
 
   if (!displayProduct) {
     return (
@@ -515,6 +585,75 @@ export default function ProductDetailPage() {
                       </div>
                     )}
 
+                    <div className="space-y-3">
+                      <label className="block text-xs font-bold uppercase tracking-wider text-[var(--muted)]">
+                        Shipping Address
+                      </label>
+                      {addressLoading && (
+                        <p className="text-xs text-[var(--muted)]">Loading your addresses...</p>
+                      )}
+                      {!addressLoading && addresses.length === 0 && (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                          Add at least one address in your profile before buying.
+                          {" "}
+                          <Link href="/profile" className="font-semibold underline">
+                            Open Profile
+                          </Link>
+                        </div>
+                      )}
+                      {addresses.length > 0 && (
+                        <>
+                          <select
+                            value={shippingAddressId}
+                            onChange={(e) => {
+                              const selected = e.target.value;
+                              setShippingAddressId(selected);
+                              if (billingSameAsShipping) {
+                                setBillingAddressId(selected);
+                              }
+                            }}
+                            disabled={buyingNow || addressLoading}
+                            className="w-full rounded-lg border border-[var(--line)] bg-white px-4 py-3 text-sm text-[var(--ink)] disabled:cursor-not-allowed disabled:opacity-60"
+                            required
+                          >
+                            <option value="">Select shipping address</option>
+                            {addresses.map((address) => (
+                              <option key={`shipping-${address.id}`} value={address.id}>
+                                {(address.label || "Address")} - {address.line1}, {address.city}
+                              </option>
+                            ))}
+                          </select>
+
+                          <label className="inline-flex items-center gap-2 text-xs text-[var(--muted)]">
+                            <input
+                              type="checkbox"
+                              checked={billingSameAsShipping}
+                              onChange={(e) => setBillingSameAsShipping(e.target.checked)}
+                              disabled={buyingNow || addressLoading}
+                            />
+                            Billing address same as shipping
+                          </label>
+
+                          {!billingSameAsShipping && (
+                            <select
+                              value={billingAddressId}
+                              onChange={(e) => setBillingAddressId(e.target.value)}
+                              disabled={buyingNow || addressLoading}
+                              className="w-full rounded-lg border border-[var(--line)] bg-white px-4 py-3 text-sm text-[var(--ink)] disabled:cursor-not-allowed disabled:opacity-60"
+                              required
+                            >
+                              <option value="">Select billing address</option>
+                              {addresses.map((address) => (
+                                <option key={`billing-${address.id}`} value={address.id}>
+                                  {(address.label || "Address")} - {address.line1}, {address.city}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </>
+                      )}
+                    </div>
+
                     {/* Quantity + Buy */}
                     <div className="flex flex-wrap items-center gap-3">
                       <div>
@@ -554,7 +693,7 @@ export default function ProductDetailPage() {
                         if (signingInToBuy) return;
                         setSigningInToBuy(true);
                         try {
-                          await login("/products");
+                          await login(`/products/${params.id}`);
                         } finally {
                           setSigningInToBuy(false);
                         }

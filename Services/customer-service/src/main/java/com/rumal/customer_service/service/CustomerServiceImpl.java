@@ -3,20 +3,26 @@ package com.rumal.customer_service.service;
 import com.rumal.customer_service.auth.KeycloakManagementService;
 import com.rumal.customer_service.auth.KeycloakUserExistsException;
 import com.rumal.customer_service.dto.CreateCustomerRequest;
+import com.rumal.customer_service.dto.CustomerAddressRequest;
+import com.rumal.customer_service.dto.CustomerAddressResponse;
 import com.rumal.customer_service.dto.CustomerResponse;
 import com.rumal.customer_service.dto.RegisterIdentityCustomerRequest;
 import com.rumal.customer_service.dto.RegisterCustomerRequest;
 import com.rumal.customer_service.dto.UpdateCustomerProfileRequest;
 import com.rumal.customer_service.entity.Customer;
+import com.rumal.customer_service.entity.CustomerAddress;
 import com.rumal.customer_service.exception.DuplicateResourceException;
 import com.rumal.customer_service.exception.ResourceNotFoundException;
+import com.rumal.customer_service.repo.CustomerAddressRepository;
 import com.rumal.customer_service.repo.CustomerRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -24,6 +30,7 @@ import java.util.UUID;
 public class CustomerServiceImpl implements CustomerService {
 
     private final CustomerRepository customerRepository;
+    private final CustomerAddressRepository customerAddressRepository;
     private final KeycloakManagementService keycloakManagementService;
 
     @Override
@@ -172,10 +179,199 @@ public class CustomerServiceImpl implements CustomerService {
         return toResponse(c);
     }
 
+    @Override
+    public List<CustomerAddressResponse> listAddressesByKeycloak(String keycloakId) {
+        Customer customer = findCustomerByKeycloakId(keycloakId);
+        return customerAddressRepository.findByCustomerIdAndDeletedFalseOrderByUpdatedAtDesc(customer.getId()).stream()
+                .map(this::toAddressResponse)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public CustomerAddressResponse addAddressByKeycloak(String keycloakId, CustomerAddressRequest request) {
+        Customer customer = findCustomerByKeycloakId(keycloakId);
+
+        CustomerAddress address = CustomerAddress.builder()
+                .customer(customer)
+                .build();
+        applyAddressFields(address, request);
+        address.setDefaultShipping(Boolean.TRUE.equals(request.defaultShipping()));
+        address.setDefaultBilling(Boolean.TRUE.equals(request.defaultBilling()));
+
+        CustomerAddress saved = customerAddressRepository.save(address);
+        rebalanceDefaults(
+                customer.getId(),
+                Boolean.TRUE.equals(request.defaultShipping()) ? saved.getId() : null,
+                Boolean.TRUE.equals(request.defaultBilling()) ? saved.getId() : null
+        );
+
+        return toAddressResponse(findActiveAddress(customer.getId(), saved.getId()));
+    }
+
+    @Override
+    @Transactional
+    public CustomerAddressResponse updateAddressByKeycloak(String keycloakId, UUID addressId, CustomerAddressRequest request) {
+        Customer customer = findCustomerByKeycloakId(keycloakId);
+        CustomerAddress address = findActiveAddress(customer.getId(), addressId);
+
+        applyAddressFields(address, request);
+        if (Boolean.TRUE.equals(request.defaultShipping())) {
+            address.setDefaultShipping(true);
+        }
+        if (Boolean.TRUE.equals(request.defaultBilling())) {
+            address.setDefaultBilling(true);
+        }
+
+        customerAddressRepository.save(address);
+        rebalanceDefaults(
+                customer.getId(),
+                Boolean.TRUE.equals(request.defaultShipping()) ? address.getId() : null,
+                Boolean.TRUE.equals(request.defaultBilling()) ? address.getId() : null
+        );
+
+        return toAddressResponse(findActiveAddress(customer.getId(), address.getId()));
+    }
+
+    @Override
+    @Transactional
+    public void softDeleteAddressByKeycloak(String keycloakId, UUID addressId) {
+        Customer customer = findCustomerByKeycloakId(keycloakId);
+        CustomerAddress address = findActiveAddress(customer.getId(), addressId);
+        address.setDeleted(true);
+        address.setDefaultShipping(false);
+        address.setDefaultBilling(false);
+        customerAddressRepository.save(address);
+        rebalanceDefaults(customer.getId(), null, null);
+    }
+
+    @Override
+    @Transactional
+    public CustomerAddressResponse setDefaultShippingByKeycloak(String keycloakId, UUID addressId) {
+        Customer customer = findCustomerByKeycloakId(keycloakId);
+        findActiveAddress(customer.getId(), addressId);
+        rebalanceDefaults(customer.getId(), addressId, null);
+        return toAddressResponse(findActiveAddress(customer.getId(), addressId));
+    }
+
+    @Override
+    @Transactional
+    public CustomerAddressResponse setDefaultBillingByKeycloak(String keycloakId, UUID addressId) {
+        Customer customer = findCustomerByKeycloakId(keycloakId);
+        findActiveAddress(customer.getId(), addressId);
+        rebalanceDefaults(customer.getId(), null, addressId);
+        return toAddressResponse(findActiveAddress(customer.getId(), addressId));
+    }
+
+    @Override
+    public CustomerAddressResponse getAddressByCustomerId(UUID customerId, UUID addressId) {
+        return toAddressResponse(findActiveAddress(customerId, addressId));
+    }
+
     private CustomerResponse toResponse(Customer c) {
         return new CustomerResponse(c.getId(), c.getName(), c.getEmail(), c.getCreatedAt());
     }
 
+    private CustomerAddressResponse toAddressResponse(CustomerAddress address) {
+        return new CustomerAddressResponse(
+                address.getId(),
+                address.getCustomer().getId(),
+                address.getLabel(),
+                address.getRecipientName(),
+                address.getPhone(),
+                address.getLine1(),
+                address.getLine2(),
+                address.getCity(),
+                address.getState(),
+                address.getPostalCode(),
+                address.getCountryCode(),
+                address.isDefaultShipping(),
+                address.isDefaultBilling(),
+                address.isDeleted(),
+                address.getCreatedAt(),
+                address.getUpdatedAt()
+        );
+    }
 
+    private Customer findCustomerByKeycloakId(String keycloakId) {
+        if (!StringUtils.hasText(keycloakId)) {
+            throw new ResourceNotFoundException("Customer not found for keycloak id");
+        }
+        return customerRepository.findByKeycloakId(keycloakId)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found for keycloak id"));
+    }
 
+    private CustomerAddress findActiveAddress(UUID customerId, UUID addressId) {
+        return customerAddressRepository.findByIdAndCustomerIdAndDeletedFalse(addressId, customerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Address not found: " + addressId));
+    }
+
+    private void applyAddressFields(CustomerAddress address, CustomerAddressRequest request) {
+        address.setLabel(normalizeNullable(request.label(), 50));
+        address.setRecipientName(normalizeRequired(request.recipientName()));
+        address.setPhone(normalizePhone(request.phone()));
+        address.setLine1(normalizeRequired(request.line1()));
+        address.setLine2(normalizeNullable(request.line2(), 180));
+        address.setCity(normalizeRequired(request.city()));
+        address.setState(normalizeRequired(request.state()));
+        address.setPostalCode(normalizeRequired(request.postalCode()));
+        address.setCountryCode(normalizeRequired(request.countryCode()).toUpperCase());
+    }
+
+    private String normalizeRequired(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private String normalizeNullable(String value, int maxLength) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        if (normalized.isEmpty()) {
+            return null;
+        }
+        if (normalized.length() > maxLength) {
+            return normalized.substring(0, maxLength);
+        }
+        return normalized;
+    }
+
+    private String normalizePhone(String value) {
+        String normalized = normalizeRequired(value).replaceAll("\\s+", " ");
+        if (normalized.length() > 32) {
+            return normalized.substring(0, 32);
+        }
+        return normalized;
+    }
+
+    private void rebalanceDefaults(UUID customerId, UUID preferredShippingId, UUID preferredBillingId) {
+        List<CustomerAddress> active = customerAddressRepository.findByCustomerIdAndDeletedFalseOrderByUpdatedAtDesc(customerId);
+        if (active.isEmpty()) {
+            return;
+        }
+
+        UUID shippingTarget = resolveTargetId(active, preferredShippingId, true);
+        UUID billingTarget = resolveTargetId(active, preferredBillingId, false);
+
+        for (CustomerAddress address : active) {
+            address.setDefaultShipping(address.getId().equals(shippingTarget));
+            address.setDefaultBilling(address.getId().equals(billingTarget));
+        }
+        customerAddressRepository.saveAll(active);
+    }
+
+    private UUID resolveTargetId(List<CustomerAddress> active, UUID preferredId, boolean shipping) {
+        if (preferredId != null && active.stream().anyMatch(address -> address.getId().equals(preferredId))) {
+            return preferredId;
+        }
+
+        for (CustomerAddress address : active) {
+            boolean currentDefault = shipping ? address.isDefaultShipping() : address.isDefaultBilling();
+            if (currentDefault) {
+                return address.getId();
+            }
+        }
+
+        return active.get(0).getId();
+    }
 }
