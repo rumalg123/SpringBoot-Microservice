@@ -76,9 +76,12 @@ function ProductsPageContent() {
   const [status, setStatus] = useState("Loading products...");
 
   useEffect(() => {
+    const q = searchParams.get("q") || "";
     const main = searchParams.get("mainCategory") || "";
     const sub = searchParams.get("subCategory") || "";
     const cat = searchParams.get("category") || "";
+    setQuery(q);
+    setSearch(q);
     setMainCategory(main);
     setSubCategory(sub);
     setCategory(cat);
@@ -144,6 +147,7 @@ function ProductsPageContent() {
   };
 
   const activeFilter = mainCategory || subCategory || category;
+  const activeSearch = search.trim();
 
   return (
     <div className="min-h-screen bg-[var(--bg)]">
@@ -184,7 +188,11 @@ function ProductsPageContent() {
           <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
             <div>
               <h1 className="text-2xl font-bold text-[var(--ink)]">
-                {activeFilter ? `Results for "${activeFilter}"` : "All Products"}
+                {activeFilter
+                  ? `Results for "${activeFilter}"`
+                  : activeSearch
+                    ? `Results for "${activeSearch}"`
+                    : "All Products"}
               </h1>
               <p className="mt-0.5 text-sm text-[var(--muted)]">{status}</p>
             </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -57,6 +57,12 @@ export default function LandingPage() {
   const [status, setStatus] = useState("loading");
   const [authActionPending, setAuthActionPending] = useState<"login" | "signup" | "forgot" | null>(null);
   const [logoutPending, setLogoutPending] = useState(false);
+  const [searchText, setSearchText] = useState("");
+  const [searchSuggestions, setSearchSuggestions] = useState<ProductSummary[]>([]);
+  const [searchSuggestionsLoading, setSearchSuggestionsLoading] = useState(false);
+  const [searchDropdownOpen, setSearchDropdownOpen] = useState(false);
+  const [searchSubmitPending, setSearchSubmitPending] = useState(false);
+  const searchBoxRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const run = async () => {
@@ -94,6 +100,61 @@ export default function LandingPage() {
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, []);
+
+  useEffect(() => {
+    const onPointerDown = (event: MouseEvent) => {
+      if (!searchBoxRef.current) return;
+      if (!searchBoxRef.current.contains(event.target as Node)) {
+        setSearchDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", onPointerDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+    };
+  }, []);
+
+  useEffect(() => {
+    const term = searchText.trim();
+    if (term.length < 2) {
+      setSearchSuggestions([]);
+      setSearchSuggestionsLoading(false);
+      return;
+    }
+
+    let active = true;
+    const timer = window.setTimeout(async () => {
+      setSearchSuggestionsLoading(true);
+      try {
+        const apiBase = process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me";
+        const params = new URLSearchParams();
+        params.set("page", "0");
+        params.set("size", "6");
+        params.set("q", term);
+
+        const res = await fetch(`${apiBase}/products?${params.toString()}`, { cache: "no-store" });
+        if (!res.ok) {
+          throw new Error("Failed to load search suggestions");
+        }
+        const data = (await res.json()) as ProductPageResponse;
+        if (!active) return;
+        setSearchSuggestions((data.content || []).slice(0, 6));
+      } catch {
+        if (!active) return;
+        setSearchSuggestions([]);
+      } finally {
+        if (active) {
+          setSearchSuggestionsLoading(false);
+        }
+      }
+    }, 250);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [searchText]);
 
   const dealProducts = useMemo(() => products.filter((p) => p.discountedPrice !== null).slice(0, 4), [products]);
   const trendingProducts = useMemo(() => products.slice(0, 8), [products]);
@@ -139,6 +200,25 @@ export default function LandingPage() {
     }
   };
 
+  const openSearchResults = (value: string) => {
+    const normalized = value.trim();
+    if (!normalized) return;
+    setSearchSubmitPending(true);
+    setSearchDropdownOpen(false);
+    router.push(`/products?q=${encodeURIComponent(normalized)}`);
+  };
+
+  const submitSearch = (e: FormEvent) => {
+    e.preventDefault();
+    if (searchSubmitPending) return;
+    openSearchResults(searchText);
+  };
+
+  const openSuggestedProduct = (product: ProductSummary) => {
+    setSearchDropdownOpen(false);
+    router.push(`/products/${encodeURIComponent((product.slug || product.id).trim())}`);
+  };
+
   return (
     <div className="min-h-screen bg-[var(--bg)]">
       {/* Top Header Bar (simplified for landing) */}
@@ -152,25 +232,88 @@ export default function LandingPage() {
             </div>
           </Link>
           <div className="mx-6 hidden flex-1 md:block">
-            <div className="flex max-w-xl items-center overflow-hidden rounded-lg bg-white">
-              <input
-                type="text"
-                placeholder="Search products, brands and more..."
-                className="flex-1 border-none px-4 py-2.5 text-sm text-[var(--ink)] outline-none"
-                readOnly
-                onFocus={(e) => {
-                  e.target.blur();
-                  router.push("/products");
-                }}
-              />
-              <button
-                onClick={() => {
-                  router.push("/products");
-                }}
-                className="bg-[var(--brand)] px-5 py-2.5 text-white transition hover:bg-[var(--brand-hover)]"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
-              </button>
+            <div ref={searchBoxRef} className="relative max-w-xl">
+              <form onSubmit={submitSearch} className="flex items-center overflow-hidden rounded-lg bg-white">
+                <input
+                  type="text"
+                  placeholder="Search products, brands and more..."
+                  className="flex-1 border-none px-4 py-2.5 text-sm text-[var(--ink)] outline-none"
+                  value={searchText}
+                  onFocus={() => setSearchDropdownOpen(true)}
+                  onChange={(e) => {
+                    setSearchText(e.target.value);
+                    if (!searchDropdownOpen) {
+                      setSearchDropdownOpen(true);
+                    }
+                  }}
+                />
+                {searchText.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchText("");
+                      setSearchSuggestions([]);
+                      setSearchDropdownOpen(true);
+                    }}
+                    className="mr-2 flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-xs text-gray-700 hover:bg-gray-300"
+                    aria-label="Clear search"
+                  >
+                    x
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  disabled={searchSubmitPending || !searchText.trim()}
+                  className="bg-[var(--brand)] px-5 py-2.5 text-white transition hover:bg-[var(--brand-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
+                </button>
+              </form>
+
+              {searchDropdownOpen && (
+                <div className="absolute left-0 right-0 z-40 mt-1 overflow-hidden rounded-lg border border-[var(--line)] bg-white shadow-xl">
+                  {searchText.trim().length < 2 && (
+                    <p className="px-4 py-3 text-xs text-[var(--muted)]">Type at least 2 characters to search.</p>
+                  )}
+
+                  {searchText.trim().length >= 2 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => openSearchResults(searchText)}
+                        className="flex w-full items-center justify-between border-b border-[var(--line)] px-4 py-3 text-left text-sm text-[var(--ink)] hover:bg-[var(--brand-soft)]"
+                      >
+                        <span>{`Search for "${searchText.trim()}"`}</span>
+                        <span className="text-xs text-[var(--muted)]">Enter</span>
+                      </button>
+
+                      {searchSuggestionsLoading && (
+                        <p className="px-4 py-3 text-xs text-[var(--muted)]">Loading suggestions...</p>
+                      )}
+
+                      {!searchSuggestionsLoading && searchSuggestions.length === 0 && (
+                        <p className="px-4 py-3 text-xs text-[var(--muted)]">No matching products.</p>
+                      )}
+
+                      {!searchSuggestionsLoading && searchSuggestions.length > 0 && (
+                        <div className="max-h-72 overflow-y-auto">
+                          {searchSuggestions.map((product) => (
+                            <button
+                              key={product.id}
+                              type="button"
+                              onClick={() => openSuggestedProduct(product)}
+                              className="block w-full border-t border-[var(--line)] px-4 py-3 text-left hover:bg-[#fafafa]"
+                            >
+                              <p className="line-clamp-1 text-sm font-semibold text-[var(--ink)]">{product.name}</p>
+                              <p className="line-clamp-1 text-xs text-[var(--muted)]">{product.sku}</p>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </div>
           {session.isAuthenticated ? (
