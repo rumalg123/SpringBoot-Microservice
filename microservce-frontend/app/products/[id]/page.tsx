@@ -42,6 +42,16 @@ type VariationSummary = {
   variations: Variation[];
 };
 
+type WishlistItem = {
+  id: string;
+  productId: string;
+};
+
+type WishlistResponse = {
+  items: WishlistItem[];
+  itemCount: number;
+};
+
 function money(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
 }
@@ -96,6 +106,8 @@ export default function ProductDetailPage() {
   const [status, setStatus] = useState("Loading product...");
   const [addingToCart, setAddingToCart] = useState(false);
   const [signingInToBuy, setSigningInToBuy] = useState(false);
+  const [wishlistItemId, setWishlistItemId] = useState("");
+  const [wishlistPending, setWishlistPending] = useState(false);
 
   useEffect(() => {
     const run = async () => {
@@ -227,6 +239,38 @@ export default function ProductDetailPage() {
     void run();
   }, [selectedVariationId, product]);
 
+  useEffect(() => {
+    if (!isAuthenticated || !apiClient) {
+      setWishlistItemId("");
+      return;
+    }
+    const targetProductId = (selectedVariation?.id || product?.id || "").trim();
+    if (!targetProductId) {
+      setWishlistItemId("");
+      return;
+    }
+
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const res = await apiClient.get("/wishlist/me");
+        const data = (res.data as WishlistResponse) || { items: [], itemCount: 0 };
+        if (cancelled) return;
+        const matched = (data.items || []).find((item) => item.productId === targetProductId);
+        setWishlistItemId(matched?.id || "");
+      } catch {
+        if (!cancelled) {
+          setWishlistItemId("");
+        }
+      }
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, apiClient, product?.id, selectedVariation?.id]);
+
   const addToCart = async () => {
     if (!apiClient || !product) return;
     if (addingToCart) return;
@@ -256,6 +300,34 @@ export default function ProductDetailPage() {
       toast.error(err instanceof Error ? err.message : "Failed to add product to cart");
     } finally {
       setAddingToCart(false);
+    }
+  };
+
+  const applyWishlistResponse = (payload: WishlistResponse, targetProductId: string) => {
+    const matched = (payload.items || []).find((item) => item.productId === targetProductId);
+    setWishlistItemId(matched?.id || "");
+  };
+
+  const toggleWishlist = async () => {
+    if (!apiClient || !isAuthenticated || wishlistPending) return;
+    const targetProductId = (selectedVariation?.id || product?.id || "").trim();
+    if (!targetProductId) return;
+
+    setWishlistPending(true);
+    try {
+      if (wishlistItemId) {
+        await apiClient.delete(`/wishlist/me/items/${wishlistItemId}`);
+        setWishlistItemId("");
+        toast.success("Removed from wishlist");
+      } else {
+        const res = await apiClient.post("/wishlist/me/items", { productId: targetProductId });
+        applyWishlistResponse((res.data as WishlistResponse) || { items: [], itemCount: 0 }, targetProductId);
+        toast.success("Added to wishlist");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Wishlist update failed");
+    } finally {
+      setWishlistPending(false);
     }
   };
 
@@ -547,13 +619,20 @@ export default function ProductDetailPage() {
                         onClick={() => void addToCart()}
                         className="btn-primary flex-1 px-8 py-3 text-base disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        {addingToCart ? "Adding..." : "🛒 Add to Cart"}
+                        {addingToCart ? "Adding..." : "Add to Cart"}
+                      </button>
+                      <button
+                        disabled={wishlistPending}
+                        onClick={() => { void toggleWishlist(); }}
+                        className="btn-outline px-6 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {wishlistPending ? "Saving..." : (wishlistItemId ? "Remove Wishlist" : "Add Wishlist")}
                       </button>
                       <Link
                         href="/cart"
                         className="btn-outline flex items-center justify-center px-6 py-3 text-sm no-underline"
                       >
-                        📦 Open Cart
+                        Open Cart
                       </Link>
                     </div>
                   </div>

@@ -3,6 +3,7 @@ env\customer-service.env
 env\order-service.env
 env\product-service.env
 env\cart-service.env
+env\wishlist-service.env
 env\eureka.env
 .idea
 .vscode

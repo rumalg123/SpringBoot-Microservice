@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { AxiosInstance } from "axios";
 import CartNavWidget from "./CartNavWidget";
+import WishlistNavWidget from "./WishlistNavWidget";
 
 type Props = {
   email?: string;
@@ -72,6 +73,7 @@ export default function AppNav({ email, canViewAdmin = false, apiClient = null, 
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
+          <WishlistNavWidget apiClient={apiClient} />
           <CartNavWidget apiClient={apiClient} emailVerified={emailVerified} />
           <span className="hidden rounded-full bg-white/10 px-3 py-1.5 text-xs text-gray-300 md:inline-block">
             {email || "User"}
@@ -112,6 +114,7 @@ export default function AppNav({ email, canViewAdmin = false, apiClient = null, 
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-1 px-4 py-2">
           <Link href="/" className={navLinkClass("/")}>Home</Link>
           <Link href="/products" className={navLinkClass("/products")}>Shop</Link>
+          <Link href="/wishlist" className={navLinkClass("/wishlist")}>Wishlist</Link>
           <Link href="/cart" className={navLinkClass("/cart")}>Cart</Link>
           <Link href="/orders" className={navLinkClass("/orders")}>My Orders</Link>
           <Link href="/profile" className={navLinkClass("/profile")}>Profile</Link>

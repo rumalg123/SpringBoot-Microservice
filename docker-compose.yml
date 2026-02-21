@@ -41,6 +41,16 @@ services:
       - ./env/common.env
       - ./env/cart-service.env
 
+  wishlist-service:
+    build:
+      context: ./Services/wishlist-service
+    depends_on:
+      - discovery-server
+      - redis
+    env_file:
+      - ./env/common.env
+      - ./env/wishlist-service.env
+
   product-service:
     build:
       context: ./Services/product-service

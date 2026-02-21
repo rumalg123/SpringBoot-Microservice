@@ -1,9 +1,10 @@
 "use client";
 
-import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
+import { FormEvent, MouseEvent, Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
+import toast from "react-hot-toast";
 import AppNav from "../components/AppNav";
 import CategoryMenu from "../components/CategoryMenu";
 import Footer from "../components/Footer";
@@ -28,6 +29,17 @@ type ProductPageResponse = {
   number: number;
   totalPages: number;
 };
+
+type WishlistItem = {
+  id: string;
+  productId: string;
+};
+
+type WishlistResponse = {
+  items: WishlistItem[];
+  itemCount: number;
+};
+
 type Category = {
   id: string;
   name: string;
@@ -74,6 +86,8 @@ function ProductsPageContent() {
   const [totalPages, setTotalPages] = useState(1);
   const [productsLoading, setProductsLoading] = useState(false);
   const [status, setStatus] = useState("Loading products...");
+  const [wishlistByProductId, setWishlistByProductId] = useState<Record<string, string>>({});
+  const [wishlistPendingProductId, setWishlistPendingProductId] = useState<string | null>(null);
 
   useEffect(() => {
     const q = searchParams.get("q") || "";
@@ -102,6 +116,36 @@ function ProductsPageContent() {
     };
     void run();
   }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated || !apiClient) {
+      setWishlistByProductId({});
+      return;
+    }
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const res = await apiClient.get("/wishlist/me");
+        const data = (res.data as WishlistResponse) || { items: [], itemCount: 0 };
+        if (cancelled) return;
+        const map: Record<string, string> = {};
+        for (const item of data.items || []) {
+          if (item.productId && item.id) {
+            map[item.productId] = item.id;
+          }
+        }
+        setWishlistByProductId(map);
+      } catch {
+        if (!cancelled) {
+          setWishlistByProductId({});
+        }
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, apiClient]);
 
   useEffect(() => {
     const run = async () => {
@@ -148,6 +192,45 @@ function ProductsPageContent() {
 
   const activeFilter = mainCategory || subCategory || category;
   const activeSearch = search.trim();
+
+  const applyWishlistResponse = (payload: WishlistResponse) => {
+    const map: Record<string, string> = {};
+    for (const item of payload.items || []) {
+      if (item.productId && item.id) {
+        map[item.productId] = item.id;
+      }
+    }
+    setWishlistByProductId(map);
+  };
+
+  const toggleWishlist = async (event: MouseEvent<HTMLButtonElement>, productId: string) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!apiClient || !isAuthenticated) return;
+    if (wishlistPendingProductId === productId) return;
+
+    setWishlistPendingProductId(productId);
+    try {
+      const existingItemId = wishlistByProductId[productId];
+      if (existingItemId) {
+        await apiClient.delete(`/wishlist/me/items/${existingItemId}`);
+        setWishlistByProductId((old) => {
+          const next = { ...old };
+          delete next[productId];
+          return next;
+        });
+        toast.success("Removed from wishlist");
+      } else {
+        const res = await apiClient.post("/wishlist/me/items", { productId });
+        applyWishlistResponse((res.data as WishlistResponse) || { items: [], itemCount: 0 });
+        toast.success("Added to wishlist");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Wishlist update failed");
+    } finally {
+      setWishlistPendingProductId(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[var(--bg)]">
@@ -261,6 +344,8 @@ function ProductsPageContent() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {products.map((p, idx) => {
             const discount = calcDiscount(p.regularPrice, p.sellingPrice);
+            const isWished = Boolean(wishlistByProductId[p.id]);
+            const wishlistBusy = wishlistPendingProductId === p.id;
             return (
               <Link
                 href={`/products/${encodeURIComponent((p.slug || p.id).trim())}`}
@@ -269,6 +354,28 @@ function ProductsPageContent() {
                 style={{ animationDelay: `${idx * 50}ms` }}
               >
                 {discount && <span className="badge-sale">-{discount}%</span>}
+                {isAuthenticated && (
+                  <button
+                    type="button"
+                    onClick={(event) => { void toggleWishlist(event, p.id); }}
+                    disabled={wishlistBusy}
+                    className={`absolute right-2 top-2 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full border text-xs transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                      isWished
+                        ? "border-red-500 bg-red-50 text-red-600"
+                        : "border-[var(--line)] bg-white text-[var(--muted)] hover:border-red-300 hover:text-red-500"
+                    }`}
+                    title={isWished ? "Remove from wishlist" : "Add to wishlist"}
+                    aria-label={isWished ? "Remove from wishlist" : "Add to wishlist"}
+                  >
+                    {wishlistBusy ? (
+                      "..."
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill={isWished ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 21s-6.7-4.35-9.33-8.08C.8 10.23 1.2 6.7 4.02 4.82A5.42 5.42 0 0 1 12 6.09a5.42 5.42 0 0 1 7.98-1.27c2.82 1.88 3.22 5.41 1.35 8.1C18.7 16.65 12 21 12 21z" />
+                      </svg>
+                    )}
+                  </button>
+                )}
                 <div className="aspect-square overflow-hidden bg-[#f8f8f8]">
                   {resolveImageUrl(p.mainImage) ? (
                     <Image

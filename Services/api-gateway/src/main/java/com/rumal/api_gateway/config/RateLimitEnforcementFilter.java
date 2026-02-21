@@ -30,6 +30,8 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
     private final RedisRateLimiter cartMeRateLimiter;
     private final RedisRateLimiter cartMeWriteRateLimiter;
     private final RedisRateLimiter cartMeCheckoutRateLimiter;
+    private final RedisRateLimiter wishlistMeRateLimiter;
+    private final RedisRateLimiter wishlistMeWriteRateLimiter;
     private final RedisRateLimiter adminOrdersRateLimiter;
     private final RedisRateLimiter productsRateLimiter;
     private final RedisRateLimiter adminProductsRateLimiter;
@@ -45,6 +47,8 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
             @Qualifier("cartMeRateLimiter") RedisRateLimiter cartMeRateLimiter,
             @Qualifier("cartMeWriteRateLimiter") RedisRateLimiter cartMeWriteRateLimiter,
             @Qualifier("cartMeCheckoutRateLimiter") RedisRateLimiter cartMeCheckoutRateLimiter,
+            @Qualifier("wishlistMeRateLimiter") RedisRateLimiter wishlistMeRateLimiter,
+            @Qualifier("wishlistMeWriteRateLimiter") RedisRateLimiter wishlistMeWriteRateLimiter,
             @Qualifier("adminOrdersRateLimiter") RedisRateLimiter adminOrdersRateLimiter,
             @Qualifier("productsRateLimiter") RedisRateLimiter productsRateLimiter,
             @Qualifier("adminProductsRateLimiter") RedisRateLimiter adminProductsRateLimiter,
@@ -59,6 +63,8 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
         this.cartMeRateLimiter = cartMeRateLimiter;
         this.cartMeWriteRateLimiter = cartMeWriteRateLimiter;
         this.cartMeCheckoutRateLimiter = cartMeCheckoutRateLimiter;
+        this.wishlistMeRateLimiter = wishlistMeRateLimiter;
+        this.wishlistMeWriteRateLimiter = wishlistMeWriteRateLimiter;
         this.adminOrdersRateLimiter = adminOrdersRateLimiter;
         this.productsRateLimiter = productsRateLimiter;
         this.adminProductsRateLimiter = adminProductsRateLimiter;
@@ -136,6 +142,14 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
         if (("/cart/me".equals(path) || "/cart/me/items".equals(path) || path.startsWith("/cart/me/items/"))
                 && method == HttpMethod.GET) {
             return new Policy("cart-me-read", cartMeRateLimiter, userOrIpKeyResolver);
+        }
+        if (("/wishlist/me".equals(path) || "/wishlist/me/items".equals(path) || path.startsWith("/wishlist/me/items/"))
+                && (method == HttpMethod.DELETE || method == HttpMethod.PUT || method == HttpMethod.POST)) {
+            return new Policy("wishlist-me-write", wishlistMeWriteRateLimiter, userOrIpKeyResolver);
+        }
+        if (("/wishlist/me".equals(path) || "/wishlist/me/items".equals(path) || path.startsWith("/wishlist/me/items/"))
+                && method == HttpMethod.GET) {
+            return new Policy("wishlist-me-read", wishlistMeRateLimiter, userOrIpKeyResolver);
         }
         if ("/admin/orders".equals(path) || path.startsWith("/admin/orders/")) {
             return new Policy("admin-orders", adminOrdersRateLimiter, userOrIpKeyResolver);

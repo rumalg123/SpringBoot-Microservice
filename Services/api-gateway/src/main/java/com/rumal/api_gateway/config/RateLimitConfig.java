@@ -95,6 +95,22 @@ public class RateLimitConfig {
     }
 
     @Bean
+    public RedisRateLimiter wishlistMeRateLimiter(
+            @Value("${RATE_LIMIT_WISHLIST_ME_REPLENISH:25}") int replenishRate,
+            @Value("${RATE_LIMIT_WISHLIST_ME_BURST:50}") int burstCapacity
+    ) {
+        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+    }
+
+    @Bean
+    public RedisRateLimiter wishlistMeWriteRateLimiter(
+            @Value("${RATE_LIMIT_WISHLIST_ME_WRITE_REPLENISH:12}") int replenishRate,
+            @Value("${RATE_LIMIT_WISHLIST_ME_WRITE_BURST:24}") int burstCapacity
+    ) {
+        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+    }
+
+    @Bean
     public RedisRateLimiter adminOrdersRateLimiter(
             @Value("${RATE_LIMIT_ADMIN_ORDERS_REPLENISH:20}") int replenishRate,
             @Value("${RATE_LIMIT_ADMIN_ORDERS_BURST:40}") int burstCapacity

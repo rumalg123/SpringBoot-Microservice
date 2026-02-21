@@ -46,6 +46,17 @@ services:
     volumes:
       - cart-db-data:/var/lib/postgresql/data
 
+  wishlist-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: wishlist_db
+      POSTGRES_USER: wishlist_user
+      POSTGRES_PASSWORD: wishlist_pass
+    ports:
+      - "5437:5432"
+    volumes:
+      - wishlist-db-data:/var/lib/postgresql/data
+
   product-db:
     image: postgres:16-alpine
     environment:
@@ -89,6 +100,17 @@ services:
     env_file:
       - ./env/common.env
       - ./env/cart-service.env
+
+  wishlist-service:
+    build:
+      context: ./Services/wishlist-service
+    depends_on:
+      - discovery-server
+      - wishlist-db
+      - redis
+    env_file:
+      - ./env/common.env
+      - ./env/wishlist-service.env
 
   product-service:
     build:
@@ -135,4 +157,5 @@ volumes:
   customer-db-data:
   order-db-data:
   cart-db-data:
+  wishlist-db-data:
   product-db-data:

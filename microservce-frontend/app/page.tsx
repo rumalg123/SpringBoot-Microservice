@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useAuthSession } from "../lib/authSession";
 import CategoryMenu from "./components/CategoryMenu";
 import CartNavWidget from "./components/CartNavWidget";
+import WishlistNavWidget from "./components/WishlistNavWidget";
 import Footer from "./components/Footer";
 
 type ProductSummary = {
@@ -319,6 +320,7 @@ export default function LandingPage() {
           </div>
           {session.isAuthenticated ? (
             <div className="flex flex-wrap items-center justify-end gap-2">
+              <WishlistNavWidget apiClient={session.apiClient} />
               <CartNavWidget apiClient={session.apiClient} emailVerified={session.emailVerified} />
               <span className="hidden rounded-full bg-white/10 px-3 py-1.5 text-xs text-gray-300 md:inline-block">
                 {(session.profile?.email as string) || "User"}

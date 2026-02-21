@@ -36,6 +36,7 @@ flowchart LR
 - `Services/customer-service`: customer domain + Keycloak management integration
 - `Services/order-service`: order domain + customer-service integration
 - `Services/cart-service`: cart domain + product/order integration
+- `Services/wishlist-service`: wishlist domain + product-service integration
 - `Services/admin-service`: admin APIs (aggregates privileged order views)
 - `Services/product-service`: product catalog domain (single/parent/variation products)
 - `microservce-frontend`: Next.js UI (Keycloak SPA flow)
@@ -67,6 +68,7 @@ flowchart LR
   - `/customers/register`, `/customers/register-identity`, `/customers/me`
   - `/orders/me`, `/orders/me/**`
   - `/cart/me`, `/cart/me/**`
+  - `/wishlist/me`, `/wishlist/me/**`
 - Enforces `email_verified=true` for:
   - `/customers/register-identity`, `/customers/me`
   - `/orders/me`, `/orders/me/**`
@@ -96,6 +98,8 @@ flowchart LR
   - cart-me-read
   - cart-me-write
   - cart-me-checkout
+  - wishlist-me-read
+  - wishlist-me-write
   - admin-orders
   - products-read
   - admin-products-read
@@ -135,6 +139,14 @@ flowchart LR
   - clears cart only after successful order creation
 - Caches:
   - `cartByKeycloak`
+
+### wishlist-service
+- Owns customer wishlist lifecycle (`/wishlist/me`)
+- Stores one distinct product per customer (`keycloak_id + product_id` unique)
+- Validates product existence/availability via product-service before add
+- Allows parent and variation products in wishlist, while purchase eligibility remains cart/checkout concern
+- Caches:
+  - `wishlistByKeycloak`
 
 ### admin-service
 - Admin-only APIs exposed through gateway
@@ -193,6 +205,13 @@ flowchart LR
 - `DELETE /cart/me/items/{itemId}` (authenticated)
 - `DELETE /cart/me` (authenticated)
 - `POST /cart/me/checkout` (authenticated)
+
+### Wishlist
+- `GET /wishlist/me` (authenticated)
+- `POST /wishlist/me/items` (authenticated)
+- `DELETE /wishlist/me/items/{itemId}` (authenticated)
+- `DELETE /wishlist/me/items/by-product/{productId}` (authenticated)
+- `DELETE /wishlist/me` (authenticated)
 
 ### Admin
 - `GET /admin/orders` (authenticated + admin authority)
@@ -309,6 +328,7 @@ Copy-Item env/eureka-sample.env env/eureka.env
 Copy-Item env/customer-service-sample.env env/customer-service.env
 Copy-Item env/order-service-sample.env env/order-service.env
 Copy-Item env/cart-service-sample.env env/cart-service.env
+Copy-Item env/wishlist-service-sample.env env/wishlist-service.env
 Copy-Item env/product-service-sample.env env/product-service.env
 Copy-Item env/frontend-sample.env env/frontend.env
 ```
@@ -330,12 +350,18 @@ Fill required values:
   - `CART_DB_URL`
   - `CART_DB_USER`
   - `CART_DB_PASS`
+- Wishlist DB:
+  - `WISHLIST_DB_URL`
+  - `WISHLIST_DB_USER`
+  - `WISHLIST_DB_PASS`
 - Product DB:
   - `PRODUCT_DB_URL`
   - `PRODUCT_DB_USER`
   - `PRODUCT_DB_PASS`
 - Cart cache:
   - `CACHE_CART_BY_KEYCLOAK_TTL` (example: `30s`)
+- Wishlist cache:
+  - `CACHE_WISHLIST_BY_KEYCLOAK_TTL` (example: `45s`)
 - Admin cache:
   - `CACHE_ADMIN_ORDERS_TTL` (example: `30s`)
 - Product cache:
