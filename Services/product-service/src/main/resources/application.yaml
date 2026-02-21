@@ -43,6 +43,11 @@ cache:
   category-list-ttl: ${CACHE_CATEGORY_LIST_TTL:120s}
   deleted-category-list-ttl: ${CACHE_DELETED_CATEGORY_LIST_TTL:90s}
 
+sample:
+  catalog:
+    seed:
+      enabled: ${SAMPLE_CATALOG_SEED_ENABLED:true}
+
 object-storage:
   enabled: ${OBJECT_STORAGE_ENABLED:false}
   endpoint: ${OBJECT_STORAGE_ENDPOINT:https://objectstorage.us-ashburn-1.oraclecloud.com}

@@ -358,6 +358,7 @@ Fill required values:
   - `PRODUCT_DB_URL`
   - `PRODUCT_DB_USER`
   - `PRODUCT_DB_PASS`
+  - `SAMPLE_CATALOG_SEED_ENABLED` (default `true`, seeds sample categories/products on empty DB startup)
 - Cart cache:
   - `CACHE_CART_BY_KEYCLOAK_TTL` (example: `30s`)
 - Wishlist cache:
