@@ -199,6 +199,11 @@ function resolveKeycloakBaseUrl(url: string): string {
   return url.trim().replace(/\/+$/, "");
 }
 
+function resolveSilentCheckSsoUri(): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  return `${window.location.origin}/silent-check-sso.html`;
+}
+
 function buildResetCredentialsUrl(returnTo: string, loginHint?: string): string {
   const base = resolveKeycloakBaseUrl(env.url);
   const params = new URLSearchParams({
@@ -237,6 +242,8 @@ function initKeycloakOnce(client: KeycloakInstance): Promise<boolean> {
       onLoad: "check-sso",
       pkceMethod: "S256",
       checkLoginIframe: false,
+      silentCheckSsoRedirectUri: resolveSilentCheckSsoUri(),
+      silentCheckSsoFallback: true,
     })
     .catch((error) => {
       keycloakInitPromise = null;
