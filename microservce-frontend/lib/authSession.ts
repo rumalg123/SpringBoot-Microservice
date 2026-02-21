@@ -179,6 +179,22 @@ function resolveReturnTo(returnTo: string): string {
   }
 }
 
+function getCallbackParam(name: string): string {
+  if (typeof window === "undefined") return "";
+
+  const searchParams = new URLSearchParams(window.location.search);
+  const fromSearch = (searchParams.get(name) || "").trim();
+  if (fromSearch) return fromSearch;
+
+  const hash = window.location.hash.startsWith("#")
+    ? window.location.hash.slice(1)
+    : window.location.hash;
+  if (!hash) return "";
+
+  const hashParams = new URLSearchParams(hash);
+  return (hashParams.get(name) || "").trim();
+}
+
 function resolveKeycloakBaseUrl(url: string): string {
   return url.trim().replace(/\/+$/, "");
 }
@@ -256,11 +272,17 @@ export function useAuthSession() {
         const keycloak = getKeycloak();
         setClient(keycloak);
 
-        const params = new URLSearchParams(window.location.search);
-        const keycloakError = params.get("error");
-        const keycloakErrorDescription = params.get("error_description");
-        const keycloakAction = (params.get("kc_action") || "").trim().toUpperCase();
-        const keycloakActionStatus = (params.get("kc_action_status") || "").trim().toLowerCase();
+        let callbackAction = "";
+        let callbackStatus = "";
+        keycloak.onActionUpdate = (status, action) => {
+          callbackStatus = (status || "").trim().toLowerCase();
+          callbackAction = (action || "").trim().toUpperCase();
+        };
+
+        const keycloakError = getCallbackParam("error");
+        const keycloakErrorDescription = getCallbackParam("error_description");
+        const keycloakAction = getCallbackParam("kc_action").toUpperCase();
+        const keycloakActionStatus = getCallbackParam("kc_action_status").toLowerCase();
         if (keycloakError || keycloakErrorDescription) {
           setError(keycloakErrorDescription || keycloakError || "");
         }
@@ -275,7 +297,9 @@ export function useAuthSession() {
             // Best effort token refresh on startup.
           }
 
-          if (keycloakAction === "UPDATE_PASSWORD" && keycloakActionStatus === "success") {
+          const resolvedAction = keycloakAction || callbackAction;
+          const resolvedActionStatus = keycloakActionStatus || callbackStatus;
+          if (resolvedAction === "UPDATE_PASSWORD" && resolvedActionStatus === "success") {
             await keycloak.logout({
               redirectUri: resolveReturnTo("/"),
             });
