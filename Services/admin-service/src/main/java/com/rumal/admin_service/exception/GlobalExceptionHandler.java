@@ -22,6 +22,11 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(error(ex.getMessage()));
     }
 
+    @ExceptionHandler(DownstreamHttpException.class)
+    public ResponseEntity<?> downstreamHttp(DownstreamHttpException ex) {
+        return ResponseEntity.status(ex.getStatusCode()).body(error(ex.getMessage()));
+    }
+
     private Map<String, Object> error(String message) {
         Map<String, Object> m = new HashMap<>();
         m.put("timestamp", Instant.now());

@@ -1,5 +1,6 @@
 package com.rumal.admin_service.client;
 
+import com.rumal.admin_service.exception.DownstreamHttpException;
 import com.rumal.admin_service.exception.ServiceUnavailableException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -11,8 +12,10 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.net.URI;
@@ -56,6 +59,8 @@ public class PosterClient {
                     .header("X-Internal-Auth", internalAuth)
                     .retrieve()
                     .toBodilessEntity();
+        } catch (RestClientResponseException ex) {
+            throw toDownstreamHttpException(ex);
         } catch (RestClientException ex) {
             throw new ServiceUnavailableException("Poster service unavailable. Try again later.", ex);
         }
@@ -73,6 +78,8 @@ public class PosterClient {
                 throw new ServiceUnavailableException("Poster service returned an empty response", null);
             }
             return body;
+        } catch (RestClientResponseException ex) {
+            throw toDownstreamHttpException(ex);
         } catch (RestClientException ex) {
             throw new ServiceUnavailableException("Poster service unavailable. Try again later.", ex);
         }
@@ -118,6 +125,8 @@ public class PosterClient {
                 throw new ServiceUnavailableException("Poster service returned an empty response", null);
             }
             return response;
+        } catch (RestClientResponseException ex) {
+            throw toDownstreamHttpException(ex);
         } catch (IOException | RestClientException ex) {
             throw new ServiceUnavailableException("Poster service unavailable. Try again later.", ex);
         }
@@ -135,6 +144,8 @@ public class PosterClient {
                 throw new ServiceUnavailableException("Poster service returned an empty response", null);
             }
             return response;
+        } catch (RestClientResponseException ex) {
+            throw toDownstreamHttpException(ex);
         } catch (RestClientException ex) {
             throw new ServiceUnavailableException("Poster service unavailable. Try again later.", ex);
         }
@@ -158,9 +169,26 @@ public class PosterClient {
                 throw new ServiceUnavailableException("Poster service returned an empty response", null);
             }
             return response;
+        } catch (RestClientResponseException ex) {
+            throw toDownstreamHttpException(ex);
         } catch (RestClientException ex) {
             throw new ServiceUnavailableException("Poster service unavailable. Try again later.", ex);
         }
+    }
+
+    private DownstreamHttpException toDownstreamHttpException(RestClientResponseException ex) {
+        String body = ex.getResponseBodyAsString();
+        String message;
+        if (StringUtils.hasText(body)) {
+            String compactBody = body.replaceAll("\\s+", " ").trim();
+            if (compactBody.length() > 300) {
+                compactBody = compactBody.substring(0, 300) + "...";
+            }
+            message = "Poster service responded with " + ex.getStatusCode().value() + ": " + compactBody;
+        } else {
+            message = "Poster service responded with " + ex.getStatusCode().value();
+        }
+        return new DownstreamHttpException(ex.getStatusCode(), message, ex);
     }
 
     private URI buildUri(String path) {

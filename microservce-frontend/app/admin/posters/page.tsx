@@ -158,6 +158,7 @@ export default function AdminPostersPage() {
   const session = useAuthSession();
   const [items, setItems] = useState<Poster[]>([]);
   const [deletedItems, setDeletedItems] = useState<Poster[]>([]);
+  const [deletedLoaded, setDeletedLoaded] = useState(false);
   const [showDeleted, setShowDeleted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("Loading posters...");
@@ -187,12 +188,26 @@ export default function AdminPostersPage() {
     if (!session.apiClient) return;
     setLoading(true);
     try {
-      const [a, d] = await Promise.all([session.apiClient.get("/admin/posters"), session.apiClient.get("/admin/posters/deleted")]);
+      const a = await session.apiClient.get("/admin/posters");
       setItems((a.data as Poster[]) || []);
-      setDeletedItems((d.data as Poster[]) || []);
       setStatus("Posters loaded.");
     } catch (e) {
       setStatus(e instanceof Error ? e.message : "Failed to load posters.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadDeleted = async () => {
+    if (!session.apiClient) return;
+    setLoading(true);
+    try {
+      const d = await session.apiClient.get("/admin/posters/deleted");
+      setDeletedItems((d.data as Poster[]) || []);
+      setDeletedLoaded(true);
+      setStatus("Deleted posters loaded.");
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : "Failed to load deleted posters.");
     } finally {
       setLoading(false);
     }
@@ -210,6 +225,12 @@ export default function AdminPostersPage() {
     }
     void load();
   }, [session.status, session.isAuthenticated, session.canViewAdmin, router]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!showDeleted || deletedLoaded) return;
+    if (!session.apiClient) return;
+    void loadDeleted();
+  }, [showDeleted, deletedLoaded, session.apiClient]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (slugEdited) return;
@@ -366,6 +387,7 @@ export default function AdminPostersPage() {
       setForm(emptyForm);
       setSlugEdited(false);
       await load();
+      if (deletedLoaded) await loadDeleted();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -385,6 +407,7 @@ export default function AdminPostersPage() {
         setSlugEdited(false);
       }
       await load();
+      if (deletedLoaded) await loadDeleted();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Delete failed");
     } finally {
@@ -399,6 +422,7 @@ export default function AdminPostersPage() {
       await session.apiClient.post(`/admin/posters/${id}/restore`);
       toast.success("Poster restored");
       await load();
+      if (deletedLoaded) await loadDeleted();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Restore failed");
     } finally {
@@ -426,7 +450,7 @@ export default function AdminPostersPage() {
             <h1 style={{ margin: 0, color: "var(--ink)", fontFamily: "'Syne', sans-serif", fontWeight: 800 }}>Admin Posters</h1>
             <p style={{ margin: "4px 0 0", color: "var(--muted)", fontSize: "0.85rem" }}>Placement presets, image uploads, auto slug, scheduling, and duplicate flow.</p>
           </div>
-          <button onClick={() => setShowDeleted((v) => !v)} style={{ padding: "8px 12px", borderRadius: "10px", border: "1px solid var(--line-bright)", background: showDeleted ? "rgba(239,68,68,0.1)" : "var(--brand-soft)", color: showDeleted ? "#f87171" : "var(--brand)", fontWeight: 700 }}>
+          <button onClick={() => setShowDeleted((v) => !v)} disabled={loading} style={{ padding: "8px 12px", borderRadius: "10px", border: "1px solid var(--line-bright)", background: showDeleted ? "rgba(239,68,68,0.1)" : "var(--brand-soft)", color: showDeleted ? "#f87171" : "var(--brand)", fontWeight: 700, opacity: loading ? 0.7 : 1, cursor: loading ? "not-allowed" : "pointer" }}>
             {showDeleted ? "Showing Deleted" : "Show Deleted"}
           </button>
         </div>

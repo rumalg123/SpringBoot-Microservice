@@ -10,6 +10,10 @@ services:
     env_file:
       - ./env/common.env
       - ./env/eureka.env
+    environment:
+      LOGGING_FILE_NAME: /logs/discovery-server.log
+    volumes:
+      - /home/ubuntu/microservice-logs:/logs
 
   customer-service:
     build:
@@ -20,6 +24,10 @@ services:
     env_file:
       - ./env/common.env
       - ./env/customer-service.env
+    environment:
+      LOGGING_FILE_NAME: /logs/customer-service.log
+    volumes:
+      - /home/ubuntu/microservice-logs:/logs
 
   order-service:
     build:
@@ -30,6 +38,10 @@ services:
     env_file:
       - ./env/common.env
       - ./env/order-service.env
+    environment:
+      LOGGING_FILE_NAME: /logs/order-service.log
+    volumes:
+      - /home/ubuntu/microservice-logs:/logs
 
   cart-service:
     build:
@@ -40,6 +52,10 @@ services:
     env_file:
       - ./env/common.env
       - ./env/cart-service.env
+    environment:
+      LOGGING_FILE_NAME: /logs/cart-service.log
+    volumes:
+      - /home/ubuntu/microservice-logs:/logs
 
   wishlist-service:
     build:
@@ -50,6 +66,10 @@ services:
     env_file:
       - ./env/common.env
       - ./env/wishlist-service.env
+    environment:
+      LOGGING_FILE_NAME: /logs/wishlist-service.log
+    volumes:
+      - /home/ubuntu/microservice-logs:/logs
 
   product-service:
     build:
@@ -60,6 +80,10 @@ services:
     env_file:
       - ./env/common.env
       - ./env/product-service.env
+    environment:
+      LOGGING_FILE_NAME: /logs/product-service.log
+    volumes:
+      - /home/ubuntu/microservice-logs:/logs
 
   poster-service:
     build:
@@ -70,6 +94,10 @@ services:
     env_file:
       - ./env/common.env
       - ./env/poster-service.env
+    environment:
+      LOGGING_FILE_NAME: /logs/poster-service.log
+    volumes:
+      - /home/ubuntu/microservice-logs:/logs
 
   admin-service:
     build:
@@ -78,6 +106,10 @@ services:
       - discovery-server
     env_file:
       - ./env/common.env
+    environment:
+      LOGGING_FILE_NAME: /logs/admin-service.log
+    volumes:
+      - /home/ubuntu/microservice-logs:/logs
 
   api-gateway:
     build:
@@ -89,6 +121,10 @@ services:
       - "8095:8080"
     env_file:
       - ./env/common.env
+    environment:
+      LOGGING_FILE_NAME: /logs/api-gateway.log
+    volumes:
+      - /home/ubuntu/microservice-logs:/logs
 
   microservice-frontend:
     build:
@@ -100,3 +136,6 @@ services:
       - "8086:3000"
     env_file:
       - ./env/frontend.env
+    command: /bin/sh -c "mkdir -p /logs && node server.js 2>&1 | tee -a /logs/microservice-frontend.log"
+    volumes:
+      - /home/ubuntu/microservice-logs:/logs
