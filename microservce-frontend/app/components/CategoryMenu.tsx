@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Category = {
   id: string;
@@ -39,6 +39,17 @@ export default function CategoryMenu() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [open, setOpen] = useState(false);
   const [activeParentId, setActiveParentId] = useState<string>("");
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const openMenu = () => {
+    if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; }
+    setOpen(true);
+    if (!activeParentId && parents.length > 0) setActiveParentId(parents[0].id);
+  };
+
+  const scheduleClose = () => {
+    closeTimer.current = setTimeout(() => setOpen(false), 150);
+  };
 
   useEffect(() => {
     const run = async () => {
@@ -87,11 +98,8 @@ export default function CategoryMenu() {
     <nav style={{ marginBottom: "16px" }}>
       <div
         style={{ position: "relative", display: "inline-block" }}
-        onMouseEnter={() => {
-          setOpen(true);
-          if (!activeParentId && parents.length > 0) setActiveParentId(parents[0].id);
-        }}
-        onMouseLeave={() => setOpen(false)}
+        onMouseEnter={openMenu}
+        onMouseLeave={scheduleClose}
       >
         {/* Trigger Button */}
         <button
@@ -113,9 +121,18 @@ export default function CategoryMenu() {
           All Categories
         </button>
 
+        {/* Transparent bridge — fills the gap between button and dropdown so onMouseLeave doesn't fire */}
+        {open && (
+          <div
+            onMouseEnter={openMenu}
+            onMouseLeave={scheduleClose}
+            style={{ position: "absolute", top: "100%", left: 0, right: 0, height: "10px", zIndex: 49 }}
+          />
+        )}
+
         {/* Dropdown Panel */}
         {open && (
-          <div style={dropdownStyle}>
+          <div style={dropdownStyle} onMouseEnter={openMenu} onMouseLeave={scheduleClose}>
             {/* Header */}
             <div style={{ padding: "12px 14px", borderBottom: "1px solid rgba(0,212,255,0.08)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <p style={{ fontSize: "0.65rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.12em", color: "var(--muted)", margin: 0 }}>Browse Categories</p>
