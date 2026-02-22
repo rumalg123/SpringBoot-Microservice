@@ -6,6 +6,7 @@ import java.util.UUID;
 public record VendorAdminOnboardResponse(
         UUID vendorId,
         boolean keycloakUserCreated,
+        boolean keycloakActionEmailSent,
         String keycloakUserId,
         String email,
         String firstName,

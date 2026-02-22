@@ -6,6 +6,7 @@ import com.rumal.vendor_service.entity.VendorStatus;
 import com.rumal.vendor_service.entity.VendorUserRole;
 import com.rumal.vendor_service.repo.VendorRepository;
 import com.rumal.vendor_service.service.VendorService;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,6 +14,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Locale;
 import java.util.UUID;
@@ -28,11 +30,13 @@ public class SampleVendorDataSeeder implements ApplicationRunner {
 
     private final VendorService vendorService;
     private final VendorRepository vendorRepository;
+    private final EntityManager entityManager;
 
     @Value("${sample.vendor.seed.enabled:true}")
     private boolean seedEnabled;
 
     @Override
+    @Transactional
     public void run(ApplicationArguments args) {
         if (!seedEnabled) {
             log.info("Skipping sample vendor seed (sample.vendor.seed.enabled=false)");
@@ -124,7 +128,7 @@ public class SampleVendorDataSeeder implements ApplicationRunner {
             VendorStatus status,
             boolean active
     ) {
-        vendorRepository.save(Vendor.builder()
+        entityManager.persist(Vendor.builder()
                 .id(id)
                 .name(name)
                 .normalizedName(name.toLowerCase(Locale.ROOT))

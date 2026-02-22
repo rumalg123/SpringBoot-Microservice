@@ -89,6 +89,11 @@ public class KeycloakVendorAdminManagementService {
 
             updateNamesIfProvided(realmResource, user, firstName, lastName);
             assignRealmRoleIfMissing(realmResource, user.getId(), vendorAdminRoleName);
+            boolean actionEmailSent = false;
+            if (created) {
+                sendRequiredActionsEmail(realmResource, user.getId());
+                actionEmailSent = true;
+            }
 
             UserRepresentation refreshed = realmResource.users().get(user.getId()).toRepresentation();
             return new KeycloakManagedUser(
@@ -96,7 +101,8 @@ public class KeycloakVendorAdminManagementService {
                     resolveEmail(refreshed),
                     refreshed.getFirstName(),
                     refreshed.getLastName(),
-                    created
+                    created,
+                    actionEmailSent
             );
         } catch (ResponseStatusException ex) {
             throw ex;
@@ -182,6 +188,20 @@ public class KeycloakVendorAdminManagementService {
         }
     }
 
+    private void sendRequiredActionsEmail(org.keycloak.admin.client.resource.RealmResource realmResource, String userId) {
+        try {
+            realmResource.users()
+                    .get(userId)
+                    .executeActionsEmail(List.of("VERIFY_EMAIL", "UPDATE_PASSWORD"));
+        } catch (WebApplicationException ex) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY,
+                    "Keycloak action email failed. Check Keycloak SMTP/email settings.",
+                    ex
+            );
+        }
+    }
+
     private UserRepresentation findUserByEmail(List<UserRepresentation> users, String normalizedEmail) {
         if (users == null || users.isEmpty()) {
             return null;
@@ -254,7 +274,8 @@ public class KeycloakVendorAdminManagementService {
             String email,
             String firstName,
             String lastName,
-            boolean created
+            boolean created,
+            boolean actionEmailSent
     ) {
     }
 }

@@ -98,6 +98,7 @@ public class AdminVendorService {
         return new VendorAdminOnboardResponse(
                 vendorId,
                 managedUser.created(),
+                managedUser.actionEmailSent(),
                 managedUser.id(),
                 managedUser.email(),
                 managedUser.firstName(),
