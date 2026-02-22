@@ -33,6 +33,9 @@ export function useVendorOnboarding({
   const [onboarding, setOnboarding] = useState(false);
   const [onboardStatus, setOnboardStatus] = useState(DEFAULT_ONBOARD_STATUS);
   const [removingMembershipId, setRemovingMembershipId] = useState<string | null>(null);
+  const [lastVendorSelectedAt, setLastVendorSelectedAt] = useState<number>(0);
+  const [lastOnboardedAt, setLastOnboardedAt] = useState<number>(0);
+  const [lastOnboardResult, setLastOnboardResult] = useState<VendorOnboardResponse | null>(null);
 
   const selectedVendor = useMemo(
     () => vendors.find((vendor) => vendor.id === selectedVendorId) || null,
@@ -68,6 +71,7 @@ export function useVendorOnboarding({
   const handleSelectVendor = (vendor: Vendor) => {
     setSelectedVendorId(vendor.id);
     fillOnboardFromVendor(vendor);
+    setLastVendorSelectedAt(Date.now());
     void loadVendorUsers(vendor.id);
   };
 
@@ -77,9 +81,11 @@ export function useVendorOnboarding({
     if (!vendor) {
       setVendorUsers([]);
       setOnboardStatus(DEFAULT_ONBOARD_STATUS);
+      setLastOnboardResult(null);
       return;
     }
     fillOnboardFromVendor(vendor);
+    setLastVendorSelectedAt(Date.now());
     void loadVendorUsers(vendorId);
   };
 
@@ -87,6 +93,7 @@ export function useVendorOnboarding({
     setSelectedVendorId("");
     setVendorUsers([]);
     setOnboardStatus(DEFAULT_ONBOARD_STATUS);
+    setLastOnboardResult(null);
   };
 
   const onboardVendorAdmin = async () => {
@@ -108,12 +115,14 @@ export function useVendorOnboarding({
       });
       const data = (res.data as VendorOnboardResponse | undefined) || undefined;
       await loadVendorUsers(selectedVendorId);
+      setLastOnboardResult(data ?? null);
       const emailStatus = data?.keycloakUserCreated
         ? data.keycloakActionEmailSent
           ? " Keycloak action email sent."
           : " Keycloak user created."
         : " Existing Keycloak user linked.";
       setOnboardStatus(`Vendor admin onboarded.${emailStatus}`);
+      setLastOnboardedAt(Date.now());
       setOnboardForm((old) => ({
         ...emptyOnboardForm,
         vendorUserRole: old.vendorUserRole,
@@ -123,6 +132,7 @@ export function useVendorOnboarding({
     } catch (err) {
       const message = getApiErrorMessage(err, "Failed to onboard vendor admin.");
       setOnboardStatus(message);
+      setLastOnboardResult(null);
       toast.error(message);
     } finally {
       setOnboarding(false);
@@ -150,6 +160,9 @@ export function useVendorOnboarding({
     onboarding,
     onboardStatus,
     removingMembershipId,
+    lastVendorSelectedAt,
+    lastOnboardedAt,
+    lastOnboardResult,
     selectedVendor,
 
     setOnboardForm,
@@ -165,4 +178,3 @@ export function useVendorOnboarding({
     removeVendorUser,
   };
 }
-

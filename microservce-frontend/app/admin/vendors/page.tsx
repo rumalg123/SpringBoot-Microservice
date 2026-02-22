@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AppNav from "../../components/AppNav";
@@ -9,6 +9,7 @@ import Footer from "../../components/Footer";
 import VendorFormPanel from "../../components/admin/vendors/VendorFormPanel";
 import VendorListPanel from "../../components/admin/vendors/VendorListPanel";
 import VendorOnboardingPanel from "../../components/admin/vendors/VendorOnboardingPanel";
+import VendorSetupStepper from "../../components/admin/vendors/VendorSetupStepper";
 import { useAdminVendors } from "../../components/admin/vendors/useAdminVendors";
 import { useAuthSession } from "../../../lib/authSession";
 
@@ -16,6 +17,43 @@ export default function AdminVendorsPage() {
   const router = useRouter();
   const session = useAuthSession();
   const vendors = useAdminVendors(session.apiClient);
+  const [highlightTarget, setHighlightTarget] = useState<"vendor-list" | "onboarding" | "users" | null>(null);
+  const highlightTimerRef = useRef<number | null>(null);
+
+  const ONBOARDING_PANEL_ID = "vendor-onboarding-panel";
+  const ONBOARDING_EMAIL_ID = "vendor-onboarding-email";
+  const VENDOR_USERS_SECTION_ID = "vendor-users-section";
+  const VENDOR_LIST_SECTION_ID = "vendor-list-section";
+
+  const runGuidance = (
+    target: "vendor-list" | "onboarding" | "users",
+    options?: { focusEmail?: boolean }
+  ) => {
+    setHighlightTarget(target);
+    if (highlightTimerRef.current) {
+      window.clearTimeout(highlightTimerRef.current);
+    }
+    highlightTimerRef.current = window.setTimeout(() => setHighlightTarget(null), 1800);
+
+    const elementId =
+      target === "vendor-list"
+        ? VENDOR_LIST_SECTION_ID
+        : target === "onboarding"
+          ? ONBOARDING_PANEL_ID
+          : VENDOR_USERS_SECTION_ID;
+
+    window.requestAnimationFrame(() => {
+      const node = document.getElementById(elementId);
+      node?.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (options?.focusEmail) {
+        window.setTimeout(() => {
+          const emailInput = document.getElementById(ONBOARDING_EMAIL_ID) as HTMLInputElement | null;
+          emailInput?.focus();
+          emailInput?.select?.();
+        }, 250);
+      }
+    });
+  };
 
   useEffect(() => {
     if (session.status !== "ready") return;
@@ -29,6 +67,29 @@ export default function AdminVendorsPage() {
     }
     void vendors.loadVendors();
   }, [router, session.status, session.isAuthenticated, session.isSuperAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!vendors.lastVendorSavedAt) return;
+    runGuidance("onboarding", { focusEmail: true });
+  }, [vendors.lastVendorSavedAt]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!vendors.lastVendorSelectedAt) return;
+    runGuidance("onboarding", { focusEmail: !vendors.onboardForm.email.trim() });
+  }, [vendors.lastVendorSelectedAt]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!vendors.lastOnboardedAt) return;
+    runGuidance("users");
+  }, [vendors.lastOnboardedAt]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimerRef.current) {
+        window.clearTimeout(highlightTimerRef.current);
+      }
+    };
+  }, []);
 
   if (session.status === "loading" || session.status === "idle") {
     return <div style={{ minHeight: "100vh", background: "var(--bg)" }} />;
@@ -86,6 +147,12 @@ export default function AdminVendorsPage() {
             </button>
           </div>
 
+          <VendorSetupStepper
+            hasAnyVendors={vendors.vendors.length > 0}
+            selectedVendorName={vendors.selectedVendor?.name || null}
+            vendorUserCount={vendors.vendorUsers.length}
+          />
+
           <div className="grid gap-6 lg:grid-cols-[1.05fr,0.95fr]">
             <div className="space-y-4">
               <VendorFormPanel
@@ -100,46 +167,71 @@ export default function AdminVendorsPage() {
                 }}
               />
 
-              <VendorListPanel
-                vendors={vendors.vendors}
-                deletedVendors={vendors.deletedVendors}
-                showDeleted={vendors.showDeleted}
-                loading={vendors.loading}
-                loadingDeleted={vendors.loadingDeleted}
-                deletedLoaded={vendors.deletedLoaded}
-                selectedVendorId={vendors.selectedVendorId}
-                onRefresh={vendors.refreshCurrentVendorList}
-                onToggleShowDeleted={vendors.setShowDeleted}
-                onEditVendor={vendors.handleEditVendor}
-                onSelectVendor={vendors.handleSelectVendor}
-                onDeleteVendor={vendors.openDeleteVendorConfirm}
-                onRestoreVendor={vendors.openRestoreVendorConfirm}
-              />
+              <div
+                id={VENDOR_LIST_SECTION_ID}
+                className="rounded-2xl transition-all duration-300"
+                style={
+                  highlightTarget === "vendor-list"
+                    ? { boxShadow: "0 0 0 2px rgba(0,212,255,0.35), 0 0 30px rgba(0,212,255,0.10)" }
+                    : undefined
+                }
+              >
+                <VendorListPanel
+                  vendors={vendors.vendors}
+                  deletedVendors={vendors.deletedVendors}
+                  showDeleted={vendors.showDeleted}
+                  loading={vendors.loading}
+                  loadingDeleted={vendors.loadingDeleted}
+                  deletedLoaded={vendors.deletedLoaded}
+                  selectedVendorId={vendors.selectedVendorId}
+                  onRefresh={vendors.refreshCurrentVendorList}
+                  onToggleShowDeleted={vendors.setShowDeleted}
+                  onEditVendor={vendors.handleEditVendor}
+                  onSelectVendor={vendors.handleSelectVendor}
+                  onDeleteVendor={vendors.openDeleteVendorConfirm}
+                  onRestoreVendor={vendors.openRestoreVendorConfirm}
+                />
+              </div>
             </div>
 
-            <VendorOnboardingPanel
-              vendors={vendors.vendors}
-              selectedVendorId={vendors.selectedVendorId}
-              selectedVendor={vendors.selectedVendor}
-              onboardForm={vendors.onboardForm}
+            <div
+              className="rounded-2xl transition-all duration-300"
+              style={
+                highlightTarget === "onboarding"
+                  ? { boxShadow: "0 0 0 2px rgba(0,212,255,0.35), 0 0 30px rgba(0,212,255,0.10)" }
+                  : highlightTarget === "users"
+                    ? { boxShadow: "0 0 0 2px rgba(16,185,129,0.28), 0 0 24px rgba(16,185,129,0.08)" }
+                    : undefined
+              }
+            >
+              <VendorOnboardingPanel
+                panelId={ONBOARDING_PANEL_ID}
+                emailInputId={ONBOARDING_EMAIL_ID}
+                vendorUsersSectionId={VENDOR_USERS_SECTION_ID}
+                vendors={vendors.vendors}
+                selectedVendorId={vendors.selectedVendorId}
+                selectedVendor={vendors.selectedVendor}
+                onboardForm={vendors.onboardForm}
               onboarding={vendors.onboarding}
               onboardStatus={vendors.onboardStatus}
+              lastOnboardResult={vendors.lastOnboardResult}
               loadingUsers={vendors.loadingUsers}
-              vendorUsers={vendors.vendorUsers}
-              removingMembershipId={vendors.removingMembershipId}
-              onSelectVendorId={vendors.handleSelectVendorId}
-              onFillFromVendor={() => {
-                if (vendors.selectedVendor) vendors.fillOnboardFromVendor(vendors.selectedVendor);
-              }}
-              onChangeOnboardForm={vendors.setOnboardForm}
-              onSubmit={() => {
-                void vendors.onboardVendorAdmin();
-              }}
-              onRefreshUsers={() => {
-                if (vendors.selectedVendorId) void vendors.loadVendorUsers(vendors.selectedVendorId);
-              }}
-              onRemoveUser={(user) => vendors.openRemoveVendorUserConfirm(vendors.selectedVendorId, user)}
-            />
+                vendorUsers={vendors.vendorUsers}
+                removingMembershipId={vendors.removingMembershipId}
+                onSelectVendorId={vendors.handleSelectVendorId}
+                onFillFromVendor={() => {
+                  if (vendors.selectedVendor) vendors.fillOnboardFromVendor(vendors.selectedVendor);
+                }}
+                onChangeOnboardForm={vendors.setOnboardForm}
+                onSubmit={() => {
+                  void vendors.onboardVendorAdmin();
+                }}
+                onRefreshUsers={() => {
+                  if (vendors.selectedVendorId) void vendors.loadVendorUsers(vendors.selectedVendorId);
+                }}
+                onRemoveUser={(user) => vendors.openRemoveVendorUserConfirm(vendors.selectedVendorId, user)}
+              />
+            </div>
           </div>
 
           <p className="text-xs text-[var(--muted)]">{vendors.status}</p>
@@ -165,4 +257,3 @@ export default function AdminVendorsPage() {
     </div>
   );
 }
-

@@ -126,6 +126,7 @@ export function useAdminVendors(apiClient: AxiosInstance | null) {
     form: vendorForm.form,
     slugStatus: vendorForm.slugStatus,
     savingVendor: vendorForm.savingVendor,
+    lastVendorSavedAt: vendorForm.lastVendorSavedAt,
 
     vendorUsers: vendorOnboarding.vendorUsers,
     loadingUsers: vendorOnboarding.loadingUsers,
@@ -133,6 +134,9 @@ export function useAdminVendors(apiClient: AxiosInstance | null) {
     onboarding: vendorOnboarding.onboarding,
     onboardStatus: vendorOnboarding.onboardStatus,
     removingMembershipId: vendorOnboarding.removingMembershipId,
+    lastVendorSelectedAt: vendorOnboarding.lastVendorSelectedAt,
+    lastOnboardedAt: vendorOnboarding.lastOnboardedAt,
+    lastOnboardResult: vendorOnboarding.lastOnboardResult,
 
     confirmState,
     confirmLoading,
@@ -164,4 +168,3 @@ export function useAdminVendors(apiClient: AxiosInstance | null) {
     handleConfirmAction,
   };
 }
-

@@ -3,6 +3,7 @@
 import type { VendorUser } from "./types";
 
 type VendorUsersListProps = {
+  containerId?: string;
   vendorUsers: VendorUser[];
   selectedVendorId: string;
   loadingUsers: boolean;
@@ -12,6 +13,7 @@ type VendorUsersListProps = {
 };
 
 export default function VendorUsersList({
+  containerId,
   vendorUsers,
   selectedVendorId,
   loadingUsers,
@@ -20,7 +22,7 @@ export default function VendorUsersList({
   removingMembershipId = null,
 }: VendorUsersListProps) {
   return (
-    <div className="mt-4 rounded-lg border border-[var(--line)] p-3">
+    <div id={containerId} className="mt-4 rounded-lg border border-[var(--line)] p-3">
       <div className="mb-2 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-[var(--ink)]">Vendor Users</h3>
         <button
@@ -75,4 +77,3 @@ export default function VendorUsersList({
     </div>
   );
 }
-

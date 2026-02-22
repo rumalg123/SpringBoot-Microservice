@@ -1,15 +1,19 @@
 "use client";
 
-import type { OnboardForm, Vendor, VendorUser, VendorUserRole } from "./types";
+import type { OnboardForm, Vendor, VendorOnboardResponse, VendorUser, VendorUserRole } from "./types";
 import VendorUsersList from "./VendorUsersList";
 
 type VendorOnboardingPanelProps = {
+  panelId?: string;
+  emailInputId?: string;
+  vendorUsersSectionId?: string;
   vendors: Vendor[];
   selectedVendorId: string;
   selectedVendor: Vendor | null;
   onboardForm: OnboardForm;
   onboarding: boolean;
   onboardStatus: string;
+  lastOnboardResult?: VendorOnboardResponse | null;
   loadingUsers: boolean;
   vendorUsers: VendorUser[];
   removingMembershipId?: string | null;
@@ -22,12 +26,16 @@ type VendorOnboardingPanelProps = {
 };
 
 export default function VendorOnboardingPanel({
+  panelId,
+  emailInputId,
+  vendorUsersSectionId,
   vendors,
   selectedVendorId,
   selectedVendor,
   onboardForm,
   onboarding,
   onboardStatus,
+  lastOnboardResult = null,
   loadingUsers,
   vendorUsers,
   removingMembershipId = null,
@@ -39,11 +47,13 @@ export default function VendorOnboardingPanel({
   onRemoveUser,
 }: VendorOnboardingPanelProps) {
   return (
-    <section className="card-surface rounded-2xl p-5">
+    <section id={panelId} className="card-surface rounded-2xl p-5">
       <div className="mb-3 flex items-center justify-between gap-2">
         <div>
           <h2 className="text-2xl text-[var(--ink)]">Vendor Admin Onboarding</h2>
-          <p className="mt-1 text-xs text-[var(--muted)]">Select a vendor and onboard an OWNER or MANAGER.</p>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            Step 3: select a vendor, then create or link a Keycloak user and grant vendor access (OWNER or MANAGER).
+          </p>
         </div>
         {selectedVendor && (
           <button
@@ -58,6 +68,20 @@ export default function VendorOnboardingPanel({
       </div>
 
       <div className="mb-3 rounded-lg border border-[var(--line)] p-3">
+        <div
+          className="mb-3 rounded-lg border border-[var(--line)] p-3 text-xs"
+          style={{ background: "rgba(0,212,255,0.03)" }}
+        >
+          <p className="font-semibold text-[var(--ink)]">What happens on onboarding</p>
+          <ul className="mt-2 list-disc space-y-1 pl-4 text-[var(--muted)]">
+            <li>Checks the selected vendor exists in `vendor-service`.</li>
+            <li>Finds the user in Keycloak, or creates one if enabled.</li>
+            <li>Assigns Keycloak realm role `vendor_admin`.</li>
+            <li>Creates or updates vendor membership in `vendor_users`.</li>
+            <li>Sends verify-email and password-setup email for newly created Keycloak users.</li>
+          </ul>
+        </div>
+
         <label className="form-label">Selected Vendor</label>
         <select
           value={selectedVendorId}
@@ -74,7 +98,7 @@ export default function VendorOnboardingPanel({
         </select>
         {selectedVendor && (
           <p className="mt-2 text-[11px] text-[var(--muted)]">
-            {selectedVendor.contactEmail} • {selectedVendor.id}
+            {selectedVendor.contactEmail} | {selectedVendor.id}
           </p>
         )}
       </div>
@@ -89,6 +113,7 @@ export default function VendorOnboardingPanel({
         <div className="form-group">
           <label className="form-label">Admin Email</label>
           <input
+            id={emailInputId}
             type="email"
             value={onboardForm.email}
             onChange={(e) => onChangeOnboardForm((s) => ({ ...s, email: e.target.value }))}
@@ -178,7 +203,50 @@ export default function VendorOnboardingPanel({
 
       <p className="mt-3 text-xs text-[var(--muted)]">{onboardStatus}</p>
 
+      {lastOnboardResult && (
+        <div
+          className="mt-3 rounded-lg border p-3 text-xs"
+          style={{ background: "rgba(16,185,129,0.06)", borderColor: "rgba(16,185,129,0.25)" }}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="font-semibold text-[var(--ink)]">Last onboarding result</p>
+            <span
+              className="rounded px-2 py-0.5 text-[10px]"
+              style={{
+                background: "rgba(16,185,129,0.14)",
+                border: "1px solid rgba(16,185,129,0.25)",
+                color: "#34d399",
+              }}
+            >
+              {lastOnboardResult.keycloakUserCreated ? "KEYCLOAK USER CREATED" : "EXISTING USER LINKED"}
+            </span>
+          </div>
+          <div className="mt-2 grid gap-1 text-[var(--muted)]">
+            <p>
+              <span className="text-[var(--ink-light)]">Email:</span> {lastOnboardResult.email}
+            </p>
+            <p>
+              <span className="text-[var(--ink-light)]">Keycloak User ID:</span>{" "}
+              <span className="font-mono">{lastOnboardResult.keycloakUserId}</span>
+            </p>
+            <p>
+              <span className="text-[var(--ink-light)]">Vendor Membership:</span>{" "}
+              {lastOnboardResult.vendorMembership.role} ({lastOnboardResult.vendorMembership.active ? "active" : "inactive"})
+            </p>
+            <p>
+              <span className="text-[var(--ink-light)]">Action Email:</span>{" "}
+              {lastOnboardResult.keycloakActionEmailSent
+                ? "Sent (verify email + password setup)"
+                : lastOnboardResult.keycloakUserCreated
+                  ? "Not sent"
+                  : "Not applicable (existing user)"}
+            </p>
+          </div>
+        </div>
+      )}
+
       <VendorUsersList
+        containerId={vendorUsersSectionId}
         vendorUsers={vendorUsers}
         selectedVendorId={selectedVendorId}
         loadingUsers={loadingUsers}
@@ -189,4 +257,3 @@ export default function VendorOnboardingPanel({
     </section>
   );
 }
-

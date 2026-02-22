@@ -29,6 +29,7 @@ export function useVendorForm({
   const [slugEdited, setSlugEdited] = useState(false);
   const [slugStatus, setSlugStatus] = useState<SlugStatus>("idle");
   const [savingVendor, setSavingVendor] = useState(false);
+  const [lastVendorSavedAt, setLastVendorSavedAt] = useState<number>(0);
 
   useEffect(() => {
     if (slugEdited) return;
@@ -129,6 +130,7 @@ export function useVendorForm({
 
       onSelectVendor(saved);
       resetVendorForm();
+      setLastVendorSavedAt(Date.now());
       setPageStatus(isUpdate ? "Vendor updated." : "Vendor created.");
       toast.success(isUpdate ? "Vendor updated" : "Vendor created");
     } catch (err) {
@@ -144,6 +146,7 @@ export function useVendorForm({
     form,
     slugStatus,
     savingVendor,
+    lastVendorSavedAt,
 
     setForm,
     setSlugEdited,
@@ -153,4 +156,3 @@ export function useVendorForm({
     saveVendor,
   };
 }
-
