@@ -81,6 +81,11 @@
 			<artifactId>s3</artifactId>
 			<version>${aws.sdk.version}</version>
 		</dependency>
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>url-connection-client</artifactId>
+			<version>${aws.sdk.version}</version>
+		</dependency>
 
 		<dependency>
 			<groupId>org.postgresql</groupId>

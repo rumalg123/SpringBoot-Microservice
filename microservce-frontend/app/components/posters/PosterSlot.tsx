@@ -1,6 +1,6 @@
 "use client";
 
-import { CSSProperties, useEffect, useMemo, useState } from "react";
+import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -42,22 +42,26 @@ type Props = {
   placement: PosterPlacement;
   variant?: Variant;
   maxItems?: number;
+  autoplayMs?: number;
   className?: string;
   style?: CSSProperties;
 };
 
-function resolvePosterImageUrl(imageName: string | null): string | null {
-  if (!imageName) return null;
+function resolvePosterImageSources(imageName: string | null): { primary: string | null; fallback: string | null } {
+  if (!imageName) return { primary: null, fallback: null };
   const normalized = imageName.replace(/^\/+/, "");
   const apiBase = (process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me").trim();
   const encoded = normalized.split("/").map((s) => encodeURIComponent(s)).join("/");
   const apiUrl = `${apiBase.replace(/\/+$/, "")}/posters/images/${encoded}`;
   const cdnBase = (process.env.NEXT_PUBLIC_POSTER_IMAGE_BASE_URL || "").trim();
-  if (!cdnBase) return apiUrl;
+  if (!cdnBase) return { primary: apiUrl, fallback: null };
   if (normalized.startsWith("posters/")) {
-    return `${cdnBase.replace(/\/+$/, "")}/${normalized}`;
+    return {
+      primary: `${cdnBase.replace(/\/+$/, "")}/${normalized}`,
+      fallback: apiUrl,
+    };
   }
-  return apiUrl;
+  return { primary: apiUrl, fallback: null };
 }
 
 function resolvePosterHref(poster: PosterItem): string | null {
@@ -97,7 +101,11 @@ function aspectByVariant(variant: Variant): string {
 }
 
 function PosterCard({ poster, variant }: { poster: PosterItem; variant: Variant }) {
-  const imageUrl = resolvePosterImageUrl(poster.desktopImage);
+  const imageSources = useMemo(() => resolvePosterImageSources(poster.desktopImage), [poster.desktopImage]);
+  const [imageUrl, setImageUrl] = useState<string | null>(imageSources?.primary ?? null);
+  useEffect(() => {
+    setImageUrl(imageSources?.primary ?? null);
+  }, [imageSources]);
   const href = resolvePosterHref(poster);
   const bg = poster.backgroundColor || "linear-gradient(135deg, rgba(0,212,255,0.08), rgba(124,58,237,0.08))";
 
@@ -121,6 +129,13 @@ function PosterCard({ poster, variant }: { poster: PosterItem; variant: Variant 
           sizes={variant === "hero" ? "100vw" : "(max-width: 1024px) 100vw, 50vw"}
           style={{ objectFit: "cover" }}
           unoptimized
+          onError={() => {
+            if (imageSources?.fallback && imageUrl !== imageSources.fallback) {
+              setImageUrl(imageSources.fallback);
+              return;
+            }
+            setImageUrl(null);
+          }}
         />
       ) : (
         <div style={{ position: "absolute", inset: 0, background: "linear-gradient(135deg,#0f172a,#111827)" }} />
@@ -215,9 +230,135 @@ function PosterCard({ poster, variant }: { poster: PosterItem; variant: Variant 
   );
 }
 
-export default function PosterSlot({ placement, variant = "strip", maxItems = 1, className, style }: Props) {
+function CarouselControls({
+  count,
+  index,
+  onPrev,
+  onNext,
+  onSelect,
+  compact,
+}: {
+  count: number;
+  index: number;
+  onPrev: () => void;
+  onNext: () => void;
+  onSelect: (next: number) => void;
+  compact: boolean;
+}) {
+  const buttonSize = compact ? 34 : 40;
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={onPrev}
+        aria-label="Previous poster"
+        style={{
+          position: "absolute",
+          left: "10px",
+          top: "50%",
+          transform: "translateY(-50%)",
+          width: `${buttonSize}px`,
+          height: `${buttonSize}px`,
+          borderRadius: "999px",
+          border: "1px solid rgba(255,255,255,0.22)",
+          background: "rgba(7,10,18,0.55)",
+          color: "#fff",
+          display: "grid",
+          placeItems: "center",
+          fontSize: compact ? "0.9rem" : "1rem",
+          fontWeight: 800,
+          backdropFilter: "blur(6px)",
+          cursor: "pointer",
+          zIndex: 2,
+        }}
+      >
+        ‹
+      </button>
+
+      <button
+        type="button"
+        onClick={onNext}
+        aria-label="Next poster"
+        style={{
+          position: "absolute",
+          right: "10px",
+          top: "50%",
+          transform: "translateY(-50%)",
+          width: `${buttonSize}px`,
+          height: `${buttonSize}px`,
+          borderRadius: "999px",
+          border: "1px solid rgba(255,255,255,0.22)",
+          background: "rgba(7,10,18,0.55)",
+          color: "#fff",
+          display: "grid",
+          placeItems: "center",
+          fontSize: compact ? "0.9rem" : "1rem",
+          fontWeight: 800,
+          backdropFilter: "blur(6px)",
+          cursor: "pointer",
+          zIndex: 2,
+        }}
+      >
+        ›
+      </button>
+
+      <div
+        aria-label="Poster slide indicators"
+        style={{
+          position: "absolute",
+          left: "50%",
+          bottom: "10px",
+          transform: "translateX(-50%)",
+          display: "flex",
+          alignItems: "center",
+          gap: "6px",
+          padding: "6px 8px",
+          borderRadius: "999px",
+          background: "rgba(7,10,18,0.45)",
+          border: "1px solid rgba(255,255,255,0.12)",
+          backdropFilter: "blur(6px)",
+          zIndex: 2,
+        }}
+      >
+        {Array.from({ length: count }).map((_, dotIndex) => (
+          <button
+            key={dotIndex}
+            type="button"
+            onClick={() => onSelect(dotIndex)}
+            aria-label={`Show poster ${dotIndex + 1}`}
+            aria-pressed={dotIndex === index}
+            style={{
+              width: dotIndex === index ? "18px" : "8px",
+              height: "8px",
+              borderRadius: "999px",
+              border: "none",
+              background: dotIndex === index ? "rgba(0,212,255,0.95)" : "rgba(255,255,255,0.45)",
+              cursor: "pointer",
+              transition: "all 140ms ease",
+            }}
+          />
+        ))}
+      </div>
+    </>
+  );
+}
+
+export default function PosterSlot({
+  placement,
+  variant = "strip",
+  maxItems = 12,
+  autoplayMs = 6000,
+  className,
+  style,
+}: Props) {
   const [items, setItems] = useState<PosterItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const touchStartXRef = useRef<number | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
+  const touchSuppressClickRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -241,10 +382,35 @@ export default function PosterSlot({ placement, variant = "strip", maxItems = 1,
   }, [placement, maxItems]);
 
   const visibleItems = useMemo(() => items.filter(Boolean), [items]);
+  const canRotate = visibleItems.length > 1;
+  const movePrev = () => {
+    if (!canRotate) return;
+    setActiveIndex((currentIndex) => (currentIndex - 1 + visibleItems.length) % visibleItems.length);
+  };
+  const moveNext = () => {
+    if (!canRotate) return;
+    setActiveIndex((currentIndex) => (currentIndex + 1) % visibleItems.length);
+  };
+
+  useEffect(() => {
+    setActiveIndex((current) => {
+      if (visibleItems.length === 0) return 0;
+      return current >= visibleItems.length ? 0 : current;
+    });
+  }, [visibleItems.length]);
+
+  useEffect(() => {
+    if (!canRotate || paused || autoplayMs <= 0) return;
+    const timer = window.setInterval(() => {
+      setActiveIndex((current) => (current + 1) % visibleItems.length);
+    }, autoplayMs);
+    return () => window.clearInterval(timer);
+  }, [autoplayMs, canRotate, paused, visibleItems.length]);
+
   if (loading && visibleItems.length === 0) return null;
   if (visibleItems.length === 0) return null;
 
-  if (variant === "grid") {
+  if (!canRotate && variant === "grid") {
     return (
       <section className={className} style={style}>
         <div className="grid gap-4 md:grid-cols-2">
@@ -254,11 +420,68 @@ export default function PosterSlot({ placement, variant = "strip", maxItems = 1,
     );
   }
 
-  if (maxItems > 1 && visibleItems.length > 1) {
+  if (canRotate) {
+    const current = visibleItems[activeIndex] ?? visibleItems[0];
     return (
-      <section className={className} style={style}>
-        <div className="grid gap-4 md:grid-cols-2">
-          {visibleItems.map((poster) => <PosterCard key={poster.id} poster={poster} variant={variant} />)}
+      <section
+        className={className}
+        style={style}
+        onMouseEnter={() => setPaused(true)}
+        onMouseLeave={() => setPaused(false)}
+        onFocusCapture={() => setPaused(true)}
+        onBlurCapture={() => setPaused(false)}
+      >
+        <div
+          style={{ position: "relative", touchAction: "pan-y" }}
+          onTouchStart={(event) => {
+            const touch = event.touches[0];
+            if (!touch) return;
+            touchStartXRef.current = touch.clientX;
+            touchStartYRef.current = touch.clientY;
+            touchSuppressClickRef.current = false;
+            setPaused(true);
+          }}
+          onTouchEnd={(event) => {
+            const startX = touchStartXRef.current;
+            const startY = touchStartYRef.current;
+            touchStartXRef.current = null;
+            touchStartYRef.current = null;
+            setPaused(false);
+            const touch = event.changedTouches[0];
+            if (!touch || startX == null || startY == null) return;
+            const deltaX = touch.clientX - startX;
+            const deltaY = touch.clientY - startY;
+            const absX = Math.abs(deltaX);
+            const absY = Math.abs(deltaY);
+            if (absX < 40 || absX <= absY) return;
+            touchSuppressClickRef.current = true;
+            if (deltaX < 0) moveNext();
+            else movePrev();
+            window.setTimeout(() => {
+              touchSuppressClickRef.current = false;
+            }, 250);
+          }}
+          onTouchCancel={() => {
+            touchStartXRef.current = null;
+            touchStartYRef.current = null;
+            touchSuppressClickRef.current = false;
+            setPaused(false);
+          }}
+          onClickCapture={(event) => {
+            if (!touchSuppressClickRef.current) return;
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+        >
+          <PosterCard poster={current} variant={variant} />
+          <CarouselControls
+            count={visibleItems.length}
+            index={activeIndex}
+            compact={variant === "tile"}
+            onPrev={movePrev}
+            onNext={moveNext}
+            onSelect={(next) => setActiveIndex(next)}
+          />
         </div>
       </section>
     );

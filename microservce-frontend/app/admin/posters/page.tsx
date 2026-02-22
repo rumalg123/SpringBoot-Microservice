@@ -131,14 +131,49 @@ function toLocalDateTime(v: string | null) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-function posterImageUrl(key: string | null) {
-  if (!key) return null;
+function posterImageSources(key: string | null): { primary: string | null; fallback: string | null } {
+  if (!key) return { primary: null, fallback: null };
   const normalized = key.replace(/^\/+/, "");
   const apiBase = (process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me").trim();
   const encoded = normalized.split("/").map(encodeURIComponent).join("/");
   const apiUrl = `${apiBase.replace(/\/+$/, "")}/posters/images/${encoded}`;
-  const base = (process.env.NEXT_PUBLIC_POSTER_IMAGE_BASE_URL || "").trim();
-  return base && normalized.startsWith("posters/") ? `${base.replace(/\/+$/, "")}/${normalized}` : apiUrl;
+  const cdnBase = (process.env.NEXT_PUBLIC_POSTER_IMAGE_BASE_URL || "").trim();
+  if (!cdnBase) return { primary: apiUrl, fallback: null };
+  if (normalized.startsWith("posters/")) {
+    return {
+      primary: `${cdnBase.replace(/\/+$/, "")}/${normalized}`,
+      fallback: apiUrl,
+    };
+  }
+  return { primary: apiUrl, fallback: null };
+}
+
+function PosterImageFill({ imageKey, alt }: { imageKey: string | null; alt: string }) {
+  const sources = useMemo(() => posterImageSources(imageKey), [imageKey]);
+  const [src, setSrc] = useState<string | null>(sources.primary);
+
+  useEffect(() => {
+    setSrc(sources.primary);
+  }, [sources.primary]);
+
+  if (!src) return null;
+
+  return (
+    <Image
+      src={src}
+      alt={alt}
+      fill
+      unoptimized
+      style={{ objectFit: "cover" }}
+      onError={() => {
+        if (sources.fallback && src !== sources.fallback) {
+          setSrc(sources.fallback);
+          return;
+        }
+        setSrc(null);
+      }}
+    />
+  );
 }
 
 function badgeStyle(active: boolean): React.CSSProperties {
@@ -520,7 +555,9 @@ export default function AdminPostersPage() {
                     </label>
                   </div>
                   <div style={{ position: "relative", height: 66, borderRadius: 8, overflow: "hidden", border: "1px solid var(--line)", background: "var(--surface-3)" }}>
-                    {posterImageUrl(form.desktopImage) ? <Image src={posterImageUrl(form.desktopImage) || ""} alt="Desktop poster preview" fill unoptimized style={{ objectFit: "cover" }} /> : <div style={{ height: "100%", display: "grid", placeItems: "center", color: "var(--muted)", fontSize: "0.75rem" }}>Desktop preview</div>}
+                    {form.desktopImage
+                      ? <PosterImageFill imageKey={form.desktopImage} alt="Desktop poster preview" />
+                      : <div style={{ height: "100%", display: "grid", placeItems: "center", color: "var(--muted)", fontSize: "0.75rem" }}>Desktop preview</div>}
                   </div>
                 </div>
               </PosterFormField>
@@ -535,7 +572,9 @@ export default function AdminPostersPage() {
                     </label>
                   </div>
                   <div style={{ position: "relative", height: 66, borderRadius: 8, overflow: "hidden", border: "1px solid var(--line)", background: "var(--surface-3)" }}>
-                    {posterImageUrl(form.mobileImage || null) ? <Image src={posterImageUrl(form.mobileImage || null) || ""} alt="Mobile poster preview" fill unoptimized style={{ objectFit: "cover" }} /> : <div style={{ height: "100%", display: "grid", placeItems: "center", color: "var(--muted)", fontSize: "0.75rem" }}>Mobile preview</div>}
+                    {form.mobileImage
+                      ? <PosterImageFill imageKey={form.mobileImage || null} alt="Mobile poster preview" />
+                      : <div style={{ height: "100%", display: "grid", placeItems: "center", color: "var(--muted)", fontSize: "0.75rem" }}>Mobile preview</div>}
                   </div>
                 </div>
               </PosterFormField>
@@ -605,7 +644,7 @@ export default function AdminPostersPage() {
                   {arr.sort((a, b) => (a.sortOrder - b.sortOrder) || a.name.localeCompare(b.name)).map((p) => (
                     <div key={p.id} className="poster-card-row" style={{ display: "grid", gridTemplateColumns: "170px 1fr", gap: 12, border: "1px solid var(--line)", borderRadius: 12, padding: 10, background: "rgba(255,255,255,0.02)" }}>
                       <div style={{ position: "relative", aspectRatio: "16/7", borderRadius: 10, overflow: "hidden", background: "var(--surface-3)" }}>
-                        {posterImageUrl(p.desktopImage) ? <Image src={posterImageUrl(p.desktopImage) || ""} alt={p.name} fill unoptimized style={{ objectFit: "cover" }} /> : null}
+                        {p.desktopImage ? <PosterImageFill imageKey={p.desktopImage} alt={p.name} /> : null}
                       </div>
                       <div>
                         <div className="mb-2 flex flex-wrap items-center gap-2">
