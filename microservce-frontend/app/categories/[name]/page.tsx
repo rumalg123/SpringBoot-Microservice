@@ -571,13 +571,17 @@ export default function CategoryProductsPage() {
       )}
 
       {!isAuthenticated && (
-        <header className="bg-[var(--header-bg)] shadow-lg">
-          <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
-            <Link href="/" className="flex items-center gap-2 text-white no-underline">
-              <span className="inline-grid h-8 w-8 place-items-center rounded-md bg-white/10 text-xs font-bold text-white">RS</span>
-              <p className="text-lg font-bold text-white">Rumal Store</p>
+        <header style={{ background: "var(--header-bg)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(0,212,255,0.1)", position: "sticky", top: 0, zIndex: 50 }}>
+          <div style={{ maxWidth: "1280px", margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px" }}>
+            <Link href="/" style={{ display: "flex", alignItems: "center", gap: "10px", textDecoration: "none" }}>
+              <span style={{ width: "32px", height: "32px", borderRadius: "8px", background: "linear-gradient(135deg, #00d4ff, #7c3aed)", display: "grid", placeItems: "center" }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" /><line x1="3" y1="6" x2="21" y2="6" /><path d="M16 10a4 4 0 0 1-8 0" />
+                </svg>
+              </span>
+              <span style={{ fontSize: "1.1rem", fontWeight: 800, color: "#fff", fontFamily: "'Syne', sans-serif" }}>Rumal Store</span>
             </Link>
-            <Link href="/" className="rounded-lg bg-[var(--brand)] px-5 py-2 text-sm font-semibold text-white no-underline transition hover:bg-[var(--brand-hover)]">
+            <Link href="/" style={{ padding: "8px 20px", borderRadius: "8px", background: "linear-gradient(135deg, #00d4ff, #7c3aed)", color: "#fff", fontWeight: 700, fontSize: "0.82rem", textDecoration: "none" }}>
               Sign In
             </Link>
           </div>
@@ -677,24 +681,31 @@ export default function CategoryProductsPage() {
                             type="button"
                             onClick={(event) => { void toggleWishlist(event, product.id); }}
                             disabled={wishlistBusy}
-                            className={`absolute right-2 top-2 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full border text-xs transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                              isWished
-                                ? "border-red-500 bg-red-50 text-red-600"
-                                : "border-[var(--line)] bg-white text-[var(--muted)] hover:border-red-300 hover:text-red-500"
-                            }`}
+                            style={{
+                              position: "absolute", right: "8px", top: "8px", zIndex: 20,
+                              width: "32px", height: "32px", borderRadius: "50%",
+                              display: "inline-flex", alignItems: "center", justifyContent: "center",
+                              border: isWished ? "1.5px solid #ef4444" : "1px solid rgba(255,255,255,0.1)",
+                              background: isWished ? "rgba(239,68,68,0.15)" : "rgba(8,8,18,0.7)",
+                              color: isWished ? "#ef4444" : "var(--muted)",
+                              backdropFilter: "blur(8px)",
+                              cursor: wishlistBusy ? "not-allowed" : "pointer",
+                              opacity: wishlistBusy ? 0.6 : 1,
+                              transition: "all 0.18s",
+                            }}
                             title={isWished ? "Remove from wishlist" : "Add to wishlist"}
                             aria-label={isWished ? "Remove from wishlist" : "Add to wishlist"}
                           >
                             {wishlistBusy ? (
-                              "..."
+                              <span className="spinner-sm" />
                             ) : (
-                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill={isWished ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill={isWished ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M12 21s-6.7-4.35-9.33-8.08C.8 10.23 1.2 6.7 4.02 4.82A5.42 5.42 0 0 1 12 6.09a5.42 5.42 0 0 1 7.98-1.27c2.82 1.88 3.22 5.41 1.35 8.1C18.7 16.65 12 21 12 21z" />
                               </svg>
                             )}
                           </button>
                         )}
-                        <div className="aspect-square overflow-hidden bg-[#f8f8f8]">
+                        <div style={{ aspectRatio: "1/1", overflow: "hidden", background: "var(--surface-2)" }}>
                           {resolveImageUrl(product.mainImage) ? (
                             <Image
                               src={resolveImageUrl(product.mainImage) || ""}
@@ -705,8 +716,8 @@ export default function CategoryProductsPage() {
                               unoptimized
                             />
                           ) : (
-                            <div className="grid h-full w-full place-items-center bg-gradient-to-br from-gray-100 to-gray-200 text-sm font-semibold text-gray-500">
-                              Image
+                            <div style={{ display: "grid", height: "100%", width: "100%", placeItems: "center", background: "linear-gradient(135deg, var(--surface-2), var(--surface-3))", fontSize: "0.8rem", fontWeight: 600, color: "var(--muted)" }}>
+                              No Image
                             </div>
                           )}
                         </div>

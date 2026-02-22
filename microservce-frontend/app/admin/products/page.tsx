@@ -672,12 +672,12 @@ export default function AdminProductsPage() {
       old.map((draft) =>
         draft.id === draftId
           ? {
-              ...draft,
-              payload: {
-                ...draft.payload,
-                ...patch,
-              },
-            }
+            ...draft,
+            payload: {
+              ...draft.payload,
+              ...patch,
+            },
+          }
           : draft
       )
     );
@@ -1249,16 +1249,16 @@ export default function AdminProductsPage() {
     !canQueueVariation
       ? "Queue mode is disabled while editing an existing variation."
       : Boolean(selectingVariationParentId)
-      ? "Wait until parent attributes finish loading."
-      : !variationParentId.trim()
-      ? "Select a parent product first."
-      : parentVariationAttributes.length === 0
-      ? "Selected parent has no variation attributes."
-      : productSlugStatus === "checking"
-      ? "Wait until slug availability check completes."
-      : productSlugStatus === "taken" || productSlugStatus === "invalid"
-      ? "Choose a unique valid slug."
-      : priceValidationMessage;
+        ? "Wait until parent attributes finish loading."
+        : !variationParentId.trim()
+          ? "Select a parent product first."
+          : parentVariationAttributes.length === 0
+            ? "Selected parent has no variation attributes."
+            : productSlugStatus === "checking"
+              ? "Wait until slug availability check completes."
+              : productSlugStatus === "taken" || productSlugStatus === "invalid"
+                ? "Choose a unique valid slug."
+                : priceValidationMessage;
   const canAddVariationDraft =
     canQueueVariation
     && !variationDraftBlockedReason
@@ -1290,7 +1290,7 @@ export default function AdminProductsPage() {
           <span className="breadcrumb-current">Admin Products</span>
         </nav>
 
-        <section className="animate-rise space-y-4 rounded-xl bg-white p-5 shadow-sm">
+        <section className="animate-rise space-y-4 rounded-xl p-5" style={{ background: "rgba(17,17,40,0.7)", border: "1px solid rgba(0,212,255,0.1)", backdropFilter: "blur(16px)" }}>
           <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
             <div>
               <p className="text-xs font-bold uppercase tracking-wider text-[var(--brand)]">ADMIN CATALOG</p>
@@ -1301,7 +1301,7 @@ export default function AdminProductsPage() {
                 type="button"
                 onClick={() => setShowDeleted(false)}
                 disabled={filtersSubmitting || listLoading}
-                className={`rounded-full px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60 ${!showDeleted ? "btn-brand" : "border border-[var(--line)] bg-white"}`}
+                className={`rounded-full px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60 ${!showDeleted ? "btn-brand" : "border border-[var(--line)] text-[var(--muted)]"}`}
               >
                 Active
               </button>
@@ -1309,7 +1309,7 @@ export default function AdminProductsPage() {
                 type="button"
                 onClick={() => setShowDeleted(true)}
                 disabled={filtersSubmitting || listLoading}
-                className={`rounded-full px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60 ${showDeleted ? "btn-brand" : "border border-[var(--line)] bg-white"}`}
+                className={`rounded-full px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60 ${showDeleted ? "btn-brand" : "border border-[var(--line)] text-[var(--muted)]"}`}
               >
                 Deleted
               </button>
@@ -1321,18 +1321,18 @@ export default function AdminProductsPage() {
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search text"
-              className="rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm"
+              className="rounded-xl border border-[var(--line)] px-3 py-2 text-sm" style={{ background: "var(--surface-2)", color: "var(--ink)" }}
             />
             <input
               value={sku}
               onChange={(e) => setSku(e.target.value)}
               placeholder="SKU"
-              className="rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm"
+              className="rounded-xl border border-[var(--line)] px-3 py-2 text-sm" style={{ background: "var(--surface-2)", color: "var(--ink)" }}
             />
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              className="rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm"
+              className="rounded-xl border border-[var(--line)] px-3 py-2 text-sm" style={{ background: "var(--surface-2)", color: "var(--ink)" }}
             >
               <option value="">All Categories</option>
               {parentCategories.length > 0 && (
@@ -1363,7 +1363,7 @@ export default function AdminProductsPage() {
             <select
               value={type}
               onChange={(e) => setType(e.target.value as ProductType | "")}
-              className="rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm"
+              className="rounded-xl border border-[var(--line)] px-3 py-2 text-sm" style={{ background: "var(--surface-2)", color: "var(--ink)" }}
             >
               <option value="">All Types</option>
               <option value="SINGLE">SINGLE</option>
@@ -1382,9 +1382,9 @@ export default function AdminProductsPage() {
           <div className="grid gap-6 lg:grid-cols-[1.1fr,0.9fr]">
             <div className="order-2 lg:order-1">
               <h2 className="mb-3 text-2xl text-[var(--ink)]">{title}</h2>
-              <div className="overflow-hidden rounded-2xl border border-[var(--line)] bg-white">
+              <div className="overflow-hidden rounded-2xl border border-[var(--line)]" style={{ background: "var(--surface)" }}>
                 <table className="w-full text-left text-sm">
-                  <thead className="bg-[#fafafa] text-[var(--ink)]">
+                  <thead style={{ background: "var(--surface-2)", color: "var(--ink)" }}>
                     <tr>
                       <th className="px-3 py-2">Name</th>
                       <th className="px-3 py-2">SKU</th>
@@ -1426,7 +1426,7 @@ export default function AdminProductsPage() {
                                     void loadToEdit(p.id);
                                   }}
                                   disabled={productRowActionBusy}
-                                  className="rounded-md border border-[var(--line)] bg-white px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
+                                  className="rounded-md border border-[var(--line)] px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60" style={{ background: "var(--surface-2)", color: "var(--ink-light)" }}
                                 >
                                   {loadingProductId === p.id ? "Loading..." : "Edit"}
                                 </button>
@@ -1436,7 +1436,7 @@ export default function AdminProductsPage() {
                                     setConfirmAction({ type: "product", id: p.id, name: p.name });
                                   }}
                                   disabled={productRowActionBusy}
-                                  className="rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                  className="rounded-md border border-red-900/30 px-2 py-1 text-xs text-red-400 disabled:cursor-not-allowed disabled:opacity-60" style={{ background: "rgba(239,68,68,0.06)" }}
                                 >
                                   Delete
                                 </button>
@@ -1449,7 +1449,7 @@ export default function AdminProductsPage() {
                                   void restore(p.id);
                                 }}
                                 disabled={productRowActionBusy}
-                                className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs text-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                className="rounded-md border border-emerald-900/30 px-2 py-1 text-xs text-emerald-400 disabled:cursor-not-allowed disabled:opacity-60" style={{ background: "rgba(16,185,129,0.06)" }}
                               >
                                 {restoringProductId === p.id ? "Restoring..." : "Restore"}
                               </button>
@@ -1506,7 +1506,7 @@ export default function AdminProductsPage() {
                         setVariationDrafts([]);
                       }}
                       disabled={productMutationBusy}
-                      className="rounded-md border border-[var(--line)] bg-white px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
+                      className="rounded-md border border-[var(--line)] px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60" style={{ background: "var(--surface-2)", color: "var(--ink-light)" }}
                     >
                       Reset
                     </button>
@@ -1541,13 +1541,12 @@ export default function AdminProductsPage() {
                       required
                     />
                     <p
-                      className={`mt-1 text-[11px] ${
-                        productSlugStatus === "taken" || productSlugStatus === "invalid"
-                          ? "text-red-600"
-                          : productSlugStatus === "available"
-                            ? "text-emerald-600"
-                            : "text-[var(--muted)]"
-                      }`}
+                      className={`mt-1 text-[11px] ${productSlugStatus === "taken" || productSlugStatus === "invalid"
+                        ? "text-red-600"
+                        : productSlugStatus === "available"
+                          ? "text-emerald-600"
+                          : "text-[var(--muted)]"
+                        }`}
                     >
                       {productSlugStatus === "checking" && "Checking slug..."}
                       {productSlugStatus === "available" && "Slug is available"}
@@ -1569,7 +1568,7 @@ export default function AdminProductsPage() {
                       <p className="text-xs text-[var(--muted)]">
                         Product Images ({form.images.length}/{MAX_IMAGE_COUNT})
                       </p>
-                      <label className="cursor-pointer rounded-md border border-[var(--line)] bg-white px-2 py-1 text-xs">
+                      <label className="cursor-pointer rounded-md border border-[var(--line)] px-2 py-1 text-xs" style={{ background: "var(--surface-2)", color: "var(--ink-light)" }}>
                         {uploadingImages ? "Uploading..." : "Upload Images"}
                         <input
                           type="file"
@@ -1595,9 +1594,9 @@ export default function AdminProductsPage() {
                             onDragStart={() => setDragImageIndex(index)}
                             onDragOver={(e: DragEvent<HTMLDivElement>) => e.preventDefault()}
                             onDrop={() => onImageDrop(index)}
-                            className="flex items-center gap-2 rounded-lg border border-[var(--line)] bg-white p-2"
+                            className="flex items-center gap-2 rounded-lg border border-[var(--line)] p-2" style={{ background: "var(--surface-2)" }}
                           >
-                            <div className="h-12 w-12 overflow-hidden rounded-md border border-[var(--line)] bg-[#f8f8f8]">
+                            <div className="h-12 w-12 overflow-hidden rounded-md border border-[var(--line)]" style={{ background: "var(--surface-3)" }}>
                               {imageUrl ? (
                                 <Image src={imageUrl} alt={imageName} width={48} height={48} className="h-full w-full object-cover" unoptimized />
                               ) : (
@@ -1612,7 +1611,7 @@ export default function AdminProductsPage() {
                               type="button"
                               onClick={() => removeImage(index)}
                               disabled={productMutationBusy}
-                              className="rounded border border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                              className="rounded border border-red-900/30 px-2 py-1 text-[10px] text-red-400 disabled:cursor-not-allowed disabled:opacity-60" style={{ background: "rgba(239,68,68,0.06)" }}
                             >
                               Remove
                             </button>
@@ -1776,7 +1775,7 @@ export default function AdminProductsPage() {
                           type="button"
                           onClick={addParentAttribute}
                           disabled={productMutationBusy}
-                          className="rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-60"
+                          className="rounded-lg border border-[var(--line)] px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-60" style={{ background: "var(--surface-2)", color: "var(--ink-light)" }}
                         >
                           Add
                         </button>
@@ -1795,7 +1794,7 @@ export default function AdminProductsPage() {
                               type="button"
                               onClick={() => removeParentAttribute(name)}
                               disabled={productMutationBusy}
-                              className="rounded-full border border-[var(--line)] bg-white px-1.5 text-[10px] leading-4 disabled:cursor-not-allowed disabled:opacity-60"
+                              className="rounded-full border border-[var(--line)] px-1.5 text-[10px] leading-4 disabled:cursor-not-allowed disabled:opacity-60" style={{ background: "var(--surface-2)", color: "var(--muted)" }}
                             >
                               x
                             </button>
@@ -1826,7 +1825,7 @@ export default function AdminProductsPage() {
                             void refreshVariationParents();
                           }}
                           disabled={isEditingVariation || loadingParentProducts || productMutationBusy || Boolean(selectingVariationParentId)}
-                          className="rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+                          className="rounded-lg border border-[var(--line)] px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60" style={{ background: "var(--surface-2)", color: "var(--ink-light)" }}
                         >
                           {loadingParentProducts ? "Refreshing..." : "Refresh"}
                         </button>
@@ -1836,7 +1835,7 @@ export default function AdminProductsPage() {
                           Showing {Math.min(filteredParentProducts.length, 20)} of {parentProducts.length} parent products
                         </p>
                       )}
-                      <div className="mt-2 max-h-40 overflow-auto rounded-lg border border-[var(--line)] bg-white">
+                      <div className="mt-2 max-h-40 overflow-auto rounded-lg border border-[var(--line)]" style={{ background: "var(--surface)" }}>
                         {loadingParentProducts && (
                           <p className="px-3 py-2 text-xs text-[var(--muted)]">Loading parent products...</p>
                         )}
@@ -1854,9 +1853,8 @@ export default function AdminProductsPage() {
                               void onSelectVariationParent(p.id);
                             }}
                             disabled={isEditingVariation || Boolean(selectingVariationParentId) || productMutationBusy}
-                            className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs transition hover:bg-[var(--brand-soft)] ${
-                              variationParentId === p.id ? "bg-[var(--brand-soft)]" : ""
-                            } disabled:cursor-not-allowed disabled:opacity-60`}
+                            className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs transition hover:bg-[var(--brand-soft)] ${variationParentId === p.id ? "bg-[var(--brand-soft)]" : ""
+                              } disabled:cursor-not-allowed disabled:opacity-60`}
                           >
                             <span className="min-w-0">
                               <span className="block truncate text-[var(--ink)]">{p.name}</span>
@@ -1881,7 +1879,7 @@ export default function AdminProductsPage() {
                               {form.subCategoryNames.map((name) => (
                                 <span
                                   key={`variation-sub-${name}`}
-                                  className="rounded-full border border-[var(--line)] bg-white px-2 py-0.5 text-[10px] text-[var(--ink)]"
+                                  className="rounded-full border border-[var(--line)] px-2 py-0.5 text-[10px] text-[var(--ink)]" style={{ background: "var(--surface-2)" }}
                                 >
                                   {name}
                                 </span>
@@ -1935,7 +1933,7 @@ export default function AdminProductsPage() {
                                 void createQueuedVariations();
                               }}
                               disabled={!canCreateQueuedVariations}
-                              className="rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                              className="rounded-lg border border-[var(--line)] px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50" style={{ background: "var(--surface-2)", color: "var(--ink-light)" }}
                             >
                               {creatingQueuedVariationBatch
                                 ? `Creating... (${variationDrafts.length})`
@@ -1946,7 +1944,7 @@ export default function AdminProductsPage() {
                                 type="button"
                                 onClick={() => setVariationDrafts([])}
                                 disabled={creatingQueuedVariationBatch}
-                                className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                className="rounded-lg border border-red-900/30 px-3 py-2 text-xs text-red-400 disabled:cursor-not-allowed disabled:opacity-60" style={{ background: "rgba(239,68,68,0.06)" }}
                               >
                                 Clear Queue
                               </button>
@@ -1964,7 +1962,7 @@ export default function AdminProductsPage() {
                           </p>
                           <div className="grid gap-2">
                             {variationDrafts.map((draft) => (
-                              <div key={draft.id} className="rounded-md border border-[var(--line)] bg-white p-2 text-xs">
+                              <div key={draft.id} className="rounded-md border border-[var(--line)] p-2 text-xs" style={{ background: "var(--surface-2)" }}>
                                 <div className="flex items-center justify-between gap-2">
                                   <p className="truncate text-[var(--ink)]">
                                     Parent: <span className="font-semibold">{draft.parentLabel}</span>
@@ -1974,7 +1972,7 @@ export default function AdminProductsPage() {
                                       type="button"
                                       onClick={() => loadVariationDraftToForm(draft.id)}
                                       disabled={creatingQueuedVariationBatch || savingProduct}
-                                      className="rounded border border-[var(--line)] bg-white px-2 py-0.5 text-[10px] disabled:cursor-not-allowed disabled:opacity-60"
+                                      className="rounded border border-[var(--line)] px-2 py-0.5 text-[10px] disabled:cursor-not-allowed disabled:opacity-60" style={{ background: "var(--surface-3)", color: "var(--ink-light)" }}
                                     >
                                       Load To Form
                                     </button>
@@ -1982,7 +1980,7 @@ export default function AdminProductsPage() {
                                       type="button"
                                       onClick={() => removeVariationDraft(draft.id)}
                                       disabled={creatingQueuedVariationBatch || savingProduct}
-                                      className="rounded border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                      className="rounded border border-red-900/30 px-2 py-0.5 text-[10px] text-red-400 disabled:cursor-not-allowed disabled:opacity-60" style={{ background: "rgba(239,68,68,0.06)" }}
                                     >
                                       Remove
                                     </button>
@@ -2083,12 +2081,12 @@ export default function AdminProductsPage() {
                     {savingProduct
                       ? "Saving..."
                       : form.productType === "VARIATION" && !form.id
-                      ? "Add Child Variation"
-                      : form.productType === "VARIATION" && form.id
-                        ? "Update Variation"
-                      : form.id
-                        ? "Update Product"
-                        : "Create Product"}
+                        ? "Add Child Variation"
+                        : form.productType === "VARIATION" && form.id
+                          ? "Update Variation"
+                          : form.id
+                            ? "Update Product"
+                            : "Create Product"}
                   </button>
                 </form>
               </section>
@@ -2123,13 +2121,12 @@ export default function AdminProductsPage() {
                       disabled={categoryMutationBusy}
                     />
                     <p
-                      className={`mt-1 text-[11px] ${
-                        categorySlugStatus === "taken" || categorySlugStatus === "invalid"
-                          ? "text-red-600"
-                          : categorySlugStatus === "available"
-                            ? "text-emerald-600"
-                            : "text-[var(--muted)]"
-                      }`}
+                      className={`mt-1 text-[11px] ${categorySlugStatus === "taken" || categorySlugStatus === "invalid"
+                        ? "text-red-600"
+                        : categorySlugStatus === "available"
+                          ? "text-emerald-600"
+                          : "text-[var(--muted)]"
+                        }`}
                     >
                       {categorySlugStatus === "checking" && "Checking slug..."}
                       {categorySlugStatus === "available" && "Slug is available"}
@@ -2186,7 +2183,7 @@ export default function AdminProductsPage() {
                           setCategorySlugStatus("idle");
                         }}
                         disabled={categoryMutationBusy}
-                        className="rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-60"
+                        className="rounded-lg border border-[var(--line)] px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-60" style={{ background: "var(--surface-2)", color: "var(--ink-light)" }}
                       >
                         Reset
                       </button>
@@ -2205,21 +2202,20 @@ export default function AdminProductsPage() {
                         <div className="flex gap-1">
                           <button
                             type="button"
-                            onClick={() =>
-                              {
-                                setCategoryForm({
-                                  id: c.id,
-                                  name: c.name,
-                                  slug: c.slug || "",
-                                  type: c.type,
-                                  parentCategoryId: c.parentCategoryId || "",
-                                });
-                                setCategorySlugTouched(true);
-                                setCategorySlugStatus("available");
-                              }
+                            onClick={() => {
+                              setCategoryForm({
+                                id: c.id,
+                                name: c.name,
+                                slug: c.slug || "",
+                                type: c.type,
+                                parentCategoryId: c.parentCategoryId || "",
+                              });
+                              setCategorySlugTouched(true);
+                              setCategorySlugStatus("available");
+                            }
                             }
                             disabled={categoryMutationBusy}
-                            className="rounded border border-[var(--line)] bg-white px-2 py-0.5 text-[10px] disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded border border-[var(--line)] px-2 py-0.5 text-[10px] disabled:cursor-not-allowed disabled:opacity-60" style={{ background: "var(--surface-2)", color: "var(--ink-light)" }}
                           >
                             Edit
                           </button>
@@ -2229,7 +2225,7 @@ export default function AdminProductsPage() {
                               setConfirmAction({ type: "category", id: c.id, name: c.name });
                             }}
                             disabled={categoryMutationBusy}
-                            className="rounded border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded border border-red-900/30 px-2 py-0.5 text-[10px] text-red-400 disabled:cursor-not-allowed disabled:opacity-60" style={{ background: "rgba(239,68,68,0.06)" }}
                           >
                             Delete
                           </button>

@@ -20,9 +20,10 @@ export default function Pagination({
         window.scrollTo({ top: 0, behavior: "smooth" });
         onPageChange(page);
     };
+
     if (totalPages <= 1) {
         return totalElements !== undefined ? (
-            <div className="mt-4 text-center text-xs text-[var(--muted)]">
+            <div style={{ marginTop: "16px", textAlign: "center", fontSize: "0.75rem", color: "var(--muted)" }}>
                 Showing all {totalElements} results
             </div>
         ) : null;
@@ -31,84 +32,88 @@ export default function Pagination({
     const getPageNumbers = (): (number | "ellipsis-left" | "ellipsis-right")[] => {
         const pages: (number | "ellipsis-left" | "ellipsis-right")[] = [];
         const maxVisible = 7;
-
         if (totalPages <= maxVisible) {
             for (let i = 0; i < totalPages; i++) pages.push(i);
             return pages;
         }
-
-        // Always show first page
         pages.push(0);
-
-        if (currentPage > 2) {
-            pages.push("ellipsis-left");
-        }
-
-        // Pages around current
+        if (currentPage > 2) pages.push("ellipsis-left");
         const start = Math.max(1, currentPage - 1);
         const end = Math.min(totalPages - 2, currentPage + 1);
-        for (let i = start; i <= end; i++) {
-            pages.push(i);
-        }
-
-        if (currentPage < totalPages - 3) {
-            pages.push("ellipsis-right");
-        }
-
-        // Always show last page
+        for (let i = start; i <= end; i++) pages.push(i);
+        if (currentPage < totalPages - 3) pages.push("ellipsis-right");
         pages.push(totalPages - 1);
-
         return pages;
     };
 
     const pages = getPageNumbers();
 
+    const navBtnBase: React.CSSProperties = {
+        display: "inline-flex", alignItems: "center", gap: "4px",
+        padding: "8px 12px", borderRadius: "8px", fontSize: "0.8rem", fontWeight: 600,
+        border: "1px solid rgba(0,212,255,0.12)", background: "rgba(0,212,255,0.03)",
+        color: "var(--ink-light)", cursor: "pointer", transition: "all 0.15s",
+    };
+
     return (
-        <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row sm:justify-between">
+        <div style={{ marginTop: "24px", display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
             {/* Results Info */}
-            <div className="text-xs text-[var(--muted)]">
-                Page <span className="font-semibold text-[var(--ink)]">{currentPage + 1}</span> of{" "}
-                <span className="font-semibold text-[var(--ink)]">{totalPages}</span>
+            <div style={{ fontSize: "0.75rem", color: "var(--muted)" }}>
+                Page <span style={{ fontWeight: 700, color: "var(--ink)" }}>{currentPage + 1}</span> of{" "}
+                <span style={{ fontWeight: 700, color: "var(--ink)" }}>{totalPages}</span>
                 {totalElements !== undefined && (
-                    <span className="ml-1">
-                        ({totalElements} total result{totalElements !== 1 ? "s" : ""})
-                    </span>
+                    <span style={{ marginLeft: "4px" }}>({totalElements} total result{totalElements !== 1 ? "s" : ""})</span>
                 )}
             </div>
 
             {/* Page Controls */}
-            <nav className="flex items-center gap-1" aria-label="Pagination">
+            <nav style={{ display: "flex", alignItems: "center", gap: "4px" }} aria-label="Pagination">
                 {/* Previous */}
                 <button
+                    type="button"
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={disabled || currentPage <= 0}
-                    className="inline-flex items-center gap-1 rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-sm font-medium text-[var(--ink)] transition hover:border-[var(--brand)] hover:text-[var(--brand)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-[var(--line)] disabled:hover:text-[var(--ink)]"
+                    style={{
+                        ...navBtnBase,
+                        opacity: disabled || currentPage <= 0 ? 0.4 : 1,
+                        cursor: disabled || currentPage <= 0 ? "not-allowed" : "pointer",
+                    }}
                     aria-label="Go to previous page"
+                    onMouseEnter={(e) => { if (!(disabled || currentPage <= 0)) { (e.currentTarget as HTMLElement).style.borderColor = "#00d4ff"; (e.currentTarget as HTMLElement).style.color = "#00d4ff"; } }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(0,212,255,0.12)"; (e.currentTarget as HTMLElement).style.color = "var(--ink-light)"; }}
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
-                    <span className="hidden sm:inline">Previous</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
+                    <span>Prev</span>
                 </button>
 
                 {/* Page Numbers */}
                 {pages.map((p, idx) => {
                     if (p === "ellipsis-left" || p === "ellipsis-right") {
                         return (
-                            <span key={p} className="px-1 text-sm text-[var(--muted)]">
-                                ···
-                            </span>
+                            <span key={p} style={{ padding: "0 4px", fontSize: "0.8rem", color: "var(--muted)" }}>···</span>
                         );
                     }
+                    const isActive = p === currentPage;
                     return (
                         <button
                             key={`page-${p}-${idx}`}
+                            type="button"
                             onClick={() => handlePageChange(p)}
                             disabled={disabled}
-                            className={`min-w-[36px] rounded-lg px-3 py-2 text-sm font-medium transition ${p === currentPage
-                                ? "bg-[var(--brand)] text-white shadow-md shadow-red-200"
-                                : "border border-[var(--line)] bg-white text-[var(--ink)] hover:border-[var(--brand)] hover:bg-[var(--brand-soft)] hover:text-[var(--brand)]"
-                                } disabled:cursor-not-allowed disabled:opacity-60`}
+                            style={{
+                                minWidth: "34px", padding: "7px 10px", borderRadius: "8px",
+                                fontSize: "0.8rem", fontWeight: isActive ? 800 : 600, cursor: disabled ? "not-allowed" : "pointer",
+                                border: isActive ? "none" : "1px solid rgba(0,212,255,0.12)",
+                                background: isActive ? "linear-gradient(135deg, #00d4ff, #7c3aed)" : "rgba(0,212,255,0.03)",
+                                color: isActive ? "#fff" : "var(--ink-light)",
+                                boxShadow: isActive ? "0 0 14px rgba(0,212,255,0.25)" : "none",
+                                opacity: disabled && !isActive ? 0.5 : 1,
+                                transition: "all 0.15s",
+                            }}
                             aria-label={`Go to page ${p + 1}`}
-                            aria-current={p === currentPage ? "page" : undefined}
+                            aria-current={isActive ? "page" : undefined}
+                            onMouseEnter={(e) => { if (!isActive && !disabled) { (e.currentTarget as HTMLElement).style.borderColor = "#00d4ff"; (e.currentTarget as HTMLElement).style.color = "#00d4ff"; } }}
+                            onMouseLeave={(e) => { if (!isActive) { (e.currentTarget as HTMLElement).style.borderColor = "rgba(0,212,255,0.12)"; (e.currentTarget as HTMLElement).style.color = "var(--ink-light)"; } }}
                         >
                             {p + 1}
                         </button>
@@ -117,13 +122,20 @@ export default function Pagination({
 
                 {/* Next */}
                 <button
+                    type="button"
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={disabled || currentPage + 1 >= totalPages}
-                    className="inline-flex items-center gap-1 rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-sm font-medium text-[var(--ink)] transition hover:border-[var(--brand)] hover:text-[var(--brand)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-[var(--line)] disabled:hover:text-[var(--ink)]"
+                    style={{
+                        ...navBtnBase,
+                        opacity: disabled || currentPage + 1 >= totalPages ? 0.4 : 1,
+                        cursor: disabled || currentPage + 1 >= totalPages ? "not-allowed" : "pointer",
+                    }}
                     aria-label="Go to next page"
+                    onMouseEnter={(e) => { if (!(disabled || currentPage + 1 >= totalPages)) { (e.currentTarget as HTMLElement).style.borderColor = "#00d4ff"; (e.currentTarget as HTMLElement).style.color = "#00d4ff"; } }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(0,212,255,0.12)"; (e.currentTarget as HTMLElement).style.color = "var(--ink-light)"; }}
                 >
-                    <span className="hidden sm:inline">Next</span>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
+                    <span>Next</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
                 </button>
             </nav>
         </div>

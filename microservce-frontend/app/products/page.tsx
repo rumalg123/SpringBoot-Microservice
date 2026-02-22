@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, MouseEvent, Suspense, useEffect, useMemo, useState } from "react";
+import { FormEvent, MouseEvent, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
@@ -295,12 +295,12 @@ function ProductsPageContent() {
     void run();
   }, [search, selectedParentNames, selectedSubNames, appliedMinPrice, appliedMaxPrice, sortBy, page]);
 
-  const onSearch = (e: FormEvent) => {
+  const onSearch = useCallback((e: FormEvent) => {
     e.preventDefault();
     if (productsLoading) return;
     setPage(0);
     setSearch(query);
-  };
+  }, [query, productsLoading]);
 
   const applyPriceFilter = (e: FormEvent) => {
     e.preventDefault();
