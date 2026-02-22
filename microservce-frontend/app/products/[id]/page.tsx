@@ -56,7 +56,18 @@ const darkSelect: React.CSSProperties = {
 
 export default function ProductDetailPage() {
   const params = useParams<{ id: string }>();
-  const { isAuthenticated, profile, logout, canViewAdmin, login, apiClient, emailVerified } = useAuthSession();
+  const {
+    isAuthenticated,
+    profile,
+    logout,
+    canViewAdmin,
+    canManageAdminOrders,
+    canManageAdminProducts,
+    canManageAdminPosters,
+    login,
+    apiClient,
+    emailVerified,
+  } = useAuthSession();
   const [product, setProduct] = useState<ProductDetail | null>(null);
   const [variations, setVariations] = useState<VariationSummary[]>([]);
   const [selectedVariationId, setSelectedVariationId] = useState("");
@@ -227,7 +238,16 @@ export default function ProductDetailPage() {
     return (
       <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
         {isAuthenticated && (
-          <AppNav email={(profile?.email as string) || ""} canViewAdmin={canViewAdmin} apiClient={apiClient} emailVerified={emailVerified} onLogout={() => { void logout(); }} />
+          <AppNav
+            email={(profile?.email as string) || ""}
+            canViewAdmin={canViewAdmin}
+            canManageAdminOrders={canManageAdminOrders}
+            canManageAdminProducts={canManageAdminProducts}
+            canManageAdminPosters={canManageAdminPosters}
+            apiClient={apiClient}
+            emailVerified={emailVerified}
+            onLogout={() => { void logout(); }}
+          />
         )}
         <main className="mx-auto max-w-7xl px-4 py-8">
           <div style={{ background: "rgba(17,17,40,0.7)", backdropFilter: "blur(16px)", border: "1px solid rgba(0,212,255,0.1)", borderRadius: "20px", padding: "48px 24px", textAlign: "center" }}>
@@ -247,7 +267,16 @@ export default function ProductDetailPage() {
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
       {isAuthenticated && (
-        <AppNav email={(profile?.email as string) || ""} canViewAdmin={canViewAdmin} apiClient={apiClient} emailVerified={emailVerified} onLogout={() => { void logout(); }} />
+        <AppNav
+          email={(profile?.email as string) || ""}
+          canViewAdmin={canViewAdmin}
+          canManageAdminOrders={canManageAdminOrders}
+          canManageAdminProducts={canManageAdminProducts}
+          canManageAdminPosters={canManageAdminPosters}
+          apiClient={apiClient}
+          emailVerified={emailVerified}
+          onLogout={() => { void logout(); }}
+        />
       )}
 
       {!isAuthenticated && (

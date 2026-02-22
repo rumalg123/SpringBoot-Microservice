@@ -7,6 +7,7 @@ import com.rumal.product_service.dto.ProductImageNameRequest;
 import com.rumal.product_service.dto.ProductImageUploadResponse;
 import com.rumal.product_service.dto.UpsertProductRequest;
 import com.rumal.product_service.security.InternalRequestVerifier;
+import com.rumal.product_service.service.AdminProductAccessScopeService;
 import com.rumal.product_service.service.ProductService;
 import com.rumal.product_service.storage.ProductImageStorageService;
 import jakarta.validation.Valid;
@@ -39,12 +40,15 @@ import java.util.UUID;
 public class AdminProductController {
 
     private final ProductService productService;
+    private final AdminProductAccessScopeService adminProductAccessScopeService;
     private final ProductImageStorageService productImageStorageService;
     private final InternalRequestVerifier internalRequestVerifier;
 
     @GetMapping("/deleted")
     public Page<ProductSummaryResponse> listDeleted(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @RequestParam(required = false) String q,
             @RequestParam(required = false) String sku,
             @RequestParam(required = false) String category,
@@ -57,17 +61,21 @@ public class AdminProductController {
             @PageableDefault(size = 20, sort = "updatedAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         internalRequestVerifier.verify(internalAuth);
-        return productService.listDeleted(pageable, q, sku, category, mainCategory, subCategory, vendorId, type, minSellingPrice, maxSellingPrice);
+        UUID scopedVendorId = adminProductAccessScopeService.resolveScopedVendorFilter(userSub, userRoles, vendorId, internalAuth);
+        return productService.listDeleted(pageable, q, sku, category, mainCategory, subCategory, scopedVendorId, type, minSellingPrice, maxSellingPrice);
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ProductResponse create(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @Valid @RequestBody UpsertProductRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
-        return productService.create(request);
+        UpsertProductRequest scopedRequest = adminProductAccessScopeService.scopeCreateRequest(userSub, userRoles, request, internalAuth);
+        return productService.create(scopedRequest);
     }
 
     @PostMapping(value = "/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -95,39 +103,52 @@ public class AdminProductController {
     @ResponseStatus(HttpStatus.CREATED)
     public ProductResponse createVariation(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID parentId,
             @Valid @RequestBody UpsertProductRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
-        return productService.createVariation(parentId, request);
+        adminProductAccessScopeService.assertCanManageProduct(parentId, userSub, userRoles, internalAuth);
+        UpsertProductRequest scopedRequest = adminProductAccessScopeService.scopeCreateRequest(userSub, userRoles, request, internalAuth);
+        return productService.createVariation(parentId, scopedRequest);
     }
 
     @PutMapping("/{id}")
     public ProductResponse update(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID id,
             @Valid @RequestBody UpsertProductRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
-        return productService.update(id, request);
+        UpsertProductRequest scopedRequest = adminProductAccessScopeService.scopeUpdateRequest(id, userSub, userRoles, request, internalAuth);
+        return productService.update(id, scopedRequest);
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
+        adminProductAccessScopeService.assertCanManageProduct(id, userSub, userRoles, internalAuth);
         productService.softDelete(id);
     }
 
     @PostMapping("/{id}/restore")
     public ProductResponse restore(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
+        adminProductAccessScopeService.assertCanManageProduct(id, userSub, userRoles, internalAuth);
         return productService.restore(id);
     }
 }

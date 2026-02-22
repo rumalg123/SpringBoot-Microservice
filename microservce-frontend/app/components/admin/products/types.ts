@@ -59,6 +59,16 @@ export type ProductFormState = {
   active: boolean;
 };
 
+export type VendorSummary = {
+  id: string;
+  name: string;
+  slug: string;
+  contactEmail: string;
+  active: boolean;
+  deleted: boolean;
+  status?: string;
+};
+
 export type VariationDraft = {
   id: string;
   parentId: string;
@@ -94,6 +104,8 @@ export type ProductEditorPanelState = {
   uploadingImages: boolean;
   parentCategories: Category[];
   subCategoryOptions: Category[];
+  vendors: VendorSummary[];
+  loadingVendors: boolean;
   priceValidationMessage: string | null;
   parentSearch: string;
   loadingParentProducts: boolean;
@@ -133,6 +145,7 @@ export type ProductEditorPanelActions = {
   removeImage: (index: number) => void;
   addParentAttribute: () => void;
   removeParentAttribute: (name: string) => void;
+  refreshVendors: () => void | Promise<void>;
   refreshVariationParents: () => void | Promise<void>;
   onSelectVariationParent: (id: string) => void | Promise<void>;
   addVariationDraft: () => void;
@@ -147,6 +160,7 @@ export type ProductEditorPanelHelpers = {
   slugify: (value: string) => string;
   resolveImageUrl: (imageName: string) => string | null;
   MAX_IMAGE_COUNT: number;
+  canSelectVendor: boolean;
   preventNumberInputScroll: (e: WheelEvent<HTMLInputElement>) => void;
   preventNumberInputArrows: (e: KeyboardEvent<HTMLInputElement>) => void;
 };
@@ -199,3 +213,14 @@ export type VariationRowsEditorProps = {
 };
 
 export type VariationParentSelectorPanelProps = ProductEditorPanelProps;
+
+export type VendorSelectorFieldProps = {
+  form: ProductFormState;
+  setForm: ProductEditorPanelActions["setForm"];
+  productMutationBusy: boolean;
+  canSelectVendor: boolean;
+  vendors: VendorSummary[];
+  loadingVendors: boolean;
+  refreshVendors: ProductEditorPanelActions["refreshVendors"];
+  selectedVariationParent: ProductSummary | null;
+};

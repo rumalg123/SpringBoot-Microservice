@@ -30,6 +30,9 @@ import java.util.UUID;
 public class SampleCatalogDataSeeder implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(SampleCatalogDataSeeder.class);
+    private static final UUID NOVA_TECH_VENDOR_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final UUID URBAN_STYLE_VENDOR_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
+    private static final UUID HOME_CRAFT_VENDOR_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
 
     private static final List<String> IMAGE_POOL = List.of(
             "2e462316-ad68-4eb4-80dc-9ced0547aa0d.jpg",
@@ -339,7 +342,7 @@ public class SampleCatalogDataSeeder implements ApplicationRunner {
                 List.of(image),
                 new BigDecimal(regularPrice),
                 new BigDecimal(discountedPrice),
-                null,
+                resolveSeedVendorId(categories),
                 categories,
                 ProductType.SINGLE,
                 List.of(),
@@ -371,7 +374,7 @@ public class SampleCatalogDataSeeder implements ApplicationRunner {
                 List.of(image),
                 new BigDecimal(regularPrice),
                 new BigDecimal(discountedPrice),
-                null,
+                resolveSeedVendorId(categories),
                 categories,
                 ProductType.PARENT,
                 attributes,
@@ -407,5 +410,18 @@ public class SampleCatalogDataSeeder implements ApplicationRunner {
                 sku,
                 true
         ));
+    }
+
+    private UUID resolveSeedVendorId(Set<String> categories) {
+        if (categories == null || categories.isEmpty()) {
+            return NOVA_TECH_VENDOR_ID;
+        }
+        if (categories.contains("Fashion")) {
+            return URBAN_STYLE_VENDOR_ID;
+        }
+        if (categories.contains("Home & Living")) {
+            return HOME_CRAFT_VENDOR_ID;
+        }
+        return NOVA_TECH_VENDOR_ID;
     }
 }

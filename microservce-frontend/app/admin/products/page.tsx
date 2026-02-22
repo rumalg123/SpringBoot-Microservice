@@ -59,6 +59,16 @@ type Category = {
   deleted?: boolean;
 };
 
+type VendorSummary = {
+  id: string;
+  name: string;
+  slug: string;
+  contactEmail: string;
+  active: boolean;
+  deleted: boolean;
+  status?: string;
+};
+
 type PagedResponse<T> = {
   content: T[];
   number?: number;
@@ -240,8 +250,11 @@ export default function AdminProductsPage() {
   const [q, setQ] = useState("");
   const [sku, setSku] = useState("");
   const [category, setCategory] = useState("");
+  const [vendorFilterId, setVendorFilterId] = useState("");
+  const [vendorFilterSearch, setVendorFilterSearch] = useState("");
   const [categories, setCategories] = useState<Category[]>([]);
   const [deletedCategories, setDeletedCategories] = useState<Category[]>([]);
+  const [vendors, setVendors] = useState<VendorSummary[]>([]);
   const [type, setType] = useState<ProductType | "">("");
   const [status, setStatus] = useState("Loading admin products...");
   const [showDeleted, setShowDeleted] = useState(false);
@@ -280,18 +293,45 @@ export default function AdminProductsPage() {
   const [restoringCategoryId, setRestoringCategoryId] = useState<string | null>(null);
   const [loadingActiveList, setLoadingActiveList] = useState(false);
   const [loadingDeletedList, setLoadingDeletedList] = useState(false);
+  const [loadingVendors, setLoadingVendors] = useState(false);
 
   const loadCategories = useCallback(async () => {
     if (!session.apiClient) return;
-    const res = await session.apiClient.get("/admin/categories");
+    const res = await session.apiClient.get(session.isSuperAdmin ? "/admin/categories" : "/categories");
     setCategories((res.data as Category[]) || []);
-  }, [session.apiClient]);
+  }, [session.apiClient, session.isSuperAdmin]);
 
   const loadDeletedCategories = useCallback(async () => {
     if (!session.apiClient) return;
+    if (!session.isSuperAdmin) {
+      setDeletedCategories([]);
+      return;
+    }
     const res = await session.apiClient.get("/admin/categories/deleted");
     setDeletedCategories((res.data as Category[]) || []);
-  }, [session.apiClient]);
+  }, [session.apiClient, session.isSuperAdmin]);
+
+  const loadVendors = useCallback(async () => {
+    if (!session.apiClient) return;
+    if (!session.isSuperAdmin) {
+      setVendors([]);
+      return;
+    }
+    setLoadingVendors(true);
+    try {
+      const res = await session.apiClient.get("/admin/vendors");
+      const vendorRows = ((res.data as VendorSummary[]) || [])
+        .filter((vendor) => vendor && !vendor.deleted)
+        .sort((a, b) => a.name.localeCompare(b.name));
+      setVendors(vendorRows);
+    } catch (err) {
+      setVendors([]);
+      const message = err instanceof Error ? err.message : "Failed to load vendors";
+      toast.error(message);
+    } finally {
+      setLoadingVendors(false);
+    }
+  }, [session.apiClient, session.isSuperAdmin]);
 
   const loadActive = useCallback(
     async (targetPage: number) => {
@@ -307,6 +347,7 @@ export default function AdminProductsPage() {
         if (sku.trim()) params.set("sku", sku.trim());
         if (category.trim()) params.set("category", category.trim());
         if (type) params.set("type", type);
+        if (vendorFilterId.trim()) params.set("vendorId", vendorFilterId.trim());
 
         const res = await session.apiClient.get(`/products?${params.toString()}`);
         setActivePage(res.data as PagedResponse<ProductSummary>);
@@ -315,7 +356,7 @@ export default function AdminProductsPage() {
         setLoadingActiveList(false);
       }
     },
-    [session.apiClient, q, sku, category, type]
+    [session.apiClient, q, sku, category, type, vendorFilterId]
   );
 
   const loadDeleted = useCallback(
@@ -331,6 +372,7 @@ export default function AdminProductsPage() {
         if (sku.trim()) params.set("sku", sku.trim());
         if (category.trim()) params.set("category", category.trim());
         if (type) params.set("type", type);
+        if (vendorFilterId.trim()) params.set("vendorId", vendorFilterId.trim());
 
         const res = await session.apiClient.get(`/admin/products/deleted?${params.toString()}`);
         setDeletedPage(res.data as PagedResponse<ProductSummary>);
@@ -339,7 +381,7 @@ export default function AdminProductsPage() {
         setLoadingDeletedList(false);
       }
     },
-    [session.apiClient, q, sku, category, type]
+    [session.apiClient, q, sku, category, type, vendorFilterId]
   );
 
   const loadParentProducts = useCallback(async () => {
@@ -374,21 +416,25 @@ export default function AdminProductsPage() {
       router.replace("/");
       return;
     }
-    if (!session.canViewAdmin) {
+    if (!session.canManageAdminProducts) {
       router.replace("/products");
       return;
     }
 
     const run = async () => {
       try {
-        await Promise.all([loadActive(0), loadDeleted(0), loadCategories(), loadDeletedCategories(), loadParentProducts()]);
+        const startupTasks: Promise<unknown>[] = [loadActive(0), loadDeleted(0), loadCategories(), loadParentProducts()];
+        if (session.isSuperAdmin) {
+          startupTasks.push(loadDeletedCategories(), loadVendors());
+        }
+        await Promise.all(startupTasks);
         setStatus("Admin product catalog loaded.");
       } catch (err) {
         setStatus(err instanceof Error ? err.message : "Failed to load products.");
       }
     };
     void run();
-  }, [router, session.status, session.isAuthenticated, session.canViewAdmin, loadActive, loadDeleted, loadCategories, loadDeletedCategories, loadParentProducts]);
+  }, [router, session.status, session.isAuthenticated, session.canManageAdminProducts, session.isSuperAdmin, loadActive, loadDeleted, loadCategories, loadDeletedCategories, loadParentProducts, loadVendors]);
 
   useEffect(() => {
     if (productSlugTouched) return;
@@ -987,6 +1033,7 @@ export default function AdminProductsPage() {
       setForm((old) => ({
         ...old,
         productType: "VARIATION",
+        vendorId: parent.vendorId || old.vendorId,
         mainCategoryName: parent.mainCategory || old.mainCategoryName,
         subCategoryNames: parent.subCategories || old.subCategoryNames,
       }));
@@ -1277,6 +1324,9 @@ export default function AdminProductsPage() {
       <AppNav
         email={(session.profile?.email as string) || ""}
         canViewAdmin={session.canViewAdmin}
+        canManageAdminOrders={session.canManageAdminOrders}
+        canManageAdminProducts={session.canManageAdminProducts}
+        canManageAdminPosters={session.canManageAdminPosters}
         apiClient={session.apiClient}
         emailVerified={session.emailVerified}
         onLogout={() => {
@@ -1299,9 +1349,14 @@ export default function AdminProductsPage() {
               q={q}
               sku={sku}
               category={category}
+              vendorId={vendorFilterId}
+              vendorSearch={vendorFilterSearch}
               type={type}
               parentCategories={parentCategories}
               subCategories={subCategories}
+              vendors={vendors}
+              loadingVendors={loadingVendors}
+              showVendorFilter={session.isSuperAdmin}
               rows={rows}
               pageMeta={pageMeta}
               currentPage={showDeleted ? deletedPageIndex : page}
@@ -1315,6 +1370,8 @@ export default function AdminProductsPage() {
               onQChange={setQ}
               onSkuChange={setSku}
               onCategoryChange={setCategory}
+              onVendorIdChange={setVendorFilterId}
+              onVendorSearchChange={setVendorFilterSearch}
               onTypeChange={setType}
               onApplyFilters={applyFilters}
               onEditProduct={(id) => loadToEdit(id)}
@@ -1344,6 +1401,8 @@ export default function AdminProductsPage() {
                   uploadingImages,
                   parentCategories,
                   subCategoryOptions,
+                  vendors,
+                  loadingVendors,
                   priceValidationMessage,
                   parentSearch,
                   loadingParentProducts,
@@ -1382,6 +1441,7 @@ export default function AdminProductsPage() {
                   removeImage,
                   addParentAttribute,
                   removeParentAttribute,
+                  refreshVendors: loadVendors,
                   refreshVariationParents,
                   onSelectVariationParent,
                   addVariationDraft,
@@ -1395,61 +1455,64 @@ export default function AdminProductsPage() {
                   slugify,
                   resolveImageUrl,
                   MAX_IMAGE_COUNT,
+                  canSelectVendor: session.isSuperAdmin,
                   preventNumberInputScroll,
                   preventNumberInputArrows,
                 }}
               />
 
-              <CategoryOperationsPanel
-                categoryForm={categoryForm}
-                categorySlugStatus={categorySlugStatus}
-                categorySlugBlocked={categorySlugBlocked}
-                categoryMutationBusy={categoryMutationBusy}
-                savingCategory={savingCategory}
-                restoringCategoryId={restoringCategoryId}
-                categories={categories}
-                deletedCategories={deletedCategories}
-                parentCategories={parentCategories}
-                normalizeSlug={(value) => slugify(value).slice(0, 130)}
-                onCategoryFormNameChange={(value) => {
-                  setCategoryForm((o) => ({ ...o, name: value }));
-                }}
-                onCategoryFormSlugChange={(value) => {
-                  setCategorySlugTouched(true);
-                  setCategoryForm((o) => ({ ...o, slug: value }));
-                }}
-                onCategoryFormTypeChange={(value) => {
-                  setCategoryForm((o) => ({
-                    ...o,
-                    type: value,
-                    parentCategoryId: value === "SUB" ? o.parentCategoryId : "",
-                  }));
-                }}
-                onCategoryFormParentChange={(value) => {
-                  setCategoryForm((o) => ({ ...o, parentCategoryId: value }));
-                }}
-                onSaveCategory={() => saveCategory()}
-                onResetCategoryForm={() => {
-                  setCategoryForm({ name: "", slug: "", type: "PARENT", parentCategoryId: "" });
-                  setCategorySlugTouched(false);
-                  setCategorySlugStatus("idle");
-                }}
-                onEditCategory={(c) => {
-                  setCategoryForm({
-                    id: c.id,
-                    name: c.name,
-                    slug: c.slug || "",
-                    type: c.type,
-                    parentCategoryId: c.parentCategoryId || "",
-                  });
-                  setCategorySlugTouched(true);
-                  setCategorySlugStatus("available");
-                }}
-                onDeleteCategoryRequest={(c) => {
-                  setConfirmAction({ type: "category", id: c.id, name: c.name });
-                }}
-                onRestoreCategory={(id) => restoreCategory(id)}
-              />
+              {session.isSuperAdmin && (
+                <CategoryOperationsPanel
+                  categoryForm={categoryForm}
+                  categorySlugStatus={categorySlugStatus}
+                  categorySlugBlocked={categorySlugBlocked}
+                  categoryMutationBusy={categoryMutationBusy}
+                  savingCategory={savingCategory}
+                  restoringCategoryId={restoringCategoryId}
+                  categories={categories}
+                  deletedCategories={deletedCategories}
+                  parentCategories={parentCategories}
+                  normalizeSlug={(value) => slugify(value).slice(0, 130)}
+                  onCategoryFormNameChange={(value) => {
+                    setCategoryForm((o) => ({ ...o, name: value }));
+                  }}
+                  onCategoryFormSlugChange={(value) => {
+                    setCategorySlugTouched(true);
+                    setCategoryForm((o) => ({ ...o, slug: value }));
+                  }}
+                  onCategoryFormTypeChange={(value) => {
+                    setCategoryForm((o) => ({
+                      ...o,
+                      type: value,
+                      parentCategoryId: value === "SUB" ? o.parentCategoryId : "",
+                    }));
+                  }}
+                  onCategoryFormParentChange={(value) => {
+                    setCategoryForm((o) => ({ ...o, parentCategoryId: value }));
+                  }}
+                  onSaveCategory={() => saveCategory()}
+                  onResetCategoryForm={() => {
+                    setCategoryForm({ name: "", slug: "", type: "PARENT", parentCategoryId: "" });
+                    setCategorySlugTouched(false);
+                    setCategorySlugStatus("idle");
+                  }}
+                  onEditCategory={(c) => {
+                    setCategoryForm({
+                      id: c.id,
+                      name: c.name,
+                      slug: c.slug || "",
+                      type: c.type,
+                      parentCategoryId: c.parentCategoryId || "",
+                    });
+                    setCategorySlugTouched(true);
+                    setCategorySlugStatus("available");
+                  }}
+                  onDeleteCategoryRequest={(c) => {
+                    setConfirmAction({ type: "category", id: c.id, name: c.name });
+                  }}
+                  onRestoreCategory={(id) => restoreCategory(id)}
+                />
+              )}
             </div>
           </div>
 

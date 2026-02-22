@@ -28,6 +28,16 @@ type Category = {
   deleted?: boolean;
 };
 
+type VendorSummary = {
+  id: string;
+  name: string;
+  slug: string;
+  contactEmail: string;
+  active: boolean;
+  deleted: boolean;
+  status?: string;
+};
+
 type PageMeta = {
   totalElements: number;
   totalPages: number;
@@ -39,9 +49,14 @@ type Props = {
   q: string;
   sku: string;
   category: string;
+  vendorId: string;
+  vendorSearch: string;
   type: ProductType | "";
   parentCategories: Category[];
   subCategories: Category[];
+  vendors: VendorSummary[];
+  loadingVendors: boolean;
+  showVendorFilter?: boolean;
   rows: ProductSummary[];
   pageMeta: PageMeta;
   currentPage: number;
@@ -55,6 +70,8 @@ type Props = {
   onQChange: (value: string) => void;
   onSkuChange: (value: string) => void;
   onCategoryChange: (value: string) => void;
+  onVendorIdChange: (value: string) => void;
+  onVendorSearchChange: (value: string) => void;
   onTypeChange: (value: ProductType | "") => void;
   onApplyFilters: (e: React.FormEvent) => void | Promise<void>;
   onEditProduct: (id: string) => void | Promise<void>;
@@ -73,9 +90,14 @@ export default function ProductCatalogPanel({
   q,
   sku,
   category,
+  vendorId,
+  vendorSearch,
   type,
   parentCategories,
   subCategories,
+  vendors,
+  loadingVendors,
+  showVendorFilter = true,
   rows,
   pageMeta,
   currentPage,
@@ -89,6 +111,8 @@ export default function ProductCatalogPanel({
   onQChange,
   onSkuChange,
   onCategoryChange,
+  onVendorIdChange,
+  onVendorSearchChange,
   onTypeChange,
   onApplyFilters,
   onEditProduct,
@@ -96,6 +120,19 @@ export default function ProductCatalogPanel({
   onRestoreProduct,
   onPageChange,
 }: Props) {
+  const filteredVendors = vendors
+    .filter((vendor) => !vendor.deleted)
+    .filter((vendor) => {
+      const needle = vendorSearch.trim().toLowerCase();
+      if (!needle) return true;
+      return vendor.name.toLowerCase().includes(needle)
+        || vendor.slug.toLowerCase().includes(needle)
+        || (vendor.contactEmail || "").toLowerCase().includes(needle)
+        || vendor.id.toLowerCase().includes(needle);
+    })
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .slice(0, 100);
+
   return (
     <div className="order-2 lg:order-1">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
@@ -123,7 +160,7 @@ export default function ProductCatalogPanel({
         </div>
       </div>
 
-      <form onSubmit={onApplyFilters} className="mb-5 grid gap-3 md:grid-cols-5">
+      <form onSubmit={onApplyFilters} className={`mb-5 grid gap-3 md:grid-cols-2 ${showVendorFilter ? "xl:grid-cols-7" : "xl:grid-cols-5"}`}>
         <input
           value={q}
           onChange={(e) => onQChange(e.target.value)}
@@ -181,6 +218,30 @@ export default function ProductCatalogPanel({
           <option value="PARENT">PARENT</option>
           <option value="VARIATION">VARIATION</option>
         </select>
+        {showVendorFilter && (
+          <>
+            <input
+              value={vendorSearch}
+              onChange={(e) => onVendorSearchChange(e.target.value)}
+              placeholder="Vendor search"
+              className="rounded-xl border border-[var(--line)] px-3 py-2 text-sm"
+              style={{ background: "var(--surface-2)", color: "var(--ink)" }}
+            />
+            <select
+              value={vendorId}
+              onChange={(e) => onVendorIdChange(e.target.value)}
+              className="rounded-xl border border-[var(--line)] px-3 py-2 text-sm"
+              style={{ background: "var(--surface-2)", color: "var(--ink)" }}
+            >
+              <option value="">{loadingVendors ? "Loading vendors..." : "All Vendors"}</option>
+              {filteredVendors.map((vendor) => (
+                <option key={vendor.id} value={vendor.id}>
+                  {vendor.name} ({vendor.slug})
+                </option>
+              ))}
+            </select>
+          </>
+        )}
         <button
           type="submit"
           disabled={filtersSubmitting || listLoading}

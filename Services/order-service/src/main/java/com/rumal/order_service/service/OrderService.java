@@ -96,19 +96,26 @@ public class OrderService {
     }
 
     public Page<OrderResponse> list(UUID customerId, Pageable pageable) {
-        return list(customerId, null, pageable);
+        return list(customerId, null, null, pageable);
     }
 
-    public Page<OrderResponse> list(UUID customerId, String customerEmail, Pageable pageable) {
+    public Page<OrderResponse> list(UUID customerId, String customerEmail, UUID vendorId, Pageable pageable) {
         UUID resolvedCustomerId = customerId;
         if (StringUtils.hasText(customerEmail)) {
             CustomerSummary customer = customerClient.getCustomerByEmail(customerEmail.trim());
             resolvedCustomerId = customer.id();
         }
 
-        Page<Order> page = (resolvedCustomerId == null)
-                ? orderRepository.findAll(pageable)
-                : orderRepository.findByCustomerId(resolvedCustomerId, pageable);
+        Page<Order> page;
+        if (resolvedCustomerId != null && vendorId != null) {
+            page = orderRepository.findByCustomerIdAndVendorId(resolvedCustomerId, vendorId, pageable);
+        } else if (resolvedCustomerId != null) {
+            page = orderRepository.findByCustomerId(resolvedCustomerId, pageable);
+        } else if (vendorId != null) {
+            page = orderRepository.findByVendorId(vendorId, pageable);
+        } else {
+            page = orderRepository.findAll(pageable);
+        }
 
         return page.map(this::toResponse);
     }
@@ -210,6 +217,7 @@ public class OrderService {
             OrderItem orderItem = OrderItem.builder()
                     .order(order)
                     .productId(line.product().id())
+                    .vendorId(Objects.requireNonNull(line.product().vendorId(), "vendorId is required"))
                     .productSku(line.product().sku())
                     .item(line.product().name().trim())
                     .quantity(line.quantity())
@@ -283,6 +291,9 @@ public class OrderService {
         if (product.sellingPrice() == null || product.sellingPrice().compareTo(BigDecimal.ZERO) <= 0) {
             throw new ValidationException("Product has invalid selling price: " + productId);
         }
+        if (product.vendorId() == null) {
+            throw new ValidationException("Product vendorId is missing: " + productId);
+        }
         return product;
     }
 
@@ -349,6 +360,7 @@ public class OrderService {
                             null,
                             null,
                             null,
+                            null,
                             order.getItem(),
                             order.getQuantity(),
                             null,
@@ -360,6 +372,7 @@ public class OrderService {
                 .map(i -> new OrderItemResponse(
                         i.getId(),
                         i.getProductId(),
+                        i.getVendorId(),
                         i.getProductSku(),
                         i.getItem(),
                         i.getQuantity(),

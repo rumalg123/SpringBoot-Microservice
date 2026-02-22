@@ -120,7 +120,17 @@ function sortProductsClient(products: ProductSummary[], sortBy: SortKey): Produc
 
 function ProductsPageContent() {
   const searchParams = useSearchParams();
-  const { isAuthenticated, profile, logout, canViewAdmin, apiClient, emailVerified } = useAuthSession();
+  const {
+    isAuthenticated,
+    profile,
+    logout,
+    canViewAdmin,
+    canManageAdminOrders,
+    canManageAdminProducts,
+    canManageAdminPosters,
+    apiClient,
+    emailVerified,
+  } = useAuthSession();
 
   const [products, setProducts] = useState<ProductSummary[]>([]);
   const [allCategories, setAllCategories] = useState<Category[]>([]);
@@ -394,6 +404,9 @@ function ProductsPageContent() {
         <AppNav
           email={(profile?.email as string) || ""}
           canViewAdmin={canViewAdmin}
+          canManageAdminOrders={canManageAdminOrders}
+          canManageAdminProducts={canManageAdminProducts}
+          canManageAdminPosters={canManageAdminPosters}
           apiClient={apiClient}
           emailVerified={emailVerified}
           onLogout={() => { void logout(); }}

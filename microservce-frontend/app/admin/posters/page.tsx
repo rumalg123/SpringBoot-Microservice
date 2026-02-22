@@ -271,12 +271,12 @@ export default function AdminPostersPage() {
       router.replace("/");
       return;
     }
-    if (!session.canViewAdmin) {
+    if (!session.canManageAdminPosters) {
       router.replace("/products");
       return;
     }
     void load();
-  }, [session.status, session.isAuthenticated, session.canViewAdmin, router]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [session.status, session.isAuthenticated, session.canManageAdminPosters, router]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!showDeleted || deletedLoaded) return;
@@ -489,7 +489,16 @@ export default function AdminPostersPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-      <AppNav email={(session.profile?.email as string) || ""} canViewAdmin={session.canViewAdmin} apiClient={session.apiClient} emailVerified={session.emailVerified} onLogout={() => { void session.logout(); }} />
+      <AppNav
+        email={(session.profile?.email as string) || ""}
+        canViewAdmin={session.canViewAdmin}
+        canManageAdminOrders={session.canManageAdminOrders}
+        canManageAdminProducts={session.canManageAdminProducts}
+        canManageAdminPosters={session.canManageAdminPosters}
+        apiClient={session.apiClient}
+        emailVerified={session.emailVerified}
+        onLogout={() => { void session.logout(); }}
+      />
       <main className="mx-auto max-w-7xl px-4 py-4">
         <nav className="breadcrumb">
           <Link href="/">Home</Link><span className="breadcrumb-sep">›</span>

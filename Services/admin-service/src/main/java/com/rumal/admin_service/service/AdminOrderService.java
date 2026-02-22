@@ -18,9 +18,9 @@ public class AdminOrderService {
 
     @Cacheable(
             cacheNames = "adminOrders",
-            key = "(#customerId == null ? 'ALL' : #customerId.toString()) + '::' + (#customerEmail == null ? 'NO_EMAIL' : #customerEmail) + '::' + #page + '::' + #size + '::' + #sort.toString()"
+            key = "(#customerId == null ? 'ALL' : #customerId.toString()) + '::' + (#customerEmail == null ? 'NO_EMAIL' : #customerEmail) + '::' + (#vendorId == null ? 'NO_VENDOR' : #vendorId.toString()) + '::' + #page + '::' + #size + '::' + #sort.toString()"
     )
-    public PageResponse<OrderResponse> listOrders(UUID customerId, String customerEmail, int page, int size, List<String> sort, String internalAuth) {
-        return orderClient.listOrders(customerId, customerEmail, page, size, sort, internalAuth);
+    public PageResponse<OrderResponse> listOrders(UUID customerId, String customerEmail, UUID vendorId, int page, int size, List<String> sort, String internalAuth) {
+        return orderClient.listOrders(customerId, customerEmail, vendorId, page, size, sort, internalAuth);
     }
 }

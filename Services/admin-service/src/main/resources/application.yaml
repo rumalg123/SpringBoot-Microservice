@@ -15,6 +15,15 @@ eureka:
     service-url:
       defaultZone: ${EUREKA_URL:http://discovery-server:8761/eureka/}
 
+keycloak:
+  issuer-uri: ${KEYCLOAK_ISSUER_URI:https://keycloak.rumalg.me/realms/microservice-realm}
+  realm: ${KEYCLOAK_REALM:microservice-realm}
+  vendor-admin-role: ${KEYCLOAK_VENDOR_ADMIN_ROLE:vendor_admin}
+  admin:
+    client-id: ${KEYCLOAK_ADMIN_CLIENT_ID:}
+    client-secret: ${KEYCLOAK_ADMIN_CLIENT_SECRET:}
+    realm: ${KEYCLOAK_ADMIN_REALM:${keycloak.realm}}
+
 internal:
   auth:
     shared-secret: ${INTERNAL_AUTH_SHARED_SECRET:}

@@ -5,9 +5,49 @@ import com.rumal.order_service.entity.Order;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.UUID;
 
 public interface OrderRepository extends JpaRepository<Order, UUID> {
     Page<Order> findByCustomerId(UUID customerId, Pageable pageable);
+
+    @Query(
+            value = """
+                    select distinct o
+                    from Order o
+                    join o.orderItems oi
+                    where oi.vendorId = :vendorId
+                    """,
+            countQuery = """
+                    select count(distinct o.id)
+                    from Order o
+                    join o.orderItems oi
+                    where oi.vendorId = :vendorId
+                    """
+    )
+    Page<Order> findByVendorId(@Param("vendorId") UUID vendorId, Pageable pageable);
+
+    @Query(
+            value = """
+                    select distinct o
+                    from Order o
+                    join o.orderItems oi
+                    where o.customerId = :customerId
+                      and oi.vendorId = :vendorId
+                    """,
+            countQuery = """
+                    select count(distinct o.id)
+                    from Order o
+                    join o.orderItems oi
+                    where o.customerId = :customerId
+                      and oi.vendorId = :vendorId
+                    """
+    )
+    Page<Order> findByCustomerIdAndVendorId(
+            @Param("customerId") UUID customerId,
+            @Param("vendorId") UUID vendorId,
+            Pageable pageable
+    );
 }

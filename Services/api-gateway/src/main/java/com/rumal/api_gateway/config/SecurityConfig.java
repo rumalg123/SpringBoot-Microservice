@@ -58,12 +58,15 @@ public class SecurityConfig {
                         .pathMatchers(HttpMethod.GET, "/products", "/products/**").permitAll()
                         .pathMatchers(HttpMethod.GET, "/categories", "/categories/**").permitAll()
                         .pathMatchers(HttpMethod.GET, "/posters", "/posters/**").permitAll()
+                        .pathMatchers(HttpMethod.GET, "/vendors", "/vendors/**").permitAll()
                         .pathMatchers("/actuator/health", "/actuator/info", "/customers/register").permitAll()
                         .pathMatchers("/auth/logout", "/auth/resend-verification").authenticated()
                         .pathMatchers("/customers/me", "/customers/me/**", "/customers/register-identity", "/orders/me", "/orders/me/**", "/cart/me", "/cart/me/**", "/wishlist/me", "/wishlist/me/**")
                         .access(this::hasCustomerAccess)
-                        .pathMatchers("/admin/**").access(this::hasAdminAccess)
-                        .pathMatchers("/customer-service/**", "/order-service/**", "/cart-service/**", "/wishlist-service/**", "/admin-service/**", "/product-service/**", "/poster-service/**", "/discovery-server/**").denyAll()
+                        .pathMatchers("/admin/posters/**", "/admin/vendors/**", "/admin/categories/**").access(this::hasSuperAdminAccess)
+                        .pathMatchers("/admin/orders/**", "/admin/products/**").access(this::hasSuperAdminOrVendorAdminAccess)
+                        .pathMatchers("/admin/**").access(this::hasSuperAdminAccess)
+                        .pathMatchers("/customer-service/**", "/order-service/**", "/cart-service/**", "/wishlist-service/**", "/admin-service/**", "/product-service/**", "/poster-service/**", "/vendor-service/**", "/discovery-server/**").denyAll()
                         .pathMatchers("/customers/**", "/orders/**", "/cart/**", "/wishlist/**").denyAll()
                         .anyExchange().authenticated()
                 )
@@ -80,13 +83,25 @@ public class SecurityConfig {
         return jwtDecoder;
     }
 
-    private Mono<AuthorizationResult> hasAdminAccess(Mono<Authentication> authentication, AuthorizationContext context) {
+    private Mono<AuthorizationResult> hasSuperAdminAccess(Mono<Authentication> authentication, AuthorizationContext context) {
         return authentication
                 .filter(Authentication::isAuthenticated)
                 .filter(auth -> auth instanceof JwtAuthenticationToken)
                 .cast(JwtAuthenticationToken.class)
                 .map(JwtAuthenticationToken::getToken)
                 .map(jwt -> (AuthorizationResult) new AuthorizationDecision(hasRole(jwt, "super_admin")))
+                .defaultIfEmpty(new AuthorizationDecision(false));
+    }
+
+    private Mono<AuthorizationResult> hasSuperAdminOrVendorAdminAccess(Mono<Authentication> authentication, AuthorizationContext context) {
+        return authentication
+                .filter(Authentication::isAuthenticated)
+                .filter(auth -> auth instanceof JwtAuthenticationToken)
+                .cast(JwtAuthenticationToken.class)
+                .map(JwtAuthenticationToken::getToken)
+                .map(jwt -> (AuthorizationResult) new AuthorizationDecision(
+                        hasRole(jwt, "super_admin") || hasRole(jwt, "vendor_admin")
+                ))
                 .defaultIfEmpty(new AuthorizationDecision(false));
     }
 

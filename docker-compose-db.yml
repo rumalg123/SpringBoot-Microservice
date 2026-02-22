@@ -83,6 +83,17 @@ services:
     volumes:
       - poster-db-data:/var/lib/postgresql/data
 
+  vendor-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: vendor_db
+      POSTGRES_USER: vendor_user
+      POSTGRES_PASSWORD: vendor_pass
+    ports:
+      - "5439:5432"
+    volumes:
+      - vendor-db-data:/var/lib/postgresql/data
+
   customer-service:
     build:
       context: ./Services/customer-service
@@ -173,6 +184,21 @@ services:
     volumes:
       - /home/ubuntu/microservice-logs:/logs
 
+  vendor-service:
+    build:
+      context: ./Services/vendor-service
+    depends_on:
+      - discovery-server
+      - vendor-db
+      - redis
+    env_file:
+      - ./env/common.env
+      - ./env/vendor-service.env
+    environment:
+      LOGGING_FILE_NAME: /logs/vendor-service.log
+    volumes:
+      - /home/ubuntu/microservice-logs:/logs
+
   admin-service:
     build:
       context: ./Services/admin-service
@@ -180,6 +206,7 @@ services:
       - discovery-server
     env_file:
       - ./env/common.env
+      - ./env/admin-service.env
     environment:
       LOGGING_FILE_NAME: /logs/admin-service.log
     volumes:
@@ -221,3 +248,4 @@ volumes:
   wishlist-db-data:
   product-db-data:
   poster-db-data:
+  vendor-db-data:

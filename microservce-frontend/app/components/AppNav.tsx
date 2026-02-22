@@ -11,12 +11,24 @@ import ProductSearchBar from "./search/ProductSearchBar";
 type Props = {
   email?: string;
   canViewAdmin?: boolean;
+  canManageAdminOrders?: boolean;
+  canManageAdminProducts?: boolean;
+  canManageAdminPosters?: boolean;
   apiClient?: AxiosInstance | null;
   emailVerified?: boolean | null;
   onLogout: () => void | Promise<void>;
 };
 
-export default function AppNav({ email, canViewAdmin = false, apiClient = null, emailVerified = null, onLogout }: Props) {
+export default function AppNav({
+  email,
+  canViewAdmin = false,
+  canManageAdminOrders,
+  canManageAdminProducts,
+  canManageAdminPosters,
+  apiClient = null,
+  emailVerified = null,
+  onLogout,
+}: Props) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [logoutPending, setLogoutPending] = useState(false);
@@ -34,6 +46,11 @@ export default function AppNav({ email, canViewAdmin = false, apiClient = null, 
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
+
+  const showAdminOrders = canManageAdminOrders ?? canViewAdmin;
+  const showAdminProducts = canManageAdminProducts ?? canViewAdmin;
+  const showAdminPosters = canManageAdminPosters ?? canViewAdmin;
+  const showAnyAdminLinks = showAdminOrders || showAdminProducts || showAdminPosters;
 
   return (
     <header
@@ -159,39 +176,45 @@ export default function AppNav({ email, canViewAdmin = false, apiClient = null, 
               {label}
             </Link>
           ))}
-          {canViewAdmin && (
+          {showAnyAdminLinks && (
             <>
               <span className="mx-1 hidden h-4 w-px bg-white/10 md:inline-block" />
-              <Link href="/admin/orders"
-                className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
-                style={{
-                  color: isActive("/admin/orders") ? "#a78bfa" : "rgba(167,139,250,0.6)",
-                  background: isActive("/admin/orders") ? "rgba(124,58,237,0.12)" : "transparent",
-                  border: isActive("/admin/orders") ? "1px solid rgba(124,58,237,0.3)" : "1px solid transparent",
-                }}
-              >
-                Admin Orders
-              </Link>
-              <Link href="/admin/products"
-                className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
-                style={{
-                  color: isActive("/admin/products") ? "#a78bfa" : "rgba(167,139,250,0.6)",
-                  background: isActive("/admin/products") ? "rgba(124,58,237,0.12)" : "transparent",
-                  border: isActive("/admin/products") ? "1px solid rgba(124,58,237,0.3)" : "1px solid transparent",
-                }}
-              >
-                Admin Products
-              </Link>
-              <Link href="/admin/posters"
-                className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
-                style={{
-                  color: isActive("/admin/posters") ? "#a78bfa" : "rgba(167,139,250,0.6)",
-                  background: isActive("/admin/posters") ? "rgba(124,58,237,0.12)" : "transparent",
-                  border: isActive("/admin/posters") ? "1px solid rgba(124,58,237,0.3)" : "1px solid transparent",
-                }}
-              >
-                Admin Posters
-              </Link>
+              {showAdminOrders && (
+                <Link href="/admin/orders"
+                  className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
+                  style={{
+                    color: isActive("/admin/orders") ? "#a78bfa" : "rgba(167,139,250,0.6)",
+                    background: isActive("/admin/orders") ? "rgba(124,58,237,0.12)" : "transparent",
+                    border: isActive("/admin/orders") ? "1px solid rgba(124,58,237,0.3)" : "1px solid transparent",
+                  }}
+                >
+                  Admin Orders
+                </Link>
+              )}
+              {showAdminProducts && (
+                <Link href="/admin/products"
+                  className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
+                  style={{
+                    color: isActive("/admin/products") ? "#a78bfa" : "rgba(167,139,250,0.6)",
+                    background: isActive("/admin/products") ? "rgba(124,58,237,0.12)" : "transparent",
+                    border: isActive("/admin/products") ? "1px solid rgba(124,58,237,0.3)" : "1px solid transparent",
+                  }}
+                >
+                  Admin Products
+                </Link>
+              )}
+              {showAdminPosters && (
+                <Link href="/admin/posters"
+                  className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
+                  style={{
+                    color: isActive("/admin/posters") ? "#a78bfa" : "rgba(167,139,250,0.6)",
+                    background: isActive("/admin/posters") ? "rgba(124,58,237,0.12)" : "transparent",
+                    border: isActive("/admin/posters") ? "1px solid rgba(124,58,237,0.3)" : "1px solid transparent",
+                  }}
+                >
+                  Admin Posters
+                </Link>
+              )}
             </>
           )}
           {/* Mobile-only: user info + logout */}

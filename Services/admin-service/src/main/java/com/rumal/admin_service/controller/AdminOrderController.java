@@ -3,6 +3,7 @@ package com.rumal.admin_service.controller;
 import com.rumal.admin_service.dto.OrderResponse;
 import com.rumal.admin_service.dto.PageResponse;
 import com.rumal.admin_service.security.InternalRequestVerifier;
+import com.rumal.admin_service.service.AdminActorScopeService;
 import com.rumal.admin_service.service.AdminOrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,18 +21,23 @@ import java.util.UUID;
 public class AdminOrderController {
 
     private final AdminOrderService adminOrderService;
+    private final AdminActorScopeService adminActorScopeService;
     private final InternalRequestVerifier internalRequestVerifier;
 
     @GetMapping
     public PageResponse<OrderResponse> listOrders(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @RequestParam(required = false) UUID customerId,
             @RequestParam(required = false) String customerEmail,
+            @RequestParam(required = false) UUID vendorId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "createdAt,DESC") List<String> sort
     ) {
         internalRequestVerifier.verify(internalAuth);
-        return adminOrderService.listOrders(customerId, customerEmail, page, size, sort, internalAuth);
+        UUID scopedVendorId = adminActorScopeService.resolveScopedVendorIdForOrderAccess(userSub, userRoles, vendorId, internalAuth);
+        return adminOrderService.listOrders(customerId, customerEmail, scopedVendorId, page, size, sort, internalAuth);
     }
 }

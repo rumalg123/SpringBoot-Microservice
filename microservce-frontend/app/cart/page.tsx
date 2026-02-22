@@ -243,6 +243,9 @@ export default function CartPage() {
       <AppNav
         email={(profile?.email as string) || ""}
         canViewAdmin={canViewAdmin}
+        canManageAdminOrders={session.canManageAdminOrders}
+        canManageAdminProducts={session.canManageAdminProducts}
+        canManageAdminPosters={session.canManageAdminPosters}
         apiClient={apiClient}
         emailVerified={emailVerified}
         onLogout={() => { void logout(); }}

@@ -7,7 +7,13 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 @Entity
-@Table(name = "order_items")
+@Table(
+        name = "order_items",
+        indexes = {
+                @Index(name = "idx_order_items_vendor_id", columnList = "vendor_id"),
+                @Index(name = "idx_order_items_product_id", columnList = "product_id")
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -25,6 +31,9 @@ public class OrderItem {
 
     @Column(name = "product_id", nullable = false)
     private UUID productId;
+
+    @Column(name = "vendor_id", nullable = false)
+    private UUID vendorId;
 
     @Column(name = "product_sku", nullable = false, length = 80)
     private String productSku;

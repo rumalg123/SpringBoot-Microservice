@@ -61,7 +61,7 @@ export default function AdminOrdersPage() {
   useEffect(() => {
     if (session.status !== "ready") return;
     if (!session.isAuthenticated) { router.replace("/"); return; }
-    if (!session.canViewAdmin) { router.replace("/orders"); return; }
+    if (!session.canManageAdminOrders) { router.replace("/orders"); return; }
     const run = async () => {
       try {
         await loadAdminOrders(0, "");
@@ -71,7 +71,7 @@ export default function AdminOrdersPage() {
       }
     };
     void run();
-  }, [router, session.status, session.isAuthenticated, session.canViewAdmin, loadAdminOrders]);
+  }, [router, session.status, session.isAuthenticated, session.canManageAdminOrders, loadAdminOrders]);
 
   const applyFilter = async (e: FormEvent) => {
     e.preventDefault();
@@ -132,6 +132,9 @@ export default function AdminOrdersPage() {
       <AppNav
         email={(session.profile?.email as string) || ""}
         canViewAdmin={session.canViewAdmin}
+        canManageAdminOrders={session.canManageAdminOrders}
+        canManageAdminProducts={session.canManageAdminProducts}
+        canManageAdminPosters={session.canManageAdminPosters}
         apiClient={session.apiClient}
         emailVerified={session.emailVerified}
         onLogout={() => { void session.logout(); }}

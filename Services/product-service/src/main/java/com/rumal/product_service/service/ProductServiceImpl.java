@@ -411,7 +411,7 @@ public class ProductServiceImpl implements ProductService {
                 ? resolveCategoriesFromParent(parentProduct)
                 : resolveCategories(request.categories());
         List<ProductVariationAttribute> normalizedVariations = normalizeVariations(request.variations());
-        UUID resolvedVendorId = resolveVendorId(request.vendorId());
+        UUID resolvedVendorId = resolveVendorId(request.vendorId(), request.productType(), parentProduct);
 
         validatePricing(request.regularPrice(), request.discountedPrice());
         validateProductTypeAndVariations(request.productType(), normalizedVariations);
@@ -488,8 +488,21 @@ public class ProductServiceImpl implements ProductService {
         );
     }
 
-    private UUID resolveVendorId(UUID vendorId) {
-        return vendorId != null ? vendorId : ADMIN_VENDOR_UUID;
+    private UUID resolveVendorId(UUID requestedVendorId, ProductType productType, Product parentProduct) {
+        if (productType == ProductType.VARIATION) {
+            if (parentProduct == null) {
+                throw new ValidationException("Parent product is required for variation vendor inheritance");
+            }
+            UUID inheritedVendorId = parentProduct.getVendorId();
+            if (inheritedVendorId == null) {
+                throw new ValidationException("Parent product vendorId is required for variation creation");
+            }
+            if (requestedVendorId != null && !inheritedVendorId.equals(requestedVendorId)) {
+                throw new ValidationException("Variation vendorId must match parent product vendorId");
+            }
+            return inheritedVendorId;
+        }
+        return requestedVendorId != null ? requestedVendorId : ADMIN_VENDOR_UUID;
     }
 
     private List<String> normalizeImages(List<String> images) {
@@ -621,6 +634,9 @@ public class ProductServiceImpl implements ProductService {
     }
 
     private void validateVariationAgainstParent(Product parent, Product variation) {
+        if (!Objects.equals(parent.getVendorId(), variation.getVendorId())) {
+            throw new ValidationException("Variation vendorId must match parent vendorId");
+        }
         java.util.Set<String> parentNames = parent.getVariations().stream()
                 .map(ProductVariationAttribute::getName)
                 .collect(java.util.stream.Collectors.toSet());

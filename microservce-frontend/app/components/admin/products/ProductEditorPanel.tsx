@@ -3,6 +3,7 @@
 import ProductImagesEditor from "./ProductImagesEditor";
 import VariationAttributesEditor from "./VariationAttributesEditor";
 import VariationParentSelectorPanel from "./VariationParentSelectorPanel";
+import VendorSelectorField from "./VendorSelectorField";
 import type { ProductEditorPanelProps, ProductType } from "./types";
 
 export default function ProductEditorPanel({ state, actions, helpers }: ProductEditorPanelProps) {
@@ -18,6 +19,8 @@ export default function ProductEditorPanel({ state, actions, helpers }: ProductE
     uploadingImages,
     parentCategories,
     subCategoryOptions,
+    vendors,
+    loadingVendors,
     priceValidationMessage,
     parentSearch,
     loadingParentProducts,
@@ -53,6 +56,7 @@ export default function ProductEditorPanel({ state, actions, helpers }: ProductE
     setVariationDrafts,
     addParentAttribute,
     removeParentAttribute,
+    refreshVendors,
     refreshVariationParents,
     onSelectVariationParent,
     addVariationDraft,
@@ -295,7 +299,16 @@ export default function ProductEditorPanel({ state, actions, helpers }: ProductE
                   {priceValidationMessage && (
                     <p className="text-xs font-semibold text-red-600">{priceValidationMessage}</p>
                   )}
-                  <input value={form.vendorId} onChange={(e) => setForm((o) => ({ ...o, vendorId: e.target.value }))} placeholder="Vendor UUID (optional)" className="rounded-lg border border-[var(--line)] px-3 py-2" disabled={productMutationBusy} />
+                  <VendorSelectorField
+                    form={form}
+                    setForm={setForm}
+                    productMutationBusy={productMutationBusy}
+                    canSelectVendor={helpers.canSelectVendor}
+                    vendors={vendors}
+                    loadingVendors={loadingVendors}
+                    refreshVendors={refreshVendors}
+                    selectedVariationParent={selectedVariationParent}
+                  />
                   {form.productType === "PARENT" && (
                     <VariationAttributesEditor
                       parentAttributeNames={parentAttributeNames}

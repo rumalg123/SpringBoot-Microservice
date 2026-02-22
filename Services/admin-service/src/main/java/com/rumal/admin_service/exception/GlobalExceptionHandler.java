@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.HashMap;
@@ -32,6 +33,17 @@ public class GlobalExceptionHandler {
     public ResponseEntity<?> downstreamHttp(DownstreamHttpException ex) {
         log.warn("Downstream HTTP error {}: {}", ex.getStatusCode().value(), ex.getMessage(), ex);
         return ResponseEntity.status(ex.getStatusCode()).body(error(ex.getMessage()));
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<?> responseStatus(ResponseStatusException ex) {
+        String message = ex.getReason() == null ? "Request failed" : ex.getReason();
+        if (ex.getStatusCode().is4xxClientError()) {
+            log.warn("Request failed with {}: {}", ex.getStatusCode().value(), message, ex);
+        } else {
+            log.error("Request failed with {}: {}", ex.getStatusCode().value(), message, ex);
+        }
+        return ResponseEntity.status(ex.getStatusCode()).body(error(message));
     }
 
     private Map<String, Object> error(String message) {

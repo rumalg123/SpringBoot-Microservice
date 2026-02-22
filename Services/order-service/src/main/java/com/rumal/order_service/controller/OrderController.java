@@ -40,9 +40,10 @@ public class OrderController {
     public Page<OrderResponse> list(
             @RequestParam(required = false) UUID customerId,
             @RequestParam(required = false) String customerEmail,
+            @RequestParam(required = false) UUID vendorId,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
-        return orderService.list(customerId, customerEmail, pageable);
+        return orderService.list(customerId, customerEmail, vendorId, pageable);
     }
 
     @GetMapping("/me")

@@ -76,6 +76,10 @@ spring:
               uri: lb://admin-service
               predicates:
                 - Path=/admin/posters,/admin/posters/**
+            - id: admin-vendors
+              uri: lb://admin-service
+              predicates:
+                - Path=/admin/vendors,/admin/vendors/**
             - id: products-catalog
               uri: lb://product-service
               predicates:
@@ -88,6 +92,10 @@ spring:
               uri: lb://poster-service
               predicates:
                 - Path=/posters,/posters/**
+            - id: vendors-catalog
+              uri: lb://vendor-service
+              predicates:
+                - Path=/vendors,/vendors/**
 
           discovery:
             locator:

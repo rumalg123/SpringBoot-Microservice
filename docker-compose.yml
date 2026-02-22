@@ -99,6 +99,20 @@ services:
     volumes:
       - /home/ubuntu/microservice-logs:/logs
 
+  vendor-service:
+    build:
+      context: ./Services/vendor-service
+    depends_on:
+      - discovery-server
+      - redis
+    env_file:
+      - ./env/common.env
+      - ./env/vendor-service.env
+    environment:
+      LOGGING_FILE_NAME: /logs/vendor-service.log
+    volumes:
+      - /home/ubuntu/microservice-logs:/logs
+
   admin-service:
     build:
       context: ./Services/admin-service
@@ -106,6 +120,7 @@ services:
       - discovery-server
     env_file:
       - ./env/common.env
+      - ./env/admin-service.env
     environment:
       LOGGING_FILE_NAME: /logs/admin-service.log
     volumes:

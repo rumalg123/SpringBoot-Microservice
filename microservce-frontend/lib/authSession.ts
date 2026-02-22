@@ -113,6 +113,13 @@ function isSuperAdminByClaims(
   return hasRoleByClaims(claims, namespace, "super_admin");
 }
 
+function isVendorAdminByClaims(
+  claims: Record<string, unknown> | null,
+  namespace: string
+): boolean {
+  return hasRoleByClaims(claims, namespace, "vendor_admin");
+}
+
 function isCustomerByClaims(
   claims: Record<string, unknown> | null,
   namespace: string
@@ -260,7 +267,12 @@ export function useAuthSession() {
   const [error, setError] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [profile, setProfile] = useState<UserProfile>(null);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [isVendorAdmin, setIsVendorAdmin] = useState(false);
   const [canViewAdmin, setCanViewAdmin] = useState(false);
+  const [canManageAdminOrders, setCanManageAdminOrders] = useState(false);
+  const [canManageAdminProducts, setCanManageAdminProducts] = useState(false);
+  const [canManageAdminPosters, setCanManageAdminPosters] = useState(false);
   const [hasCustomerRole, setHasCustomerRole] = useState(false);
   const [emailVerified, setEmailVerified] = useState<boolean | null>(null);
   const customerBootstrapDoneRef = useRef(false);
@@ -348,14 +360,26 @@ export function useAuthSession() {
           }
 
           const superAdmin = isSuperAdminByClaims(parsedClaims, env.claimsNamespace);
+          const vendorAdmin = isVendorAdminByClaims(parsedClaims, env.claimsNamespace);
           const customerRole = isCustomerByClaims(parsedClaims, env.claimsNamespace);
+          const anyAdmin = superAdmin || vendorAdmin;
           setProfile(userProfile);
-          setCanViewAdmin(superAdmin);
+          setIsSuperAdmin(superAdmin);
+          setIsVendorAdmin(vendorAdmin);
+          setCanViewAdmin(anyAdmin);
+          setCanManageAdminOrders(anyAdmin);
+          setCanManageAdminProducts(anyAdmin);
+          setCanManageAdminPosters(superAdmin);
           setHasCustomerRole(customerRole);
           setEmailVerified(resolveEmailVerified(parsedClaims, userProfile, env.claimsNamespace));
         } else {
           setProfile(null);
+          setIsSuperAdmin(false);
+          setIsVendorAdmin(false);
           setCanViewAdmin(false);
+          setCanManageAdminOrders(false);
+          setCanManageAdminProducts(false);
+          setCanManageAdminPosters(false);
           setHasCustomerRole(false);
           setEmailVerified(null);
         }
@@ -499,7 +523,12 @@ export function useAuthSession() {
     status,
     error,
     isAuthenticated,
+    isSuperAdmin,
+    isVendorAdmin,
     canViewAdmin,
+    canManageAdminOrders,
+    canManageAdminProducts,
+    canManageAdminPosters,
     hasCustomerRole,
     emailVerified,
     profile,

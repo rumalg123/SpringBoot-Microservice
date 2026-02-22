@@ -166,6 +166,9 @@ export default function CategoriesPage() {
         <AppNav
           email={(session.profile?.email as string) || ""}
           canViewAdmin={session.canViewAdmin}
+          canManageAdminOrders={session.canManageAdminOrders}
+          canManageAdminProducts={session.canManageAdminProducts}
+          canManageAdminPosters={session.canManageAdminPosters}
           apiClient={session.apiClient}
           emailVerified={session.emailVerified}
           onLogout={() => { void session.logout(); }}
