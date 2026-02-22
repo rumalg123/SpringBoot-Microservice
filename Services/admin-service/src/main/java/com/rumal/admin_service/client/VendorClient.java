@@ -63,6 +63,8 @@ public class VendorClient {
             throw toDownstreamHttpException(ex);
         } catch (RestClientException ex) {
             throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
+        } catch (IllegalStateException ex) {
+            throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
         }
     }
 
@@ -81,6 +83,8 @@ public class VendorClient {
         } catch (RestClientResponseException ex) {
             throw toDownstreamHttpException(ex);
         } catch (RestClientException ex) {
+            throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
+        } catch (IllegalStateException ex) {
             throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
         }
     }
@@ -113,6 +117,8 @@ public class VendorClient {
             throw toDownstreamHttpException(ex);
         } catch (RestClientException ex) {
             throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
+        } catch (IllegalStateException ex) {
+            throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
         }
     }
 
@@ -132,6 +138,8 @@ public class VendorClient {
             throw toDownstreamHttpException(ex);
         } catch (RestClientException ex) {
             throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
+        } catch (IllegalStateException ex) {
+            throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
         }
     }
 
@@ -150,6 +158,8 @@ public class VendorClient {
         } catch (RestClientResponseException ex) {
             throw toDownstreamHttpException(ex);
         } catch (RestClientException ex) {
+            throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
+        } catch (IllegalStateException ex) {
             throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
         }
     }
@@ -175,6 +185,8 @@ public class VendorClient {
         } catch (RestClientResponseException ex) {
             throw toDownstreamHttpException(ex);
         } catch (RestClientException ex) {
+            throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
+        } catch (IllegalStateException ex) {
             throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
         }
     }

@@ -37,6 +37,8 @@ public class VendorAccessClient {
             throw new ServiceUnavailableException("Vendor service access lookup failed (" + ex.getStatusCode().value() + ")", ex);
         } catch (RestClientException ex) {
             throw new ServiceUnavailableException("Vendor service unavailable for access lookup", ex);
+        } catch (IllegalStateException ex) {
+            throw new ServiceUnavailableException("Vendor service unavailable for access lookup", ex);
         }
     }
 
