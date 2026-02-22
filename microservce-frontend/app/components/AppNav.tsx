@@ -204,6 +204,18 @@ export default function AppNav({
                 </Link>
               )}
               {showAdminPosters && (
+                <Link href="/admin/vendors"
+                  className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
+                  style={{
+                    color: isActive("/admin/vendors") ? "#a78bfa" : "rgba(167,139,250,0.6)",
+                    background: isActive("/admin/vendors") ? "rgba(124,58,237,0.12)" : "transparent",
+                    border: isActive("/admin/vendors") ? "1px solid rgba(124,58,237,0.3)" : "1px solid transparent",
+                  }}
+                >
+                  Admin Vendors
+                </Link>
+              )}
+              {showAdminPosters && (
                 <Link href="/admin/posters"
                   className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
                   style={{
