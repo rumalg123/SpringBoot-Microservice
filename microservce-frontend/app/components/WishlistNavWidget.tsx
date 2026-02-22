@@ -67,6 +67,13 @@ export default function WishlistNavWidget({ apiClient }: Props) {
   useEffect(() => { void loadWishlist(); }, [loadWishlist, pathname]);
   useEffect(() => { if (!open) return; void loadWishlist(); }, [open, loadWishlist]);
 
+  // Re-fetch whenever any page emits 'wishlist-updated'
+  useEffect(() => {
+    const handler = () => { void loadWishlist(); };
+    window.addEventListener("wishlist-updated", handler);
+    return () => window.removeEventListener("wishlist-updated", handler);
+  }, [loadWishlist]);
+
   const previewItems = wishlist.items.slice(0, 3);
 
   return (

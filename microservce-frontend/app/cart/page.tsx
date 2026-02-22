@@ -332,7 +332,7 @@ export default function CartPage() {
           </div>
         </div>
 
-        <div style={{ display: "grid", gap: "20px", gridTemplateColumns: "1.4fr 0.8fr" }}>
+        <div className="cart-grid" style={{ display: "grid", gap: "20px", gridTemplateColumns: "1.4fr 0.8fr" }}>
           {/* Cart Items */}
           <section style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             {cart.items.length === 0 && (
@@ -405,7 +405,7 @@ export default function CartPage() {
           </section>
 
           {/* Checkout Panel */}
-          <aside style={{ ...glassCard, alignSelf: "start", position: "sticky", top: "80px" }}>
+          <aside className="cart-summary-aside" style={{ ...glassCard, alignSelf: "start", position: "sticky", top: "80px" }}>
             <h2 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: "1.1rem", color: "#fff", margin: "0 0 16px" }}>
               Checkout Summary
             </h2>

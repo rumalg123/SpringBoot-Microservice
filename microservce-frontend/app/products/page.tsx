@@ -12,6 +12,7 @@ import Pagination from "../components/Pagination";
 import CatalogToolbar from "../components/catalog/CatalogToolbar";
 import CatalogFiltersSidebar from "../components/catalog/CatalogFiltersSidebar";
 import { useAuthSession } from "../../lib/authSession";
+import { emitWishlistUpdate } from "../../lib/navEvents";
 
 type ProductSummary = {
   id: string;
@@ -373,10 +374,12 @@ function ProductsPageContent() {
         await apiClient.delete(`/wishlist/me/items/${existingItemId}`);
         setWishlistByProductId((old) => { const next = { ...old }; delete next[productId]; return next; });
         toast.success("Removed from wishlist");
+        emitWishlistUpdate();
       } else {
         const res = await apiClient.post("/wishlist/me/items", { productId });
         applyWishlistResponse((res.data as WishlistResponse) || { items: [], itemCount: 0 });
         toast.success("Added to wishlist");
+        emitWishlistUpdate();
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Wishlist update failed");

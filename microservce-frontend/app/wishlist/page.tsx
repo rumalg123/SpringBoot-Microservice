@@ -7,6 +7,7 @@ import toast from "react-hot-toast";
 import AppNav from "../components/AppNav";
 import Footer from "../components/Footer";
 import { useAuthSession } from "../../lib/authSession";
+import { emitCartUpdate, emitWishlistUpdate } from "../../lib/navEvents";
 
 type WishlistItem = {
   id: string;
@@ -108,6 +109,8 @@ export default function WishlistPage() {
         return { items: nextItems, itemCount: nextItems.length };
       });
       toast.success("Moved to cart");
+      emitCartUpdate();
+      emitWishlistUpdate();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to move item to cart");
     } finally { setMovingItemId(null); }

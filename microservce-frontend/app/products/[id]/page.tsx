@@ -8,6 +8,7 @@ import toast from "react-hot-toast";
 import AppNav from "../../components/AppNav";
 import Footer from "../../components/Footer";
 import { useAuthSession } from "../../../lib/authSession";
+import { emitCartUpdate, emitWishlistUpdate } from "../../../lib/navEvents";
 
 type Variation = { name: string; value: string };
 type ProductDetail = {
@@ -185,6 +186,7 @@ export default function ProductDetailPage() {
     try {
       await apiClient.post("/cart/me/items", { productId: targetProductId, quantity });
       toast.success("Added to cart");
+      emitCartUpdate();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to add product to cart");
     } finally { setAddingToCart(false); }
@@ -200,12 +202,14 @@ export default function ProductDetailPage() {
         await apiClient.delete(`/wishlist/me/items/${wishlistItemId}`);
         setWishlistItemId("");
         toast.success("Removed from wishlist");
+        emitWishlistUpdate();
       } else {
         const res = await apiClient.post("/wishlist/me/items", { productId: targetProductId });
         const data = (res.data as WishlistResponse) || { items: [], itemCount: 0 };
         const matched = (data.items || []).find((item) => item.productId === targetProductId);
         setWishlistItemId(matched?.id || "");
         toast.success("Added to wishlist");
+        emitWishlistUpdate();
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Wishlist update failed");

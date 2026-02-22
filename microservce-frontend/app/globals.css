@@ -1078,7 +1078,86 @@ textarea:focus {
     bottom: 20px;
     right: 20px;
   }
+
+  /* Cart page: stack columns on mobile */
+  .cart-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Checkout summary: remove sticky on mobile */
+  .cart-summary-aside {
+    position: static !important;
+  }
+
+  /* Product card grids: single column */
+  .product-grid-auto {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Hide desktop-only elements */
+  .hide-mobile {
+    display: none !important;
+  }
+
+  /* Full-width on mobile */
+  .full-mobile {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  /* Admin tables: horizontal scroll */
+  .admin-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Reduce padding on mobile */
+  .mobile-px {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  /* Section headers stack on mobile */
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
 }
+
+@media (max-width: 480px) {
+
+  /* Very small phones: 1 column product grid */
+  .product-grid-auto {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Smaller page headings */
+  h1 {
+    font-size: 1.5rem !important;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1023px) {
+
+  /* Tablet: 2 column product grid */
+  .product-grid-auto {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Tablet: catalog sidebar stacks above content */
+  .catalog-layout {
+    flex-direction: column;
+  }
+
+  .catalog-sidebar {
+    width: 100% !important;
+    max-width: none !important;
+    position: static !important;
+    max-height: none !important;
+  }
+}
+
 
 /* ─── Neon Divider ─── */
 .neon-divider {

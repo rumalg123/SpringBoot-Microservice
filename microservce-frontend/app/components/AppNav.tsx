@@ -133,7 +133,7 @@ export default function AppNav({ email, canViewAdmin = false, apiClient = null, 
               setLogoutPending(true);
               try { await onLogout(); } finally { setLogoutPending(false); }
             }}
-            className="rounded-xl px-4 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
+            className="hidden md:inline-flex rounded-xl px-4 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
             style={{
               background: "linear-gradient(135deg, #00d4ff, #7c3aed)",
               color: "#fff",
@@ -214,6 +214,37 @@ export default function AppNav({ email, canViewAdmin = false, apiClient = null, 
               >
                 Admin Products
               </Link>
+            </>
+          )}
+          {/* Mobile-only: user info + logout */}
+          {mobileOpen && (
+            <>
+              <div className="w-full mt-1 pt-2" style={{ borderTop: "1px solid rgba(0,212,255,0.08)" }}>
+                <div className="flex items-center justify-between gap-3">
+                  {email && (
+                    <span className="text-xs font-medium" style={{ color: "rgba(0,212,255,0.7)" }}>
+                      {email}
+                    </span>
+                  )}
+                  <button
+                    disabled={logoutPending}
+                    onClick={async () => {
+                      if (logoutPending) return;
+                      setLogoutPending(true);
+                      try { await onLogout(); } finally { setLogoutPending(false); }
+                    }}
+                    className="rounded-lg px-4 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
+                    style={{
+                      background: "linear-gradient(135deg, #00d4ff, #7c3aed)",
+                      color: "#fff",
+                      border: "none",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {logoutPending ? "Logging out..." : "Logout"}
+                  </button>
+                </div>
+              </div>
             </>
           )}
         </div>

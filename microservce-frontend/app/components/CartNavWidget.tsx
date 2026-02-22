@@ -82,6 +82,13 @@ export default function CartNavWidget({ apiClient, emailVerified }: Props) {
   useEffect(() => { void loadCart(); }, [loadCart, pathname]);
   useEffect(() => { if (!open) return; void loadCart(); }, [open, loadCart]);
 
+  // Re-fetch whenever any page emits 'cart-updated' (e.g. after add-to-cart)
+  useEffect(() => {
+    const handler = () => { void loadCart(); };
+    window.addEventListener("cart-updated", handler);
+    return () => window.removeEventListener("cart-updated", handler);
+  }, [loadCart]);
+
   useEffect(() => {
     if (!open || !apiClient || cart.itemCount <= 0 || emailVerified === false) return;
     const stale = Date.now() - addressesFetchedAt > 30_000;
