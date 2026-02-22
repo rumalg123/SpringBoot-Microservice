@@ -41,7 +41,7 @@ public class AdminPosterController {
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth
     ) {
         internalRequestVerifier.verify(internalAuth);
-        return posterService.listAllActive();
+        return posterService.listAllNonDeleted();
     }
 
     @GetMapping("/deleted")

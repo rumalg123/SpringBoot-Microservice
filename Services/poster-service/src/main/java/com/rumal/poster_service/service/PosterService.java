@@ -13,6 +13,7 @@ public interface PosterService {
     PosterResponse getByIdOrSlug(String idOrSlug);
     List<PosterResponse> listActiveByPlacement(PosterPlacement placement);
     List<PosterResponse> listAllActive();
+    List<PosterResponse> listAllNonDeleted();
     List<PosterResponse> listDeleted();
     void softDelete(UUID id);
     PosterResponse restore(UUID id);

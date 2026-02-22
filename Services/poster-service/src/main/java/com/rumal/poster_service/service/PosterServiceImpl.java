@@ -69,6 +69,10 @@ public class PosterServiceImpl implements PosterService {
         if (poster.isDeleted()) {
             throw new ResourceNotFoundException("Poster not found: " + idOrSlug);
         }
+        Instant now = Instant.now();
+        if (!poster.isActive() || !isActiveInWindow(poster, now)) {
+            throw new ResourceNotFoundException("Poster not found: " + idOrSlug);
+        }
         return toResponse(poster);
     }
 
@@ -92,6 +96,14 @@ public class PosterServiceImpl implements PosterService {
                 .stream()
                 .filter(Poster::isActive)
                 .filter(p -> isActiveInWindow(p, now))
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Override
+    public List<PosterResponse> listAllNonDeleted() {
+        return posterRepository.findByDeletedFalseOrderByPlacementAscSortOrderAscCreatedAtDesc()
+                .stream()
                 .map(this::toResponse)
                 .toList();
     }
