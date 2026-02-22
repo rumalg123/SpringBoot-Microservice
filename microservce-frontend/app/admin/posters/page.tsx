@@ -153,6 +153,23 @@ function badgeStyle(active: boolean): React.CSSProperties {
   };
 }
 
+function getApiErrorMessage(err: unknown, fallback: string) {
+  if (typeof err === "object" && err !== null) {
+    const maybe = err as {
+      message?: string;
+      response?: { data?: { message?: string; error?: string } | string };
+    };
+    const responseData = maybe.response?.data;
+    if (typeof responseData === "string" && responseData.trim()) return responseData.trim();
+    if (responseData && typeof responseData === "object") {
+      if (typeof responseData.message === "string" && responseData.message.trim()) return responseData.message.trim();
+      if (typeof responseData.error === "string" && responseData.error.trim()) return responseData.error.trim();
+    }
+    if (typeof maybe.message === "string" && maybe.message.trim()) return maybe.message.trim();
+  }
+  return fallback;
+}
+
 export default function AdminPostersPage() {
   const router = useRouter();
   const session = useAuthSession();
@@ -192,7 +209,7 @@ export default function AdminPostersPage() {
       setItems((a.data as Poster[]) || []);
       setStatus("Posters loaded.");
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : "Failed to load posters.");
+      setStatus(getApiErrorMessage(e, "Failed to load posters."));
     } finally {
       setLoading(false);
     }
@@ -207,7 +224,7 @@ export default function AdminPostersPage() {
       setDeletedLoaded(true);
       setStatus("Deleted posters loaded.");
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : "Failed to load deleted posters.");
+      setStatus(getApiErrorMessage(e, "Failed to load deleted posters."));
     } finally {
       setLoading(false);
     }
@@ -341,7 +358,7 @@ export default function AdminPostersPage() {
       setField(target, uploaded as FormState[typeof target]);
       toast.success("Image uploaded");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Upload failed");
+      toast.error(getApiErrorMessage(err, "Upload failed"));
     } finally {
       setUploading(false);
     }
@@ -389,7 +406,7 @@ export default function AdminPostersPage() {
       await load();
       if (deletedLoaded) await loadDeleted();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Save failed");
+      toast.error(getApiErrorMessage(err, "Save failed"));
     } finally {
       setSubmitting(false);
     }
@@ -409,7 +426,7 @@ export default function AdminPostersPage() {
       await load();
       if (deletedLoaded) await loadDeleted();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Delete failed");
+      toast.error(getApiErrorMessage(err, "Delete failed"));
     } finally {
       setDeleteBusy(false);
     }
@@ -424,7 +441,7 @@ export default function AdminPostersPage() {
       await load();
       if (deletedLoaded) await loadDeleted();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Restore failed");
+      toast.error(getApiErrorMessage(err, "Restore failed"));
     } finally {
       setRestoreId(null);
     }

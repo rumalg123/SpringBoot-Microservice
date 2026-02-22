@@ -1,9 +1,9 @@
-@import "tailwindcss";
-
-/* ─── Google Fonts ─── */
+﻿/* --- Google Fonts --- */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Syne:wght@600;700;800&display=swap');
 
-/* ─── Design Tokens ─── */
+@import "tailwindcss";
+
+/* --- Design Tokens --- */
 :root {
   /* Dark backgrounds */
   --bg: #080812;
@@ -22,13 +22,13 @@
   --line: rgba(120, 120, 200, 0.12);
   --line-bright: rgba(0, 212, 255, 0.2);
 
-  /* Neon Cyan — primary accent */
+  /* Neon Cyan - primary accent */
   --brand: #00d4ff;
   --brand-hover: #00b8e0;
   --brand-soft: rgba(0, 212, 255, 0.08);
   --brand-glow: rgba(0, 212, 255, 0.3);
 
-  /* Violet — secondary accent */
+  /* Violet - secondary accent */
   --accent: #7c3aed;
   --accent-hover: #6d28d9;
   --accent-soft: rgba(124, 58, 237, 0.12);
@@ -53,7 +53,7 @@
   --gradient-card: linear-gradient(145deg, rgba(17, 17, 40, 0.9), rgba(22, 22, 50, 0.95));
 }
 
-/* ─── Reset ─── */
+/* --- Reset --- */
 *,
 *::before,
 *::after {
@@ -89,7 +89,7 @@ h6 {
   color: var(--ink);
 }
 
-/* ─── Form Elements ─── */
+/* --- Form Elements --- */
 select,
 input,
 textarea {
@@ -107,7 +107,7 @@ textarea:focus {
   box-shadow: 0 0 0 3px var(--brand-soft), 0 0 12px var(--brand-glow);
 }
 
-/* ─── Keyframe Animations ─── */
+/* --- Keyframe Animations --- */
 @keyframes riseIn {
   from {
     opacity: 0;
@@ -228,7 +228,7 @@ textarea:focus {
   }
 }
 
-/* ─── Animation Utility Classes ─── */
+/* --- Animation Utility Classes --- */
 .animate-rise {
   animation: riseIn 450ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
@@ -246,7 +246,7 @@ textarea:focus {
   animation: gradientShift 5s ease infinite;
 }
 
-/* ─── Glassmorphism Card ─── */
+/* --- Glassmorphism Card --- */
 .glass-card {
   background: rgba(17, 17, 40, 0.7);
   backdrop-filter: blur(16px);
@@ -263,7 +263,7 @@ textarea:focus {
   border-radius: 16px;
 }
 
-/* ─── Gradient Text ─── */
+/* --- Gradient Text --- */
 .gradient-text {
   background: var(--gradient-brand);
   -webkit-background-clip: text;
@@ -276,7 +276,7 @@ textarea:focus {
   text-shadow: 0 0 12px var(--brand-glow);
 }
 
-/* ─── Buttons ─── */
+/* --- Buttons --- */
 .btn-primary,
 .btn-brand {
   display: inline-flex;
@@ -420,7 +420,7 @@ textarea:focus {
   transform: translateY(-1px);
 }
 
-/* ─── Card Surface (legacy compat) ─── */
+/* --- Card Surface (legacy compat) --- */
 .card-surface {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -432,7 +432,7 @@ textarea:focus {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--line-bright);
 }
 
-/* ─── Product Card ─── */
+/* --- Product Card --- */
 .product-card {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -501,7 +501,7 @@ textarea:focus {
   border-top: 1px solid var(--line);
 }
 
-/* ─── Price Styles ─── */
+/* --- Price Styles --- */
 .price-current {
   color: var(--brand);
   font-weight: 800;
@@ -530,7 +530,7 @@ textarea:focus {
   box-shadow: 0 0 8px var(--danger-glow);
 }
 
-/* ─── Sale Badge ─── */
+/* --- Sale Badge --- */
 .badge-sale {
   position: absolute;
   top: 10px;
@@ -546,7 +546,7 @@ textarea:focus {
   box-shadow: 0 0 10px var(--danger-glow);
 }
 
-/* ─── Star Rating ─── */
+/* --- Star Rating --- */
 .star-rating {
   color: var(--star);
   font-size: 0.78rem;
@@ -560,7 +560,7 @@ textarea:focus {
   margin-left: 4px;
 }
 
-/* ─── Trust Bar ─── */
+/* --- Trust Bar --- */
 .trust-bar {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -630,7 +630,7 @@ textarea:focus {
   margin: 2px 0 0 0;
 }
 
-/* ─── Category Pills ─── */
+/* --- Category Pills --- */
 .category-pill {
   display: inline-flex;
   align-items: center;
@@ -655,7 +655,7 @@ textarea:focus {
   box-shadow: 0 0 14px var(--brand-glow);
 }
 
-/* ─── Section Header ─── */
+/* --- Section Header --- */
 .section-header {
   display: flex;
   align-items: center;
@@ -692,7 +692,7 @@ textarea:focus {
   text-shadow: 0 0 10px var(--brand-glow);
 }
 
-/* ─── Flash Deal Label ─── */
+/* --- Flash Deal Label --- */
 .flash-label {
   display: inline-flex;
   align-items: center;
@@ -707,7 +707,7 @@ textarea:focus {
   box-shadow: 0 0 14px rgba(239, 68, 68, 0.4);
 }
 
-/* ─── Scrollbar ─── */
+/* --- Scrollbar --- */
 .hide-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -717,7 +717,7 @@ textarea:focus {
   display: none;
 }
 
-/* ─── Skeleton Shimmer ─── */
+/* --- Skeleton Shimmer --- */
 .skeleton {
   background: linear-gradient(90deg, var(--surface) 25%, var(--surface-2) 50%, var(--surface) 75%);
   background-size: 800px 100%;
@@ -725,7 +725,7 @@ textarea:focus {
   border-radius: 8px;
 }
 
-/* ─── Quantity Stepper ─── */
+/* --- Quantity Stepper --- */
 .qty-stepper {
   display: inline-flex;
   align-items: center;
@@ -762,7 +762,7 @@ textarea:focus {
   color: var(--ink);
 }
 
-/* ─── Back to Top ─── */
+/* --- Back to Top --- */
 .back-to-top {
   position: fixed;
   bottom: 28px;
@@ -789,7 +789,7 @@ textarea:focus {
   box-shadow: 0 0 30px var(--brand-glow);
 }
 
-/* ─── Confirm Modal ─── */
+/* --- Confirm Modal --- */
 .confirm-modal-overlay {
   position: fixed;
   inset: 0;
@@ -878,7 +878,7 @@ textarea:focus {
   box-shadow: 0 0 16px var(--danger-glow);
 }
 
-/* ─── Loading Spinner ─── */
+/* --- Loading Spinner --- */
 .spinner-sm {
   display: inline-block;
   width: 16px;
@@ -900,7 +900,7 @@ textarea:focus {
   box-shadow: 0 0 20px rgba(0, 212, 255, 0.2);
 }
 
-/* ─── Breadcrumbs ─── */
+/* --- Breadcrumbs --- */
 .breadcrumb {
   display: flex;
   align-items: center;
@@ -931,7 +931,7 @@ textarea:focus {
   font-weight: 600;
 }
 
-/* ─── Empty State ─── */
+/* --- Empty State --- */
 .empty-state {
   padding: 60px 24px;
   text-align: center;
@@ -961,7 +961,7 @@ textarea:focus {
   margin: 0 0 24px;
 }
 
-/* ─── Admin Table ─── */
+/* --- Admin Table --- */
 .admin-table {
   width: 100%;
   text-align: left;
@@ -998,7 +998,7 @@ textarea:focus {
   background: var(--surface-2);
 }
 
-/* ─── Type Badge ─── */
+/* --- Type Badge --- */
 .type-badge {
   display: inline-block;
   padding: 3px 10px;
@@ -1024,7 +1024,7 @@ textarea:focus {
   color: #a78bfa;
 }
 
-/* ─── Form Group ─── */
+/* --- Form Group --- */
 .form-group {
   display: grid;
   gap: 5px;
@@ -1038,7 +1038,7 @@ textarea:focus {
   letter-spacing: 0.06em;
 }
 
-/* ─── Glow Ring (decorative) ─── */
+/* --- Glow Ring (decorative) --- */
 .glow-ring {
   position: relative;
 }
@@ -1059,7 +1059,7 @@ textarea:focus {
   opacity: 0.6;
 }
 
-/* ─── Mobile ─── */
+/* --- Mobile --- */
 @media (max-width: 640px) {
 
   button,
@@ -1159,7 +1159,7 @@ textarea:focus {
 }
 
 
-/* ─── Neon Divider ─── */
+/* --- Neon Divider --- */
 .neon-divider {
   height: 1px;
   background: linear-gradient(90deg, transparent 0%, var(--brand) 50%, transparent 100%);
@@ -1167,7 +1167,7 @@ textarea:focus {
   margin: 0;
 }
 
-/* ─── Filter Sidebar Panel ─── */
+/* --- Filter Sidebar Panel --- */
 .filter-sidebar {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -1213,3 +1213,4 @@ textarea:focus {
   background: var(--brand);
   border-radius: 1px;
 }
+
