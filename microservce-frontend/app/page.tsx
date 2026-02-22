@@ -51,7 +51,7 @@ function calcDiscount(regular: number, selling: number): number | null {
   return null;
 }
 
-/* â”€â”€ Futuristic Trust Icon SVGs â”€â”€ */
+/* --- Futuristic Trust Icon SVGs --- */
 const TrustIcons = {
   ship: (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -143,7 +143,7 @@ export default function LandingPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-      {/* â”€â”€ Header â”€â”€ */}
+      {/* --- Header --- */}
       <header
         style={{
           background: "rgba(8,8,18,0.88)",
@@ -260,7 +260,7 @@ export default function LandingPage() {
           <PosterSlot placement="HOME_HERO" variant="hero" />
         </div>
 
-        {/* â”€â”€ HERO SECTION â”€â”€ */}
+        {/* --- HERO SECTION --- */}
         <section
           className="animate-rise"
           style={{
@@ -310,7 +310,7 @@ export default function LandingPage() {
                       animation: "glowPulse 2s ease-in-out infinite",
                     }}
                   />
-                  Mega Sale â€” Live Now
+                  Mega Sale - Live Now
                 </div>
 
                 {/* Headline */}
@@ -341,7 +341,7 @@ export default function LandingPage() {
 
                 <p style={{ fontSize: "1rem", color: "#8888bb", lineHeight: 1.7, margin: "0 0 36px", maxWidth: "520px" }}>
                   Discover thousands of premium products at unbeatable prices. Secure payments, lightning-fast delivery, and a shopping experience built for the future.
-                  {session.isAuthenticated ? " Welcome back â€” your deals are waiting." : " Sign in to unlock your personal store."}
+                  {session.isAuthenticated ? " Welcome back - your deals are waiting." : " Sign in to unlock your personal store."}
                 </p>
 
                 {/* CTA Buttons */}
@@ -377,7 +377,7 @@ export default function LandingPage() {
                       className="inline-flex items-center gap-2 rounded-xl px-7 py-3.5 font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
                       style={{ border: "1.5px solid rgba(0,212,255,0.3)", color: "#00d4ff", background: "rgba(0,212,255,0.06)", fontSize: "0.9rem", cursor: "pointer" }}
                     >
-                      {authActionPending === "signup" ? "Redirecting..." : "Create Account â†’"}
+                      {authActionPending === "signup" ? "Redirecting..." : "Create Account ->"}
                     </button>
                   )}
                 </div>
@@ -430,14 +430,14 @@ export default function LandingPage() {
                     fontWeight: 600,
                   }}
                 >
-                  âœ¦ Free shipping on orders $25+
+                  * Free shipping on orders $25+
                 </div>
               </div>
             </div>
           </div>
         </section>
 
-        {/* â”€â”€ TRUST BAR â”€â”€ */}
+        {/* --- TRUST BAR --- */}
         <section className="animate-rise mx-auto max-w-7xl px-4 py-8" style={{ animationDelay: "100ms" }}>
           <div className="trust-bar">
             {[
@@ -465,7 +465,7 @@ export default function LandingPage() {
           </div>
         )}
 
-        {/* â”€â”€ FLASH DEALS â”€â”€ */}
+        {/* --- FLASH DEALS --- */}
         <section className="mx-auto max-w-7xl px-4 pb-8">
           <div className="grid gap-4 lg:grid-cols-2">
             <PosterSlot placement="HOME_MID_LEFT" variant="tile" />
@@ -488,7 +488,7 @@ export default function LandingPage() {
                 </span>
               </div>
               <Link href="/products" className="no-underline" style={{ color: "var(--brand)", fontWeight: 700, fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "4px" }}>
-                View All â†’
+                View All {"->"}
               </Link>
             </div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -513,7 +513,7 @@ export default function LandingPage() {
                       )}
                       <div className="product-card-overlay">
                         <span style={{ background: "linear-gradient(135deg,#00d4ff,#7c3aed)", color: "#fff", padding: "8px 18px", borderRadius: "20px", fontSize: "0.78rem", fontWeight: 800, letterSpacing: "0.04em" }}>
-                          View Deal â†’
+                          View Deal {"->"}
                         </span>
                       </div>
                     </div>
@@ -523,7 +523,7 @@ export default function LandingPage() {
                         <span className="price-current">{money(product.sellingPrice)}</span>
                         {product.discountedPrice !== null && <span className="price-original">{money(product.regularPrice)}</span>}
                       </div>
-                      <div className="star-rating">â˜…â˜…â˜…â˜…â˜… <span className="star-rating-count">| 1k+ sold</span></div>
+                      <div className="star-rating">***** <span className="star-rating-count">| 1k+ sold</span></div>
                     </div>
                   </Link>
                 );
@@ -532,7 +532,7 @@ export default function LandingPage() {
           </section>
         )}
 
-        {/* â”€â”€ TRENDING PRODUCTS â”€â”€ */}
+        {/* --- TRENDING PRODUCTS --- */}
         <section
           className="animate-rise mx-auto max-w-7xl px-4 pb-12"
           style={{ animationDelay: "300ms" }}
@@ -540,7 +540,7 @@ export default function LandingPage() {
           <div className="section-header">
             <h2>Trending Products</h2>
             <Link href="/products" className="no-underline" style={{ color: "var(--brand)", fontWeight: 700, fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "4px" }}>
-              View All â†’
+              View All {"->"}
             </Link>
           </div>
 
@@ -560,7 +560,7 @@ export default function LandingPage() {
 
           {status === "error" && (
             <p style={{ borderRadius: "12px", border: "1px solid rgba(245,158,11,0.25)", background: "rgba(245,158,11,0.08)", padding: "14px 16px", fontSize: "0.875rem", color: "#fbbf24" }}>
-              âš  Product catalog is unavailable right now. Please try again later.
+              Warning: Product catalog is unavailable right now. Please try again later.
             </p>
           )}
 
@@ -592,7 +592,7 @@ export default function LandingPage() {
                     )}
                     <div className="product-card-overlay">
                       <span style={{ background: "linear-gradient(135deg,#00d4ff,#7c3aed)", color: "#fff", padding: "8px 18px", borderRadius: "20px", fontSize: "0.78rem", fontWeight: 800 }}>
-                        View Product â†’
+                        View Product {"->"}
                       </span>
                     </div>
                   </div>
@@ -604,7 +604,7 @@ export default function LandingPage() {
                       {product.discountedPrice !== null && <span className="price-original">{money(product.regularPrice)}</span>}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <span className="star-rating">â˜…â˜…â˜…â˜…â˜† <span className="star-rating-count">4.5</span></span>
+                      <span className="star-rating">****o <span className="star-rating-count">4.5</span></span>
                       <span style={{ fontSize: "0.65rem", color: "var(--muted)" }}>500+ sold</span>
                     </div>
                   </div>
@@ -614,7 +614,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* â”€â”€ CTA BANNER â”€â”€ */}
+        {/* --- CTA BANNER --- */}
         <section
           className="animate-rise mx-auto max-w-7xl px-4 pb-16"
           style={{ animationDelay: "400ms" }}
@@ -636,7 +636,7 @@ export default function LandingPage() {
 
             <div style={{ position: "relative", zIndex: 1 }}>
               <span style={{ display: "inline-block", fontFamily: "'Syne', sans-serif", fontSize: "2.4rem", fontWeight: 900, lineHeight: 1.15, color: "#fff", marginBottom: "16px" }}>
-                {session.isAuthenticated ? "Welcome Back! ðŸ‘‹" : (
+                {session.isAuthenticated ? "Welcome Back!" : (
                   <>
                     Join{" "}
                     <span style={{ background: "linear-gradient(135deg, #00d4ff, #7c3aed)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
@@ -658,7 +658,7 @@ export default function LandingPage() {
                     className="no-underline inline-flex items-center gap-2 rounded-xl px-8 py-3.5 font-bold transition"
                     style={{ background: "linear-gradient(135deg, #00d4ff, #7c3aed)", color: "#fff", fontSize: "0.9rem", boxShadow: "0 0 24px rgba(0,212,255,0.25)" }}
                   >
-                    {session.canViewAdmin ? "Open Admin â†’" : "Open Profile â†’"}
+                    {session.canViewAdmin ? "Open Admin ->" : "Open Profile ->"}
                   </Link>
                 ) : (
                   <button
@@ -667,7 +667,7 @@ export default function LandingPage() {
                     className="inline-flex items-center gap-2 rounded-xl px-8 py-3.5 font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
                     style={{ background: "linear-gradient(135deg, #00d4ff, #7c3aed)", color: "#fff", fontSize: "0.9rem", cursor: "pointer", border: "none", boxShadow: "0 0 24px rgba(0,212,255,0.25)" }}
                   >
-                    {authActionPending === "signup" ? "Redirecting..." : "Sign Up Free â†’"}
+                    {authActionPending === "signup" ? "Redirecting..." : "Sign Up Free ->"}
                   </button>
                 )}
                 <Link
