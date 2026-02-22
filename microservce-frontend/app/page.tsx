@@ -9,6 +9,7 @@ import CategoryMenu from "./components/CategoryMenu";
 import CartNavWidget from "./components/CartNavWidget";
 import WishlistNavWidget from "./components/WishlistNavWidget";
 import Footer from "./components/Footer";
+import PosterSlot from "./components/posters/PosterSlot";
 
 type ProductSummary = {
   id: string;
@@ -436,6 +437,12 @@ export default function LandingPage() {
         <div className="mx-auto max-w-7xl px-4 pt-4">
           <CategoryMenu />
         </div>
+        <div className="mx-auto max-w-7xl px-4 pt-4">
+          <PosterSlot placement="HOME_TOP_STRIP" variant="strip" />
+        </div>
+        <div className="mx-auto max-w-7xl px-4 pt-4">
+          <PosterSlot placement="HOME_HERO" variant="hero" />
+        </div>
 
         {/* ── HERO SECTION ── */}
         <section
@@ -643,6 +650,12 @@ export default function LandingPage() {
         )}
 
         {/* ── FLASH DEALS ── */}
+        <section className="mx-auto max-w-7xl px-4 pb-8">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <PosterSlot placement="HOME_MID_LEFT" variant="tile" />
+            <PosterSlot placement="HOME_MID_RIGHT" variant="tile" />
+          </div>
+        </section>
         {dealProducts.length > 0 && (
           <section
             className="animate-rise mx-auto max-w-7xl px-4 pb-12"

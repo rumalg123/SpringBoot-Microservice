@@ -61,6 +61,16 @@ services:
       - ./env/common.env
       - ./env/product-service.env
 
+  poster-service:
+    build:
+      context: ./Services/poster-service
+    depends_on:
+      - discovery-server
+      - redis
+    env_file:
+      - ./env/common.env
+      - ./env/poster-service.env
+
   admin-service:
     build:
       context: ./Services/admin-service

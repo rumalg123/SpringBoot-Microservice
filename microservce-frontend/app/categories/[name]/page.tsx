@@ -11,6 +11,7 @@ import Footer from "../../components/Footer";
 import Pagination from "../../components/Pagination";
 import CatalogToolbar from "../../components/catalog/CatalogToolbar";
 import CatalogFiltersSidebar from "../../components/catalog/CatalogFiltersSidebar";
+import PosterSlot from "../../components/posters/PosterSlot";
 import { useAuthSession } from "../../../lib/authSession";
 import { emitWishlistUpdate } from "../../../lib/navEvents";
 
@@ -600,9 +601,13 @@ export default function CategoryProductsPage() {
           <span className="breadcrumb-current">{activeFilter}</span>
         </nav>
 
-        <CategoryMenu />
+         <CategoryMenu />
 
-        {routeLoading && (
+         <div className="mt-4">
+           <PosterSlot placement="CATEGORY_TOP" variant="strip" />
+         </div>
+
+         {routeLoading && (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[1, 2, 3, 4].map((i) => (
               <div key={i} className="overflow-hidden rounded-xl">

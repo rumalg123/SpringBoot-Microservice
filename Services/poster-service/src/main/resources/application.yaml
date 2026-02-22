@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: poster-service
+  datasource:
+    url: ${POSTER_DB_URL:jdbc:postgresql://poster-db:5432/poster_db}
+    username: ${POSTER_DB_USER:poster_user}
+    password: ${POSTER_DB_PASS:poster_pass}
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+
+server:
+  port: 8089
+  servlet:
+    multipart:
+      max-file-size: ${POSTER_IMAGE_MAX_FILE_SIZE:2MB}
+      max-request-size: ${POSTER_IMAGE_MAX_REQUEST_SIZE:10MB}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://discovery-server:8761/eureka/}
+
+cache:
+  posters-by-placement-ttl: ${CACHE_POSTERS_BY_PLACEMENT_TTL:60s}
+
+object-storage:
+  enabled: ${OBJECT_STORAGE_ENABLED:false}
+  endpoint: ${OBJECT_STORAGE_ENDPOINT:https://objectstorage.us-ashburn-1.oraclecloud.com}
+  region: ${OBJECT_STORAGE_REGION:us-ashburn-1}
+  access-key: ${OBJECT_STORAGE_ACCESS_KEY:}
+  secret-key: ${OBJECT_STORAGE_SECRET_KEY:}
+  bucket: ${OBJECT_STORAGE_BUCKET:}
+
+internal:
+  auth:
+    shared-secret: ${INTERNAL_AUTH_SHARED_SECRET:}

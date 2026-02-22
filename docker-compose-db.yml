@@ -68,6 +68,17 @@ services:
     volumes:
       - product-db-data:/var/lib/postgresql/data
 
+  poster-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: poster_db
+      POSTGRES_USER: poster_user
+      POSTGRES_PASSWORD: poster_pass
+    ports:
+      - "5438:5432"
+    volumes:
+      - poster-db-data:/var/lib/postgresql/data
+
   customer-service:
     build:
       context: ./Services/customer-service
@@ -123,6 +134,17 @@ services:
       - ./env/common.env
       - ./env/product-service.env
 
+  poster-service:
+    build:
+      context: ./Services/poster-service
+    depends_on:
+      - discovery-server
+      - poster-db
+      - redis
+    env_file:
+      - ./env/common.env
+      - ./env/poster-service.env
+
   admin-service:
     build:
       context: ./Services/admin-service
@@ -159,3 +181,4 @@ volumes:
   cart-db-data:
   wishlist-db-data:
   product-db-data:
+  poster-db-data:

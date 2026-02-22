@@ -72,6 +72,10 @@ spring:
               uri: lb://product-service
               predicates:
                 - Path=/admin/categories,/admin/categories/**
+            - id: admin-posters
+              uri: lb://admin-service
+              predicates:
+                - Path=/admin/posters,/admin/posters/**
             - id: products-catalog
               uri: lb://product-service
               predicates:
@@ -80,6 +84,10 @@ spring:
               uri: lb://product-service
               predicates:
                 - Path=/categories,/categories/**
+            - id: posters-catalog
+              uri: lb://poster-service
+              predicates:
+                - Path=/posters,/posters/**
 
           discovery:
             locator:
