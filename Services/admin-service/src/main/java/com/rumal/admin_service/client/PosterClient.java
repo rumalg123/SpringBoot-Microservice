@@ -2,7 +2,6 @@ package com.rumal.admin_service.client;
 
 import com.rumal.admin_service.exception.DownstreamHttpException;
 import com.rumal.admin_service.exception.ServiceUnavailableException;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.core.io.ByteArrayResource;
@@ -24,7 +23,6 @@ import java.util.Map;
 import java.util.UUID;
 
 @Component
-@RequiredArgsConstructor
 public class PosterClient {
 
     private static final ParameterizedTypeReference<List<Map<String, Object>>> LIST_MAP_TYPE =
@@ -34,6 +32,10 @@ public class PosterClient {
 
     @Qualifier("loadBalancedRestClientBuilder")
     private final RestClient.Builder lbRestClientBuilder;
+
+    public PosterClient(@Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder) {
+        this.lbRestClientBuilder = lbRestClientBuilder;
+    }
 
     public List<Map<String, Object>> listAll(String internalAuth) {
         return getList("/admin/posters", internalAuth);
