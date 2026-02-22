@@ -89,7 +89,9 @@ public class PosterImageStorageServiceImpl implements PosterImageStorageService 
                 s3Client.putObject(request, RequestBody.fromBytes(file.getBytes()));
                 uploaded.add(key);
             } catch (IOException ex) {
-                throw new ValidationException("Failed to upload image");
+                throw new ValidationException("Failed to read image bytes for upload", ex);
+            } catch (RuntimeException ex) {
+                throw new ValidationException("Object storage upload failed", ex);
             }
         }
         return uploaded;
