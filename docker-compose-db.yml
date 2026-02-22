@@ -3,6 +3,11 @@ version: "3.9"
 services:
   redis:
     image: redis:7-alpine
+    environment:
+      TZ: Asia/Colombo
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
   discovery-server:
     build:
@@ -13,13 +18,17 @@ services:
       - ./env/common.env
       - ./env/eureka.env
     environment:
+      TZ: Asia/Colombo
       LOGGING_FILE_NAME: /logs/discovery-server.log
     volumes:
       - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
   customer-db:
     image: postgres:16-alpine
     environment:
+      TZ: Asia/Colombo
       POSTGRES_DB: customer_db
       POSTGRES_USER: customer_user
       POSTGRES_PASSWORD: customer_pass
@@ -27,10 +36,13 @@ services:
       - "5433:5432"
     volumes:
       - customer-db-data:/var/lib/postgresql/data
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
   order-db:
     image: postgres:16-alpine
     environment:
+      TZ: Asia/Colombo
       POSTGRES_DB: order_db
       POSTGRES_USER: order_user
       POSTGRES_PASSWORD: order_pass
@@ -38,10 +50,13 @@ services:
       - "5434:5432"
     volumes:
       - order-db-data:/var/lib/postgresql/data
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
   cart-db:
     image: postgres:16-alpine
     environment:
+      TZ: Asia/Colombo
       POSTGRES_DB: cart_db
       POSTGRES_USER: cart_user
       POSTGRES_PASSWORD: cart_pass
@@ -49,10 +64,13 @@ services:
       - "5436:5432"
     volumes:
       - cart-db-data:/var/lib/postgresql/data
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
   wishlist-db:
     image: postgres:16-alpine
     environment:
+      TZ: Asia/Colombo
       POSTGRES_DB: wishlist_db
       POSTGRES_USER: wishlist_user
       POSTGRES_PASSWORD: wishlist_pass
@@ -60,10 +78,13 @@ services:
       - "5437:5432"
     volumes:
       - wishlist-db-data:/var/lib/postgresql/data
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
   product-db:
     image: postgres:16-alpine
     environment:
+      TZ: Asia/Colombo
       POSTGRES_DB: product_db
       POSTGRES_USER: product_user
       POSTGRES_PASSWORD: product_pass
@@ -71,10 +92,13 @@ services:
       - "5435:5432"
     volumes:
       - product-db-data:/var/lib/postgresql/data
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
   poster-db:
     image: postgres:16-alpine
     environment:
+      TZ: Asia/Colombo
       POSTGRES_DB: poster_db
       POSTGRES_USER: poster_user
       POSTGRES_PASSWORD: poster_pass
@@ -82,10 +106,13 @@ services:
       - "5438:5432"
     volumes:
       - poster-db-data:/var/lib/postgresql/data
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
   vendor-db:
     image: postgres:16-alpine
     environment:
+      TZ: Asia/Colombo
       POSTGRES_DB: vendor_db
       POSTGRES_USER: vendor_user
       POSTGRES_PASSWORD: vendor_pass
@@ -93,6 +120,8 @@ services:
       - "5439:5432"
     volumes:
       - vendor-db-data:/var/lib/postgresql/data
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
   customer-service:
     build:
@@ -105,9 +134,12 @@ services:
       - ./env/common.env
       - ./env/customer-service.env
     environment:
+      TZ: Asia/Colombo
       LOGGING_FILE_NAME: /logs/customer-service.log
     volumes:
       - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
   order-service:
     build:
@@ -120,9 +152,12 @@ services:
       - ./env/common.env
       - ./env/order-service.env
     environment:
+      TZ: Asia/Colombo
       LOGGING_FILE_NAME: /logs/order-service.log
     volumes:
       - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
   cart-service:
     build:
@@ -135,9 +170,12 @@ services:
       - ./env/common.env
       - ./env/cart-service.env
     environment:
+      TZ: Asia/Colombo
       LOGGING_FILE_NAME: /logs/cart-service.log
     volumes:
       - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
   wishlist-service:
     build:
@@ -150,9 +188,12 @@ services:
       - ./env/common.env
       - ./env/wishlist-service.env
     environment:
+      TZ: Asia/Colombo
       LOGGING_FILE_NAME: /logs/wishlist-service.log
     volumes:
       - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
   product-service:
     build:
@@ -165,9 +206,12 @@ services:
       - ./env/common.env
       - ./env/product-service.env
     environment:
+      TZ: Asia/Colombo
       LOGGING_FILE_NAME: /logs/product-service.log
     volumes:
       - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
   poster-service:
     build:
@@ -180,9 +224,12 @@ services:
       - ./env/common.env
       - ./env/poster-service.env
     environment:
+      TZ: Asia/Colombo
       LOGGING_FILE_NAME: /logs/poster-service.log
     volumes:
       - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
   vendor-service:
     build:
@@ -195,9 +242,12 @@ services:
       - ./env/common.env
       - ./env/vendor-service.env
     environment:
+      TZ: Asia/Colombo
       LOGGING_FILE_NAME: /logs/vendor-service.log
     volumes:
       - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
   admin-service:
     build:
@@ -208,9 +258,12 @@ services:
       - ./env/common.env
       - ./env/admin-service.env
     environment:
+      TZ: Asia/Colombo
       LOGGING_FILE_NAME: /logs/admin-service.log
     volumes:
       - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
   api-gateway:
     build:
@@ -223,9 +276,12 @@ services:
     env_file:
       - ./env/common.env
     environment:
+      TZ: Asia/Colombo
       LOGGING_FILE_NAME: /logs/api-gateway.log
     volumes:
       - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
   microservice-frontend:
     build:
@@ -238,8 +294,12 @@ services:
     env_file:
       - ./env/frontend.env
     command: /bin/sh -c "mkdir -p /logs && node server.js 2>&1 | tee -a /logs/microservice-frontend.log"
+    environment:
+      TZ: Asia/Colombo
     volumes:
       - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
 volumes:
   customer-db-data:

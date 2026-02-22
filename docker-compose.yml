@@ -1,6 +1,11 @@
 services:
   redis:
     image: redis:7-alpine
+    environment:
+      TZ: Asia/Colombo
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
   discovery-server:
     build:
@@ -11,9 +16,12 @@ services:
       - ./env/common.env
       - ./env/eureka.env
     environment:
+      TZ: Asia/Colombo
       LOGGING_FILE_NAME: /logs/discovery-server.log
     volumes:
       - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
   customer-service:
     build:
@@ -25,9 +33,12 @@ services:
       - ./env/common.env
       - ./env/customer-service.env
     environment:
+      TZ: Asia/Colombo
       LOGGING_FILE_NAME: /logs/customer-service.log
     volumes:
       - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
   order-service:
     build:
@@ -39,9 +50,12 @@ services:
       - ./env/common.env
       - ./env/order-service.env
     environment:
+      TZ: Asia/Colombo
       LOGGING_FILE_NAME: /logs/order-service.log
     volumes:
       - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
   cart-service:
     build:
@@ -53,9 +67,12 @@ services:
       - ./env/common.env
       - ./env/cart-service.env
     environment:
+      TZ: Asia/Colombo
       LOGGING_FILE_NAME: /logs/cart-service.log
     volumes:
       - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
   wishlist-service:
     build:
@@ -67,9 +84,12 @@ services:
       - ./env/common.env
       - ./env/wishlist-service.env
     environment:
+      TZ: Asia/Colombo
       LOGGING_FILE_NAME: /logs/wishlist-service.log
     volumes:
       - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
   product-service:
     build:
@@ -81,9 +101,12 @@ services:
       - ./env/common.env
       - ./env/product-service.env
     environment:
+      TZ: Asia/Colombo
       LOGGING_FILE_NAME: /logs/product-service.log
     volumes:
       - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
   poster-service:
     build:
@@ -95,9 +118,12 @@ services:
       - ./env/common.env
       - ./env/poster-service.env
     environment:
+      TZ: Asia/Colombo
       LOGGING_FILE_NAME: /logs/poster-service.log
     volumes:
       - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
   vendor-service:
     build:
@@ -109,9 +135,12 @@ services:
       - ./env/common.env
       - ./env/vendor-service.env
     environment:
+      TZ: Asia/Colombo
       LOGGING_FILE_NAME: /logs/vendor-service.log
     volumes:
       - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
   admin-service:
     build:
@@ -122,9 +151,12 @@ services:
       - ./env/common.env
       - ./env/admin-service.env
     environment:
+      TZ: Asia/Colombo
       LOGGING_FILE_NAME: /logs/admin-service.log
     volumes:
       - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
   api-gateway:
     build:
@@ -137,9 +169,12 @@ services:
     env_file:
       - ./env/common.env
     environment:
+      TZ: Asia/Colombo
       LOGGING_FILE_NAME: /logs/api-gateway.log
     volumes:
       - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
   microservice-frontend:
     build:
@@ -152,5 +187,9 @@ services:
     env_file:
       - ./env/frontend.env
     command: /bin/sh -c "mkdir -p /logs && node server.js 2>&1 | tee -a /logs/microservice-frontend.log"
+    environment:
+      TZ: Asia/Colombo
     volumes:
       - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
