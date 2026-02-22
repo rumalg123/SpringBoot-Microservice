@@ -64,9 +64,13 @@ function resolvePosterHref(poster: PosterItem): string | null {
   const target = (poster.linkTarget || "").trim();
   switch (poster.linkType) {
     case "PRODUCT":
-      return target ? `/products/${encodeURIComponent(target)}` : null;
+      if (!target) return null;
+      if (target.startsWith("/products/")) return target;
+      return `/products/${encodeURIComponent(target)}`;
     case "CATEGORY":
-      return target ? `/categories/${encodeURIComponent(target)}` : null;
+      if (!target) return null;
+      if (target.startsWith("/categories/")) return target;
+      return `/categories/${encodeURIComponent(target)}`;
     case "SEARCH":
       if (!target) return null;
       return target.startsWith("?") ? `/products${target}` : `/products?${target}`;
@@ -266,4 +270,3 @@ export default function PosterSlot({ placement, variant = "strip", maxItems = 1,
     </section>
   );
 }
-

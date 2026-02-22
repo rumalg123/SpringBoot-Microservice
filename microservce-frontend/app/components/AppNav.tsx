@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { AxiosInstance } from "axios";
 import CartNavWidget from "./CartNavWidget";
 import WishlistNavWidget from "./WishlistNavWidget";
+import ProductSearchBar from "./search/ProductSearchBar";
 
 type Props = {
   email?: string;
@@ -17,7 +18,6 @@ type Props = {
 
 export default function AppNav({ email, canViewAdmin = false, apiClient = null, emailVerified = null, onLogout }: Props) {
   const pathname = usePathname();
-  const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [logoutPending, setLogoutPending] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -77,39 +77,7 @@ export default function AppNav({ email, canViewAdmin = false, apiClient = null, 
 
         {/* Search */}
         <div className="mx-4 hidden flex-1 md:block">
-          <div
-            className="flex max-w-lg items-center overflow-hidden rounded-xl"
-            style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(0,212,255,0.15)" }}
-          >
-            <span className="pl-3" style={{ color: "rgba(0,212,255,0.5)" }}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
-              </svg>
-            </span>
-            <input
-              type="text"
-              placeholder="Search products, brands..."
-              className="flex-1 border-none bg-transparent px-3 py-2.5 text-sm outline-none"
-              style={{ color: "#fff" }}
-              readOnly
-              onFocus={(e) => { e.target.blur(); router.push("/products"); }}
-            />
-            <button
-              type="button"
-              onClick={() => router.push("/products")}
-              className="px-4 py-2.5 text-sm font-bold transition"
-              style={{
-                background: "linear-gradient(135deg, #00d4ff, #7c3aed)",
-                color: "#fff",
-                border: "none",
-                cursor: "pointer",
-              }}
-              aria-label="Search"
-            >
-              Search
-            </button>
-          </div>
+          <ProductSearchBar maxWidth={560} placeholder="Search products, brands and more..." />
         </div>
 
         {/* Right Actions */}

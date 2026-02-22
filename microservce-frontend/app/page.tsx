@@ -1,15 +1,15 @@
-"use client";
+﻿"use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import { useAuthSession } from "../lib/authSession";
 import CategoryMenu from "./components/CategoryMenu";
 import CartNavWidget from "./components/CartNavWidget";
 import WishlistNavWidget from "./components/WishlistNavWidget";
 import Footer from "./components/Footer";
 import PosterSlot from "./components/posters/PosterSlot";
+import ProductSearchBar from "./components/search/ProductSearchBar";
 
 type ProductSummary = {
   id: string;
@@ -51,7 +51,7 @@ function calcDiscount(regular: number, selling: number): number | null {
   return null;
 }
 
-/* ── Futuristic Trust Icon SVGs ── */
+/* â”€â”€ Futuristic Trust Icon SVGs â”€â”€ */
 const TrustIcons = {
   ship: (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -81,18 +81,11 @@ const TrustIcons = {
 };
 
 export default function LandingPage() {
-  const router = useRouter();
   const session = useAuthSession();
   const [products, setProducts] = useState<ProductSummary[]>([]);
   const [status, setStatus] = useState("loading");
   const [authActionPending, setAuthActionPending] = useState<"login" | "signup" | "forgot" | null>(null);
   const [logoutPending, setLogoutPending] = useState(false);
-  const [searchText, setSearchText] = useState("");
-  const [searchSuggestions, setSearchSuggestions] = useState<ProductSummary[]>([]);
-  const [searchSuggestionsLoading, setSearchSuggestionsLoading] = useState(false);
-  const [searchDropdownOpen, setSearchDropdownOpen] = useState(false);
-  const [searchSubmitPending, setSearchSubmitPending] = useState(false);
-  const searchBoxRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const run = async () => {
@@ -123,39 +116,6 @@ export default function LandingPage() {
     };
   }, []);
 
-  useEffect(() => {
-    const onPointerDown = (event: MouseEvent) => {
-      if (!searchBoxRef.current) return;
-      if (!searchBoxRef.current.contains(event.target as Node)) setSearchDropdownOpen(false);
-    };
-    document.addEventListener("mousedown", onPointerDown);
-    return () => document.removeEventListener("mousedown", onPointerDown);
-  }, []);
-
-  useEffect(() => {
-    const term = searchText.trim();
-    if (term.length < 2) { setSearchSuggestions([]); setSearchSuggestionsLoading(false); return; }
-    let active = true;
-    const timer = window.setTimeout(async () => {
-      setSearchSuggestionsLoading(true);
-      try {
-        const apiBase = process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me";
-        const params = new URLSearchParams({ page: "0", size: "6", q: term });
-        const res = await fetch(`${apiBase}/products?${params.toString()}`, { cache: "no-store" });
-        if (!res.ok) throw new Error("Failed");
-        const data = (await res.json()) as ProductPageResponse;
-        if (!active) return;
-        setSearchSuggestions((data.content || []).slice(0, 6));
-      } catch {
-        if (!active) return;
-        setSearchSuggestions([]);
-      } finally {
-        if (active) setSearchSuggestionsLoading(false);
-      }
-    }, 250);
-    return () => { active = false; window.clearTimeout(timer); };
-  }, [searchText]);
-
   const dealProducts = useMemo(() => products.filter((p) => p.discountedPrice !== null).slice(0, 4), [products]);
   const trendingProducts = useMemo(() => products.slice(0, 8), [products]);
   const authBusy = authActionPending !== null || session.status === "loading" || session.status === "idle";
@@ -181,28 +141,9 @@ export default function LandingPage() {
     try { await session.logout(); } finally { setLogoutPending(false); }
   };
 
-  const openSearchResults = (value: string) => {
-    const normalized = value.trim();
-    if (!normalized) return;
-    setSearchSubmitPending(true);
-    setSearchDropdownOpen(false);
-    router.push(`/products?q=${encodeURIComponent(normalized)}`);
-  };
-
-  const submitSearch = (e: FormEvent) => {
-    e.preventDefault();
-    if (searchSubmitPending) return;
-    openSearchResults(searchText);
-  };
-
-  const openSuggestedProduct = (product: ProductSummary) => {
-    setSearchDropdownOpen(false);
-    router.push(`/products/${encodeURIComponent((product.slug || product.id).trim())}`);
-  };
-
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-      {/* ── Header ── */}
+      {/* â”€â”€ Header â”€â”€ */}
       <header
         style={{
           background: "rgba(8,8,18,0.88)",
@@ -238,132 +179,7 @@ export default function LandingPage() {
 
           {/* Search */}
           <div className="mx-4 hidden flex-1 md:block">
-            <div ref={searchBoxRef} style={{ position: "relative", maxWidth: "520px" }}>
-              <form
-                onSubmit={submitSearch}
-                style={{
-                  display: "flex", alignItems: "center", overflow: "hidden",
-                  borderRadius: "12px", border: "1px solid rgba(0,212,255,0.18)",
-                  background: "rgba(255,255,255,0.04)",
-                }}
-              >
-                <span style={{ paddingLeft: "14px", color: "rgba(0,212,255,0.45)", flexShrink: 0 }}>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
-                  </svg>
-                </span>
-                <input
-                  type="text"
-                  placeholder="Search products, brands and more..."
-                  style={{
-                    flex: 1, border: "none", background: "transparent",
-                    padding: "11px 12px", fontSize: "0.875rem", color: "#fff", outline: "none",
-                  }}
-                  value={searchText}
-                  onFocus={() => setSearchDropdownOpen(true)}
-                  onChange={(e) => { setSearchText(e.target.value); if (!searchDropdownOpen) setSearchDropdownOpen(true); }}
-                />
-                {searchText.trim() && (
-                  <button
-                    type="button"
-                    onClick={() => { setSearchText(""); setSearchSuggestions([]); setSearchDropdownOpen(true); }}
-                    style={{
-                      marginRight: "8px", width: "22px", height: "22px", borderRadius: "50%",
-                      border: "none", background: "rgba(255,255,255,0.1)", color: "#aaa",
-                      fontSize: "0.65rem", cursor: "pointer", display: "flex",
-                      alignItems: "center", justifyContent: "center",
-                    }}
-                    aria-label="Clear search"
-                  >✕</button>
-                )}
-                <button
-                  type="submit"
-                  disabled={searchSubmitPending || !searchText.trim()}
-                  style={{
-                    padding: "11px 20px", border: "none",
-                    background: "linear-gradient(135deg, #00d4ff, #7c3aed)",
-                    color: "#fff", fontWeight: 700, fontSize: "0.8rem",
-                    cursor: searchSubmitPending || !searchText.trim() ? "not-allowed" : "pointer",
-                    opacity: !searchText.trim() ? 0.6 : 1,
-                    transition: "opacity 0.2s",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  Search
-                </button>
-              </form>
-
-              {searchDropdownOpen && (
-                <div
-                  style={{
-                    position: "absolute", left: 0, right: 0, zIndex: 40, marginTop: "6px",
-                    borderRadius: "12px", border: "1px solid rgba(0,212,255,0.15)",
-                    background: "#111128", boxShadow: "0 16px 48px rgba(0,0,0,0.7)",
-                    overflow: "hidden",
-                  }}
-                >
-                  {searchText.trim().length < 2 && (
-                    <p style={{ padding: "14px 16px", fontSize: "0.8rem", color: "#6868a0", margin: 0 }}>
-                      Type at least 2 characters to search.
-                    </p>
-                  )}
-                  {searchText.trim().length >= 2 && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => openSearchResults(searchText)}
-                        style={{
-                          width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
-                          padding: "12px 16px", textAlign: "left", fontSize: "0.875rem", color: "#fff",
-                          background: "transparent", border: "none", borderBottom: "1px solid rgba(0,212,255,0.08)",
-                          cursor: "pointer", fontWeight: 600,
-                        }}
-                      >
-                        <span>Search for &quot;{searchText.trim()}&quot;</span>
-                        <span style={{ fontSize: "0.7rem", color: "#6868a0" }}>Enter ↵</span>
-                      </button>
-                      {searchSuggestionsLoading && (
-                        <p style={{ padding: "12px 16px", fontSize: "0.8rem", color: "#6868a0", margin: 0 }}>
-                          Loading suggestions...
-                        </p>
-                      )}
-                      {!searchSuggestionsLoading && searchSuggestions.length === 0 && (
-                        <p style={{ padding: "12px 16px", fontSize: "0.8rem", color: "#6868a0", margin: 0 }}>
-                          No matching products.
-                        </p>
-                      )}
-                      {!searchSuggestionsLoading && searchSuggestions.length > 0 && (
-                        <div style={{ maxHeight: "280px", overflowY: "auto" }}>
-                          {searchSuggestions.map((product) => (
-                            <button
-                              key={product.id}
-                              type="button"
-                              onClick={() => openSuggestedProduct(product)}
-                              style={{
-                                display: "block", width: "100%",
-                                borderTop: "1px solid rgba(0,212,255,0.06)",
-                                padding: "10px 16px", textAlign: "left",
-                                background: "transparent", border: "none 0",
-                                cursor: "pointer", transition: "background 0.12s",
-                              }}
-                              onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(0,212,255,0.05)"; }}
-                              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                            >
-                              <p style={{ margin: 0, fontSize: "0.875rem", fontWeight: 600, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                {product.name}
-                              </p>
-                              <p style={{ margin: 0, fontSize: "0.72rem", color: "#6868a0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                SKU: {product.sku}
-                              </p>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
+            <ProductSearchBar maxWidth={520} />
           </div>
 
           {/* Auth Area */}
@@ -444,7 +260,7 @@ export default function LandingPage() {
           <PosterSlot placement="HOME_HERO" variant="hero" />
         </div>
 
-        {/* ── HERO SECTION ── */}
+        {/* â”€â”€ HERO SECTION â”€â”€ */}
         <section
           className="animate-rise"
           style={{
@@ -494,7 +310,7 @@ export default function LandingPage() {
                       animation: "glowPulse 2s ease-in-out infinite",
                     }}
                   />
-                  Mega Sale — Live Now
+                  Mega Sale â€” Live Now
                 </div>
 
                 {/* Headline */}
@@ -525,7 +341,7 @@ export default function LandingPage() {
 
                 <p style={{ fontSize: "1rem", color: "#8888bb", lineHeight: 1.7, margin: "0 0 36px", maxWidth: "520px" }}>
                   Discover thousands of premium products at unbeatable prices. Secure payments, lightning-fast delivery, and a shopping experience built for the future.
-                  {session.isAuthenticated ? " Welcome back — your deals are waiting." : " Sign in to unlock your personal store."}
+                  {session.isAuthenticated ? " Welcome back â€” your deals are waiting." : " Sign in to unlock your personal store."}
                 </p>
 
                 {/* CTA Buttons */}
@@ -561,7 +377,7 @@ export default function LandingPage() {
                       className="inline-flex items-center gap-2 rounded-xl px-7 py-3.5 font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
                       style={{ border: "1.5px solid rgba(0,212,255,0.3)", color: "#00d4ff", background: "rgba(0,212,255,0.06)", fontSize: "0.9rem", cursor: "pointer" }}
                     >
-                      {authActionPending === "signup" ? "Redirecting..." : "Create Account →"}
+                      {authActionPending === "signup" ? "Redirecting..." : "Create Account â†’"}
                     </button>
                   )}
                 </div>
@@ -614,14 +430,14 @@ export default function LandingPage() {
                     fontWeight: 600,
                   }}
                 >
-                  ✦ Free shipping on orders $25+
+                  âœ¦ Free shipping on orders $25+
                 </div>
               </div>
             </div>
           </div>
         </section>
 
-        {/* ── TRUST BAR ── */}
+        {/* â”€â”€ TRUST BAR â”€â”€ */}
         <section className="animate-rise mx-auto max-w-7xl px-4 py-8" style={{ animationDelay: "100ms" }}>
           <div className="trust-bar">
             {[
@@ -649,7 +465,7 @@ export default function LandingPage() {
           </div>
         )}
 
-        {/* ── FLASH DEALS ── */}
+        {/* â”€â”€ FLASH DEALS â”€â”€ */}
         <section className="mx-auto max-w-7xl px-4 pb-8">
           <div className="grid gap-4 lg:grid-cols-2">
             <PosterSlot placement="HOME_MID_LEFT" variant="tile" />
@@ -672,7 +488,7 @@ export default function LandingPage() {
                 </span>
               </div>
               <Link href="/products" className="no-underline" style={{ color: "var(--brand)", fontWeight: 700, fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "4px" }}>
-                View All →
+                View All â†’
               </Link>
             </div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -697,7 +513,7 @@ export default function LandingPage() {
                       )}
                       <div className="product-card-overlay">
                         <span style={{ background: "linear-gradient(135deg,#00d4ff,#7c3aed)", color: "#fff", padding: "8px 18px", borderRadius: "20px", fontSize: "0.78rem", fontWeight: 800, letterSpacing: "0.04em" }}>
-                          View Deal →
+                          View Deal â†’
                         </span>
                       </div>
                     </div>
@@ -707,7 +523,7 @@ export default function LandingPage() {
                         <span className="price-current">{money(product.sellingPrice)}</span>
                         {product.discountedPrice !== null && <span className="price-original">{money(product.regularPrice)}</span>}
                       </div>
-                      <div className="star-rating">★★★★★ <span className="star-rating-count">| 1k+ sold</span></div>
+                      <div className="star-rating">â˜…â˜…â˜…â˜…â˜… <span className="star-rating-count">| 1k+ sold</span></div>
                     </div>
                   </Link>
                 );
@@ -716,7 +532,7 @@ export default function LandingPage() {
           </section>
         )}
 
-        {/* ── TRENDING PRODUCTS ── */}
+        {/* â”€â”€ TRENDING PRODUCTS â”€â”€ */}
         <section
           className="animate-rise mx-auto max-w-7xl px-4 pb-12"
           style={{ animationDelay: "300ms" }}
@@ -724,7 +540,7 @@ export default function LandingPage() {
           <div className="section-header">
             <h2>Trending Products</h2>
             <Link href="/products" className="no-underline" style={{ color: "var(--brand)", fontWeight: 700, fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "4px" }}>
-              View All →
+              View All â†’
             </Link>
           </div>
 
@@ -744,7 +560,7 @@ export default function LandingPage() {
 
           {status === "error" && (
             <p style={{ borderRadius: "12px", border: "1px solid rgba(245,158,11,0.25)", background: "rgba(245,158,11,0.08)", padding: "14px 16px", fontSize: "0.875rem", color: "#fbbf24" }}>
-              ⚠ Product catalog is unavailable right now. Please try again later.
+              âš  Product catalog is unavailable right now. Please try again later.
             </p>
           )}
 
@@ -776,7 +592,7 @@ export default function LandingPage() {
                     )}
                     <div className="product-card-overlay">
                       <span style={{ background: "linear-gradient(135deg,#00d4ff,#7c3aed)", color: "#fff", padding: "8px 18px", borderRadius: "20px", fontSize: "0.78rem", fontWeight: 800 }}>
-                        View Product →
+                        View Product â†’
                       </span>
                     </div>
                   </div>
@@ -788,7 +604,7 @@ export default function LandingPage() {
                       {product.discountedPrice !== null && <span className="price-original">{money(product.regularPrice)}</span>}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <span className="star-rating">★★★★☆ <span className="star-rating-count">4.5</span></span>
+                      <span className="star-rating">â˜…â˜…â˜…â˜…â˜† <span className="star-rating-count">4.5</span></span>
                       <span style={{ fontSize: "0.65rem", color: "var(--muted)" }}>500+ sold</span>
                     </div>
                   </div>
@@ -798,7 +614,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* ── CTA BANNER ── */}
+        {/* â”€â”€ CTA BANNER â”€â”€ */}
         <section
           className="animate-rise mx-auto max-w-7xl px-4 pb-16"
           style={{ animationDelay: "400ms" }}
@@ -820,7 +636,7 @@ export default function LandingPage() {
 
             <div style={{ position: "relative", zIndex: 1 }}>
               <span style={{ display: "inline-block", fontFamily: "'Syne', sans-serif", fontSize: "2.4rem", fontWeight: 900, lineHeight: 1.15, color: "#fff", marginBottom: "16px" }}>
-                {session.isAuthenticated ? "Welcome Back! 👋" : (
+                {session.isAuthenticated ? "Welcome Back! ðŸ‘‹" : (
                   <>
                     Join{" "}
                     <span style={{ background: "linear-gradient(135deg, #00d4ff, #7c3aed)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
@@ -842,7 +658,7 @@ export default function LandingPage() {
                     className="no-underline inline-flex items-center gap-2 rounded-xl px-8 py-3.5 font-bold transition"
                     style={{ background: "linear-gradient(135deg, #00d4ff, #7c3aed)", color: "#fff", fontSize: "0.9rem", boxShadow: "0 0 24px rgba(0,212,255,0.25)" }}
                   >
-                    {session.canViewAdmin ? "Open Admin →" : "Open Profile →"}
+                    {session.canViewAdmin ? "Open Admin â†’" : "Open Profile â†’"}
                   </Link>
                 ) : (
                   <button
@@ -851,7 +667,7 @@ export default function LandingPage() {
                     className="inline-flex items-center gap-2 rounded-xl px-8 py-3.5 font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
                     style={{ background: "linear-gradient(135deg, #00d4ff, #7c3aed)", color: "#fff", fontSize: "0.9rem", cursor: "pointer", border: "none", boxShadow: "0 0 24px rgba(0,212,255,0.25)" }}
                   >
-                    {authActionPending === "signup" ? "Redirecting..." : "Sign Up Free →"}
+                    {authActionPending === "signup" ? "Redirecting..." : "Sign Up Free â†’"}
                   </button>
                 )}
                 <Link
@@ -871,3 +687,4 @@ export default function LandingPage() {
     </div>
   );
 }
+
