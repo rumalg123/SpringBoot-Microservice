@@ -49,8 +49,8 @@ function slugify(v: string) {
 
 const darkSelect: React.CSSProperties = {
   width: "100%", padding: "10px 14px", borderRadius: "10px",
-  border: "1px solid rgba(0,212,255,0.15)", background: "rgba(0,212,255,0.04)",
-  color: "#c8c8e8", fontSize: "0.85rem", outline: "none",
+  border: "1px solid var(--line-bright)", background: "var(--brand-soft)",
+  color: "var(--ink-light)", fontSize: "0.85rem", outline: "none",
   appearance: "none", WebkitAppearance: "none",
 };
 
@@ -250,12 +250,12 @@ export default function ProductDetailPage() {
           />
         )}
         <main className="mx-auto max-w-7xl px-4 py-8">
-          <div style={{ background: "rgba(17,17,40,0.7)", backdropFilter: "blur(16px)", border: "1px solid rgba(0,212,255,0.1)", borderRadius: "20px", padding: "48px 24px", textAlign: "center" }}>
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="rgba(0,212,255,0.4)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ margin: "0 auto 16px" }}>
+          <div style={{ background: "rgba(17,17,40,0.7)", backdropFilter: "blur(16px)", border: "1px solid var(--line-bright)", borderRadius: "20px", padding: "48px 24px", textAlign: "center" }}>
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--brand-glow)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ margin: "0 auto 16px" }}>
               <path d="M5 8h14M5 8a2 2 0 1 0 0-4h14a2 2 0 1 0 0 4M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8m-9 4h4" />
             </svg>
-            <p style={{ fontSize: "1.1rem", fontWeight: 700, color: "#c8c8e8", margin: "0 0 12px" }}>{status}</p>
-            <Link href="/products" style={{ color: "#00d4ff", fontSize: "0.875rem", textDecoration: "none" }}>← Back to Shop</Link>
+            <p style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--ink-light)", margin: "0 0 12px" }}>{status}</p>
+            <Link href="/products" style={{ color: "var(--brand)", fontSize: "0.875rem", textDecoration: "none" }}>← Back to Shop</Link>
           </div>
         </main>
       </div>
@@ -280,14 +280,14 @@ export default function ProductDetailPage() {
       )}
 
       {!isAuthenticated && (
-        <header style={{ background: "rgba(10,10,28,0.95)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(0,212,255,0.08)", position: "sticky", top: 0, zIndex: 100 }}>
+        <header style={{ background: "var(--header-bg)", backdropFilter: "blur(12px)", borderBottom: "1px solid var(--brand-soft)", position: "sticky", top: 0, zIndex: 100 }}>
           <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
             <Link href="/" className="no-underline flex items-center gap-2">
-              <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: 900, fontSize: "1.2rem", background: "linear-gradient(135deg, #00d4ff, #7c3aed)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+              <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: 900, fontSize: "1.2rem", background: "var(--gradient-brand)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
                 Rumal Store
               </span>
             </Link>
-            <Link href="/" className="no-underline" style={{ padding: "8px 18px", borderRadius: "10px", background: "linear-gradient(135deg, #00d4ff, #7c3aed)", color: "#fff", fontSize: "0.8rem", fontWeight: 700 }}>
+            <Link href="/" className="no-underline" style={{ padding: "8px 18px", borderRadius: "10px", background: "var(--gradient-brand)", color: "#fff", fontSize: "0.8rem", fontWeight: 700 }}>
               Sign In
             </Link>
           </div>
@@ -307,12 +307,12 @@ export default function ProductDetailPage() {
         {/* Main Card */}
         <section
           className="animate-rise"
-          style={{ background: "rgba(17,17,40,0.7)", backdropFilter: "blur(20px)", border: "1px solid rgba(0,212,255,0.1)", borderRadius: "24px", padding: "28px", marginTop: "4px" }}
+          style={{ background: "rgba(17,17,40,0.7)", backdropFilter: "blur(20px)", border: "1px solid var(--line-bright)", borderRadius: "24px", padding: "28px", marginTop: "4px" }}
         >
           <div style={{ display: "grid", gap: "40px", gridTemplateColumns: "1fr 1fr" }}>
             {/* Image Gallery */}
             <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              <div style={{ position: "relative", aspectRatio: "1", overflow: "hidden", borderRadius: "16px", border: "1px solid rgba(0,212,255,0.1)", background: "rgba(0,0,10,0.5)" }}>
+              <div style={{ position: "relative", aspectRatio: "1", overflow: "hidden", borderRadius: "16px", border: "1px solid var(--line-bright)", background: "rgba(0,0,10,0.5)" }}>
                 {discount && (
                   <span className="badge-sale" style={{ top: "12px", left: "12px" }}>−{discount}% OFF</span>
                 )}
@@ -325,8 +325,8 @@ export default function ProductDetailPage() {
                     unoptimized
                   />
                 ) : (
-                  <div style={{ display: "grid", placeItems: "center", height: "100%", background: "linear-gradient(135deg, rgba(0,212,255,0.05), rgba(124,58,237,0.05))" }}>
-                    <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="rgba(0,212,255,0.3)" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+                  <div style={{ display: "grid", placeItems: "center", height: "100%", background: "linear-gradient(135deg, var(--brand-soft), var(--accent-soft))" }}>
+                    <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="var(--brand-glow)" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M5 8h14M5 8a2 2 0 1 0 0-4h14a2 2 0 1 0 0 4M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8m-9 4h4" />
                     </svg>
                   </div>
@@ -346,9 +346,9 @@ export default function ProductDetailPage() {
                         disabled={addingToCart}
                         style={{
                           aspectRatio: "1", overflow: "hidden", borderRadius: "10px", padding: 0,
-                          border: isSelected ? "2px solid #00d4ff" : "2px solid rgba(0,212,255,0.12)",
+                          border: isSelected ? "2px solid var(--brand)" : "2px solid var(--line-bright)",
                           background: "rgba(0,0,10,0.5)", cursor: "pointer",
-                          boxShadow: isSelected ? "0 0 10px rgba(0,212,255,0.3)" : "none",
+                          boxShadow: isSelected ? "0 0 10px var(--brand-glow)" : "none",
                           transition: "border-color 0.2s, box-shadow 0.2s",
                         }}
                       >
@@ -377,14 +377,14 @@ export default function ProductDetailPage() {
                   <span className="star-rating" style={{ fontSize: "0.95rem" }}>★★★★☆</span>
                   <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>4.5 · 1,200+ ratings</span>
                   <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>·</span>
-                  <span style={{ fontSize: "0.8rem", color: "#4ade80", fontWeight: 700 }}>In Stock</span>
+                  <span style={{ fontSize: "0.8rem", color: "var(--success)", fontWeight: 700 }}>In Stock</span>
                 </div>
               </div>
 
               {/* Price */}
-              <div style={{ borderRadius: "14px", background: "rgba(0,212,255,0.04)", border: "1px solid rgba(0,212,255,0.1)", padding: "16px 18px" }}>
+              <div style={{ borderRadius: "14px", background: "var(--brand-soft)", border: "1px solid var(--line-bright)", padding: "16px 18px" }}>
                 <div style={{ display: "flex", alignItems: "baseline", gap: "12px", flexWrap: "wrap" }}>
-                  <span style={{ fontSize: "2rem", fontWeight: 900, color: "#00d4ff" }}>
+                  <span style={{ fontSize: "2rem", fontWeight: 900, color: "var(--brand)" }}>
                     {money(displayProduct.sellingPrice)}
                   </span>
                   {displayProduct.discountedPrice !== null && (
@@ -399,7 +399,7 @@ export default function ProductDetailPage() {
                   )}
                 </div>
                 {displayProduct.discountedPrice !== null && (
-                  <p style={{ margin: "6px 0 0", fontSize: "0.75rem", color: "#4ade80", fontWeight: 600 }}>
+                  <p style={{ margin: "6px 0 0", fontSize: "0.75rem", color: "var(--success)", fontWeight: 600 }}>
                     You save {money(displayProduct.regularPrice - displayProduct.sellingPrice)}
                   </p>
                 )}
@@ -407,7 +407,7 @@ export default function ProductDetailPage() {
 
               {/* Description & SKU */}
               <div>
-                <p style={{ fontSize: "0.875rem", lineHeight: 1.7, color: "rgba(200,200,232,0.8)", margin: "0 0 8px" }}>
+                <p style={{ fontSize: "0.875rem", lineHeight: 1.7, color: "var(--ink-light)", margin: "0 0 8px" }}>
                   {displayProduct.description}
                 </p>
                 <p style={{ fontSize: "0.72rem", color: "var(--muted-2)", fontFamily: "monospace", margin: 0 }}>
@@ -421,7 +421,7 @@ export default function ProductDetailPage() {
                   <Link
                     href={`/categories/${encodeURIComponent(displayProduct.mainCategorySlug || slugify(displayProduct.mainCategory))}`}
                     className="no-underline"
-                    style={{ borderRadius: "20px", background: "linear-gradient(135deg, #00d4ff, #7c3aed)", color: "#fff", padding: "4px 12px", fontSize: "0.72rem", fontWeight: 700 }}
+                    style={{ borderRadius: "20px", background: "var(--gradient-brand)", color: "#fff", padding: "4px 12px", fontSize: "0.72rem", fontWeight: 700 }}
                   >
                     {displayProduct.mainCategory}
                   </Link>
@@ -431,7 +431,7 @@ export default function ProductDetailPage() {
                     key={`${c}-${index}`}
                     href={`/categories/${encodeURIComponent(displayProduct.subCategorySlugs?.[index] || slugify(c))}`}
                     className="no-underline"
-                    style={{ borderRadius: "20px", background: "rgba(0,212,255,0.07)", border: "1px solid rgba(0,212,255,0.18)", color: "#00d4ff", padding: "4px 12px", fontSize: "0.72rem", fontWeight: 700 }}
+                    style={{ borderRadius: "20px", background: "var(--brand-soft)", border: "1px solid var(--line-bright)", color: "var(--brand)", padding: "4px 12px", fontSize: "0.72rem", fontWeight: 700 }}
                   >
                     {c}
                   </Link>
@@ -440,7 +440,7 @@ export default function ProductDetailPage() {
 
               {/* Specifications / Variation Options (display panel) */}
               {displayProduct.variations.length > 0 && (
-                <div style={{ borderRadius: "12px", border: "1px solid rgba(0,212,255,0.1)", background: "rgba(0,212,255,0.03)", padding: "14px 16px" }}>
+                <div style={{ borderRadius: "12px", border: "1px solid var(--line-bright)", background: "var(--brand-soft)", padding: "14px 16px" }}>
                   <p style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--muted)", margin: "0 0 10px" }}>
                     {displayProduct.productType === "PARENT" ? "Available Options" : "Specifications"}
                   </p>
@@ -448,10 +448,10 @@ export default function ProductDetailPage() {
                     {displayProduct.variations.map((v, i) => (
                       <span
                         key={`${v.name}-${i}`}
-                        style={{ borderRadius: "8px", border: "1px solid rgba(0,212,255,0.12)", background: "rgba(0,212,255,0.04)", padding: "6px 12px", fontSize: "0.8rem" }}
+                        style={{ borderRadius: "8px", border: "1px solid var(--line-bright)", background: "var(--brand-soft)", padding: "6px 12px", fontSize: "0.8rem" }}
                       >
                         {displayProduct.productType === "PARENT" ? (
-                          <span style={{ fontWeight: 700, color: "#c8c8e8" }}>{v.name}</span>
+                          <span style={{ fontWeight: 700, color: "var(--ink-light)" }}>{v.name}</span>
                         ) : (
                           <><span style={{ color: "var(--muted)" }}>{v.name}: </span><span style={{ fontWeight: 700, color: "#fff" }}>{v.value}</span></>
                         )}
@@ -462,7 +462,7 @@ export default function ProductDetailPage() {
               )}
 
               {/* Purchase Controls */}
-              <div style={{ borderTop: "1px solid rgba(0,212,255,0.08)", paddingTop: "20px" }}>
+              <div style={{ borderTop: "1px solid var(--brand-soft)", paddingTop: "20px" }}>
                 {isAuthenticated ? (
                   <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                     {/* Variation Selector */}
@@ -492,7 +492,7 @@ export default function ProductDetailPage() {
                           <p style={{ fontSize: "0.78rem", color: "var(--muted)" }}>Select all attributes to continue.</p>
                         )}
                         {allAttributesSelected && !selectedVariationId && variations.length > 0 && (
-                          <p style={{ fontSize: "0.78rem", fontWeight: 700, color: "#ef4444" }}>No variation matches the selected combination.</p>
+                          <p style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--danger)" }}>No variation matches the selected combination.</p>
                         )}
                         {variations.length === 0 && <p style={{ fontSize: "0.78rem", color: "var(--muted)" }}>No variations available.</p>}
                       </div>
@@ -515,10 +515,10 @@ export default function ProductDetailPage() {
                         onClick={() => void addToCart()}
                         style={{
                           flex: 1, minWidth: "140px", padding: "13px 20px", borderRadius: "12px", border: "none",
-                          background: canAddToCart ? "linear-gradient(135deg, #00d4ff, #7c3aed)" : "rgba(0,212,255,0.2)",
+                          background: canAddToCart ? "var(--gradient-brand)" : "var(--line-bright)",
                           color: "#fff", fontSize: "0.9rem", fontWeight: 800,
                           cursor: canAddToCart ? "pointer" : "not-allowed",
-                          boxShadow: canAddToCart ? "0 0 20px rgba(0,212,255,0.2)" : "none",
+                          boxShadow: canAddToCart ? "0 0 20px var(--line-bright)" : "none",
                           display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "8px",
                         }}
                       >
@@ -530,9 +530,9 @@ export default function ProductDetailPage() {
                         onClick={() => { void toggleWishlist(); }}
                         style={{
                           padding: "13px 18px", borderRadius: "12px",
-                          border: wishlistItemId ? "1px solid rgba(239,68,68,0.4)" : "1px solid rgba(0,212,255,0.25)",
-                          background: wishlistItemId ? "rgba(239,68,68,0.06)" : "rgba(0,212,255,0.06)",
-                          color: wishlistItemId ? "#ef4444" : "#00d4ff",
+                          border: wishlistItemId ? "1px solid var(--danger)" : "1px solid var(--line-bright)",
+                          background: wishlistItemId ? "var(--danger-soft)" : "var(--brand-soft)",
+                          color: wishlistItemId ? "var(--danger)" : "var(--brand)",
                           fontSize: "0.8rem", fontWeight: 700, cursor: wishlistPending ? "not-allowed" : "pointer",
                           display: "inline-flex", alignItems: "center", gap: "6px",
                         }}
@@ -547,8 +547,8 @@ export default function ProductDetailPage() {
                         className="no-underline"
                         style={{
                           padding: "13px 18px", borderRadius: "12px",
-                          border: "1px solid rgba(0,212,255,0.2)", background: "rgba(0,0,10,0.4)",
-                          color: "#c8c8e8", fontSize: "0.8rem", fontWeight: 700,
+                          border: "1px solid var(--line-bright)", background: "rgba(0,0,10,0.4)",
+                          color: "var(--ink-light)", fontSize: "0.8rem", fontWeight: 700,
                           display: "inline-flex", alignItems: "center", gap: "6px",
                         }}
                       >
@@ -572,7 +572,7 @@ export default function ProductDetailPage() {
                       }}
                       style={{
                         padding: "13px 20px", borderRadius: "12px", border: "none",
-                        background: "linear-gradient(135deg, #00d4ff, #7c3aed)",
+                        background: "var(--gradient-brand)",
                         color: "#fff", fontSize: "0.9rem", fontWeight: 800, cursor: "pointer",
                         display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "8px",
                       }}
@@ -584,14 +584,14 @@ export default function ProductDetailPage() {
               </div>
 
               {/* Trust Badges */}
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "16px", borderTop: "1px solid rgba(0,212,255,0.08)", paddingTop: "16px" }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "16px", borderTop: "1px solid var(--brand-soft)", paddingTop: "16px" }}>
                 {[
                   { icon: "M5 12h14M12 5l7 7-7 7", label: "Free Shipping" },
                   { icon: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z", label: "Secure Payment" },
                   { icon: "M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8M3 8v4h4M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16m18 0v-4h-4", label: "30-Day Returns" },
                 ].map(({ icon, label }) => (
                   <span key={label} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.75rem", color: "var(--muted)" }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00d4ff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d={icon} />
                     </svg>
                     {label}

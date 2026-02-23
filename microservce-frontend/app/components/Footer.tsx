@@ -5,8 +5,8 @@ export default function Footer() {
         <footer
             style={{
                 marginTop: "80px",
-                background: "linear-gradient(180deg, #060610 0%, #04040c 100%)",
-                borderTop: "1px solid rgba(0,212,255,0.1)",
+                background: "linear-gradient(180deg, var(--footer-bg) 0%, #04040c 100%)",
+                borderTop: "1px solid var(--line-bright)",
                 position: "relative",
                 overflow: "hidden",
             }}
@@ -20,7 +20,7 @@ export default function Footer() {
                     width: "400px",
                     height: "400px",
                     borderRadius: "50%",
-                    background: "radial-gradient(circle, rgba(0,212,255,0.04) 0%, transparent 70%)",
+                    background: "radial-gradient(circle, var(--brand-soft) 0%, transparent 70%)",
                     pointerEvents: "none",
                 }}
             />
@@ -32,7 +32,7 @@ export default function Footer() {
                     width: "300px",
                     height: "300px",
                     borderRadius: "50%",
-                    background: "radial-gradient(circle, rgba(124,58,237,0.05) 0%, transparent 70%)",
+                    background: "radial-gradient(circle, var(--accent-soft) 0%, transparent 70%)",
                     pointerEvents: "none",
                 }}
             />
@@ -47,14 +47,14 @@ export default function Footer() {
                                 width: "40px",
                                 height: "40px",
                                 borderRadius: "12px",
-                                background: "linear-gradient(135deg, #00d4ff, #7c3aed)",
+                                background: "var(--gradient-brand)",
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
                                 fontWeight: "900",
                                 fontSize: "0.75rem",
                                 color: "#fff",
-                                boxShadow: "0 0 16px rgba(0,212,255,0.3)",
+                                boxShadow: "0 0 16px var(--brand-glow)",
                                 flexShrink: 0,
                             }}
                         >
@@ -64,12 +64,12 @@ export default function Footer() {
                             <p style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, color: "#fff", fontSize: "1rem", margin: 0 }}>
                                 Rumal Store
                             </p>
-                            <p style={{ fontSize: "9px", color: "rgba(0,212,255,0.5)", letterSpacing: "0.2em", margin: 0, fontWeight: 600 }}>
+                            <p style={{ fontSize: "9px", color: "var(--brand)", letterSpacing: "0.2em", margin: 0, fontWeight: 600, opacity: 0.5 }}>
                                 ONLINE MARKETPLACE
                             </p>
                         </div>
                     </Link>
-                    <p className="text-sm leading-relaxed" style={{ color: "#6868a0" }}>
+                    <p className="text-sm leading-relaxed" style={{ color: "var(--muted)" }}>
                         Your trusted next-gen online marketplace. Discover amazing deals on top products with fast delivery and secure payments.
                     </p>
 
@@ -80,9 +80,9 @@ export default function Footer() {
                                 key={badge}
                                 className="rounded-full px-3 py-1 text-[10px] font-bold tracking-wider"
                                 style={{
-                                    background: "rgba(0,212,255,0.06)",
-                                    border: "1px solid rgba(0,212,255,0.15)",
-                                    color: "rgba(0,212,255,0.7)",
+                                    background: "var(--brand-soft)",
+                                    border: "1px solid var(--line-bright)",
+                                    color: "var(--brand)",
                                 }}
                             >
                                 ✓ {badge}
@@ -111,11 +111,11 @@ export default function Footer() {
                                 <Link
                                     href={href}
                                     className="flex items-center gap-2 no-underline transition"
-                                    style={{ color: "#6868a0" }}
-                                    onMouseEnter={(e) => { e.currentTarget.style.color = "#00d4ff"; }}
-                                    onMouseLeave={(e) => { e.currentTarget.style.color = "#6868a0"; }}
+                                    style={{ color: "var(--muted)" }}
+                                    onMouseEnter={(e) => { e.currentTarget.style.color = "var(--brand)"; }}
+                                    onMouseLeave={(e) => { e.currentTarget.style.color = "var(--muted)"; }}
                                 >
-                                    <span style={{ color: "rgba(0,212,255,0.3)", fontSize: "0.6rem" }}>▶</span>
+                                    <span style={{ color: "var(--brand-glow)", fontSize: "0.6rem" }}>▶</span>
                                     {label}
                                 </Link>
                             </li>
@@ -143,11 +143,11 @@ export default function Footer() {
                                 <Link
                                     href={href}
                                     className="flex items-center gap-2 no-underline transition"
-                                    style={{ color: "#6868a0" }}
-                                    onMouseEnter={(e) => { e.currentTarget.style.color = "#00d4ff"; }}
-                                    onMouseLeave={(e) => { e.currentTarget.style.color = "#6868a0"; }}
+                                    style={{ color: "var(--muted)" }}
+                                    onMouseEnter={(e) => { e.currentTarget.style.color = "var(--brand)"; }}
+                                    onMouseLeave={(e) => { e.currentTarget.style.color = "var(--muted)"; }}
                                 >
-                                    <span style={{ color: "rgba(0,212,255,0.3)", fontSize: "0.6rem" }}>▶</span>
+                                    <span style={{ color: "var(--brand-glow)", fontSize: "0.6rem" }}>▶</span>
                                     {label}
                                 </Link>
                             </li>
@@ -174,11 +174,11 @@ export default function Footer() {
                                 <Link
                                     href={href}
                                     className="flex items-center gap-2 no-underline"
-                                    style={{ color: "#6868a0" }}
-                                    onMouseEnter={(e) => { e.currentTarget.style.color = "#00d4ff"; }}
-                                    onMouseLeave={(e) => { e.currentTarget.style.color = "#6868a0"; }}
+                                    style={{ color: "var(--muted)" }}
+                                    onMouseEnter={(e) => { e.currentTarget.style.color = "var(--brand)"; }}
+                                    onMouseLeave={(e) => { e.currentTarget.style.color = "var(--muted)"; }}
                                 >
-                                    <span style={{ color: "rgba(0,212,255,0.3)", fontSize: "0.6rem" }}>▶</span>
+                                    <span style={{ color: "var(--brand-glow)", fontSize: "0.6rem" }}>▶</span>
                                     {label}
                                 </Link>
                             </li>
@@ -210,11 +210,11 @@ export default function Footer() {
             </div>
 
             {/* Bottom Bar */}
-            <div style={{ borderTop: "1px solid rgba(0,212,255,0.08)", background: "rgba(0,0,0,0.3)" }}>
+            <div style={{ borderTop: "1px solid var(--brand-soft)", background: "rgba(0,0,0,0.3)" }}>
                 <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-4">
                     <p className="text-xs" style={{ color: "#4a4a70" }}>
                         © {new Date().getFullYear()} Rumal Store. All rights reserved. Built with{" "}
-                        <span style={{ color: "rgba(0,212,255,0.5)" }}>♦</span> precision.
+                        <span style={{ color: "var(--brand)", opacity: 0.5 }}>♦</span> precision.
                     </p>
                     <div className="flex items-center gap-3">
                         {/* Social icons */}
@@ -229,18 +229,18 @@ export default function Footer() {
                                 className="flex h-8 w-8 items-center justify-center rounded-lg transition"
                                 style={{
                                     background: "rgba(255,255,255,0.04)",
-                                    border: "1px solid rgba(0,212,255,0.1)",
+                                    border: "1px solid var(--line-bright)",
                                     color: "#4a4a70",
                                     cursor: "pointer",
                                 }}
                                 onMouseEnter={(e) => {
-                                    e.currentTarget.style.color = "#00d4ff";
-                                    e.currentTarget.style.borderColor = "rgba(0,212,255,0.4)";
-                                    e.currentTarget.style.boxShadow = "0 0 12px rgba(0,212,255,0.2)";
+                                    e.currentTarget.style.color = "var(--brand)";
+                                    e.currentTarget.style.borderColor = "var(--brand-glow)";
+                                    e.currentTarget.style.boxShadow = "0 0 12px var(--line-bright)";
                                 }}
                                 onMouseLeave={(e) => {
                                     e.currentTarget.style.color = "#4a4a70";
-                                    e.currentTarget.style.borderColor = "rgba(0,212,255,0.1)";
+                                    e.currentTarget.style.borderColor = "var(--line-bright)";
                                     e.currentTarget.style.boxShadow = "none";
                                 }}
                             >

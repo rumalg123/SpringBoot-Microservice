@@ -166,7 +166,7 @@ export default function WishlistPage() {
             <Link
               href="/products"
               className="no-underline"
-              style={{ padding: "9px 18px", borderRadius: "10px", border: "1px solid rgba(0,212,255,0.25)", color: "#00d4ff", background: "rgba(0,212,255,0.06)", fontSize: "0.8rem", fontWeight: 700 }}
+              style={{ padding: "9px 18px", borderRadius: "10px", border: "1px solid var(--line-bright)", color: "var(--brand)", background: "var(--brand-soft)", fontSize: "0.8rem", fontWeight: 700 }}
             >
               Continue Shopping
             </Link>
@@ -175,8 +175,8 @@ export default function WishlistPage() {
               disabled={busy || wishlist.itemCount === 0}
               style={{
                 padding: "9px 18px", borderRadius: "10px",
-                border: "1px solid rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.06)",
-                color: "#ef4444", fontSize: "0.8rem", fontWeight: 700,
+                border: "1px solid var(--danger-glow)", background: "var(--danger-soft)",
+                color: "var(--danger)", fontSize: "0.8rem", fontWeight: 700,
                 cursor: busy || wishlist.itemCount === 0 ? "not-allowed" : "pointer",
                 opacity: wishlist.itemCount === 0 ? 0.4 : 1,
               }}
@@ -207,11 +207,9 @@ export default function WishlistPage() {
             return (
               <article
                 key={item.id}
-                className="animate-rise"
+                className="animate-rise glass-card"
                 style={{
-                  background: "rgba(17,17,40,0.7)",
-                  backdropFilter: "blur(16px)",
-                  border: "1px solid rgba(0,212,255,0.1)",
+                  border: "1px solid var(--line-bright)",
                   borderRadius: "16px",
                   padding: "18px 20px",
                 }}
@@ -222,7 +220,7 @@ export default function WishlistPage() {
                       href={`/products/${encodeURIComponent(item.productSlug)}`}
                       className="no-underline"
                       style={{ fontWeight: 700, color: "#fff", fontSize: "0.95rem" }}
-                      onMouseEnter={(e) => { e.currentTarget.style.color = "#00d4ff"; }}
+                      onMouseEnter={(e) => { e.currentTarget.style.color = "var(--brand)"; }}
                       onMouseLeave={(e) => { e.currentTarget.style.color = "#fff"; }}
                     >
                       {item.productName}
@@ -232,12 +230,12 @@ export default function WishlistPage() {
                         style={{
                           fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase",
                           padding: "2px 10px", borderRadius: "20px",
-                          background: "rgba(0,212,255,0.08)", border: "1px solid rgba(0,212,255,0.2)", color: "#00d4ff",
+                          background: "var(--brand-soft)", border: "1px solid var(--line-bright)", color: "var(--brand)",
                         }}
                       >
                         {item.productType}
                       </span>
-                      <span style={{ fontSize: "0.875rem", fontWeight: 700, color: "#00d4ff" }}>
+                      <span style={{ fontSize: "0.875rem", fontWeight: 700, color: "var(--brand)" }}>
                         {money(item.sellingPriceSnapshot)}
                       </span>
                     </div>
@@ -249,7 +247,7 @@ export default function WishlistPage() {
                       disabled={busy || isParent}
                       style={{
                         padding: "8px 16px", borderRadius: "10px", border: "none",
-                        background: busy || isParent ? "rgba(0,212,255,0.2)" : "linear-gradient(135deg, #00d4ff, #7c3aed)",
+                        background: busy || isParent ? "var(--line-bright)" : "var(--gradient-brand)",
                         color: "#fff", fontSize: "0.78rem", fontWeight: 700,
                         cursor: busy || isParent ? "not-allowed" : "pointer",
                         display: "inline-flex", alignItems: "center", gap: "6px",
@@ -266,8 +264,8 @@ export default function WishlistPage() {
                       disabled={busy}
                       style={{
                         padding: "8px 14px", borderRadius: "10px",
-                        border: "1px solid rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.06)",
-                        color: "#ef4444", fontSize: "0.72rem", fontWeight: 700,
+                        border: "1px solid var(--danger-glow)", background: "var(--danger-soft)",
+                        color: "var(--danger)", fontSize: "0.72rem", fontWeight: 700,
                         cursor: busy ? "not-allowed" : "pointer", opacity: busy ? 0.5 : 1,
                       }}
                     >

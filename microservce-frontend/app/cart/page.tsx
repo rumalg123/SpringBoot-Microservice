@@ -46,11 +46,51 @@ type CustomerAddress = {
   defaultBilling: boolean;
 };
 
+type AppliedPromotion = {
+  promotionId: string;
+  promotionName: string;
+  applicationLevel: string;
+  benefitType: string;
+  priority: number;
+  exclusive: boolean;
+  discountAmount: number;
+};
+
+type RejectedPromotion = {
+  promotionId: string;
+  promotionName: string;
+  reason: string;
+};
+
+type CheckoutPreviewResponse = {
+  itemCount: number;
+  totalQuantity: number;
+  couponCode: string | null;
+  subtotal: number;
+  lineDiscountTotal: number;
+  cartDiscountTotal: number;
+  shippingAmount: number;
+  shippingDiscountTotal: number;
+  totalDiscount: number;
+  grandTotal: number;
+  appliedPromotions: AppliedPromotion[];
+  rejectedPromotions: RejectedPromotion[];
+  pricedAt: string;
+};
+
 type CheckoutResponse = {
   orderId: string;
   itemCount: number;
   totalQuantity: number;
+  couponCode: string | null;
   subtotal: number;
+  lineDiscountTotal: number;
+  cartDiscountTotal: number;
+  shippingAmount: number;
+  shippingDiscountTotal: number;
+  totalDiscount: number;
+  grandTotal: number;
+  cartCleared: boolean;
 };
 
 const emptyCart: CartResponse = {
@@ -62,28 +102,6 @@ function money(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value || 0);
 }
 
-/* Shared dark select style */
-const darkSelect: React.CSSProperties = {
-  width: "100%",
-  padding: "10px 14px",
-  borderRadius: "10px",
-  border: "1px solid rgba(0,212,255,0.15)",
-  background: "rgba(0,212,255,0.04)",
-  color: "#c8c8e8",
-  fontSize: "0.85rem",
-  outline: "none",
-  appearance: "none",
-  WebkitAppearance: "none",
-};
-
-/* Glass card style */
-const glassCard: React.CSSProperties = {
-  background: "rgba(17,17,40,0.7)",
-  backdropFilter: "blur(16px)",
-  border: "1px solid rgba(0,212,255,0.1)",
-  borderRadius: "16px",
-  padding: "20px",
-};
 
 export default function CartPage() {
   const router = useRouter();
@@ -105,6 +123,10 @@ export default function CartPage() {
   const [removingItemId, setRemovingItemId] = useState<string | null>(null);
   const [clearingCart, setClearingCart] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
+  const [couponCode, setCouponCode] = useState("");
+  const [preview, setPreview] = useState<CheckoutPreviewResponse | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [couponError, setCouponError] = useState("");
 
   const loadCart = useCallback(async () => {
     if (!apiClient) return;
@@ -149,7 +171,7 @@ export default function CartPage() {
     setBillingAddressId(shippingAddressId);
   }, [billingSameAsShipping, shippingAddressId]);
 
-  const busy = updatingItemId !== null || removingItemId !== null || clearingCart || checkingOut;
+  const busy = updatingItemId !== null || removingItemId !== null || clearingCart || checkingOut || previewing;
 
   const updateQuantity = async (itemId: string, quantity: number) => {
     if (!apiClient || busy || quantity < 1) return;
@@ -186,6 +208,27 @@ export default function CartPage() {
     } finally { setClearingCart(false); }
   };
 
+  const loadPreview = async () => {
+    if (!apiClient || cart.items.length === 0) return;
+    setPreviewing(true);
+    setCouponError("");
+    try {
+      const res = await apiClient.post("/cart/me/checkout/preview", {
+        couponCode: couponCode.trim() || null,
+        shippingAmount: 0,
+      });
+      setPreview(res.data as CheckoutPreviewResponse);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Preview failed";
+      if (couponCode.trim() && msg.toLowerCase().includes("coupon")) {
+        setCouponError(msg);
+      } else {
+        toast.error(msg);
+      }
+      setPreview(null);
+    } finally { setPreviewing(false); }
+  };
+
   const checkout = async () => {
     if (!apiClient || busy || cart.items.length === 0) return;
     const resolvedShipping = shippingAddressId.trim();
@@ -195,12 +238,16 @@ export default function CartPage() {
     setStatus("Placing order...");
     try {
       const res = await apiClient.post("/cart/me/checkout", {
-        shippingAddressId: resolvedShipping, billingAddressId: resolvedBilling,
+        shippingAddressId: resolvedShipping,
+        billingAddressId: resolvedBilling,
+        couponCode: couponCode.trim() || null,
+        shippingAmount: 0,
       });
       const data = res.data as CheckoutResponse;
       await loadCart();
+      setPreview(null);
       setStatus("Order placed successfully.");
-      toast.success(`Order placed: ${data.orderId}`);
+      toast.success(`Order placed! Total: ${money(data.grandTotal)}`);
       router.push("/orders");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Checkout failed";
@@ -259,7 +306,7 @@ export default function CartPage() {
         {emailVerified === false && (
           <section
             className="mb-4 flex items-center gap-3 rounded-xl px-4 py-3 text-sm"
-            style={{ border: "1px solid rgba(245,158,11,0.3)", background: "rgba(245,158,11,0.08)", color: "#fbbf24" }}
+            style={{ border: "1px solid var(--warning-border)", background: "var(--warning-soft)", color: "var(--warning-text)" }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
@@ -274,7 +321,7 @@ export default function CartPage() {
               style={{
                 background: "rgba(245,158,11,0.2)",
                 border: "1px solid rgba(245,158,11,0.4)",
-                color: "#fbbf24",
+                color: "var(--warning-text)",
                 padding: "6px 14px",
                 borderRadius: "8px",
                 fontSize: "0.75rem",
@@ -310,7 +357,7 @@ export default function CartPage() {
                 padding: "9px 18px",
                 borderRadius: "10px",
                 border: "1px solid rgba(0,212,255,0.25)",
-                color: "#00d4ff",
+                color: "var(--brand)",
                 background: "rgba(0,212,255,0.06)",
                 fontSize: "0.8rem",
                 fontWeight: 700,
@@ -326,7 +373,7 @@ export default function CartPage() {
                 borderRadius: "10px",
                 border: "1px solid rgba(239,68,68,0.25)",
                 background: "rgba(239,68,68,0.06)",
-                color: "#ef4444",
+                color: "var(--danger)",
                 fontSize: "0.8rem",
                 fontWeight: 700,
                 cursor: busy || cart.items.length === 0 ? "not-allowed" : "pointer",
@@ -358,14 +405,14 @@ export default function CartPage() {
             )}
 
             {cart.items.map((item) => (
-              <article key={item.id} className="animate-rise" style={glassCard}>
+              <article key={item.id} className="animate-rise glass-card">
                 <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: "12px" }}>
                   <div style={{ flex: 1, minWidth: "200px" }}>
                     <Link
                       href={`/products/${encodeURIComponent(item.productSlug)}`}
                       className="no-underline"
                       style={{ fontWeight: 700, color: "#fff", fontSize: "0.95rem", lineHeight: 1.4 }}
-                      onMouseEnter={(e) => { e.currentTarget.style.color = "#00d4ff"; }}
+                      onMouseEnter={(e) => { e.currentTarget.style.color = "var(--brand)"; }}
                       onMouseLeave={(e) => { e.currentTarget.style.color = "#fff"; }}
                     >
                       {item.productName}
@@ -373,11 +420,11 @@ export default function CartPage() {
                     <p style={{ margin: "4px 0 0", fontSize: "0.7rem", color: "var(--muted-2)", fontFamily: "monospace" }}>
                       SKU: {item.productSku}
                     </p>
-                    <p style={{ margin: "6px 0 0", fontSize: "0.9rem", fontWeight: 700, color: "#00d4ff" }}>
+                    <p style={{ margin: "6px 0 0", fontSize: "0.9rem", fontWeight: 700, color: "var(--brand)" }}>
                       {money(item.unitPrice)} each
                     </p>
                     <p style={{ margin: "2px 0 0", fontSize: "0.75rem", color: "var(--muted)" }}>
-                      Line total: <strong style={{ color: "#c8c8e8" }}>{money(item.lineTotal)}</strong>
+                      Line total: <strong style={{ color: "var(--ink-light)" }}>{money(item.lineTotal)}</strong>
                     </p>
                   </div>
 
@@ -395,7 +442,7 @@ export default function CartPage() {
                         borderRadius: "8px",
                         border: "1px solid rgba(239,68,68,0.25)",
                         background: "rgba(239,68,68,0.06)",
-                        color: "#ef4444",
+                        color: "var(--danger)",
                         fontSize: "0.72rem",
                         fontWeight: 700,
                         cursor: busy ? "not-allowed" : "pointer",
@@ -411,33 +458,126 @@ export default function CartPage() {
           </section>
 
           {/* Checkout Panel */}
-          <aside className="cart-summary-aside" style={{ ...glassCard, alignSelf: "start", position: "sticky", top: "80px" }}>
+          <aside className="cart-summary-aside glass-card" style={{ alignSelf: "start", position: "sticky", top: "80px" }}>
             <h2 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: "1.1rem", color: "#fff", margin: "0 0 16px" }}>
               Checkout Summary
             </h2>
 
+            {/* Coupon Code */}
+            <div style={{ marginBottom: "14px" }}>
+              <label className="form-label" style={{ marginBottom: "6px", display: "block" }}>Coupon Code</label>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <input
+                  type="text"
+                  value={couponCode}
+                  onChange={(e) => { setCouponCode(e.target.value); setCouponError(""); }}
+                  placeholder="Enter coupon code..."
+                  className="form-input"
+                  style={{ flex: 1 }}
+                  disabled={busy || cart.items.length === 0}
+                />
+                <button
+                  onClick={() => { void loadPreview(); }}
+                  disabled={busy || cart.items.length === 0}
+                  className="btn-outline"
+                  style={{ padding: "9px 14px", fontSize: "0.78rem", whiteSpace: "nowrap" }}
+                >
+                  {previewing ? <span className="spinner-sm" /> : "Apply"}
+                </button>
+              </div>
+              {couponError && (
+                <p style={{ margin: "6px 0 0", fontSize: "0.75rem", color: "var(--danger)" }}>{couponError}</p>
+              )}
+              {preview?.couponCode && !couponError && (
+                <p style={{ margin: "6px 0 0", fontSize: "0.75rem", color: "var(--success)" }}>
+                  Coupon &quot;{preview.couponCode}&quot; applied
+                </p>
+              )}
+            </div>
+
             {/* Totals */}
-            <div style={{ borderRadius: "10px", background: "rgba(0,212,255,0.04)", border: "1px solid rgba(0,212,255,0.08)", padding: "12px 14px", marginBottom: "16px" }}>
+            <div style={{ borderRadius: "10px", background: "var(--brand-soft)", border: "1px solid var(--brand-soft)", padding: "12px 14px", marginBottom: "16px" }}>
               {[
-                { label: "Distinct items", value: String(cart.itemCount) },
-                { label: "Total quantity", value: String(cart.totalQuantity) },
+                { label: "Distinct items", value: String(preview?.itemCount ?? cart.itemCount) },
+                { label: "Total quantity", value: String(preview?.totalQuantity ?? cart.totalQuantity) },
               ].map(({ label, value }) => (
                 <div key={label} style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "0.82rem" }}>
                   <span style={{ color: "var(--muted)" }}>{label}</span>
-                  <span style={{ color: "#c8c8e8", fontWeight: 600 }}>{value}</span>
+                  <span style={{ color: "var(--ink-light)", fontWeight: 600 }}>{value}</span>
                 </div>
               ))}
-              <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid rgba(0,212,255,0.1)", paddingTop: "10px", fontWeight: 800 }}>
-                <span style={{ color: "#fff" }}>Subtotal</span>
-                <span style={{ color: "#00d4ff", fontSize: "1rem" }}>{money(cart.subtotal)}</span>
+
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px", fontSize: "0.82rem" }}>
+                <span style={{ color: "var(--muted)" }}>Subtotal</span>
+                <span style={{ color: "var(--ink-light)", fontWeight: 600 }}>{money(preview?.subtotal ?? cart.subtotal)}</span>
+              </div>
+
+              {(preview?.lineDiscountTotal ?? 0) > 0 && (
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px", fontSize: "0.82rem" }}>
+                  <span style={{ color: "var(--success)" }}>Line Discounts</span>
+                  <span style={{ color: "var(--success)", fontWeight: 600 }}>−{money(preview!.lineDiscountTotal)}</span>
+                </div>
+              )}
+              {(preview?.cartDiscountTotal ?? 0) > 0 && (
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px", fontSize: "0.82rem" }}>
+                  <span style={{ color: "var(--success)" }}>Cart Discounts</span>
+                  <span style={{ color: "var(--success)", fontWeight: 600 }}>−{money(preview!.cartDiscountTotal)}</span>
+                </div>
+              )}
+              {(preview?.shippingDiscountTotal ?? 0) > 0 && (
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px", fontSize: "0.82rem" }}>
+                  <span style={{ color: "var(--success)" }}>Shipping Discount</span>
+                  <span style={{ color: "var(--success)", fontWeight: 600 }}>−{money(preview!.shippingDiscountTotal)}</span>
+                </div>
+              )}
+              {(preview?.totalDiscount ?? 0) > 0 && (
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px", fontSize: "0.82rem", fontWeight: 700 }}>
+                  <span style={{ color: "var(--success)" }}>Total Savings</span>
+                  <span style={{ color: "var(--success)" }}>−{money(preview!.totalDiscount)}</span>
+                </div>
+              )}
+
+              <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid var(--line-bright)", paddingTop: "10px", fontWeight: 800 }}>
+                <span style={{ color: "#fff" }}>Grand Total</span>
+                <span style={{ color: "var(--brand)", fontSize: "1rem" }}>{money(preview?.grandTotal ?? cart.subtotal)}</span>
               </div>
             </div>
 
+            {/* Applied Promotions */}
+            {preview && preview.appliedPromotions.length > 0 && (
+              <div style={{ marginBottom: "14px" }}>
+                <p style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "6px" }}>
+                  Applied Promotions
+                </p>
+                {preview.appliedPromotions.map((p) => (
+                  <div key={p.promotionId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", fontSize: "0.78rem", borderBottom: "1px solid var(--line)" }}>
+                    <span style={{ color: "var(--ink-light)" }}>{p.promotionName}</span>
+                    <span style={{ color: "var(--success)", fontWeight: 700 }}>−{money(p.discountAmount)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Rejected Promotions */}
+            {preview && preview.rejectedPromotions.length > 0 && (
+              <div style={{ marginBottom: "14px" }}>
+                <p style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "6px" }}>
+                  Ineligible Promotions
+                </p>
+                {preview.rejectedPromotions.map((p) => (
+                  <div key={p.promotionId} style={{ padding: "6px 0", fontSize: "0.75rem", borderBottom: "1px solid var(--line)" }}>
+                    <span style={{ color: "var(--muted)" }}>{p.promotionName}</span>
+                    <p style={{ margin: "2px 0 0", fontSize: "0.7rem", color: "var(--danger)", opacity: 0.8 }}>{p.reason}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* Address notices */}
             {addresses.length === 0 && !addressLoading && (
-              <div style={{ borderRadius: "10px", border: "1px solid rgba(245,158,11,0.25)", background: "rgba(245,158,11,0.06)", padding: "10px 12px", fontSize: "0.78rem", color: "#fbbf24", marginBottom: "14px" }}>
+              <div style={{ borderRadius: "10px", border: "1px solid rgba(245,158,11,0.25)", background: "rgba(245,158,11,0.06)", padding: "10px 12px", fontSize: "0.78rem", color: "var(--warning-text)", marginBottom: "14px" }}>
                 Add at least one address in your profile before checkout.{" "}
-                <Link href="/profile" style={{ color: "#00d4ff", fontWeight: 700 }}>Open Profile</Link>
+                <Link href="/profile" style={{ color: "var(--brand)", fontWeight: 700 }}>Open Profile</Link>
               </div>
             )}
             {addressLoading && (
@@ -458,7 +598,7 @@ export default function CartPage() {
                     if (billingSameAsShipping) setBillingAddressId(v);
                   }}
                   disabled={busy || addressLoading || addresses.length === 0}
-                  style={darkSelect}
+                  className="form-select"
                 >
                   <option value="">Select shipping address...</option>
                   {addresses.map((a) => (
@@ -476,7 +616,7 @@ export default function CartPage() {
                   checked={billingSameAsShipping}
                   onChange={(e) => setBillingSameAsShipping(e.target.checked)}
                   disabled={busy || addressLoading || addresses.length === 0}
-                  style={{ accentColor: "#00d4ff", width: "14px", height: "14px" }}
+                  style={{ accentColor: "var(--brand)", width: "14px", height: "14px" }}
                 />
                 Billing same as shipping
               </label>
@@ -491,7 +631,7 @@ export default function CartPage() {
                     value={billingAddressId}
                     onChange={(e) => setBillingAddressId(e.target.value)}
                     disabled={busy || addressLoading || addresses.length === 0}
-                    style={darkSelect}
+                    className="form-select"
                   >
                     <option value="">Select billing address...</option>
                     {addresses.map((a) => (
@@ -513,13 +653,13 @@ export default function CartPage() {
                   borderRadius: "10px",
                   border: "none",
                   background: busy || cart.items.length === 0 || !hasRequiredAddresses || emailVerified === false
-                    ? "rgba(0,212,255,0.2)" : "linear-gradient(135deg, #00d4ff, #7c3aed)",
+                    ? "rgba(0,212,255,0.2)" : "var(--gradient-brand)",
                   color: "#fff",
                   fontSize: "0.9rem",
                   fontWeight: 800,
                   cursor: busy || cart.items.length === 0 || !hasRequiredAddresses || emailVerified === false
                     ? "not-allowed" : "pointer",
-                  boxShadow: "0 0 20px rgba(0,212,255,0.15)",
+                  boxShadow: "0 0 20px var(--line-bright)",
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",

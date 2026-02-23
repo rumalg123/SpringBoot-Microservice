@@ -146,10 +146,10 @@ export default function LandingPage() {
       {/* --- Header --- */}
       <header
         style={{
-          background: "rgba(8,8,18,0.88)",
+          background: "var(--header-bg)",
           backdropFilter: "blur(20px)",
           WebkitBackdropFilter: "blur(20px)",
-          borderBottom: "1px solid rgba(0,212,255,0.1)",
+          borderBottom: "1px solid var(--line-bright)",
           position: "sticky",
           top: 0,
           zIndex: 50,
@@ -161,17 +161,17 @@ export default function LandingPage() {
             <div
               style={{
                 width: "36px", height: "36px", borderRadius: "10px",
-                background: "linear-gradient(135deg, #00d4ff, #7c3aed)",
+                background: "var(--gradient-brand)",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontWeight: 900, fontSize: "0.7rem", color: "#fff",
-                boxShadow: "0 0 16px rgba(0,212,255,0.35)",
+                boxShadow: "0 0 16px var(--brand-glow)",
               }}
             >RS</div>
             <div>
               <p style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, color: "#fff", fontSize: "1rem", margin: 0 }}>
                 Rumal Store
               </p>
-              <p style={{ fontSize: "9px", color: "rgba(0,212,255,0.55)", letterSpacing: "0.18em", margin: 0 }}>
+              <p style={{ fontSize: "9px", color: "var(--brand)", letterSpacing: "0.18em", margin: 0, opacity: 0.55 }}>
                 ONLINE MARKETPLACE
               </p>
             </div>
@@ -189,21 +189,21 @@ export default function LandingPage() {
               <CartNavWidget apiClient={session.apiClient} emailVerified={session.emailVerified} />
               <span
                 className="hidden md:inline-block rounded-full px-3 py-1.5 text-xs font-medium"
-                style={{ background: "rgba(0,212,255,0.07)", border: "1px solid rgba(0,212,255,0.15)", color: "rgba(0,212,255,0.8)" }}
+                style={{ background: "var(--brand-soft)", border: "1px solid var(--line-bright)", color: "var(--brand)" }}
               >
                 {(session.profile?.email as string) || "User"}
               </span>
               {session.canViewAdmin ? (
                 <Link href="/admin/orders"
                   className="rounded-xl px-4 py-2 text-xs font-bold no-underline transition"
-                  style={{ border: "1px solid rgba(124,58,237,0.35)", color: "#a78bfa", background: "rgba(124,58,237,0.08)" }}
+                  style={{ border: "1px solid var(--accent-glow)", color: "#a78bfa", background: "var(--accent-soft)" }}
                 >
                   Admin
                 </Link>
               ) : (
                 <Link href="/profile"
                   className="rounded-xl px-4 py-2 text-xs font-bold no-underline transition"
-                  style={{ border: "1px solid rgba(0,212,255,0.25)", color: "#00d4ff", background: "rgba(0,212,255,0.06)" }}
+                  style={{ border: "1px solid var(--line-bright)", color: "var(--brand)", background: "var(--brand-soft)" }}
                 >
                   Profile
                 </Link>
@@ -212,7 +212,7 @@ export default function LandingPage() {
                 onClick={() => { void startLogout(); }}
                 disabled={logoutPending}
                 className="rounded-xl px-4 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
-                style={{ background: "linear-gradient(135deg, #00d4ff, #7c3aed)", color: "#fff", border: "none", cursor: "pointer", boxShadow: "0 0 14px rgba(0,212,255,0.2)" }}
+                style={{ background: "var(--gradient-brand)", color: "#fff", border: "none", cursor: "pointer", boxShadow: "0 0 14px var(--line-bright)" }}
               >
                 {logoutPending ? "Logging out..." : "Logout"}
               </button>
@@ -223,7 +223,7 @@ export default function LandingPage() {
                 onClick={() => { void startLogin(); }}
                 disabled={authBusy}
                 className="rounded-xl px-5 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
-                style={{ background: "linear-gradient(135deg, #00d4ff, #7c3aed)", color: "#fff", border: "none", cursor: "pointer", boxShadow: "0 0 14px rgba(0,212,255,0.2)" }}
+                style={{ background: "var(--gradient-brand)", color: "#fff", border: "none", cursor: "pointer", boxShadow: "0 0 14px var(--line-bright)" }}
               >
                 {authActionPending === "login" ? "Redirecting..." : "Login"}
               </button>
@@ -231,7 +231,7 @@ export default function LandingPage() {
                 onClick={() => { void startSignup(); }}
                 disabled={authBusy}
                 className="rounded-xl px-5 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
-                style={{ border: "1px solid rgba(0,212,255,0.25)", color: "#00d4ff", background: "rgba(0,212,255,0.06)", cursor: "pointer" }}
+                style={{ border: "1px solid var(--line-bright)", color: "var(--brand)", background: "var(--brand-soft)", cursor: "pointer" }}
               >
                 {authActionPending === "signup" ? "Redirecting..." : "Sign Up"}
               </button>
@@ -239,7 +239,7 @@ export default function LandingPage() {
                 onClick={() => { void startForgotPassword(); }}
                 disabled={authBusy}
                 className="px-2 py-1 text-xs transition disabled:cursor-not-allowed disabled:opacity-50"
-                style={{ color: "#6868a0", background: "none", border: "none", textDecoration: "underline", textDecorationColor: "rgba(104,104,160,0.4)", cursor: "pointer" }}
+                style={{ color: "var(--muted)", background: "none", border: "none", textDecoration: "underline", textDecorationColor: "rgba(104,104,160,0.4)", cursor: "pointer" }}
               >
                 {authActionPending === "forgot" ? "Redirecting..." : "Forgot Password?"}
               </button>
@@ -272,15 +272,15 @@ export default function LandingPage() {
           }}
         >
           {/* Decorative orbs */}
-          <div style={{ position: "absolute", top: "-80px", left: "-80px", width: "450px", height: "450px", borderRadius: "50%", background: "radial-gradient(circle, rgba(0,212,255,0.08) 0%, transparent 70%)", pointerEvents: "none" }} />
-          <div style={{ position: "absolute", bottom: "-100px", right: "-60px", width: "500px", height: "500px", borderRadius: "50%", background: "radial-gradient(circle, rgba(124,58,237,0.09) 0%, transparent 70%)", pointerEvents: "none" }} />
-          <div style={{ position: "absolute", top: "30%", left: "40%", width: "200px", height: "200px", borderRadius: "50%", background: "radial-gradient(circle, rgba(0,212,255,0.05) 0%, transparent 70%)", pointerEvents: "none" }} />
+          <div style={{ position: "absolute", top: "-80px", left: "-80px", width: "450px", height: "450px", borderRadius: "50%", background: "radial-gradient(circle, var(--brand-soft) 0%, transparent 70%)", pointerEvents: "none" }} />
+          <div style={{ position: "absolute", bottom: "-100px", right: "-60px", width: "500px", height: "500px", borderRadius: "50%", background: "radial-gradient(circle, var(--accent-soft) 0%, transparent 70%)", pointerEvents: "none" }} />
+          <div style={{ position: "absolute", top: "30%", left: "40%", width: "200px", height: "200px", borderRadius: "50%", background: "radial-gradient(circle, var(--brand-soft) 0%, transparent 70%)", pointerEvents: "none" }} />
 
           {/* Subtle grid */}
           <div
             style={{
               position: "absolute", inset: 0, pointerEvents: "none",
-              backgroundImage: "linear-gradient(rgba(0,212,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,0.04) 1px, transparent 1px)",
+              backgroundImage: "linear-gradient(var(--brand-soft) 1px, transparent 1px), linear-gradient(90deg, var(--brand-soft) 1px, transparent 1px)",
               backgroundSize: "48px 48px",
             }}
           />
@@ -292,11 +292,11 @@ export default function LandingPage() {
                 <div
                   className="mb-6 inline-flex items-center gap-2 rounded-full px-4 py-1.5"
                   style={{
-                    background: "rgba(0,212,255,0.06)",
-                    border: "1px solid rgba(0,212,255,0.2)",
+                    background: "var(--brand-soft)",
+                    border: "1px solid var(--line-bright)",
                     fontSize: "0.72rem",
                     fontWeight: 800,
-                    color: "#00d4ff",
+                    color: "var(--brand)",
                     letterSpacing: "0.12em",
                     textTransform: "uppercase",
                   }}
@@ -304,8 +304,8 @@ export default function LandingPage() {
                   <span
                     style={{
                       width: "6px", height: "6px", borderRadius: "50%",
-                      background: "#00d4ff",
-                      boxShadow: "0 0 8px #00d4ff",
+                      background: "var(--brand)",
+                      boxShadow: "0 0 8px var(--brand)",
                       display: "inline-block",
                       animation: "glowPulse 2s ease-in-out infinite",
                     }}
@@ -329,7 +329,7 @@ export default function LandingPage() {
                   <br />
                   <span
                     style={{
-                      background: "linear-gradient(135deg, #00d4ff 0%, #7c3aed 100%)",
+                      background: "var(--gradient-brand)",
                       WebkitBackgroundClip: "text",
                       WebkitTextFillColor: "transparent",
                       backgroundClip: "text",
@@ -350,10 +350,10 @@ export default function LandingPage() {
                     href="/products"
                     className="no-underline inline-flex items-center gap-2 rounded-xl px-7 py-3.5 font-bold transition"
                     style={{
-                      background: "linear-gradient(135deg, #00d4ff, #7c3aed)",
+                      background: "var(--gradient-brand)",
                       color: "#fff",
                       fontSize: "0.9rem",
-                      boxShadow: "0 0 28px rgba(0,212,255,0.3)",
+                      boxShadow: "0 0 28px var(--brand-glow)",
                     }}
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -366,7 +366,7 @@ export default function LandingPage() {
                     <Link
                       href={session.canViewAdmin ? "/admin/orders" : "/profile"}
                       className="no-underline inline-flex items-center gap-2 rounded-xl px-7 py-3.5 font-bold transition"
-                      style={{ border: "1.5px solid rgba(0,212,255,0.3)", color: "#00d4ff", background: "rgba(0,212,255,0.06)", fontSize: "0.9rem" }}
+                      style={{ border: "1.5px solid var(--brand-glow)", color: "var(--brand)", background: "var(--brand-soft)", fontSize: "0.9rem" }}
                     >
                       {session.canViewAdmin ? "Go to Admin" : "My Profile"}
                     </Link>
@@ -375,7 +375,7 @@ export default function LandingPage() {
                       onClick={() => { void startSignup(); }}
                       disabled={authBusy}
                       className="inline-flex items-center gap-2 rounded-xl px-7 py-3.5 font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
-                      style={{ border: "1.5px solid rgba(0,212,255,0.3)", color: "#00d4ff", background: "rgba(0,212,255,0.06)", fontSize: "0.9rem", cursor: "pointer" }}
+                      style={{ border: "1.5px solid var(--brand-glow)", color: "var(--brand)", background: "var(--brand-soft)", fontSize: "0.9rem", cursor: "pointer" }}
                     >
                       {authActionPending === "signup" ? "Redirecting..." : "Create Account ->"}
                     </button>
@@ -390,10 +390,10 @@ export default function LandingPage() {
                     { value: "24/7", label: "Support" },
                   ].map(({ value, label }) => (
                     <div key={label}>
-                      <p style={{ fontFamily: "'Syne', sans-serif", fontSize: "1.5rem", fontWeight: 800, color: "#00d4ff", margin: "0 0 2px", textShadow: "0 0 16px rgba(0,212,255,0.4)" }}>
+                      <p style={{ fontFamily: "'Syne', sans-serif", fontSize: "1.5rem", fontWeight: 800, color: "var(--brand)", margin: "0 0 2px", textShadow: "0 0 16px var(--brand-glow)" }}>
                         {value}
                       </p>
-                      <p style={{ fontSize: "0.72rem", color: "#6868a0", margin: 0, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em" }}>{label}</p>
+                      <p style={{ fontSize: "0.72rem", color: "var(--muted)", margin: 0, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em" }}>{label}</p>
                     </div>
                   ))}
                 </div>
@@ -405,16 +405,16 @@ export default function LandingPage() {
                   style={{
                     padding: "32px 28px",
                     borderRadius: "24px",
-                    border: "1px solid rgba(0,212,255,0.2)",
-                    background: "rgba(0,212,255,0.04)",
+                    border: "1px solid var(--line-bright)",
+                    background: "var(--brand-soft)",
                     backdropFilter: "blur(12px)",
                     textAlign: "center",
-                    boxShadow: "0 0 40px rgba(0,212,255,0.08)",
+                    boxShadow: "0 0 40px var(--brand-soft)",
                   }}
                 >
-                  <p style={{ fontSize: "0.7rem", fontWeight: 800, color: "#00d4ff", letterSpacing: "0.16em", textTransform: "uppercase", margin: "0 0 4px" }}>UP TO</p>
-                  <p style={{ fontFamily: "'Syne', sans-serif", fontSize: "5rem", fontWeight: 900, color: "#fff", lineHeight: 1, margin: "0 0 4px", textShadow: "0 0 32px rgba(0,212,255,0.3)" }}>
-                    70<span style={{ color: "#00d4ff" }}>%</span>
+                  <p style={{ fontSize: "0.7rem", fontWeight: 800, color: "var(--brand)", letterSpacing: "0.16em", textTransform: "uppercase", margin: "0 0 4px" }}>UP TO</p>
+                  <p style={{ fontFamily: "'Syne', sans-serif", fontSize: "5rem", fontWeight: 900, color: "#fff", lineHeight: 1, margin: "0 0 4px", textShadow: "0 0 32px var(--brand-glow)" }}>
+                    70<span style={{ color: "var(--brand)" }}>%</span>
                   </p>
                   <p style={{ fontSize: "1rem", fontWeight: 800, color: "rgba(255,255,255,0.6)", letterSpacing: "0.08em", margin: 0 }}>OFF TODAY</p>
                 </div>
@@ -422,8 +422,8 @@ export default function LandingPage() {
                   style={{
                     padding: "14px 20px",
                     borderRadius: "14px",
-                    border: "1px solid rgba(124,58,237,0.25)",
-                    background: "rgba(124,58,237,0.06)",
+                    border: "1px solid var(--accent-glow)",
+                    background: "var(--accent-soft)",
                     textAlign: "center",
                     fontSize: "0.78rem",
                     color: "#a78bfa",
@@ -507,12 +507,12 @@ export default function LandingPage() {
                       {imgUrl ? (
                         <Image src={imgUrl} alt={product.name} width={400} height={400} className="product-card-img" unoptimized />
                       ) : (
-                        <div style={{ display: "grid", placeItems: "center", width: "100%", height: "100%", background: "linear-gradient(135deg, #111128, #1c1c38)", color: "#4a4a70", fontSize: "0.8rem", fontWeight: 600 }}>
+                        <div style={{ display: "grid", placeItems: "center", width: "100%", height: "100%", background: "linear-gradient(135deg, var(--surface), #1c1c38)", color: "var(--muted-2)", fontSize: "0.8rem", fontWeight: 600 }}>
                           No Image
                         </div>
                       )}
                       <div className="product-card-overlay">
-                        <span style={{ background: "linear-gradient(135deg,#00d4ff,#7c3aed)", color: "#fff", padding: "8px 18px", borderRadius: "20px", fontSize: "0.78rem", fontWeight: 800, letterSpacing: "0.04em" }}>
+                        <span style={{ background: "var(--gradient-brand)", color: "#fff", padding: "8px 18px", borderRadius: "20px", fontSize: "0.78rem", fontWeight: 800, letterSpacing: "0.04em" }}>
                           View Deal {"->"}
                         </span>
                       </div>
@@ -559,7 +559,7 @@ export default function LandingPage() {
           )}
 
           {status === "error" && (
-            <p style={{ borderRadius: "12px", border: "1px solid rgba(245,158,11,0.25)", background: "rgba(245,158,11,0.08)", padding: "14px 16px", fontSize: "0.875rem", color: "#fbbf24" }}>
+            <p style={{ borderRadius: "12px", border: "1px solid var(--warning-border)", background: "var(--warning-soft)", padding: "14px 16px", fontSize: "0.875rem", color: "var(--warning-text)" }}>
               Warning: Product catalog is unavailable right now. Please try again later.
             </p>
           )}
@@ -586,12 +586,12 @@ export default function LandingPage() {
                     {imgUrl ? (
                       <Image src={imgUrl} alt={product.name} width={400} height={400} className="product-card-img" unoptimized />
                     ) : (
-                      <div style={{ display: "grid", placeItems: "center", width: "100%", height: "100%", background: "linear-gradient(135deg, #111128, #1c1c38)", color: "#4a4a70", fontSize: "0.8rem", fontWeight: 600 }}>
+                      <div style={{ display: "grid", placeItems: "center", width: "100%", height: "100%", background: "linear-gradient(135deg, var(--surface), #1c1c38)", color: "var(--muted-2)", fontSize: "0.8rem", fontWeight: 600 }}>
                         No Image
                       </div>
                     )}
                     <div className="product-card-overlay">
-                      <span style={{ background: "linear-gradient(135deg,#00d4ff,#7c3aed)", color: "#fff", padding: "8px 18px", borderRadius: "20px", fontSize: "0.78rem", fontWeight: 800 }}>
+                      <span style={{ background: "var(--gradient-brand)", color: "#fff", padding: "8px 18px", borderRadius: "20px", fontSize: "0.78rem", fontWeight: 800 }}>
                         View Product {"->"}
                       </span>
                     </div>
@@ -625,21 +625,21 @@ export default function LandingPage() {
               padding: "56px 40px",
               textAlign: "center",
               background: "linear-gradient(135deg, #0a0a22 0%, #12082e 50%, #080e28 100%)",
-              border: "1px solid rgba(0,212,255,0.12)",
+              border: "1px solid var(--line-bright)",
               position: "relative",
               overflow: "hidden",
             }}
           >
             {/* Decorative orbs */}
-            <div style={{ position: "absolute", top: "-60px", left: "20%", width: "300px", height: "300px", borderRadius: "50%", background: "radial-gradient(circle, rgba(0,212,255,0.07) 0%, transparent 70%)", pointerEvents: "none" }} />
-            <div style={{ position: "absolute", bottom: "-60px", right: "15%", width: "250px", height: "250px", borderRadius: "50%", background: "radial-gradient(circle, rgba(124,58,237,0.08) 0%, transparent 70%)", pointerEvents: "none" }} />
+            <div style={{ position: "absolute", top: "-60px", left: "20%", width: "300px", height: "300px", borderRadius: "50%", background: "radial-gradient(circle, var(--brand-soft) 0%, transparent 70%)", pointerEvents: "none" }} />
+            <div style={{ position: "absolute", bottom: "-60px", right: "15%", width: "250px", height: "250px", borderRadius: "50%", background: "radial-gradient(circle, var(--accent-soft) 0%, transparent 70%)", pointerEvents: "none" }} />
 
             <div style={{ position: "relative", zIndex: 1 }}>
               <span style={{ display: "inline-block", fontFamily: "'Syne', sans-serif", fontSize: "2.4rem", fontWeight: 900, lineHeight: 1.15, color: "#fff", marginBottom: "16px" }}>
                 {session.isAuthenticated ? "Welcome Back!" : (
                   <>
                     Join{" "}
-                    <span style={{ background: "linear-gradient(135deg, #00d4ff, #7c3aed)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
+                    <span style={{ background: "var(--gradient-brand)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
                       Rumal Store
                     </span>{" "}
                     Today
@@ -656,7 +656,7 @@ export default function LandingPage() {
                   <Link
                     href={session.canViewAdmin ? "/admin/orders" : "/profile"}
                     className="no-underline inline-flex items-center gap-2 rounded-xl px-8 py-3.5 font-bold transition"
-                    style={{ background: "linear-gradient(135deg, #00d4ff, #7c3aed)", color: "#fff", fontSize: "0.9rem", boxShadow: "0 0 24px rgba(0,212,255,0.25)" }}
+                    style={{ background: "var(--gradient-brand)", color: "#fff", fontSize: "0.9rem", boxShadow: "0 0 24px var(--line-bright)" }}
                   >
                     {session.canViewAdmin ? "Open Admin ->" : "Open Profile ->"}
                   </Link>
@@ -665,7 +665,7 @@ export default function LandingPage() {
                     onClick={() => { void startSignup(); }}
                     disabled={authBusy}
                     className="inline-flex items-center gap-2 rounded-xl px-8 py-3.5 font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
-                    style={{ background: "linear-gradient(135deg, #00d4ff, #7c3aed)", color: "#fff", fontSize: "0.9rem", cursor: "pointer", border: "none", boxShadow: "0 0 24px rgba(0,212,255,0.25)" }}
+                    style={{ background: "var(--gradient-brand)", color: "#fff", fontSize: "0.9rem", cursor: "pointer", border: "none", boxShadow: "0 0 24px var(--line-bright)" }}
                   >
                     {authActionPending === "signup" ? "Redirecting..." : "Sign Up Free ->"}
                   </button>
@@ -673,7 +673,7 @@ export default function LandingPage() {
                 <Link
                   href="/products"
                   className="no-underline inline-flex items-center gap-2 rounded-xl px-8 py-3.5 font-bold transition"
-                  style={{ border: "1.5px solid rgba(0,212,255,0.3)", color: "#00d4ff", background: "rgba(0,212,255,0.06)", fontSize: "0.9rem" }}
+                  style={{ border: "1.5px solid var(--brand-glow)", color: "var(--brand)", background: "var(--brand-soft)", fontSize: "0.9rem" }}
                 >
                   Browse Products
                 </Link>

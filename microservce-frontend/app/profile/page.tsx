@@ -35,17 +35,6 @@ function splitDisplayName(name: string) {
   return { firstName: normalized.slice(0, firstSpace).trim(), lastName: normalized.slice(firstSpace + 1).trim() };
 }
 
-/* Reusable dark input style */
-const darkInput: React.CSSProperties = {
-  width: "100%", padding: "9px 12px", borderRadius: "9px",
-  border: "1px solid rgba(0,212,255,0.15)", background: "rgba(0,212,255,0.04)",
-  color: "#c8c8e8", fontSize: "0.82rem", outline: "none",
-};
-/* Reusable glass card style */
-const glassCard: React.CSSProperties = {
-  background: "rgba(17,17,40,0.7)", backdropFilter: "blur(16px)",
-  border: "1px solid rgba(0,212,255,0.1)", borderRadius: "18px",
-};
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -270,7 +259,7 @@ export default function ProfilePage() {
         {emailVerified === false && (
           <section
             className="mb-4 flex items-center gap-3 rounded-xl px-4 py-3 text-sm"
-            style={{ border: "1px solid rgba(245,158,11,0.3)", background: "rgba(245,158,11,0.08)", color: "#fbbf24" }}
+            style={{ border: "1px solid var(--warning-border)", background: "var(--warning-soft)", color: "var(--warning-text)" }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
@@ -283,7 +272,7 @@ export default function ProfilePage() {
             <button
               onClick={() => { void resendVerification(); }}
               disabled={resendingVerification}
-              style={{ background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.35)", color: "#fbbf24", padding: "6px 14px", borderRadius: "8px", fontSize: "0.75rem", fontWeight: 700, cursor: resendingVerification ? "not-allowed" : "pointer" }}
+              style={{ background: "var(--warning-soft)", border: "1px solid var(--warning-border)", color: "var(--warning-text)", padding: "6px 14px", borderRadius: "8px", fontSize: "0.75rem", fontWeight: 700, cursor: resendingVerification ? "not-allowed" : "pointer" }}
             >
               {resendingVerification ? "Sending..." : "Resend Email"}
             </button>
@@ -299,16 +288,16 @@ export default function ProfilePage() {
             <p style={{ marginTop: "4px", fontSize: "0.8rem", color: "var(--muted)" }}>Manage your account and addresses</p>
           </div>
           <div style={{ display: "flex", gap: "10px" }}>
-            <Link href="/products" className="no-underline" style={{ padding: "9px 18px", borderRadius: "10px", background: "linear-gradient(135deg, #00d4ff, #7c3aed)", color: "#fff", fontSize: "0.8rem", fontWeight: 700 }}>
+            <Link href="/products" className="no-underline" style={{ padding: "9px 18px", borderRadius: "10px", background: "var(--gradient-brand)", color: "#fff", fontSize: "0.8rem", fontWeight: 700 }}>
               Shop
             </Link>
-            <Link href="/orders" className="no-underline" style={{ padding: "9px 18px", borderRadius: "10px", border: "1px solid rgba(0,212,255,0.25)", background: "rgba(0,212,255,0.06)", color: "#00d4ff", fontSize: "0.8rem", fontWeight: 700 }}>
+            <Link href="/orders" className="no-underline" style={{ padding: "9px 18px", borderRadius: "10px", border: "1px solid var(--line-bright)", background: "var(--brand-soft)", color: "var(--brand)", fontSize: "0.8rem", fontWeight: 700 }}>
               Orders
             </Link>
             <button
               onClick={() => { void startChangePassword(); }}
               disabled={passwordActionPending}
-              style={{ padding: "9px 18px", borderRadius: "10px", border: "1px solid rgba(0,212,255,0.25)", background: "rgba(0,212,255,0.06)", color: "#00d4ff", fontSize: "0.8rem", fontWeight: 700, cursor: passwordActionPending ? "not-allowed" : "pointer", opacity: passwordActionPending ? 0.5 : 1 }}
+              style={{ padding: "9px 18px", borderRadius: "10px", border: "1px solid var(--line-bright)", background: "var(--brand-soft)", color: "var(--brand)", fontSize: "0.8rem", fontWeight: 700, cursor: passwordActionPending ? "not-allowed" : "pointer", opacity: passwordActionPending ? 0.5 : 1 }}
             >
               {passwordActionPending ? "Redirecting..." : "Change Password"}
             </button>
@@ -318,11 +307,11 @@ export default function ProfilePage() {
         {/* Top 2 Cards: Profile + Session Info */}
         <div style={{ display: "grid", gap: "16px", gridTemplateColumns: "1fr 1fr", marginBottom: "20px" }}>
           {/* Customer Profile Card */}
-          <article className="animate-rise" style={{ ...glassCard, padding: "24px" }}>
+          <article className="animate-rise glass-card" style={{ padding: "24px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
               <div style={{
                 width: "48px", height: "48px", borderRadius: "50%", flexShrink: 0,
-                background: "linear-gradient(135deg, #00d4ff, #7c3aed)",
+                background: "var(--gradient-brand)",
                 display: "grid", placeItems: "center",
               }}>
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -340,25 +329,27 @@ export default function ProfilePage() {
             {!canViewAdmin && (
               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                 {/* First Name */}
-                <div style={{ borderRadius: "10px", background: "rgba(0,212,255,0.04)", border: "1px solid rgba(0,212,255,0.08)", padding: "10px 14px" }}>
+                <div style={{ borderRadius: "10px", background: "var(--brand-soft)", border: "1px solid var(--brand-soft)", padding: "10px 14px" }}>
                   <p style={{ fontSize: "0.65rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 0 6px" }}>First Name</p>
                   <input
                     value={editFirstName}
                     onChange={(e) => setEditFirstName(e.target.value)}
                     disabled={savingProfile || emailVerified === false}
-                    style={{ ...darkInput, padding: "7px 10px" }}
+                    className="form-input"
+                    style={{ padding: "7px 10px" }}
                     placeholder="Enter first name"
                   />
                 </div>
                 {/* Last Name + Save */}
-                <div style={{ borderRadius: "10px", background: "rgba(0,212,255,0.04)", border: "1px solid rgba(0,212,255,0.08)", padding: "10px 14px" }}>
+                <div style={{ borderRadius: "10px", background: "var(--brand-soft)", border: "1px solid var(--brand-soft)", padding: "10px 14px" }}>
                   <p style={{ fontSize: "0.65rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 0 6px" }}>Last Name</p>
                   <div style={{ display: "flex", gap: "8px" }}>
                     <input
                       value={editLastName}
                       onChange={(e) => setEditLastName(e.target.value)}
                       disabled={savingProfile || emailVerified === false}
-                      style={{ ...darkInput, flex: 1, padding: "7px 10px" }}
+                      className="form-input"
+                      style={{ flex: 1, padding: "7px 10px" }}
                       placeholder="Enter last name"
                     />
                     <button
@@ -369,7 +360,7 @@ export default function ProfilePage() {
                       }
                       style={{
                         padding: "7px 14px", borderRadius: "8px", border: "none", flexShrink: 0,
-                        background: "linear-gradient(135deg, #00d4ff, #7c3aed)",
+                        background: "var(--gradient-brand)",
                         color: "#fff", fontSize: "0.75rem", fontWeight: 700, cursor: "pointer",
                         opacity: savingProfile || !editFirstName.trim() || !editLastName.trim() ? 0.5 : 1,
                       }}
@@ -384,9 +375,9 @@ export default function ProfilePage() {
                   { label: "Customer ID", value: customer?.id || "—", mono: true },
                   { label: "Member Since", value: customer?.createdAt ? new Date(customer.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : "—" },
                 ].map(({ label, value, mono }) => (
-                  <div key={label} style={{ borderRadius: "10px", background: "rgba(0,212,255,0.04)", border: "1px solid rgba(0,212,255,0.08)", padding: "10px 14px" }}>
+                  <div key={label} style={{ borderRadius: "10px", background: "var(--brand-soft)", border: "1px solid var(--brand-soft)", padding: "10px 14px" }}>
                     <p style={{ fontSize: "0.65rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 0 3px" }}>{label}</p>
-                    <p style={{ fontSize: "0.82rem", fontWeight: 700, color: "#c8c8e8", fontFamily: mono ? "monospace" : undefined, wordBreak: "break-all", margin: 0 }}>{value}</p>
+                    <p style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--ink-light)", fontFamily: mono ? "monospace" : undefined, wordBreak: "break-all", margin: 0 }}>{value}</p>
                   </div>
                 ))}
               </div>
@@ -401,7 +392,7 @@ export default function ProfilePage() {
           </article>
 
           {/* Session Info Card */}
-          <article className="animate-rise" style={{ ...glassCard, padding: "24px", animationDelay: "80ms" }}>
+          <article className="animate-rise glass-card" style={{ padding: "24px", animationDelay: "80ms" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
               <div style={{ width: "48px", height: "48px", borderRadius: "50%", flexShrink: 0, background: "rgba(124,58,237,0.2)", border: "1px solid rgba(124,58,237,0.35)", display: "grid", placeItems: "center" }}>
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -420,12 +411,12 @@ export default function ProfilePage() {
                 { label: "Auth Email", value: (profile?.email as string) || "—" },
                 { label: "Auth Name", value: (profile?.name as string) || "—" },
               ].map(({ label, value }) => (
-                <div key={label} style={{ borderRadius: "10px", background: "rgba(0,212,255,0.04)", border: "1px solid rgba(0,212,255,0.08)", padding: "10px 14px" }}>
+                <div key={label} style={{ borderRadius: "10px", background: "var(--brand-soft)", border: "1px solid var(--brand-soft)", padding: "10px 14px" }}>
                   <p style={{ fontSize: "0.65rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 0 3px" }}>{label}</p>
-                  <p style={{ fontSize: "0.82rem", fontWeight: 700, color: "#c8c8e8", margin: 0 }}>{value}</p>
+                  <p style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--ink-light)", margin: 0 }}>{value}</p>
                 </div>
               ))}
-              <div style={{ borderRadius: "10px", background: "rgba(0,212,255,0.04)", border: "1px solid rgba(0,212,255,0.08)", padding: "10px 14px" }}>
+              <div style={{ borderRadius: "10px", background: "var(--brand-soft)", border: "1px solid var(--brand-soft)", padding: "10px 14px" }}>
                 <p style={{ fontSize: "0.65rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 0 6px" }}>Role</p>
                 <span style={{
                   borderRadius: "20px", padding: "3px 12px", fontSize: "0.72rem", fontWeight: 800,
@@ -436,13 +427,13 @@ export default function ProfilePage() {
                   {canViewAdmin ? "Admin" : "Customer"}
                 </span>
               </div>
-              <div style={{ borderRadius: "10px", background: "rgba(0,212,255,0.04)", border: "1px solid rgba(0,212,255,0.08)", padding: "10px 14px" }}>
+              <div style={{ borderRadius: "10px", background: "var(--brand-soft)", border: "1px solid var(--brand-soft)", padding: "10px 14px" }}>
                 <p style={{ fontSize: "0.65rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 0 6px" }}>Email Verified</p>
                 <span style={{
                   borderRadius: "20px", padding: "3px 12px", fontSize: "0.72rem", fontWeight: 800,
-                  background: emailVerified ? "rgba(34,197,94,0.1)" : "rgba(245,158,11,0.1)",
-                  border: `1px solid ${emailVerified ? "rgba(34,197,94,0.25)" : "rgba(245,158,11,0.3)"}`,
-                  color: emailVerified ? "#4ade80" : "#fbbf24",
+                  background: emailVerified ? "rgba(34,197,94,0.1)" : "var(--warning-soft)",
+                  border: `1px solid ${emailVerified ? "rgba(34,197,94,0.25)" : "var(--warning-border)"}`,
+                  color: emailVerified ? "#4ade80" : "var(--warning-text)",
                 }}>
                   {emailVerified ? "Verified" : "Not Verified"}
                 </span>
@@ -453,21 +444,21 @@ export default function ProfilePage() {
 
         {/* Address Book */}
         {!canViewAdmin && (
-          <section style={{ ...glassCard, padding: "24px" }}>
+          <section className="glass-card" style={{ padding: "24px" }}>
             <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: "12px", marginBottom: "20px" }}>
               <div>
                 <h2 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: "1.1rem", color: "#fff", margin: "0 0 4px" }}>Address Book</h2>
                 <p style={{ fontSize: "0.75rem", color: "var(--muted)", margin: 0 }}>Manage shipping and billing addresses.</p>
               </div>
-              <span style={{ background: "linear-gradient(135deg, #00d4ff, #7c3aed)", color: "#fff", padding: "3px 12px", borderRadius: "20px", fontSize: "0.72rem", fontWeight: 800 }}>
+              <span style={{ background: "var(--gradient-brand)", color: "#fff", padding: "3px 12px", borderRadius: "20px", fontSize: "0.72rem", fontWeight: 800 }}>
                 {addresses.length} active
               </span>
             </div>
 
             <div style={{ display: "grid", gap: "20px", gridTemplateColumns: "0.9fr 1.1fr" }}>
               {/* Address Form */}
-              <div style={{ borderRadius: "12px", border: "1px solid rgba(0,212,255,0.1)", padding: "16px" }}>
-                <p style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#00d4ff", margin: "0 0 12px" }}>
+              <div style={{ borderRadius: "12px", border: "1px solid var(--line-bright)", padding: "16px" }}>
+                <p style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--brand)", margin: "0 0 12px" }}>
                   {addressForm.id ? "Edit Address" : "Add Address"}
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -484,7 +475,7 @@ export default function ProfilePage() {
                       onChange={(e) => setAddressForm((old) => ({ ...old, [key]: e.target.value }))}
                       placeholder={placeholder}
                       disabled={savingAddress || emailVerified === false}
-                      style={darkInput}
+                      className="form-input"
                     />
                   ))}
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
@@ -498,7 +489,7 @@ export default function ProfilePage() {
                         onChange={(e) => setAddressForm((old) => ({ ...old, [key]: e.target.value }))}
                         placeholder={placeholder}
                         disabled={savingAddress || emailVerified === false}
-                        style={darkInput}
+                        className="form-input"
                       />
                     ))}
                   </div>
@@ -508,7 +499,7 @@ export default function ProfilePage() {
                       onChange={(e) => setAddressForm((old) => ({ ...old, postalCode: e.target.value }))}
                       placeholder="Postal code *"
                       disabled={savingAddress || emailVerified === false}
-                      style={darkInput}
+                      className="form-input"
                     />
                     <input
                       value={addressForm.countryCode}
@@ -516,7 +507,7 @@ export default function ProfilePage() {
                       placeholder="Country (US)"
                       maxLength={2}
                       disabled={savingAddress || emailVerified === false}
-                      style={darkInput}
+                      className="form-input"
                     />
                   </div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", padding: "4px 0" }}>
@@ -530,7 +521,7 @@ export default function ProfilePage() {
                           checked={(addressForm as unknown as Record<string, boolean>)[key]}
                           onChange={(e) => setAddressForm((old) => ({ ...old, [key]: e.target.checked }))}
                           disabled={savingAddress || emailVerified === false}
-                          style={{ accentColor: "#00d4ff", width: "14px", height: "14px" }}
+                          style={{ accentColor: "var(--brand)", width: "14px", height: "14px" }}
                         />
                         {label}
                       </label>
@@ -542,7 +533,7 @@ export default function ProfilePage() {
                       disabled={savingAddress || emailVerified === false}
                       style={{
                         flex: 1, padding: "10px", borderRadius: "10px", border: "none",
-                        background: savingAddress || emailVerified === false ? "rgba(0,212,255,0.2)" : "linear-gradient(135deg, #00d4ff, #7c3aed)",
+                        background: savingAddress || emailVerified === false ? "var(--line-bright)" : "var(--gradient-brand)",
                         color: "#fff", fontSize: "0.82rem", fontWeight: 700,
                         cursor: savingAddress || emailVerified === false ? "not-allowed" : "pointer",
                         display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px",
@@ -555,7 +546,7 @@ export default function ProfilePage() {
                       <button
                         onClick={resetAddressForm}
                         disabled={savingAddress}
-                        style={{ padding: "10px 14px", borderRadius: "10px", border: "1px solid rgba(0,212,255,0.2)", background: "transparent", color: "var(--muted)", fontSize: "0.82rem", cursor: "pointer" }}
+                        style={{ padding: "10px 14px", borderRadius: "10px", border: "1px solid var(--line-bright)", background: "transparent", color: "var(--muted)", fontSize: "0.82rem", cursor: "pointer" }}
                       >
                         Cancel
                       </button>
@@ -565,8 +556,8 @@ export default function ProfilePage() {
               </div>
 
               {/* Saved Addresses */}
-              <div style={{ borderRadius: "12px", border: "1px solid rgba(0,212,255,0.08)", padding: "16px" }}>
-                <p style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#7c3aed", margin: "0 0 12px" }}>Saved Addresses</p>
+              <div style={{ borderRadius: "12px", border: "1px solid var(--brand-soft)", padding: "16px" }}>
+                <p style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--accent)", margin: "0 0 12px" }}>Saved Addresses</p>
                 {addressLoading && <p style={{ fontSize: "0.82rem", color: "var(--muted)" }}>Loading addresses...</p>}
                 {!addressLoading && addresses.length === 0 && (
                   <p style={{ fontSize: "0.82rem", color: "var(--muted)" }}>No addresses added yet.</p>
@@ -579,7 +570,7 @@ export default function ProfilePage() {
                     return (
                       <article
                         key={address.id}
-                        style={{ borderRadius: "12px", border: "1px solid rgba(0,212,255,0.08)", background: "rgba(0,212,255,0.03)", padding: "12px 14px" }}
+                        style={{ borderRadius: "12px", border: "1px solid var(--brand-soft)", background: "var(--brand-soft)", padding: "12px 14px" }}
                       >
                         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: "8px" }}>
                           <div style={{ flex: 1, minWidth: "140px" }}>
@@ -597,7 +588,7 @@ export default function ProfilePage() {
                                 </span>
                               )}
                               {address.defaultBilling && (
-                                <span style={{ fontSize: "0.6rem", fontWeight: 700, padding: "2px 8px", borderRadius: "20px", background: "rgba(0,212,255,0.1)", border: "1px solid rgba(0,212,255,0.2)", color: "#00d4ff" }}>
+                                <span style={{ fontSize: "0.6rem", fontWeight: 700, padding: "2px 8px", borderRadius: "20px", background: "var(--line-bright)", border: "1px solid var(--line-bright)", color: "var(--brand)" }}>
                                   Default Billing
                                 </span>
                               )}
@@ -608,7 +599,7 @@ export default function ProfilePage() {
                             <button
                               onClick={() => startEditAddress(address)}
                               disabled={savingAddress || emailVerified === false}
-                              style={{ padding: "4px 10px", borderRadius: "7px", border: "1px solid rgba(0,212,255,0.2)", background: "rgba(0,212,255,0.05)", color: "#00d4ff", fontSize: "0.62rem", fontWeight: 700, cursor: "pointer" }}
+                              style={{ padding: "4px 10px", borderRadius: "7px", border: "1px solid var(--line-bright)", background: "var(--brand-soft)", color: "var(--brand)", fontSize: "0.62rem", fontWeight: 700, cursor: "pointer" }}
                             >
                               Edit
                             </button>
@@ -624,7 +615,7 @@ export default function ProfilePage() {
                             <button
                               onClick={() => { void setDefaultAddress(address.id, "billing"); }}
                               disabled={isSingle || address.defaultBilling || settingDefaultAddress !== null || savingAddress || emailVerified === false}
-                              style={{ padding: "4px 10px", borderRadius: "7px", border: "1px solid rgba(0,212,255,0.2)", background: "rgba(0,212,255,0.06)", color: "#00d4ff", fontSize: "0.62rem", fontWeight: 700, cursor: "pointer", opacity: isSingle || address.defaultBilling ? 0.4 : 1 }}
+                              style={{ padding: "4px 10px", borderRadius: "7px", border: "1px solid var(--line-bright)", background: "var(--brand-soft)", color: "var(--brand)", fontSize: "0.62rem", fontWeight: 700, cursor: "pointer", opacity: isSingle || address.defaultBilling ? 0.4 : 1 }}
                             >
                               {isSettingBilling ? "Saving..." : address.defaultBilling ? "✓ Billing" : "Set Billing"}
                             </button>
@@ -632,7 +623,7 @@ export default function ProfilePage() {
                             <button
                               onClick={() => { void deleteAddress(address.id); }}
                               disabled={deletingAddressId !== null || savingAddress || emailVerified === false}
-                              style={{ padding: "4px 10px", borderRadius: "7px", border: "1px solid rgba(239,68,68,0.2)", background: "rgba(239,68,68,0.05)", color: "#ef4444", fontSize: "0.62rem", fontWeight: 700, cursor: deletingAddressId ? "not-allowed" : "pointer" }}
+                              style={{ padding: "4px 10px", borderRadius: "7px", border: "1px solid rgba(239,68,68,0.2)", background: "rgba(239,68,68,0.05)", color: "var(--danger)", fontSize: "0.62rem", fontWeight: 700, cursor: deletingAddressId ? "not-allowed" : "pointer" }}
                             >
                               {deletingAddressId === address.id ? "Deleting..." : "Delete"}
                             </button>

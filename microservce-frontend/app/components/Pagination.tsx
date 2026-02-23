@@ -51,7 +51,7 @@ export default function Pagination({
     const navBtnBase: React.CSSProperties = {
         display: "inline-flex", alignItems: "center", gap: "4px",
         padding: "8px 12px", borderRadius: "8px", fontSize: "0.8rem", fontWeight: 600,
-        border: "1px solid rgba(0,212,255,0.12)", background: "rgba(0,212,255,0.03)",
+        border: "1px solid var(--line-bright)", background: "var(--brand-soft)",
         color: "var(--ink-light)", cursor: "pointer", transition: "all 0.15s",
     };
 
@@ -79,8 +79,8 @@ export default function Pagination({
                         cursor: disabled || currentPage <= 0 ? "not-allowed" : "pointer",
                     }}
                     aria-label="Go to previous page"
-                    onMouseEnter={(e) => { if (!(disabled || currentPage <= 0)) { (e.currentTarget as HTMLElement).style.borderColor = "#00d4ff"; (e.currentTarget as HTMLElement).style.color = "#00d4ff"; } }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(0,212,255,0.12)"; (e.currentTarget as HTMLElement).style.color = "var(--ink-light)"; }}
+                    onMouseEnter={(e) => { if (!(disabled || currentPage <= 0)) { (e.currentTarget as HTMLElement).style.borderColor = "var(--brand)"; (e.currentTarget as HTMLElement).style.color = "var(--brand)"; } }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--line-bright)"; (e.currentTarget as HTMLElement).style.color = "var(--ink-light)"; }}
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
                     <span>Prev</span>
@@ -103,17 +103,17 @@ export default function Pagination({
                             style={{
                                 minWidth: "34px", padding: "7px 10px", borderRadius: "8px",
                                 fontSize: "0.8rem", fontWeight: isActive ? 800 : 600, cursor: disabled ? "not-allowed" : "pointer",
-                                border: isActive ? "none" : "1px solid rgba(0,212,255,0.12)",
-                                background: isActive ? "linear-gradient(135deg, #00d4ff, #7c3aed)" : "rgba(0,212,255,0.03)",
+                                border: isActive ? "none" : "1px solid var(--line-bright)",
+                                background: isActive ? "var(--gradient-brand)" : "var(--brand-soft)",
                                 color: isActive ? "#fff" : "var(--ink-light)",
-                                boxShadow: isActive ? "0 0 14px rgba(0,212,255,0.25)" : "none",
+                                boxShadow: isActive ? "0 0 14px var(--line-bright)" : "none",
                                 opacity: disabled && !isActive ? 0.5 : 1,
                                 transition: "all 0.15s",
                             }}
                             aria-label={`Go to page ${p + 1}`}
                             aria-current={isActive ? "page" : undefined}
-                            onMouseEnter={(e) => { if (!isActive && !disabled) { (e.currentTarget as HTMLElement).style.borderColor = "#00d4ff"; (e.currentTarget as HTMLElement).style.color = "#00d4ff"; } }}
-                            onMouseLeave={(e) => { if (!isActive) { (e.currentTarget as HTMLElement).style.borderColor = "rgba(0,212,255,0.12)"; (e.currentTarget as HTMLElement).style.color = "var(--ink-light)"; } }}
+                            onMouseEnter={(e) => { if (!isActive && !disabled) { (e.currentTarget as HTMLElement).style.borderColor = "var(--brand)"; (e.currentTarget as HTMLElement).style.color = "var(--brand)"; } }}
+                            onMouseLeave={(e) => { if (!isActive) { (e.currentTarget as HTMLElement).style.borderColor = "var(--line-bright)"; (e.currentTarget as HTMLElement).style.color = "var(--ink-light)"; } }}
                         >
                             {p + 1}
                         </button>
@@ -131,8 +131,8 @@ export default function Pagination({
                         cursor: disabled || currentPage + 1 >= totalPages ? "not-allowed" : "pointer",
                     }}
                     aria-label="Go to next page"
-                    onMouseEnter={(e) => { if (!(disabled || currentPage + 1 >= totalPages)) { (e.currentTarget as HTMLElement).style.borderColor = "#00d4ff"; (e.currentTarget as HTMLElement).style.color = "#00d4ff"; } }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(0,212,255,0.12)"; (e.currentTarget as HTMLElement).style.color = "var(--ink-light)"; }}
+                    onMouseEnter={(e) => { if (!(disabled || currentPage + 1 >= totalPages)) { (e.currentTarget as HTMLElement).style.borderColor = "var(--brand)"; (e.currentTarget as HTMLElement).style.color = "var(--brand)"; } }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--line-bright)"; (e.currentTarget as HTMLElement).style.color = "var(--ink-light)"; }}
                 >
                     <span>Next</span>
                     <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>

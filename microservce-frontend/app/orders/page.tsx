@@ -10,15 +10,24 @@ import { useAuthSession } from "../../lib/authSession";
 
 const CREATING_STATUS = "Creating purchase...";
 
-type Order = { id: string; customerId: string; item: string; quantity: number; createdAt: string };
+type Order = {
+  id: string; customerId: string; item: string; quantity: number; itemCount: number;
+  orderTotal: number; subtotal: number; lineDiscountTotal: number; cartDiscountTotal: number;
+  shippingAmount: number; shippingDiscountTotal: number; totalDiscount: number;
+  couponCode: string | null; status: string; createdAt: string;
+};
 type OrderItem = { id: string | null; item: string; quantity: number };
 type OrderAddress = {
   sourceAddressId: string; label: string | null; recipientName: string; phone: string;
   line1: string; line2: string | null; city: string; state: string; postalCode: string; countryCode: string;
 };
 type OrderDetail = {
-  id: string; customerId: string; item: string; quantity: number; createdAt: string;
+  id: string; customerId: string; item: string; quantity: number; itemCount: number;
+  orderTotal: number; subtotal: number; lineDiscountTotal: number; cartDiscountTotal: number;
+  shippingAmount: number; shippingDiscountTotal: number; totalDiscount: number;
+  couponCode: string | null; status: string; createdAt: string;
   items: OrderItem[]; shippingAddress?: OrderAddress | null; billingAddress?: OrderAddress | null;
+  warnings?: string[];
 };
 type PagedOrder = { content: Order[] };
 type ProductSummary = { id: string; name: string; sku: string; productType: string };
@@ -29,15 +38,17 @@ type CustomerAddress = {
   postalCode: string; countryCode: string; defaultShipping: boolean; defaultBilling: boolean;
 };
 
-const darkInput: React.CSSProperties = {
-  width: "100%", padding: "10px 14px", borderRadius: "10px",
-  border: "1px solid rgba(0,212,255,0.15)", background: "rgba(0,212,255,0.04)",
-  color: "#c8c8e8", fontSize: "0.85rem", outline: "none",
-};
-const darkSelect: React.CSSProperties = { ...darkInput, appearance: "none", WebkitAppearance: "none" };
-const glassCard: React.CSSProperties = {
-  background: "rgba(17,17,40,0.7)", backdropFilter: "blur(16px)",
-  border: "1px solid rgba(0,212,255,0.1)", borderRadius: "16px",
+function money(value: number) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value || 0);
+}
+
+const STATUS_COLORS: Record<string, { bg: string; border: string; color: string }> = {
+  PENDING: { bg: "var(--warning-soft)", border: "var(--warning-border)", color: "var(--warning-text)" },
+  CONFIRMED: { bg: "var(--brand-soft)", border: "var(--line-bright)", color: "var(--brand)" },
+  PROCESSING: { bg: "var(--brand-soft)", border: "var(--line-bright)", color: "var(--brand)" },
+  SHIPPED: { bg: "var(--accent-soft)", border: "var(--accent-glow)", color: "var(--accent)" },
+  DELIVERED: { bg: "var(--success-soft)", border: "var(--success-glow)", color: "var(--success)" },
+  CANCELLED: { bg: "var(--danger-soft)", border: "var(--danger-glow)", color: "var(--danger)" },
 };
 
 export default function OrdersPage() {
@@ -177,7 +188,7 @@ export default function OrdersPage() {
         {emailVerified === false && (
           <section
             className="mb-4 flex items-center gap-3 rounded-xl px-4 py-3 text-sm"
-            style={{ border: "1px solid rgba(245,158,11,0.3)", background: "rgba(245,158,11,0.08)", color: "#fbbf24" }}
+            style={{ border: "1px solid var(--warning-border)", background: "var(--warning-soft)", color: "var(--warning-text)" }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
@@ -192,7 +203,7 @@ export default function OrdersPage() {
               disabled={resendingVerification}
               style={{
                 background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.35)",
-                color: "#fbbf24", padding: "6px 14px", borderRadius: "8px",
+                color: "var(--warning-text)", padding: "6px 14px", borderRadius: "8px",
                 fontSize: "0.75rem", fontWeight: 700, cursor: resendingVerification ? "not-allowed" : "pointer",
               }}
             >
@@ -220,9 +231,9 @@ export default function OrdersPage() {
             className="no-underline"
             style={{
               padding: "9px 18px", borderRadius: "10px",
-              background: "linear-gradient(135deg, #00d4ff, #7c3aed)",
+              background: "var(--gradient-brand)",
               color: "#fff", fontSize: "0.8rem", fontWeight: 700,
-              boxShadow: "0 0 14px rgba(0,212,255,0.2)",
+              boxShadow: "0 0 14px var(--line-bright)",
             }}
           >
             Continue Shopping
@@ -234,8 +245,9 @@ export default function OrdersPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             {/* Header */}
             <div
+              className="glass-card"
               style={{
-                ...glassCard, padding: "14px 18px",
+                padding: "14px 18px",
                 display: "flex", alignItems: "center", justifyContent: "space-between",
               }}
             >
@@ -244,7 +256,7 @@ export default function OrdersPage() {
               </h2>
               <span
                 style={{
-                  background: "linear-gradient(135deg, #00d4ff, #7c3aed)",
+                  background: "var(--gradient-brand)",
                   color: "#fff", padding: "3px 12px", borderRadius: "20px",
                   fontSize: "0.75rem", fontWeight: 800,
                 }}
@@ -266,55 +278,63 @@ export default function OrdersPage() {
               </div>
             )}
 
-            {orders.map((order, idx) => (
-              <article
-                key={order.id}
-                className="animate-rise"
-                style={{ ...glassCard, padding: "16px 20px", animationDelay: `${idx * 50}ms` }}
-              >
-                <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: "10px" }}>
-                  <div style={{ flex: 1 }}>
-                    <p style={{ fontWeight: 700, color: "#fff", fontSize: "0.9rem", margin: 0 }}>{order.item}</p>
-                    <p style={{ margin: "4px 0 0", fontFamily: "monospace", fontSize: "0.65rem", color: "var(--muted-2)" }}>
-                      ID: {order.id}
-                    </p>
-                    <div style={{ marginTop: "8px", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px" }}>
-                      <span style={{ fontSize: "0.72rem", fontWeight: 700, padding: "3px 10px", borderRadius: "20px", background: "rgba(0,212,255,0.08)", border: "1px solid rgba(0,212,255,0.2)", color: "#00d4ff" }}>
-                        Qty: {order.quantity}
-                      </span>
-                      <span style={{ fontSize: "0.72rem", fontWeight: 700, padding: "3px 10px", borderRadius: "20px", background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.2)", color: "#4ade80" }}>
-                        ✓ Placed
-                      </span>
-                      <span style={{ fontSize: "0.72rem", color: "var(--muted)" }}>
-                        {new Date(order.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
-                      </span>
+            {orders.map((order, idx) => {
+              const sc = STATUS_COLORS[order.status] || STATUS_COLORS.CONFIRMED;
+              return (
+                <article
+                  key={order.id}
+                  className="animate-rise glass-card"
+                  style={{ padding: "16px 20px", animationDelay: `${idx * 50}ms` }}
+                >
+                  <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: "10px" }}>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontWeight: 700, color: "#fff", fontSize: "0.9rem", margin: 0 }}>{order.item}</p>
+                      <p style={{ margin: "4px 0 0", fontFamily: "monospace", fontSize: "0.65rem", color: "var(--muted-2)" }}>
+                        ID: {order.id}
+                      </p>
+                      <div style={{ marginTop: "8px", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px" }}>
+                        <span style={{ fontSize: "0.72rem", fontWeight: 700, padding: "3px 10px", borderRadius: "20px", background: sc.bg, border: `1px solid ${sc.border}`, color: sc.color }}>
+                          {order.status || "PLACED"}
+                        </span>
+                        <span style={{ fontSize: "0.72rem", fontWeight: 700, padding: "3px 10px", borderRadius: "20px", background: "var(--brand-soft)", border: "1px solid var(--line-bright)", color: "var(--brand)" }}>
+                          {money(order.orderTotal || order.subtotal)}
+                        </span>
+                        {order.couponCode && (
+                          <span style={{ fontSize: "0.72rem", fontWeight: 700, padding: "3px 10px", borderRadius: "20px", background: "var(--success-soft)", border: "1px solid var(--success-glow)", color: "var(--success)" }}>
+                            🏷 {order.couponCode}
+                          </span>
+                        )}
+                        <span style={{ fontSize: "0.72rem", color: "var(--muted)" }}>
+                          {new Date(order.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
+                        </span>
+                      </div>
                     </div>
+                    <button
+                      onClick={() => { void loadDetail(order.id); }}
+                      disabled={Boolean(detailLoadingTarget)}
+                      style={{
+                        padding: "7px 14px", borderRadius: "9px",
+                        border: "1px solid var(--line-bright)", background: "var(--brand-soft)",
+                        color: "var(--brand)", fontSize: "0.75rem", fontWeight: 700,
+                        cursor: detailLoadingTarget ? "not-allowed" : "pointer",
+                        opacity: detailLoadingTarget && detailLoadingTarget !== order.id ? 0.5 : 1,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {detailLoadingTarget === order.id ? "Loading..." : "View Details"}
+                    </button>
                   </div>
-                  <button
-                    onClick={() => { void loadDetail(order.id); }}
-                    disabled={Boolean(detailLoadingTarget)}
-                    style={{
-                      padding: "7px 14px", borderRadius: "9px",
-                      border: "1px solid rgba(0,212,255,0.25)", background: "rgba(0,212,255,0.06)",
-                      color: "#00d4ff", fontSize: "0.75rem", fontWeight: 700,
-                      cursor: detailLoadingTarget ? "not-allowed" : "pointer",
-                      opacity: detailLoadingTarget && detailLoadingTarget !== order.id ? 0.5 : 1,
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {detailLoadingTarget === order.id ? "Loading..." : "View Details"}
-                  </button>
-                </div>
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </div>
 
           {/* Right Sidebar */}
           <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
             {/* Quick Purchase */}
-            <section style={{ ...glassCard, padding: "20px" }}>
+            <section className="glass-card" style={{ padding: "20px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00d4ff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" />
                   <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
                 </svg>
@@ -324,9 +344,9 @@ export default function OrdersPage() {
               </div>
 
               {addresses.length === 0 && (
-                <div style={{ borderRadius: "10px", border: "1px solid rgba(245,158,11,0.25)", background: "rgba(245,158,11,0.06)", padding: "10px 12px", fontSize: "0.78rem", color: "#fbbf24", marginBottom: "12px" }}>
+                <div style={{ borderRadius: "10px", border: "1px solid var(--warning-border)", background: "var(--warning-soft)", padding: "10px 12px", fontSize: "0.78rem", color: "var(--warning-text)", marginBottom: "12px" }}>
                   Add at least one address in your profile before placing an order.{" "}
-                  <Link href="/profile" style={{ color: "#00d4ff", fontWeight: 700 }}>Open Profile</Link>
+                  <Link href="/profile" style={{ color: "var(--brand)", fontWeight: 700 }}>Open Profile</Link>
                 </div>
               )}
 
@@ -335,7 +355,7 @@ export default function OrdersPage() {
                   value={form.productId}
                   onChange={(e) => setForm((old) => ({ ...old, productId: e.target.value }))}
                   disabled={status === CREATING_STATUS || addresses.length === 0}
-                  style={darkSelect}
+                  className="form-select"
                   required
                 >
                   <option value="">Select product...</option>
@@ -350,7 +370,7 @@ export default function OrdersPage() {
                     setForm((old) => ({ ...old, shippingAddressId: v, billingAddressId: billingSameAsShipping ? v : old.billingAddressId }));
                   }}
                   disabled={status === CREATING_STATUS || addresses.length === 0}
-                  style={darkSelect}
+                  className="form-select"
                   required
                 >
                   <option value="">Select shipping address...</option>
@@ -364,7 +384,7 @@ export default function OrdersPage() {
                     checked={billingSameAsShipping}
                     onChange={(e) => setBillingSameAsShipping(e.target.checked)}
                     disabled={status === CREATING_STATUS || addresses.length === 0}
-                    style={{ accentColor: "#00d4ff", width: "14px", height: "14px" }}
+                    style={{ accentColor: "var(--brand)", width: "14px", height: "14px" }}
                   />
                   Billing same as shipping
                 </label>
@@ -373,7 +393,7 @@ export default function OrdersPage() {
                     value={form.billingAddressId}
                     onChange={(e) => setForm((old) => ({ ...old, billingAddressId: e.target.value }))}
                     disabled={status === CREATING_STATUS || addresses.length === 0}
-                    style={darkSelect}
+                    className="form-select"
                     required
                   >
                     <option value="">Select billing address...</option>
@@ -387,7 +407,8 @@ export default function OrdersPage() {
                     type="number" min={1} value={form.quantity}
                     onChange={(e) => setForm((old) => ({ ...old, quantity: Number(e.target.value) }))}
                     disabled={status === CREATING_STATUS || addresses.length === 0}
-                    style={{ ...darkInput, width: "80px" }}
+                    className="form-input"
+                    style={{ width: "80px" }}
                     placeholder="Qty"
                   />
                   <button
@@ -396,7 +417,7 @@ export default function OrdersPage() {
                     style={{
                       flex: 1, padding: "10px", borderRadius: "10px", border: "none",
                       background: status === CREATING_STATUS || addresses.length === 0
-                        ? "rgba(0,212,255,0.2)" : "linear-gradient(135deg, #00d4ff, #7c3aed)",
+                        ? "var(--line-bright)" : "var(--gradient-brand)",
                       color: "#fff", fontSize: "0.875rem", fontWeight: 700,
                       cursor: status === CREATING_STATUS || addresses.length === 0 ? "not-allowed" : "pointer",
                       display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "8px",
@@ -410,9 +431,9 @@ export default function OrdersPage() {
             </section>
 
             {/* Order Lookup */}
-            <section style={{ ...glassCard, padding: "20px" }}>
+            <section className="glass-card" style={{ padding: "20px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
                 </svg>
                 <h3 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: "1rem", color: "#fff", margin: 0 }}>
@@ -424,15 +445,15 @@ export default function OrdersPage() {
                   value={selectedId}
                   onChange={(e) => setSelectedId(e.target.value)}
                   placeholder="Paste Order ID..."
-                  style={darkInput}
+                  className="form-input"
                 />
                 <button
                   onClick={() => { void loadDetail(); }}
                   disabled={Boolean(detailLoadingTarget) || !selectedId.trim()}
                   style={{
                     padding: "10px", borderRadius: "10px",
-                    border: "1px solid rgba(0,212,255,0.25)", background: "rgba(0,212,255,0.06)",
-                    color: "#00d4ff", fontSize: "0.875rem", fontWeight: 700,
+                    border: "1px solid var(--line-bright)", background: "var(--brand-soft)",
+                    color: "var(--brand)", fontSize: "0.875rem", fontWeight: 700,
                     cursor: detailLoadingTarget || !selectedId.trim() ? "not-allowed" : "pointer",
                     opacity: !selectedId.trim() ? 0.4 : 1,
                   }}
@@ -442,60 +463,107 @@ export default function OrdersPage() {
               </div>
 
               {!selectedDetail && (
-                <div style={{ marginTop: "12px", borderRadius: "10px", border: "1px dashed rgba(0,212,255,0.12)", padding: "16px", textAlign: "center", fontSize: "0.8rem", color: "var(--muted)" }}>
+                <div style={{ marginTop: "12px", borderRadius: "10px", border: "1px dashed var(--line-bright)", padding: "16px", textAlign: "center", fontSize: "0.8rem", color: "var(--muted)" }}>
                   Select or search for an order to view details
                 </div>
               )}
 
-              {selectedDetail && (
-                <div style={{ marginTop: "12px", borderRadius: "12px", border: "1px solid rgba(0,212,255,0.1)", background: "rgba(0,212,255,0.03)", overflow: "hidden" }}>
-                  <div style={{ padding: "12px 14px", borderBottom: "1px solid rgba(0,212,255,0.08)" }}>
-                    <p style={{ fontFamily: "monospace", fontSize: "0.65rem", color: "var(--muted-2)", margin: "0 0 4px" }}>{selectedDetail.id}</p>
-                    <p style={{ fontSize: "0.78rem", color: "var(--muted)", margin: 0 }}>
-                      Placed:{" "}
-                      <span style={{ color: "#c8c8e8", fontWeight: 600 }}>
-                        {new Date(selectedDetail.createdAt).toLocaleString()}
-                      </span>
-                    </p>
-                  </div>
+              {selectedDetail && (() => {
+                const dsc = STATUS_COLORS[selectedDetail.status] || STATUS_COLORS.CONFIRMED;
+                return (
+                  <div style={{ marginTop: "12px", borderRadius: "12px", border: "1px solid var(--line-bright)", background: "var(--brand-soft)", overflow: "hidden" }}>
+                    <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--brand-soft)" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                        <span style={{ fontSize: "0.72rem", fontWeight: 700, padding: "3px 10px", borderRadius: "20px", background: dsc.bg, border: `1px solid ${dsc.border}`, color: dsc.color }}>
+                          {selectedDetail.status || "PLACED"}
+                        </span>
+                        {selectedDetail.couponCode && (
+                          <span style={{ fontSize: "0.72rem", fontWeight: 700, padding: "3px 10px", borderRadius: "20px", background: "var(--success-soft)", border: "1px solid var(--success-glow)", color: "var(--success)" }}>
+                            Coupon: {selectedDetail.couponCode}
+                          </span>
+                        )}
+                      </div>
+                      <p style={{ fontFamily: "monospace", fontSize: "0.65rem", color: "var(--muted-2)", margin: "0 0 4px" }}>{selectedDetail.id}</p>
+                      <p style={{ fontSize: "0.78rem", color: "var(--muted)", margin: 0 }}>
+                        Placed:{" "}
+                        <span style={{ color: "var(--ink-light)", fontWeight: 600 }}>
+                          {new Date(selectedDetail.createdAt).toLocaleString()}
+                        </span>
+                      </p>
+                    </div>
 
-                  {(selectedDetail.shippingAddress || selectedDetail.billingAddress) && (
-                    <div style={{ padding: "12px 14px", display: "grid", gap: "8px", gridTemplateColumns: "1fr 1fr", borderBottom: "1px solid rgba(0,212,255,0.08)" }}>
+                    {/* Price Breakdown */}
+                    <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--brand-soft)", fontSize: "0.78rem" }}>
                       {[
-                        { label: "Shipping", addr: selectedDetail.shippingAddress },
-                        { label: "Billing", addr: selectedDetail.billingAddress },
-                      ].filter(({ addr }) => addr).map(({ label, addr }) => (
-                        <div key={label} style={{ borderRadius: "8px", border: "1px solid rgba(0,212,255,0.1)", padding: "8px 10px" }}>
-                          <p style={{ fontSize: "0.6rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#00d4ff", margin: "0 0 4px" }}>{label}</p>
-                          <p style={{ fontSize: "0.75rem", fontWeight: 700, color: "#fff", margin: 0 }}>{addr!.recipientName}</p>
-                          <p style={{ fontSize: "0.7rem", color: "var(--muted)", margin: "2px 0 0" }}>{addr!.line1}{addr!.line2 ? `, ${addr!.line2}` : ""}, {addr!.city}, {addr!.state}</p>
+                        { label: "Subtotal", value: selectedDetail.subtotal, show: true },
+                        { label: "Line Discounts", value: -(selectedDetail.lineDiscountTotal || 0), show: (selectedDetail.lineDiscountTotal || 0) > 0, isDiscount: true },
+                        { label: "Cart Discounts", value: -(selectedDetail.cartDiscountTotal || 0), show: (selectedDetail.cartDiscountTotal || 0) > 0, isDiscount: true },
+                        { label: "Shipping", value: selectedDetail.shippingAmount || 0, show: true },
+                        { label: "Shipping Discount", value: -(selectedDetail.shippingDiscountTotal || 0), show: (selectedDetail.shippingDiscountTotal || 0) > 0, isDiscount: true },
+                      ].filter((r) => r.show).map(({ label, value, isDiscount }) => (
+                        <div key={label} style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                          <span style={{ color: isDiscount ? "var(--success)" : "var(--muted)" }}>{label}</span>
+                          <span style={{ color: isDiscount ? "var(--success)" : "var(--ink-light)", fontWeight: 600 }}>
+                            {isDiscount ? `−${money(Math.abs(value))}` : money(value)}
+                          </span>
                         </div>
                       ))}
+                      {(selectedDetail.totalDiscount || 0) > 0 && (
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px", fontWeight: 700 }}>
+                          <span style={{ color: "var(--success)" }}>Total Savings</span>
+                          <span style={{ color: "var(--success)" }}>−{money(selectedDetail.totalDiscount)}</span>
+                        </div>
+                      )}
+                      <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid var(--line-bright)", paddingTop: "8px", marginTop: "4px", fontWeight: 800 }}>
+                        <span style={{ color: "#fff" }}>Grand Total</span>
+                        <span style={{ color: "var(--brand)", fontSize: "1rem" }}>{money(selectedDetail.orderTotal || selectedDetail.subtotal)}</span>
+                      </div>
                     </div>
-                  )}
 
-                  <div style={{ overflow: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.78rem" }}>
-                      <thead>
-                        <tr style={{ background: "rgba(0,212,255,0.04)" }}>
-                          {["Item", "Qty", "Row ID"].map((h) => (
-                            <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontWeight: 700, color: "var(--muted)", fontSize: "0.65rem", textTransform: "uppercase", letterSpacing: "0.08em" }}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedDetail.items?.map((row, idx) => (
-                          <tr key={row.id || `${row.item}-${idx}`} style={{ borderTop: "1px solid rgba(0,212,255,0.06)" }}>
-                            <td style={{ padding: "8px 12px", color: "#c8c8e8" }}>{row.item}</td>
-                            <td style={{ padding: "8px 12px", color: "#00d4ff", fontWeight: 700 }}>{row.quantity}</td>
-                            <td style={{ padding: "8px 12px", fontFamily: "monospace", fontSize: "0.6rem", color: "var(--muted-2)" }}>{row.id || "—"}</td>
-                          </tr>
+                    {(selectedDetail.shippingAddress || selectedDetail.billingAddress) && (
+                      <div style={{ padding: "12px 14px", display: "grid", gap: "8px", gridTemplateColumns: "1fr 1fr", borderBottom: "1px solid var(--brand-soft)" }}>
+                        {[
+                          { label: "Shipping", addr: selectedDetail.shippingAddress },
+                          { label: "Billing", addr: selectedDetail.billingAddress },
+                        ].filter(({ addr }) => addr).map(({ label, addr }) => (
+                          <div key={label} style={{ borderRadius: "8px", border: "1px solid var(--line-bright)", padding: "8px 10px" }}>
+                            <p style={{ fontSize: "0.6rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--brand)", margin: "0 0 4px" }}>{label}</p>
+                            <p style={{ fontSize: "0.75rem", fontWeight: 700, color: "#fff", margin: 0 }}>{addr!.recipientName}</p>
+                            <p style={{ fontSize: "0.7rem", color: "var(--muted)", margin: "2px 0 0" }}>{addr!.line1}{addr!.line2 ? `, ${addr!.line2}` : ""}, {addr!.city}, {addr!.state}</p>
+                          </div>
                         ))}
-                      </tbody>
-                    </table>
+                      </div>
+                    )}
+
+                    {selectedDetail.warnings && selectedDetail.warnings.length > 0 && (
+                      <div className="alert alert-warning" style={{ margin: "12px 14px", fontSize: "0.75rem" }}>
+                        {selectedDetail.warnings.map((w, i) => <p key={i} style={{ margin: i > 0 ? "4px 0 0" : 0 }}>{w}</p>)}
+                      </div>
+                    )}
+
+                    <div style={{ overflow: "auto" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.78rem" }}>
+                        <thead>
+                          <tr style={{ background: "var(--brand-soft)" }}>
+                            {["Item", "Qty", "Row ID"].map((h) => (
+                              <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontWeight: 700, color: "var(--muted)", fontSize: "0.65rem", textTransform: "uppercase", letterSpacing: "0.08em" }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedDetail.items?.map((row, idx) => (
+                            <tr key={row.id || `${row.item}-${idx}`} style={{ borderTop: "1px solid var(--brand-soft)" }}>
+                              <td style={{ padding: "8px 12px", color: "var(--ink-light)" }}>{row.item}</td>
+                              <td style={{ padding: "8px 12px", color: "var(--brand)", fontWeight: 700 }}>{row.quantity}</td>
+                              <td style={{ padding: "8px 12px", fontFamily: "monospace", fontSize: "0.6rem", color: "var(--muted-2)" }}>{row.id || "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </section>
           </div>
         </div>

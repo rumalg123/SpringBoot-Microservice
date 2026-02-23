@@ -57,19 +57,18 @@ export default function AppNav({
   const showAdminProducts = canManageAdminProducts ?? canViewAdmin;
   const showAdminVendors = canManageAdminVendors ?? isSuperAdmin;
   const showAdminPosters = canManageAdminPosters ?? canViewAdmin;
+  const showAdminPromotions = canViewAdmin;
   const showVendorStaffAdmin = isSuperAdmin || isVendorAdmin;
-  const showAnyAdminLinks = showAdminOrders || showAdminProducts || showAdminVendors || showVendorStaffAdmin || showAdminPosters;
+  const showAnyAdminLinks = showAdminOrders || showAdminProducts || showAdminVendors || showVendorStaffAdmin || showAdminPosters || showAdminPromotions;
 
   return (
     <header
       className="sticky top-0 z-50 transition-all duration-300"
       style={{
-        background: scrolled
-          ? "rgba(8,8,18,0.92)"
-          : "rgba(8,8,18,0.75)",
+        background: "var(--header-bg)",
         backdropFilter: "blur(20px)",
         WebkitBackdropFilter: "blur(20px)",
-        borderBottom: "1px solid rgba(0,212,255,0.1)",
+        borderBottom: "1px solid var(--brand-soft)",
         boxShadow: scrolled ? "0 4px 32px rgba(0,0,0,0.5)" : "none",
       }}
     >
@@ -79,8 +78,8 @@ export default function AppNav({
           <div
             className="flex h-9 w-9 items-center justify-center rounded-xl text-xs font-black"
             style={{
-              background: "linear-gradient(135deg, #00d4ff, #7c3aed)",
-              boxShadow: "0 0 16px rgba(0,212,255,0.35)",
+              background: "var(--gradient-brand)",
+              boxShadow: "0 0 16px var(--brand-glow)",
               color: "#fff",
               letterSpacing: "0.02em",
             }}
@@ -112,8 +111,8 @@ export default function AppNav({
           <span
             className="hidden rounded-full px-3 py-1.5 text-xs font-medium md:inline-block"
             style={{
-              background: "rgba(0,212,255,0.08)",
-              border: "1px solid rgba(0,212,255,0.15)",
+              background: "var(--brand-soft)",
+              border: "1px solid var(--line-bright)",
               color: "rgba(0,212,255,0.8)",
             }}
           >
@@ -128,11 +127,11 @@ export default function AppNav({
             }}
             className="hidden md:inline-flex rounded-xl px-4 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
             style={{
-              background: "linear-gradient(135deg, #00d4ff, #7c3aed)",
+              background: "var(--gradient-brand)",
               color: "#fff",
               border: "none",
               cursor: "pointer",
-              boxShadow: "0 0 14px rgba(0,212,255,0.2)",
+              boxShadow: "0 0 14px var(--line-bright)",
             }}
           >
             {logoutPending ? "Logging out..." : "Logout"}
@@ -142,7 +141,7 @@ export default function AppNav({
             type="button"
             onClick={() => setMobileOpen((o) => !o)}
             className="md:hidden rounded-lg p-2 transition"
-            style={{ color: "#fff", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(0,212,255,0.15)" }}
+            style={{ color: "#fff", background: "rgba(255,255,255,0.05)", border: "1px solid var(--line-bright)" }}
             aria-label={mobileOpen ? "Close menu" : "Open menu"}
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
@@ -159,7 +158,7 @@ export default function AppNav({
       {/* Bottom nav strip */}
       <nav
         className={mobileOpen ? "block" : "hidden md:block"}
-        style={{ borderTop: "1px solid rgba(0,212,255,0.08)", background: "rgba(8,8,18,0.6)" }}
+        style={{ borderTop: "1px solid var(--brand-soft)", background: "rgba(8,8,18,0.6)" }}
       >
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-1 px-4 py-2">
           {[
@@ -175,7 +174,7 @@ export default function AppNav({
               href={href}
               className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline relative"
               style={{
-                color: isActive(href) ? "#00d4ff" : "rgba(255,255,255,0.6)",
+                color: isActive(href) ? "var(--brand)" : "rgba(255,255,255,0.6)",
                 background: isActive(href) ? "rgba(0,212,255,0.1)" : "transparent",
                 border: isActive(href) ? "1px solid rgba(0,212,255,0.25)" : "1px solid transparent",
                 textShadow: isActive(href) ? "0 0 12px rgba(0,212,255,0.5)" : "none",
@@ -192,8 +191,8 @@ export default function AppNav({
                   className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
                   style={{
                     color: isActive("/admin/orders") ? "#a78bfa" : "rgba(167,139,250,0.6)",
-                    background: isActive("/admin/orders") ? "rgba(124,58,237,0.12)" : "transparent",
-                    border: isActive("/admin/orders") ? "1px solid rgba(124,58,237,0.3)" : "1px solid transparent",
+                    background: isActive("/admin/orders") ? "var(--accent-soft)" : "transparent",
+                    border: isActive("/admin/orders") ? "1px solid var(--accent-glow)" : "1px solid transparent",
                   }}
                 >
                   Admin Orders
@@ -204,8 +203,8 @@ export default function AppNav({
                   className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
                   style={{
                     color: isActive("/admin/products") ? "#a78bfa" : "rgba(167,139,250,0.6)",
-                    background: isActive("/admin/products") ? "rgba(124,58,237,0.12)" : "transparent",
-                    border: isActive("/admin/products") ? "1px solid rgba(124,58,237,0.3)" : "1px solid transparent",
+                    background: isActive("/admin/products") ? "var(--accent-soft)" : "transparent",
+                    border: isActive("/admin/products") ? "1px solid var(--accent-glow)" : "1px solid transparent",
                   }}
                 >
                   Admin Products
@@ -216,8 +215,8 @@ export default function AppNav({
                   className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
                   style={{
                     color: isActive("/admin/vendors") ? "#a78bfa" : "rgba(167,139,250,0.6)",
-                    background: isActive("/admin/vendors") ? "rgba(124,58,237,0.12)" : "transparent",
-                    border: isActive("/admin/vendors") ? "1px solid rgba(124,58,237,0.3)" : "1px solid transparent",
+                    background: isActive("/admin/vendors") ? "var(--accent-soft)" : "transparent",
+                    border: isActive("/admin/vendors") ? "1px solid var(--accent-glow)" : "1px solid transparent",
                   }}
                 >
                   Admin Vendors
@@ -228,8 +227,8 @@ export default function AppNav({
                   className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
                   style={{
                     color: isActive("/admin/vendor-staff") ? "#a78bfa" : "rgba(167,139,250,0.6)",
-                    background: isActive("/admin/vendor-staff") ? "rgba(124,58,237,0.12)" : "transparent",
-                    border: isActive("/admin/vendor-staff") ? "1px solid rgba(124,58,237,0.3)" : "1px solid transparent",
+                    background: isActive("/admin/vendor-staff") ? "var(--accent-soft)" : "transparent",
+                    border: isActive("/admin/vendor-staff") ? "1px solid var(--accent-glow)" : "1px solid transparent",
                   }}
                 >
                   Vendor Staff
@@ -240,8 +239,8 @@ export default function AppNav({
                   className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
                   style={{
                     color: isActive("/admin/platform-staff") ? "#a78bfa" : "rgba(167,139,250,0.6)",
-                    background: isActive("/admin/platform-staff") ? "rgba(124,58,237,0.12)" : "transparent",
-                    border: isActive("/admin/platform-staff") ? "1px solid rgba(124,58,237,0.3)" : "1px solid transparent",
+                    background: isActive("/admin/platform-staff") ? "var(--accent-soft)" : "transparent",
+                    border: isActive("/admin/platform-staff") ? "1px solid var(--accent-glow)" : "1px solid transparent",
                   }}
                 >
                   Platform Staff
@@ -252,11 +251,23 @@ export default function AppNav({
                   className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
                   style={{
                     color: isActive("/admin/posters") ? "#a78bfa" : "rgba(167,139,250,0.6)",
-                    background: isActive("/admin/posters") ? "rgba(124,58,237,0.12)" : "transparent",
-                    border: isActive("/admin/posters") ? "1px solid rgba(124,58,237,0.3)" : "1px solid transparent",
+                    background: isActive("/admin/posters") ? "var(--accent-soft)" : "transparent",
+                    border: isActive("/admin/posters") ? "1px solid var(--accent-glow)" : "1px solid transparent",
                   }}
                 >
                   Admin Posters
+                </Link>
+              )}
+              {showAdminPromotions && (
+                <Link href="/admin/promotions"
+                  className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
+                  style={{
+                    color: isActive("/admin/promotions") ? "#a78bfa" : "rgba(167,139,250,0.6)",
+                    background: isActive("/admin/promotions") ? "var(--accent-soft)" : "transparent",
+                    border: isActive("/admin/promotions") ? "1px solid var(--accent-glow)" : "1px solid transparent",
+                  }}
+                >
+                  Promotions
                 </Link>
               )}
             </>
@@ -264,7 +275,7 @@ export default function AppNav({
           {/* Mobile-only: user info + logout */}
           {mobileOpen && (
             <>
-              <div className="w-full mt-1 pt-2" style={{ borderTop: "1px solid rgba(0,212,255,0.08)" }}>
+              <div className="w-full mt-1 pt-2" style={{ borderTop: "1px solid var(--brand-soft)" }}>
                 <div className="flex items-center justify-between gap-3">
                   {email && (
                     <span className="text-xs font-medium" style={{ color: "rgba(0,212,255,0.7)" }}>
@@ -280,7 +291,7 @@ export default function AppNav({
                     }}
                     className="rounded-lg px-4 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
                     style={{
-                      background: "linear-gradient(135deg, #00d4ff, #7c3aed)",
+                      background: "var(--gradient-brand)",
                       color: "#fff",
                       border: "none",
                       cursor: "pointer",

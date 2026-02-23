@@ -416,9 +416,9 @@ function ProductsPageContent() {
       {!isAuthenticated && (
         <header
           style={{
-            background: "rgba(8,8,18,0.88)",
+            background: "var(--header-bg)",
             backdropFilter: "blur(20px)",
-            borderBottom: "1px solid rgba(0,212,255,0.1)",
+            borderBottom: "1px solid var(--line-bright)",
             position: "sticky",
             top: 0,
             zIndex: 50,
@@ -426,7 +426,7 @@ function ProductsPageContent() {
         >
           <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
             <Link href="/" className="flex items-center gap-3 no-underline">
-              <div style={{ width: "34px", height: "34px", borderRadius: "10px", background: "linear-gradient(135deg, #00d4ff, #7c3aed)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: "0.7rem", color: "#fff", boxShadow: "0 0 14px rgba(0,212,255,0.3)" }}>
+              <div style={{ width: "34px", height: "34px", borderRadius: "10px", background: "var(--gradient-brand)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: "0.7rem", color: "#fff", boxShadow: "0 0 14px var(--brand-glow)" }}>
                 RS
               </div>
               <p style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, color: "#fff", fontSize: "1rem", margin: 0 }}>Rumal Store</p>
@@ -434,7 +434,7 @@ function ProductsPageContent() {
             <Link
               href="/"
               className="no-underline rounded-xl px-5 py-2 text-sm font-bold transition"
-              style={{ background: "linear-gradient(135deg, #00d4ff, #7c3aed)", color: "#fff", boxShadow: "0 0 14px rgba(0,212,255,0.2)" }}
+              style={{ background: "var(--gradient-brand)", color: "#fff", boxShadow: "0 0 14px var(--line-bright)" }}
             >
               Sign In
             </Link>
@@ -541,9 +541,9 @@ function ProductsPageContent() {
                             width: "32px",
                             height: "32px",
                             borderRadius: "50%",
-                            border: isWished ? "1.5px solid rgba(239,68,68,0.6)" : "1.5px solid rgba(0,212,255,0.2)",
-                            background: isWished ? "rgba(239,68,68,0.12)" : "rgba(8,8,18,0.8)",
-                            color: isWished ? "#ef4444" : "#6868a0",
+                            border: isWished ? "1.5px solid var(--danger)" : "1.5px solid var(--line-bright)",
+                            background: isWished ? "var(--danger-soft)" : "var(--header-bg)",
+                            color: isWished ? "var(--danger)" : "var(--muted)",
                             cursor: wishlistBusy ? "not-allowed" : "pointer",
                             opacity: wishlistBusy ? 0.5 : 1,
                             display: "flex",
@@ -551,7 +551,7 @@ function ProductsPageContent() {
                             justifyContent: "center",
                             transition: "all 0.2s",
                             backdropFilter: "blur(8px)",
-                            boxShadow: isWished ? "0 0 10px rgba(239,68,68,0.2)" : "none",
+                            boxShadow: isWished ? "0 0 10px var(--danger-soft)" : "none",
                           }}
                           title={isWished ? "Remove from wishlist" : "Add to wishlist"}
                           aria-label={isWished ? "Remove from wishlist" : "Add to wishlist"}
@@ -573,12 +573,12 @@ function ProductsPageContent() {
                         {imgUrl ? (
                           <Image src={imgUrl} alt={p.name} width={400} height={400} className="product-card-img" unoptimized />
                         ) : (
-                          <div style={{ display: "grid", placeItems: "center", width: "100%", height: "100%", background: "linear-gradient(135deg, #111128, #1c1c38)", color: "#4a4a70", fontSize: "0.75rem", fontWeight: 600 }}>
+                          <div style={{ display: "grid", placeItems: "center", width: "100%", height: "100%", background: "linear-gradient(135deg, var(--surface), var(--surface-3))", color: "var(--muted-2)", fontSize: "0.75rem", fontWeight: 600 }}>
                             No Image
                           </div>
                         )}
                         <div className="product-card-overlay" style={{ borderRadius: "15px 15px 0 0" }}>
-                          <span style={{ background: "linear-gradient(135deg,#00d4ff,#7c3aed)", color: "#fff", padding: "7px 16px", borderRadius: "20px", fontSize: "0.72rem", fontWeight: 800, letterSpacing: "0.04em" }}>
+                          <span style={{ background: "var(--gradient-brand)", color: "#fff", padding: "7px 16px", borderRadius: "20px", fontSize: "0.72rem", fontWeight: 800, letterSpacing: "0.04em" }}>
                             View Product →
                           </span>
                         </div>
