@@ -277,6 +277,19 @@ public class PromotionCampaignService {
             if (request.benefitValue() != null && request.benefitValue().compareTo(BigDecimal.ZERO) > 0) {
                 throw new ValidationException("benefitValue is not used for TIERED_SPEND promotions");
             }
+        } else if (request.benefitType() == PromotionBenefitType.BUNDLE_DISCOUNT) {
+            if (request.applicationLevel() != com.rumal.promotion_service.entity.PromotionApplicationLevel.CART) {
+                throw new ValidationException("BUNDLE_DISCOUNT promotions must use applicationLevel=CART");
+            }
+            if (request.scopeType() != PromotionScopeType.PRODUCT) {
+                throw new ValidationException("BUNDLE_DISCOUNT promotions must use scopeType=PRODUCT");
+            }
+            if (request.targetProductIdsOrEmpty().size() < 2) {
+                throw new ValidationException("BUNDLE_DISCOUNT promotions require at least 2 targetProductIds");
+            }
+            if (request.benefitValue() == null || request.benefitValue().compareTo(BigDecimal.ZERO) <= 0) {
+                throw new ValidationException("BUNDLE_DISCOUNT promotions require benefitValue > 0");
+            }
         } else {
             if (request.benefitValue() == null || request.benefitValue().compareTo(BigDecimal.ZERO) <= 0) {
                 throw new ValidationException("benefitValue must be greater than 0 for non-shipping benefits");

@@ -45,6 +45,7 @@ class PromotionQuoteServiceTest {
     private final UUID productId = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private final UUID categoryId = UUID.fromString("33333333-3333-3333-3333-333333333333");
     private final UUID productId2 = UUID.fromString("55555555-5555-5555-5555-555555555555");
+    private final UUID productId3 = UUID.fromString("77777777-7777-7777-7777-777777777777");
 
     @BeforeEach
     void setUp() {
@@ -297,6 +298,82 @@ class PromotionQuoteServiceTest {
         assertEquals(1, quote.rejectedPromotions().size());
         assertEquals(tiered.getId(), quote.rejectedPromotions().getFirst().promotionId());
         assertTrue(quote.rejectedPromotions().getFirst().reason().contains("threshold"));
+    }
+
+    @Test
+    void quote_bundleDiscountAppliesPerCompleteBundleQuantity() {
+        PromotionCampaign bundle = basePromotion(
+                "Bundle 2-item combo",
+                PromotionApplicationLevel.CART,
+                PromotionScopeType.PRODUCT,
+                PromotionBenefitType.BUNDLE_DISCOUNT,
+                "7.50",
+                1,
+                true,
+                false
+        );
+        bundle.setTargetProductIds(Set.of(productId, productId2));
+
+        when(promotionCampaignRepository.findAll()).thenReturn(List.of(bundle));
+
+        PromotionQuoteResponse quote = service.quote(new PromotionQuoteRequest(
+                List.of(
+                        new PromotionQuoteLineRequest(productId, vendorId, Set.of(categoryId), new BigDecimal("30.00"), 2),
+                        new PromotionQuoteLineRequest(productId2, vendorId, Set.of(categoryId), new BigDecimal("20.00"), 2),
+                        new PromotionQuoteLineRequest(productId3, vendorId, Set.of(categoryId), new BigDecimal("10.00"), 1)
+                ),
+                new BigDecimal("0.00"),
+                UUID.fromString("88888888-8888-8888-8888-888888888888"),
+                null,
+                "US",
+                pricingAt
+        ));
+
+        // Two complete bundles (one unit of each target product per bundle) => 2 * 7.50 discount.
+        assertEquals(new BigDecimal("110.00"), quote.subtotal());
+        assertEquals(new BigDecimal("0.00"), quote.lineDiscountTotal());
+        assertEquals(new BigDecimal("15.00"), quote.cartDiscountTotal());
+        assertEquals(new BigDecimal("15.00"), quote.totalDiscount());
+        assertEquals(new BigDecimal("95.00"), quote.grandTotal());
+        assertEquals(1, quote.appliedPromotions().size());
+        assertEquals(bundle.getId(), quote.appliedPromotions().getFirst().promotionId());
+        assertTrue(quote.rejectedPromotions().isEmpty());
+    }
+
+    @Test
+    void quote_bundleDiscountRejectedWhenCartHasNoCompleteBundle() {
+        PromotionCampaign bundle = basePromotion(
+                "Bundle 2-item combo",
+                PromotionApplicationLevel.CART,
+                PromotionScopeType.PRODUCT,
+                PromotionBenefitType.BUNDLE_DISCOUNT,
+                "7.50",
+                1,
+                true,
+                false
+        );
+        bundle.setTargetProductIds(Set.of(productId, productId2));
+
+        when(promotionCampaignRepository.findAll()).thenReturn(List.of(bundle));
+
+        PromotionQuoteResponse quote = service.quote(new PromotionQuoteRequest(
+                List.of(
+                        new PromotionQuoteLineRequest(productId, vendorId, Set.of(categoryId), new BigDecimal("30.00"), 1),
+                        new PromotionQuoteLineRequest(productId3, vendorId, Set.of(categoryId), new BigDecimal("10.00"), 1)
+                ),
+                new BigDecimal("0.00"),
+                UUID.fromString("99999999-9999-9999-9999-999999999999"),
+                null,
+                "US",
+                pricingAt
+        ));
+
+        assertEquals(new BigDecimal("40.00"), quote.subtotal());
+        assertEquals(new BigDecimal("0.00"), quote.cartDiscountTotal());
+        assertEquals(0, quote.appliedPromotions().size());
+        assertEquals(1, quote.rejectedPromotions().size());
+        assertEquals(bundle.getId(), quote.rejectedPromotions().getFirst().promotionId());
+        assertTrue(quote.rejectedPromotions().getFirst().reason().contains("bundle"));
     }
 
     private PromotionQuoteRequest singleLineOrderRequest(String unitPrice, int quantity, String shippingAmount) {

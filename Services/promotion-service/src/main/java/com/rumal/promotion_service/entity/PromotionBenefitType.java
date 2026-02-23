@@ -5,5 +5,6 @@ public enum PromotionBenefitType {
     FIXED_AMOUNT_OFF,
     FREE_SHIPPING,
     BUY_X_GET_Y,
-    TIERED_SPEND
+    TIERED_SPEND,
+    BUNDLE_DISCOUNT
 }
