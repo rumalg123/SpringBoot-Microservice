@@ -64,7 +64,7 @@ Rules for execution:
 
 ## Phase 7: Tests + Hardening
 
-- [ ] Unit tests for access scoping.
+- [x] Unit tests for access scoping.
 - [ ] Unit tests for promotion engine conflict/stacking rules.
 - [ ] Integration tests for coupon reservation lifecycle.
 - [ ] Integration tests for cart/order promotion flows.
