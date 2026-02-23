@@ -504,8 +504,8 @@ export default function AdminPostersPage() {
       />
       <main className="mx-auto max-w-7xl px-4 py-4">
         <nav className="breadcrumb">
-          <Link href="/">Home</Link><span className="breadcrumb-sep">›</span>
-          <Link href="/admin/products">Admin</Link><span className="breadcrumb-sep">›</span>
+          <Link href="/">Home</Link><span className="breadcrumb-sep">&gt;</span>
+          <Link href="/admin/products">Admin</Link><span className="breadcrumb-sep">&gt;</span>
           <span className="breadcrumb-current">Posters</span>
         </nav>
 
