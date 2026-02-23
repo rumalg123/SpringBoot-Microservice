@@ -84,3 +84,8 @@ cache:
 internal:
   auth:
     shared-secret: ${INTERNAL_AUTH_SHARED_SECRET:}
+
+coupon:
+  reservation:
+    default-ttl-seconds: ${COUPON_RESERVATION_DEFAULT_TTL_SECONDS:900}
+    max-ttl-seconds: ${COUPON_RESERVATION_MAX_TTL_SECONDS:1800}

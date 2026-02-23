@@ -31,13 +31,13 @@ Rules for execution:
 ## Phase 2: Core Promotion Domain (MVP)
 
 - [x] Define promotion enums/entities for campaign type, status, funding source, scope/approval status.
-- [ ] Define coupon entities (`CouponCode`, usage/reservation records) with indexes and constraints.
+- [x] Define coupon entities (`CouponCode`, usage/reservation records) with indexes and constraints.
 - [x] Define DTOs + validation for admin create/update/list/approve APIs.
 - [x] Implement repositories and base query/filter support.
 
 ## Phase 3: Admin Promotion Management APIs (MVP)
 
-- [ ] Admin CRUD for promotions (`/admin/promotions`).
+- [x] Admin CRUD for promotions (`/admin/promotions`).
 - [x] Admin status transitions (activate, pause, archive).
 - [x] Vendor submission workflow and platform approval/rejection endpoints.
 - [x] Admin list/filter endpoints (status, vendor, type, date range, approval state).
@@ -45,9 +45,9 @@ Rules for execution:
 ## Phase 4: Promotion Evaluation Engine (MVP)
 
 - [x] Build deterministic pricing engine for line/cart/shipping discounts with priority and exclusivity rules.
-- [ ] Implement coupon validation (validity window, min spend, usage limits, per-customer limits).
+- [x] Implement coupon validation (validity window, min spend, usage limits, per-customer limits).
 - [x] Add internal quote API (`/internal/promotions/quote`) returning breakdown + rejection reasons.
-- [ ] Add reservation/commit/release APIs for coupon usage lifecycle.
+- [x] Add reservation/commit/release APIs for coupon usage lifecycle.
 
 ## Phase 5: Real Monetary Integration (Cart + Order)
 

@@ -23,8 +23,9 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -34,6 +35,7 @@ import java.util.UUID;
 public class PromotionQuoteService {
 
     private final PromotionCampaignRepository promotionCampaignRepository;
+    private final CouponValidationService couponValidationService;
 
     @Transactional(readOnly = true)
     public PromotionQuoteResponse quote(PromotionQuoteRequest request) {
@@ -57,31 +59,50 @@ public class PromotionQuoteService {
         List<AppliedPromotionQuoteEntry> applied = new ArrayList<>();
         List<RejectedPromotionQuoteEntry> rejected = new ArrayList<>();
 
+        CouponValidationService.CouponEligibility couponEligibility = null;
+        PromotionCampaign couponPromotion = null;
         if (request.couponCode() != null && !request.couponCode().isBlank()) {
-            rejected.add(new RejectedPromotionQuoteEntry(
-                    null,
-                    request.couponCode().trim(),
-                    "Coupon code validation is not implemented yet in this slice"
-            ));
+            couponEligibility = couponValidationService.findEligibleCouponForQuote(request.couponCode(), request.customerId(), pricedAt)
+                    .orElseGet(() -> CouponValidationService.CouponEligibility.ineligible(null, "Coupon code not found"));
+            if (!couponEligibility.eligible()) {
+                rejected.add(new RejectedPromotionQuoteEntry(
+                        couponEligibility.promotionId(),
+                        request.couponCode().trim(),
+                        couponEligibility.reason()
+                ));
+            } else if (couponEligibility.couponCode() == null || couponEligibility.couponCode().getPromotion() == null) {
+                rejected.add(new RejectedPromotionQuoteEntry(null, request.couponCode().trim(), "Coupon promotion link is invalid"));
+            } else {
+                couponPromotion = couponEligibility.couponCode().getPromotion();
+            }
         }
 
-        List<PromotionCampaign> candidates = promotionCampaignRepository.findAll().stream()
+        Map<UUID, PromotionCandidate> candidatesById = new LinkedHashMap<>();
+        promotionCampaignRepository.findAll().stream()
                 .filter(p -> p.getLifecycleStatus() == PromotionLifecycleStatus.ACTIVE)
                 .filter(this::isApprovalEligible)
                 .filter(p -> withinWindow(p, pricedAt))
+                .forEach(p -> candidatesById.put(p.getId(), new PromotionCandidate(p, false, null)));
+        if (couponPromotion != null && couponPromotion.getId() != null) {
+            candidatesById.put(couponPromotion.getId(), new PromotionCandidate(couponPromotion, true, request.couponCode().trim()));
+        }
+
+        List<PromotionCandidate> candidates = candidatesById.values().stream()
                 .sorted(Comparator
-                        .comparing(PromotionCampaign::isExclusive).reversed()
-                        .thenComparing(PromotionCampaign::getPriority)
-                        .thenComparing(PromotionCampaign::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder()))
-                        .thenComparing(PromotionCampaign::getId, Comparator.nullsLast(Comparator.naturalOrder())))
+                        .comparing((PromotionCandidate c) -> c.promotion().isExclusive()).reversed()
+                        .thenComparing(c -> c.promotion().getPriority())
+                        .thenComparing((PromotionCandidate c) -> !c.explicitCoupon())
+                        .thenComparing(c -> c.promotion().getCreatedAt(), Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(c -> c.promotion().getId(), Comparator.nullsLast(Comparator.naturalOrder())))
                 .toList();
 
         boolean exclusiveApplied = false;
         BigDecimal cartDiscountTotal = BigDecimal.ZERO;
         BigDecimal shippingDiscountTotal = BigDecimal.ZERO;
 
-        for (PromotionCampaign promotion : candidates) {
-            if (!promotion.isAutoApply()) {
+        for (PromotionCandidate candidate : candidates) {
+            PromotionCampaign promotion = candidate.promotion();
+            if (!candidate.explicitCoupon() && !promotion.isAutoApply()) {
                 rejected.add(new RejectedPromotionQuoteEntry(promotion.getId(), promotion.getName(), "Promotion requires explicit coupon/manual trigger"));
                 continue;
             }
@@ -378,5 +399,12 @@ public class PromotionQuoteService {
         private static PromotionApplicationResult rejected(String reason) {
             return new PromotionApplicationResult(false, BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP), reason);
         }
+    }
+
+    private record PromotionCandidate(
+            PromotionCampaign promotion,
+            boolean explicitCoupon,
+            String couponCode
+    ) {
     }
 }
