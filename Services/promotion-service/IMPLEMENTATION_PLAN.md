@@ -44,9 +44,9 @@ Rules for execution:
 
 ## Phase 4: Promotion Evaluation Engine (MVP)
 
-- [ ] Build deterministic pricing engine for line/cart/shipping discounts with priority and exclusivity rules.
+- [x] Build deterministic pricing engine for line/cart/shipping discounts with priority and exclusivity rules.
 - [ ] Implement coupon validation (validity window, min spend, usage limits, per-customer limits).
-- [ ] Add internal quote API (`/internal/promotions/quote`) returning breakdown + rejection reasons.
+- [x] Add internal quote API (`/internal/promotions/quote`) returning breakdown + rejection reasons.
 - [ ] Add reservation/commit/release APIs for coupon usage lifecycle.
 
 ## Phase 5: Real Monetary Integration (Cart + Order)

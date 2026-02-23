@@ -201,6 +201,7 @@ public class AdminPromotionAccessScopeService {
                 request.stackable(),
                 request.exclusive(),
                 request.autoApply(),
+                request.priority(),
                 request.startsAt(),
                 request.endsAt()
         );

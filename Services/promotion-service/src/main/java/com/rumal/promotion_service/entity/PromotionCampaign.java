@@ -94,6 +94,10 @@ public class PromotionCampaign {
     @Builder.Default
     private boolean autoApply = true;
 
+    @Column(name = "priority_rank", nullable = false)
+    @Builder.Default
+    private int priority = 100;
+
     @ElementCollection
     @CollectionTable(name = "promotion_target_product_ids", joinColumns = @JoinColumn(name = "promotion_id"))
     @Column(name = "product_id", nullable = false)

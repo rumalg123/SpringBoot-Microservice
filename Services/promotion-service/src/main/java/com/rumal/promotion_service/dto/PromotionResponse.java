@@ -29,6 +29,7 @@ public record PromotionResponse(
         boolean stackable,
         boolean exclusive,
         boolean autoApply,
+        int priority,
         PromotionLifecycleStatus lifecycleStatus,
         PromotionApprovalStatus approvalStatus,
         String approvalNote,

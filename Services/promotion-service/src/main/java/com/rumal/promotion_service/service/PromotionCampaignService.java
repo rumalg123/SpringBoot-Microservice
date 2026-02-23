@@ -281,6 +281,7 @@ public class PromotionCampaignService {
         campaign.setStackable(request.stackable());
         campaign.setExclusive(request.exclusive());
         campaign.setAutoApply(request.autoApply());
+        campaign.setPriority(request.priority() == null ? 100 : request.priority());
         campaign.setStartsAt(request.startsAt());
         campaign.setEndsAt(request.endsAt());
         campaign.setTargetProductIds(new LinkedHashSet<>(request.targetProductIdsOrEmpty()));
@@ -319,6 +320,7 @@ public class PromotionCampaignService {
                 entity.isStackable(),
                 entity.isExclusive(),
                 entity.isAutoApply(),
+                entity.getPriority(),
                 entity.getLifecycleStatus(),
                 entity.getApprovalStatus(),
                 entity.getApprovalNote(),

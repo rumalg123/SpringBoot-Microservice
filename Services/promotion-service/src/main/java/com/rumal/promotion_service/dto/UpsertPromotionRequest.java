@@ -6,6 +6,8 @@ import com.rumal.promotion_service.entity.PromotionFundingSource;
 import com.rumal.promotion_service.entity.PromotionScopeType;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -32,6 +34,7 @@ public record UpsertPromotionRequest(
         boolean stackable,
         boolean exclusive,
         boolean autoApply,
+        @NotNull @Min(value = 0, message = "priority must be 0 or greater") @Max(value = 10000, message = "priority must be 10000 or less") Integer priority,
         Instant startsAt,
         Instant endsAt
 ) {
