@@ -97,6 +97,7 @@ public class PromotionQuoteService {
                 .toList();
 
         boolean exclusiveApplied = false;
+        boolean nonStackableApplied = false;
         BigDecimal cartDiscountTotal = BigDecimal.ZERO;
         BigDecimal shippingDiscountTotal = BigDecimal.ZERO;
 
@@ -108,6 +109,14 @@ public class PromotionQuoteService {
             }
             if (exclusiveApplied) {
                 rejected.add(new RejectedPromotionQuoteEntry(promotion.getId(), promotion.getName(), "Skipped because an exclusive promotion already applied"));
+                continue;
+            }
+            if (nonStackableApplied) {
+                rejected.add(new RejectedPromotionQuoteEntry(promotion.getId(), promotion.getName(), "Skipped because a non-stackable promotion already applied"));
+                continue;
+            }
+            if (!promotion.isStackable() && !applied.isEmpty()) {
+                rejected.add(new RejectedPromotionQuoteEntry(promotion.getId(), promotion.getName(), "Promotion is not stackable with previously applied promotions"));
                 continue;
             }
 
@@ -135,6 +144,9 @@ public class PromotionQuoteService {
 
             if (promotion.isExclusive()) {
                 exclusiveApplied = true;
+            }
+            if (!promotion.isStackable()) {
+                nonStackableApplied = true;
             }
         }
 
