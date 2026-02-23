@@ -68,7 +68,7 @@ Rules for execution:
 - [x] Unit tests for promotion engine conflict/stacking rules.
 - [x] Integration tests for coupon reservation lifecycle.
 - [x] Integration tests for cart/order promotion flows.
-- [ ] Seed/sample data for local testing (optional, controlled by config).
+- [x] Seed/sample data for local testing (optional, controlled by config).
 
 ## Phase 8: Nice-to-Have (After MVP)
 

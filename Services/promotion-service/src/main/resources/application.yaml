@@ -89,3 +89,10 @@ coupon:
   reservation:
     default-ttl-seconds: ${COUPON_RESERVATION_DEFAULT_TTL_SECONDS:900}
     max-ttl-seconds: ${COUPON_RESERVATION_MAX_TTL_SECONDS:1800}
+
+promotion:
+  sample-data:
+    enabled: ${PROMOTION_SAMPLE_DATA_ENABLED:false}
+    vendor-id: ${PROMOTION_SAMPLE_VENDOR_ID:}
+    product-id: ${PROMOTION_SAMPLE_PRODUCT_ID:}
+    category-id: ${PROMOTION_SAMPLE_CATEGORY_ID:}
