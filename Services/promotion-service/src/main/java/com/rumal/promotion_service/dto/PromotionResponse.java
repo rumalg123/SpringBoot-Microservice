@@ -25,6 +25,7 @@ public record PromotionResponse(
         BigDecimal benefitValue,
         Integer buyQuantity,
         Integer getQuantity,
+        java.util.List<PromotionSpendTierResponse> spendTiers,
         BigDecimal minimumOrderAmount,
         BigDecimal maximumDiscountAmount,
         PromotionFundingSource fundingSource,

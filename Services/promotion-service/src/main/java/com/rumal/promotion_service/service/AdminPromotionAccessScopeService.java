@@ -197,6 +197,7 @@ public class AdminPromotionAccessScopeService {
                 request.benefitValue(),
                 request.buyQuantity(),
                 request.getQuantity(),
+                request.spendTiers(),
                 request.minimumOrderAmount(),
                 request.maximumDiscountAmount(),
                 fundingSource,

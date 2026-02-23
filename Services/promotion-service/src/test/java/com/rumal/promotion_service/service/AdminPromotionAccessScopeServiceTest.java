@@ -190,6 +190,7 @@ class AdminPromotionAccessScopeServiceTest {
                 new BigDecimal("10.00"),
                 null,
                 null,
+                null,
                 new BigDecimal("50.00"),
                 new BigDecimal("25.00"),
                 fundingSource,

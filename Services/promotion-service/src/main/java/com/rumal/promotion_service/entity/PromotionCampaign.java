@@ -10,6 +10,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,7 +22,9 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -77,6 +80,12 @@ public class PromotionCampaign {
 
     @Column(name = "get_quantity")
     private Integer getQuantity;
+
+    @ElementCollection
+    @CollectionTable(name = "promotion_spend_tiers", joinColumns = @JoinColumn(name = "promotion_id"))
+    @OrderColumn(name = "tier_order_index")
+    @Builder.Default
+    private List<PromotionSpendTier> spendTiers = new ArrayList<>();
 
     @Column(name = "minimum_order_amount", precision = 19, scale = 2)
     private BigDecimal minimumOrderAmount;

@@ -12,6 +12,7 @@ import com.rumal.promotion_service.entity.PromotionBenefitType;
 import com.rumal.promotion_service.entity.PromotionCampaign;
 import com.rumal.promotion_service.entity.PromotionLifecycleStatus;
 import com.rumal.promotion_service.entity.PromotionScopeType;
+import com.rumal.promotion_service.entity.PromotionSpendTier;
 import com.rumal.promotion_service.exception.ValidationException;
 import com.rumal.promotion_service.repo.PromotionCampaignRepository;
 import lombok.RequiredArgsConstructor;
@@ -316,6 +317,10 @@ public class PromotionQuoteService {
         if (eligibleBase.compareTo(BigDecimal.ZERO) <= 0) {
             return PromotionApplicationResult.rejected("No eligible cart amount remaining");
         }
+        if (promotion.getBenefitType() == PromotionBenefitType.TIERED_SPEND) {
+            return applyTieredSpendCartPromotion(promotion, eligibleBase);
+        }
+
         BigDecimal discount = calculateDiscountForAmount(promotion, eligibleBase);
         discount = applyPromotionCap(promotion, discount);
         discount = minMoney(discount, eligibleBase);
@@ -323,6 +328,43 @@ public class PromotionQuoteService {
             return PromotionApplicationResult.rejected("Promotion produced no discount");
         }
         return PromotionApplicationResult.applied(discount);
+    }
+
+    private PromotionApplicationResult applyTieredSpendCartPromotion(PromotionCampaign promotion, BigDecimal eligibleBase) {
+        if (eligibleBase == null || eligibleBase.compareTo(BigDecimal.ZERO) <= 0) {
+            return PromotionApplicationResult.rejected("No eligible cart amount remaining");
+        }
+
+        PromotionSpendTier matchedTier = highestMatchingSpendTier(promotion, eligibleBase);
+        if (matchedTier == null) {
+            return PromotionApplicationResult.rejected("No spend tier threshold met");
+        }
+
+        BigDecimal discount = normalizeMoney(matchedTier.getDiscountAmount());
+        discount = applyPromotionCap(promotion, discount);
+        discount = minMoney(discount, eligibleBase);
+        if (discount.compareTo(BigDecimal.ZERO) <= 0) {
+            return PromotionApplicationResult.rejected("Promotion produced no discount");
+        }
+        return PromotionApplicationResult.applied(discount);
+    }
+
+    private PromotionSpendTier highestMatchingSpendTier(PromotionCampaign promotion, BigDecimal eligibleBase) {
+        if (promotion == null || promotion.getSpendTiers() == null || promotion.getSpendTiers().isEmpty()) {
+            return null;
+        }
+        BigDecimal normalizedBase = normalizeMoney(eligibleBase);
+        return promotion.getSpendTiers().stream()
+                .filter(Objects::nonNull)
+                .filter(tier -> tier.getThresholdAmount() != null && tier.getDiscountAmount() != null)
+                .filter(tier -> normalizeMoney(tier.getThresholdAmount()).compareTo(BigDecimal.ZERO) > 0)
+                .filter(tier -> normalizeMoney(tier.getDiscountAmount()).compareTo(BigDecimal.ZERO) > 0)
+                .sorted(Comparator
+                        .comparing((PromotionSpendTier tier) -> normalizeMoney(tier.getThresholdAmount())).reversed()
+                        .thenComparing(tier -> normalizeMoney(tier.getDiscountAmount()), Comparator.reverseOrder()))
+                .filter(tier -> normalizedBase.compareTo(normalizeMoney(tier.getThresholdAmount())) >= 0)
+                .findFirst()
+                .orElse(null);
     }
 
     private PromotionApplicationResult applyShippingPromotion(
@@ -391,6 +433,7 @@ public class PromotionQuoteService {
             case FIXED_AMOUNT_OFF -> promotion.getBenefitValue() == null ? BigDecimal.ZERO : promotion.getBenefitValue();
             case FREE_SHIPPING -> BigDecimal.ZERO;
             case BUY_X_GET_Y -> BigDecimal.ZERO;
+            case TIERED_SPEND -> BigDecimal.ZERO;
         };
         return minMoney(normalizeMoney(discount), normalizeMoney(baseAmount));
     }

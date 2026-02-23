@@ -10,6 +10,7 @@ import com.rumal.promotion_service.entity.PromotionCampaign;
 import com.rumal.promotion_service.entity.PromotionFundingSource;
 import com.rumal.promotion_service.entity.PromotionLifecycleStatus;
 import com.rumal.promotion_service.entity.PromotionScopeType;
+import com.rumal.promotion_service.entity.PromotionSpendTier;
 import com.rumal.promotion_service.repo.PromotionCampaignRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -237,6 +238,65 @@ class PromotionQuoteServiceTest {
         assertTrue(quote.rejectedPromotions().isEmpty());
         assertEquals(new BigDecimal("30.00"), quote.lines().getFirst().lineTotal());
         assertEquals(new BigDecimal("10.00"), quote.lines().get(1).lineDiscount());
+    }
+
+    @Test
+    void quote_tieredSpendAppliesHighestMatchingTier() {
+        PromotionCampaign tiered = basePromotion(
+                "Spend tiers",
+                PromotionApplicationLevel.CART,
+                PromotionScopeType.ORDER,
+                PromotionBenefitType.TIERED_SPEND,
+                "0.00",
+                1,
+                true,
+                false
+        );
+        tiered.setSpendTiers(List.of(
+                new PromotionSpendTier(new BigDecimal("50.00"), new BigDecimal("5.00")),
+                new PromotionSpendTier(new BigDecimal("100.00"), new BigDecimal("12.50")),
+                new PromotionSpendTier(new BigDecimal("200.00"), new BigDecimal("30.00"))
+        ));
+
+        when(promotionCampaignRepository.findAll()).thenReturn(List.of(tiered));
+
+        PromotionQuoteResponse quote = service.quote(singleLineOrderRequest("120.00", 1, "0.00"));
+
+        assertEquals(new BigDecimal("120.00"), quote.subtotal());
+        assertEquals(new BigDecimal("0.00"), quote.lineDiscountTotal());
+        assertEquals(new BigDecimal("12.50"), quote.cartDiscountTotal());
+        assertEquals(new BigDecimal("12.50"), quote.totalDiscount());
+        assertEquals(new BigDecimal("107.50"), quote.grandTotal());
+        assertEquals(1, quote.appliedPromotions().size());
+        assertEquals(tiered.getId(), quote.appliedPromotions().getFirst().promotionId());
+        assertTrue(quote.rejectedPromotions().isEmpty());
+    }
+
+    @Test
+    void quote_tieredSpendRejectedWhenNoThresholdIsMet() {
+        PromotionCampaign tiered = basePromotion(
+                "Spend tiers",
+                PromotionApplicationLevel.CART,
+                PromotionScopeType.ORDER,
+                PromotionBenefitType.TIERED_SPEND,
+                "0.00",
+                1,
+                true,
+                false
+        );
+        tiered.setSpendTiers(List.of(
+                new PromotionSpendTier(new BigDecimal("100.00"), new BigDecimal("10.00"))
+        ));
+
+        when(promotionCampaignRepository.findAll()).thenReturn(List.of(tiered));
+
+        PromotionQuoteResponse quote = service.quote(singleLineOrderRequest("80.00", 1, "0.00"));
+
+        assertEquals(new BigDecimal("0.00"), quote.cartDiscountTotal());
+        assertEquals(0, quote.appliedPromotions().size());
+        assertEquals(1, quote.rejectedPromotions().size());
+        assertEquals(tiered.getId(), quote.rejectedPromotions().getFirst().promotionId());
+        assertTrue(quote.rejectedPromotions().getFirst().reason().contains("threshold"));
     }
 
     private PromotionQuoteRequest singleLineOrderRequest(String unitPrice, int quantity, String shippingAmount) {

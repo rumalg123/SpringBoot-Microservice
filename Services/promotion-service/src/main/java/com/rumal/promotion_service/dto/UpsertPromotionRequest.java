@@ -4,6 +4,7 @@ import com.rumal.promotion_service.entity.PromotionApplicationLevel;
 import com.rumal.promotion_service.entity.PromotionBenefitType;
 import com.rumal.promotion_service.entity.PromotionFundingSource;
 import com.rumal.promotion_service.entity.PromotionScopeType;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
@@ -15,6 +16,7 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -30,6 +32,7 @@ public record UpsertPromotionRequest(
         @DecimalMin(value = "0.00", message = "benefitValue cannot be negative") BigDecimal benefitValue,
         @Min(value = 1, message = "buyQuantity must be at least 1") Integer buyQuantity,
         @Min(value = 1, message = "getQuantity must be at least 1") Integer getQuantity,
+        List<@Valid PromotionSpendTierRequest> spendTiers,
         @DecimalMin(value = "0.00", message = "minimumOrderAmount cannot be negative") BigDecimal minimumOrderAmount,
         @DecimalMin(value = "0.00", message = "maximumDiscountAmount cannot be negative") BigDecimal maximumDiscountAmount,
         @NotNull PromotionFundingSource fundingSource,
@@ -48,6 +51,10 @@ public record UpsertPromotionRequest(
         return targetCategoryIds == null ? Set.of() : Set.copyOf(new LinkedHashSet<>(targetCategoryIds));
     }
 
+    public List<PromotionSpendTierRequest> spendTiersOrEmpty() {
+        return spendTiers == null ? List.of() : List.copyOf(spendTiers);
+    }
+
     @AssertTrue(message = "startsAt must be before or equal to endsAt")
     public boolean isDateRangeValid() {
         return startsAt == null || endsAt == null || !startsAt.isAfter(endsAt);
@@ -64,5 +71,13 @@ public record UpsertPromotionRequest(
             return buyQuantity != null && buyQuantity > 0 && getQuantity != null && getQuantity > 0;
         }
         return buyQuantity == null && getQuantity == null;
+    }
+
+    @AssertTrue(message = "TIERED_SPEND requires spendTiers; other benefit types must not set spendTiers")
+    public boolean isTieredSpendFieldsValid() {
+        if (benefitType == PromotionBenefitType.TIERED_SPEND) {
+            return spendTiersOrEmpty().stream().anyMatch(t -> t != null);
+        }
+        return spendTiers == null || spendTiers.isEmpty();
     }
 }

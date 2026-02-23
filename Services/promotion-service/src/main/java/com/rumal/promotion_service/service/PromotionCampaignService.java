@@ -2,6 +2,7 @@ package com.rumal.promotion_service.service;
 
 import com.rumal.promotion_service.dto.PromotionApprovalDecisionRequest;
 import com.rumal.promotion_service.dto.PromotionResponse;
+import com.rumal.promotion_service.dto.PromotionSpendTierResponse;
 import com.rumal.promotion_service.dto.UpsertPromotionRequest;
 import com.rumal.promotion_service.entity.PromotionApprovalStatus;
 import com.rumal.promotion_service.entity.PromotionBenefitType;
@@ -9,6 +10,7 @@ import com.rumal.promotion_service.entity.PromotionCampaign;
 import com.rumal.promotion_service.entity.PromotionFundingSource;
 import com.rumal.promotion_service.entity.PromotionLifecycleStatus;
 import com.rumal.promotion_service.entity.PromotionScopeType;
+import com.rumal.promotion_service.entity.PromotionSpendTier;
 import com.rumal.promotion_service.exception.ResourceNotFoundException;
 import com.rumal.promotion_service.exception.ValidationException;
 import com.rumal.promotion_service.repo.PromotionCampaignRepository;
@@ -25,6 +27,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
@@ -246,6 +250,33 @@ public class PromotionCampaignService {
             if (request.benefitValue() != null && request.benefitValue().compareTo(BigDecimal.ZERO) > 0) {
                 throw new ValidationException("benefitValue is not used for BUY_X_GET_Y promotions");
             }
+        } else if (request.benefitType() == PromotionBenefitType.TIERED_SPEND) {
+            if (request.applicationLevel() != com.rumal.promotion_service.entity.PromotionApplicationLevel.CART) {
+                throw new ValidationException("TIERED_SPEND promotions must use applicationLevel=CART");
+            }
+            if (!request.spendTiersOrEmpty().stream().anyMatch(Objects::nonNull)) {
+                throw new ValidationException("TIERED_SPEND promotions require spendTiers");
+            }
+            Set<BigDecimal> thresholds = new HashSet<>();
+            for (var tier : request.spendTiersOrEmpty()) {
+                if (tier == null) {
+                    continue;
+                }
+                BigDecimal threshold = normalizeNullableMoney(tier.thresholdAmount());
+                BigDecimal discount = normalizeNullableMoney(tier.discountAmount());
+                if (threshold == null || threshold.compareTo(BigDecimal.ZERO) <= 0) {
+                    throw new ValidationException("Tier thresholdAmount must be greater than 0");
+                }
+                if (discount == null || discount.compareTo(BigDecimal.ZERO) <= 0) {
+                    throw new ValidationException("Tier discountAmount must be greater than 0");
+                }
+                if (!thresholds.add(threshold)) {
+                    throw new ValidationException("Tier thresholdAmount values must be unique within a promotion");
+                }
+            }
+            if (request.benefitValue() != null && request.benefitValue().compareTo(BigDecimal.ZERO) > 0) {
+                throw new ValidationException("benefitValue is not used for TIERED_SPEND promotions");
+            }
         } else {
             if (request.benefitValue() == null || request.benefitValue().compareTo(BigDecimal.ZERO) <= 0) {
                 throw new ValidationException("benefitValue must be greater than 0 for non-shipping benefits");
@@ -290,6 +321,16 @@ public class PromotionCampaignService {
                 : normalizeNullableMoney(request.benefitValue()));
         campaign.setBuyQuantity(request.benefitType() == PromotionBenefitType.BUY_X_GET_Y ? request.buyQuantity() : null);
         campaign.setGetQuantity(request.benefitType() == PromotionBenefitType.BUY_X_GET_Y ? request.getQuantity() : null);
+        campaign.setSpendTiers(request.benefitType() == PromotionBenefitType.TIERED_SPEND
+                ? request.spendTiersOrEmpty().stream()
+                .filter(Objects::nonNull)
+                .sorted(Comparator.comparing(tier -> normalizeNullableMoney(tier.thresholdAmount())))
+                .map(tier -> new PromotionSpendTier(
+                        normalizeNullableMoney(tier.thresholdAmount()),
+                        normalizeNullableMoney(tier.discountAmount())
+                ))
+                .toList()
+                : new ArrayList<>());
         campaign.setMinimumOrderAmount(normalizeNullableMoney(request.minimumOrderAmount()));
         campaign.setMaximumDiscountAmount(normalizeNullableMoney(request.maximumDiscountAmount()));
         campaign.setFundingSource(request.fundingSource());
@@ -331,6 +372,14 @@ public class PromotionCampaignService {
                 entity.getBenefitValue(),
                 entity.getBuyQuantity(),
                 entity.getGetQuantity(),
+                entity.getSpendTiers() == null ? List.of() : entity.getSpendTiers().stream()
+                        .filter(Objects::nonNull)
+                        .sorted(Comparator.comparing(PromotionSpendTier::getThresholdAmount, Comparator.nullsLast(Comparator.naturalOrder())))
+                        .map(tier -> new PromotionSpendTierResponse(
+                                normalizeNullableMoney(tier.getThresholdAmount()),
+                                normalizeNullableMoney(tier.getDiscountAmount())
+                        ))
+                        .toList(),
                 entity.getMinimumOrderAmount(),
                 entity.getMaximumDiscountAmount(),
                 entity.getFundingSource(),
