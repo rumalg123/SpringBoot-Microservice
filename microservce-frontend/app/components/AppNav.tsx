@@ -119,7 +119,7 @@ export default function AppNav({
           >
             {email || "User"}
           </span>
-          <button
+          <button type="button"
             disabled={logoutPending}
             onClick={async () => {
               if (logoutPending) return;
@@ -271,7 +271,7 @@ export default function AppNav({
                       {email}
                     </span>
                   )}
-                  <button
+                  <button type="button"
                     disabled={logoutPending}
                     onClick={async () => {
                       if (logoutPending) return;
@@ -297,3 +297,4 @@ export default function AppNav({
     </header>
   );
 }
+

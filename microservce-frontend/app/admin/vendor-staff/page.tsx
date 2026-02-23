@@ -421,7 +421,7 @@ export default function AdminVendorStaffPage() {
             />
 
             <div className="flex gap-2">
-              <button
+              <button type="button"
                 onClick={() => { void save(); }}
                 disabled={saving}
                 className="inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-60"
@@ -430,7 +430,7 @@ export default function AdminVendorStaffPage() {
                 {saving ? "Saving..." : form.id ? "Update Vendor Staff" : "Create Vendor Staff"}
               </button>
               {form.id && (
-                <button className="btn-ghost" onClick={() => setForm((old) => ({ ...EMPTY_FORM, vendorId: old.vendorId }))} disabled={saving}>
+                <button type="button" className="btn-ghost" onClick={() => setForm((old) => ({ ...EMPTY_FORM, vendorId: old.vendorId }))} disabled={saving}>
                   Cancel Edit
                 </button>
               )}
@@ -448,8 +448,8 @@ export default function AdminVendorStaffPage() {
                 </p>
               </div>
               <div className="flex gap-2">
-                <button className="btn-ghost" onClick={() => setShowDeleted(false)} disabled={!showDeleted}>Active</button>
-                <button className="btn-ghost" onClick={() => setShowDeleted(true)} disabled={showDeleted || listBusy}>Deleted</button>
+                <button type="button" className="btn-ghost" onClick={() => setShowDeleted(false)} disabled={!showDeleted}>Active</button>
+                <button type="button" className="btn-ghost" onClick={() => setShowDeleted(true)} disabled={showDeleted || listBusy}>Deleted</button>
               </div>
             </div>
 
@@ -511,7 +511,7 @@ export default function AdminVendorStaffPage() {
                       <div className="flex gap-2">
                         {!showDeleted && (
                           <>
-                            <button
+                            <button type="button"
                               className="btn-ghost"
                               onClick={() => setForm({
                                 id: row.id,
@@ -525,20 +525,20 @@ export default function AdminVendorStaffPage() {
                             >
                               Edit
                             </button>
-                            <button className="btn-ghost" onClick={() => setAuditTargetRow(row)}>
+                            <button type="button" className="btn-ghost" onClick={() => setAuditTargetRow(row)}>
                               History
                             </button>
-                            <button className="btn-ghost" disabled={deletingId === row.id} onClick={() => { setActionReason(""); setConfirmDelete(row); }}>
+                            <button type="button" className="btn-ghost" disabled={deletingId === row.id} onClick={() => { setActionReason(""); setConfirmDelete(row); }}>
                               {deletingId === row.id ? "Deleting..." : "Delete"}
                             </button>
                           </>
                         )}
                         {showDeleted && (
                           <>
-                            <button className="btn-ghost" onClick={() => setAuditTargetRow(row)}>
+                            <button type="button" className="btn-ghost" onClick={() => setAuditTargetRow(row)}>
                               History
                             </button>
-                            <button className="btn-ghost" disabled={restoringId === row.id} onClick={() => { setActionReason(""); setConfirmRestore(row); }}>
+                            <button type="button" className="btn-ghost" disabled={restoringId === row.id} onClick={() => { setActionReason(""); setConfirmRestore(row); }}>
                               {restoringId === row.id ? "Restoring..." : "Restore"}
                             </button>
                           </>
@@ -596,3 +596,4 @@ export default function AdminVendorStaffPage() {
     </div>
   );
 }
+

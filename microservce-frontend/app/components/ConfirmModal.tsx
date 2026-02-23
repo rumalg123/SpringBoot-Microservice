@@ -104,14 +104,14 @@ export default function ConfirmModal({
                     </div>
                 )}
                 <div className="confirm-modal-actions">
-                    <button
+                    <button type="button"
                         onClick={onCancel}
                         disabled={loading}
                         className="btn-outline confirm-modal-cancel"
                     >
                         {cancelLabel}
                     </button>
-                    <button
+                    <button type="button"
                         ref={confirmRef}
                         onClick={onConfirm}
                         disabled={loading}
@@ -127,3 +127,4 @@ export default function ConfirmModal({
         </div>
     );
 }
+

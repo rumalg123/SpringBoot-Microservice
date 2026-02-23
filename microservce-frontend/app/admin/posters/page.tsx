@@ -1,4 +1,4 @@
-ï»¿"use client";
+"use client";
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -504,8 +504,8 @@ export default function AdminPostersPage() {
       />
       <main className="mx-auto max-w-7xl px-4 py-4">
         <nav className="breadcrumb">
-          <Link href="/">Home</Link><span className="breadcrumb-sep">â€º</span>
-          <Link href="/admin/products">Admin</Link><span className="breadcrumb-sep">â€º</span>
+          <Link href="/">Home</Link><span className="breadcrumb-sep">›</span>
+          <Link href="/admin/products">Admin</Link><span className="breadcrumb-sep">›</span>
           <span className="breadcrumb-current">Posters</span>
         </nav>
 
@@ -514,7 +514,7 @@ export default function AdminPostersPage() {
             <h1 style={{ margin: 0, color: "var(--ink)", fontFamily: "'Syne', sans-serif", fontWeight: 800 }}>Admin Posters</h1>
             <p style={{ margin: "4px 0 0", color: "var(--muted)", fontSize: "0.85rem" }}>Placement presets, image uploads, auto slug, scheduling, and duplicate flow.</p>
           </div>
-          <button onClick={() => setShowDeleted((v) => !v)} disabled={loading} style={{ padding: "8px 12px", borderRadius: "10px", border: "1px solid var(--line-bright)", background: showDeleted ? "rgba(239,68,68,0.1)" : "var(--brand-soft)", color: showDeleted ? "#f87171" : "var(--brand)", fontWeight: 700, opacity: loading ? 0.7 : 1, cursor: loading ? "not-allowed" : "pointer" }}>
+          <button type="button" onClick={() => setShowDeleted((v) => !v)} disabled={loading} style={{ padding: "8px 12px", borderRadius: "10px", border: "1px solid var(--line-bright)", background: showDeleted ? "rgba(239,68,68,0.1)" : "var(--brand-soft)", color: showDeleted ? "#f87171" : "var(--brand)", fontWeight: 700, opacity: loading ? 0.7 : 1, cursor: loading ? "not-allowed" : "pointer" }}>
             {showDeleted ? "Showing Deleted" : "Show Deleted"}
           </button>
         </div>
@@ -725,5 +725,6 @@ export default function AdminPostersPage() {
     </div>
   );
 }
+
 
 

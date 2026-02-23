@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthSession } from "../../../../lib/authSession";
 import { canTransitionOrderStatus } from "./orderStatus";
@@ -39,6 +39,11 @@ export default function useOrderList({
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [bulkStatus, setBulkStatus] = useState<string>("PROCESSING");
   const [bulkSaving, setBulkSaving] = useState(false);
+  const resetPanelsForListReloadRef = useRef(onResetPanelsForListReload);
+
+  useEffect(() => {
+    resetPanelsForListReloadRef.current = onResetPanelsForListReload;
+  }, [onResetPanelsForListReload]);
 
   const loadAdminOrders = useCallback(
     async (targetPage: number, targetCustomerEmail: string) => {
@@ -63,12 +68,12 @@ export default function useOrderList({
         });
         setPage(targetPage);
         setSelectedOrderIds([]);
-        onResetPanelsForListReload();
+        resetPanelsForListReloadRef.current();
       } finally {
         setOrdersLoading(false);
       }
     },
-    [onResetPanelsForListReload, session.apiClient]
+    [session.apiClient]
   );
 
   useEffect(() => {

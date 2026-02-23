@@ -161,7 +161,7 @@ export default function AccessAuditPanel({
             {targetId ? `Showing latest access changes for ${targetType.toLowerCase().replace("_", " ")}.` : "Select a row to view audit history."}
           </p>
         </div>
-        <button className="btn-ghost" onClick={() => { void load(); }} disabled={!canLoad || loading}>
+        <button type="button" className="btn-ghost" onClick={() => { void load(); }} disabled={!canLoad || loading}>
           {loading ? "Refreshing..." : "Refresh"}
         </button>
       </div>
@@ -195,7 +195,7 @@ export default function AccessAuditPanel({
             </label>
 
             <div className="flex items-end">
-              <button
+              <button type="button"
                 className="btn-ghost w-full"
                 disabled={!hasActiveFilters}
                 onClick={() => {
@@ -330,13 +330,13 @@ export default function AccessAuditPanel({
               </select>
             </label>
             <div className="flex items-center gap-2">
-              <button className="btn-ghost" disabled={!hasPrevPage || loading} onClick={() => setPage((p) => Math.max(0, p - 1))}>
+              <button type="button" className="btn-ghost" disabled={!hasPrevPage || loading} onClick={() => setPage((p) => Math.max(0, p - 1))}>
                 Prev
               </button>
               <span className="text-xs" style={{ color: "rgba(255,255,255,0.7)" }}>
                 {totalPages === 0 ? "No pages" : `Page ${page + 1} of ${totalPages}`}
               </span>
-              <button className="btn-ghost" disabled={!hasNextPage || loading} onClick={() => setPage((p) => p + 1)}>
+              <button type="button" className="btn-ghost" disabled={!hasNextPage || loading} onClick={() => setPage((p) => p + 1)}>
                 Next
               </button>
             </div>
@@ -346,3 +346,4 @@ export default function AccessAuditPanel({
     </section>
   );
 }
+

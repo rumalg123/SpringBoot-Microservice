@@ -1,4 +1,4 @@
-﻿/* --- Google Fonts --- */
+/* --- Google Fonts --- */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Syne:wght@600;700;800&display=swap');
 
 @import "tailwindcss";
@@ -356,6 +356,40 @@ textarea:focus {
 .btn-outline:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.8rem;
+  background: rgba(255,255,255,0.03);
+  color: var(--ink-light);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-ghost:hover {
+  background: rgba(0,212,255,0.08);
+  border-color: rgba(0,212,255,0.25);
+  color: var(--ink);
+  box-shadow: 0 0 10px rgba(0,212,255,0.12);
+}
+
+.btn-ghost:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btn-ghost:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--brand-soft), 0 0 10px var(--brand-glow);
 }
 
 .btn-neon {
@@ -1213,4 +1247,5 @@ textarea:focus {
   background: var(--brand);
   border-radius: 1px;
 }
+
 
