@@ -66,7 +66,7 @@ Rules for execution:
 
 - [x] Unit tests for access scoping.
 - [x] Unit tests for promotion engine conflict/stacking rules.
-- [ ] Integration tests for coupon reservation lifecycle.
+- [x] Integration tests for coupon reservation lifecycle.
 - [ ] Integration tests for cart/order promotion flows.
 - [ ] Seed/sample data for local testing (optional, controlled by config).
 
