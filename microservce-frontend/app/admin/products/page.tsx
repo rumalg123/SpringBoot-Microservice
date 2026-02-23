@@ -1326,9 +1326,12 @@ export default function AdminProductsPage() {
     <div className="min-h-screen bg-[var(--bg)]">
       <AppNav
         email={(session.profile?.email as string) || ""}
+        isSuperAdmin={session.isSuperAdmin}
+        isVendorAdmin={session.isVendorAdmin}
         canViewAdmin={session.canViewAdmin}
         canManageAdminOrders={session.canManageAdminOrders}
         canManageAdminProducts={session.canManageAdminProducts}
+        canManageAdminVendors={session.canManageAdminVendors}
         canManageAdminPosters={session.canManageAdminPosters}
         apiClient={session.apiClient}
         emailVerified={session.emailVerified}

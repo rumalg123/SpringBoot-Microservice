@@ -133,9 +133,12 @@ export default function WishlistPage() {
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
       <AppNav
         email={(profile?.email as string) || ""}
+        isSuperAdmin={session.isSuperAdmin}
+        isVendorAdmin={session.isVendorAdmin}
         canViewAdmin={canViewAdmin}
         canManageAdminOrders={session.canManageAdminOrders}
         canManageAdminProducts={session.canManageAdminProducts}
+        canManageAdminVendors={session.canManageAdminVendors}
         canManageAdminPosters={session.canManageAdminPosters}
         apiClient={apiClient}
         emailVerified={emailVerified}

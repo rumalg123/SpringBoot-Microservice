@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthSession } from "../../../../lib/authSession";
 import { canTransitionOrderStatus } from "./orderStatus";
@@ -86,8 +86,7 @@ export default function useOrderList({
     void run();
   }, [router, session.status, session.isAuthenticated, session.canManageAdminOrders, loadAdminOrders, setStatusMessage]);
 
-  const applyFilter = async (e: FormEvent) => {
-    e.preventDefault();
+  const applyFilter = async () => {
     if (ordersLoading || filterSubmitting) return;
     setFilterSubmitting(true);
     const nextFilter = customerEmailInput.trim();
@@ -260,4 +259,3 @@ export default function useOrderList({
     loadAdminOrders,
   };
 }
-

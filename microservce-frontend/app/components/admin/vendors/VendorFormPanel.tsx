@@ -3,6 +3,7 @@
 import type { SlugStatus, VendorForm, VendorStatus } from "./types";
 
 type VendorFormPanelProps = {
+  panelId?: string;
   form: VendorForm;
   slugStatus: SlugStatus;
   saving: boolean;
@@ -34,6 +35,7 @@ function slugStatusClass(status: SlugStatus) {
 }
 
 export default function VendorFormPanel({
+  panelId,
   form,
   slugStatus,
   saving,
@@ -43,7 +45,7 @@ export default function VendorFormPanel({
   onSubmit,
 }: VendorFormPanelProps) {
   return (
-    <section className="card-surface rounded-2xl p-5">
+    <section id={panelId} className="card-surface rounded-2xl p-5">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-2xl text-[var(--ink)]">{form.id ? "Update Vendor" : "Create Vendor"}</h2>
         <button

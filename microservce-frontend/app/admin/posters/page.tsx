@@ -491,9 +491,12 @@ export default function AdminPostersPage() {
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
       <AppNav
         email={(session.profile?.email as string) || ""}
+        isSuperAdmin={session.isSuperAdmin}
+        isVendorAdmin={session.isVendorAdmin}
         canViewAdmin={session.canViewAdmin}
         canManageAdminOrders={session.canManageAdminOrders}
         canManageAdminProducts={session.canManageAdminProducts}
+        canManageAdminVendors={session.canManageAdminVendors}
         canManageAdminPosters={session.canManageAdminPosters}
         apiClient={session.apiClient}
         emailVerified={session.emailVerified}

@@ -1,12 +1,10 @@
 "use client";
 
-import { FormEvent } from "react";
-
 type Props = {
   customerEmailInput: string;
   filterBusy: boolean;
   onCustomerEmailInputChange: (value: string) => void;
-  onSubmit: (e: FormEvent) => void | Promise<void>;
+  onSubmit: () => void | Promise<void>;
   onClear: () => void | Promise<void>;
 };
 
@@ -30,7 +28,7 @@ export default function OrderFiltersBar({
 }: Props) {
   return (
     <>
-      <form onSubmit={(e) => { void onSubmit(e); }} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
         <div style={{ position: "relative", display: "flex", alignItems: "center", flex: 1, minWidth: "260px", ...darkInput, padding: 0, overflow: "hidden" }}>
           <span style={{ padding: "0 12px", color: "var(--muted)", flexShrink: 0 }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -40,6 +38,12 @@ export default function OrderFiltersBar({
           <input
             value={customerEmailInput}
             onChange={(e) => onCustomerEmailInputChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void onSubmit();
+              }
+            }}
             placeholder="Filter by customer email..."
             disabled={filterBusy}
             style={{ flex: 1, border: "none", background: "transparent", color: "#c8c8e8", fontSize: "0.85rem", outline: "none", padding: "10px 0" }}
@@ -56,7 +60,8 @@ export default function OrderFiltersBar({
           )}
         </div>
         <button
-          type="submit"
+          type="button"
+          onClick={() => { void onSubmit(); }}
           disabled={filterBusy}
           style={{
             padding: "10px 20px", borderRadius: "10px", border: "none",
@@ -67,9 +72,8 @@ export default function OrderFiltersBar({
         >
           {filterBusy ? "Applying..." : "Apply Filter"}
         </button>
-      </form>
+      </div>
       <p style={{ fontSize: "0.68rem", color: "var(--muted-2)", marginBottom: "16px" }}>Use full customer email, e.g. user@example.com</p>
     </>
   );
 }
-

@@ -17,6 +17,7 @@ type VendorListPanelProps = {
   onToggleShowDeleted: (next: boolean) => void;
   onEditVendor: (vendor: Vendor) => void;
   onSelectVendor: (vendor: Vendor) => void;
+  onOpenLogs: (vendor: Vendor) => void;
   onDeleteVendor: (vendor: Vendor) => void | Promise<void>;
   onConfirmDeleteVendor: (vendor: Vendor) => void | Promise<void>;
   onRestoreVendor: (vendor: Vendor) => void;
@@ -33,6 +34,7 @@ function VendorRow({
   showDeleted,
   onEditVendor,
   onSelectVendor,
+  onOpenLogs,
   onDeleteVendor,
   onConfirmDeleteVendor,
   onRestoreVendor,
@@ -47,6 +49,7 @@ function VendorRow({
   showDeleted: boolean;
   onEditVendor: (vendor: Vendor) => void;
   onSelectVendor: (vendor: Vendor) => void;
+  onOpenLogs: (vendor: Vendor) => void;
   onDeleteVendor: (vendor: Vendor) => void | Promise<void>;
   onConfirmDeleteVendor: (vendor: Vendor) => void | Promise<void>;
   onRestoreVendor: (vendor: Vendor) => void;
@@ -115,13 +118,23 @@ function VendorRow({
               <button
                 type="button"
                 onClick={() => onSelectVendor(vendor)}
+                title="Open vendor users, deletion eligibility and lifecycle logs"
                 className="rounded-md border border-[var(--line)] px-2 py-1 text-xs"
                 style={{
                   background: selectedVendorId === vendor.id ? "var(--brand-soft)" : "var(--surface-2)",
                   color: selectedVendorId === vendor.id ? "var(--brand)" : "var(--ink-light)",
                 }}
               >
-                {selectedVendorId === vendor.id ? "Selected" : "Users"}
+                {selectedVendorId === vendor.id ? "Managing" : "Manage"}
+              </button>
+              <button
+                type="button"
+                onClick={() => onOpenLogs(vendor)}
+                className="rounded-md border border-[var(--line)] px-2 py-1 text-xs"
+                style={{ background: "var(--surface-2)", color: "var(--ink-light)" }}
+                title="Open lifecycle logs for this vendor"
+              >
+                Logs
               </button>
               <button
                 type="button"
@@ -178,6 +191,7 @@ export default function VendorListPanel({
   onToggleShowDeleted,
   onEditVendor,
   onSelectVendor,
+  onOpenLogs,
   onDeleteVendor,
   onConfirmDeleteVendor,
   onRestoreVendor,
@@ -254,6 +268,7 @@ export default function VendorListPanel({
                   showDeleted={showDeleted}
                   onEditVendor={onEditVendor}
                   onSelectVendor={onSelectVendor}
+                  onOpenLogs={onOpenLogs}
                   onDeleteVendor={onDeleteVendor}
                   onConfirmDeleteVendor={onConfirmDeleteVendor}
                   onRestoreVendor={onRestoreVendor}

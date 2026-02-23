@@ -39,7 +39,7 @@ export default function VendorLifecycleAuditPanel({ vendor, audits, loading = fa
 
       {!vendor && (
         <div className="rounded-xl border border-[var(--line)] p-4 text-sm text-[var(--muted)]">
-          Select a vendor to view lifecycle audit history.
+          Select a vendor from the Vendors table using the `Manage` button to view lifecycle audit history.
         </div>
       )}
 
@@ -90,4 +90,3 @@ export default function VendorLifecycleAuditPanel({ vendor, audits, loading = fa
     </section>
   );
 }
-

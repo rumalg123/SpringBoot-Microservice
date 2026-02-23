@@ -26,6 +26,8 @@ export default function AdminVendorsPage() {
   const ONBOARDING_EMAIL_ID = "vendor-onboarding-email";
   const VENDOR_USERS_SECTION_ID = "vendor-users-section";
   const VENDOR_LIST_SECTION_ID = "vendor-list-section";
+  const VENDOR_FORM_SECTION_ID = "vendor-form-section";
+  const VENDOR_LIFECYCLE_AUDIT_SECTION_ID = "vendor-lifecycle-audit-section";
 
   const runGuidance = (
     target: "vendor-list" | "onboarding" | "users",
@@ -102,9 +104,12 @@ export default function AdminVendorsPage() {
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
       <AppNav
         email={(session.profile?.email as string) || ""}
+        isSuperAdmin={session.isSuperAdmin}
+        isVendorAdmin={session.isVendorAdmin}
         canViewAdmin={session.canViewAdmin}
         canManageAdminOrders={session.canManageAdminOrders}
         canManageAdminProducts={session.canManageAdminProducts}
+        canManageAdminVendors={session.canManageAdminVendors}
         canManageAdminPosters={session.canManageAdminPosters}
         apiClient={session.apiClient}
         emailVerified={session.emailVerified}
@@ -155,9 +160,36 @@ export default function AdminVendorsPage() {
             vendorUserCount={vendors.vendorUsers.length}
           />
 
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--line)] px-3 py-2 text-xs" style={{ background: "rgba(255,255,255,0.02)" }}>
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={() => {
+                vendors.resetVendorForm();
+                document.getElementById(VENDOR_FORM_SECTION_ID)?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}
+            >
+              Create Vendor
+            </button>
+            <button
+              type="button"
+              className="btn-ghost"
+              disabled={!vendors.selectedVendorId}
+              onClick={() => {
+                document.getElementById(ONBOARDING_PANEL_ID)?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}
+            >
+              Open Users / Logs
+            </button>
+            <span className="text-[11px] text-[var(--muted)]">
+              Use `Manage` in the vendor row to load users, eligibility, and lifecycle logs for that vendor.
+            </span>
+          </div>
+
           <div className="grid gap-6 lg:grid-cols-[1.05fr,0.95fr]">
             <div className="space-y-4">
               <VendorFormPanel
+                panelId={VENDOR_FORM_SECTION_ID}
                 form={vendors.form}
                 slugStatus={vendors.slugStatus}
                 saving={vendors.savingVendor}
@@ -193,6 +225,12 @@ export default function AdminVendorsPage() {
                   onToggleShowDeleted={vendors.setShowDeleted}
                   onEditVendor={vendors.handleEditVendor}
                   onSelectVendor={vendors.handleSelectVendor}
+                  onOpenLogs={(vendor) => {
+                    vendors.handleSelectVendor(vendor);
+                    window.requestAnimationFrame(() => {
+                      document.getElementById(VENDOR_LIFECYCLE_AUDIT_SECTION_ID)?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    });
+                  }}
                   onDeleteVendor={vendors.openDeleteVendorConfirm}
                   onConfirmDeleteVendor={vendors.openConfirmDeleteVendorConfirm}
                   onRestoreVendor={vendors.openRestoreVendorConfirm}
@@ -225,17 +263,19 @@ export default function AdminVendorsPage() {
                   }}
                 />
 
-                <VendorLifecycleAuditPanel
-                  vendor={vendors.selectedVendor}
-                  audits={vendors.selectedVendorLifecycleAudit}
-                  loading={
-                    Boolean(vendors.selectedVendorId) &&
-                    vendors.lifecycleAuditLoadingVendorId === vendors.selectedVendorId
-                  }
-                  onRefresh={() => {
-                    if (vendors.selectedVendorId) void vendors.loadVendorLifecycleAudit(vendors.selectedVendorId);
-                  }}
-                />
+                <div id={VENDOR_LIFECYCLE_AUDIT_SECTION_ID}>
+                  <VendorLifecycleAuditPanel
+                    vendor={vendors.selectedVendor}
+                    audits={vendors.selectedVendorLifecycleAudit}
+                    loading={
+                      Boolean(vendors.selectedVendorId) &&
+                      vendors.lifecycleAuditLoadingVendorId === vendors.selectedVendorId
+                    }
+                    onRefresh={() => {
+                      if (vendors.selectedVendorId) void vendors.loadVendorLifecycleAudit(vendors.selectedVendorId);
+                    }}
+                  />
+                </div>
 
                 <VendorOnboardingPanel
                   apiClient={session.apiClient}
