@@ -35,6 +35,7 @@ public record UpsertPromotionRequest(
         List<@Valid PromotionSpendTierRequest> spendTiers,
         @DecimalMin(value = "0.00", message = "minimumOrderAmount cannot be negative") BigDecimal minimumOrderAmount,
         @DecimalMin(value = "0.00", message = "maximumDiscountAmount cannot be negative") BigDecimal maximumDiscountAmount,
+        @DecimalMin(value = "0.00", message = "budgetAmount cannot be negative") BigDecimal budgetAmount,
         @NotNull PromotionFundingSource fundingSource,
         boolean stackable,
         boolean exclusive,

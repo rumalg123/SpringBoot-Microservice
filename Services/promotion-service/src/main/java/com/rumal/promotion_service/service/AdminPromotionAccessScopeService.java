@@ -200,6 +200,7 @@ public class AdminPromotionAccessScopeService {
                 request.spendTiers(),
                 request.minimumOrderAmount(),
                 request.maximumDiscountAmount(),
+                request.budgetAmount(),
                 fundingSource,
                 request.stackable(),
                 request.exclusive(),

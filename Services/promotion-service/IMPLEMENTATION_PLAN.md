@@ -75,5 +75,5 @@ Rules for execution:
 - [x] BOGO / Buy-X-Get-Y support.
 - [x] Tiered spend discounts.
 - [x] Bundle discounts.
-- [ ] Promotion budgets and burn limits.
+- [x] Promotion budgets and burn limits.
 - [ ] Analytics/reporting endpoints.

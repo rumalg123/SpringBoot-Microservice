@@ -12,6 +12,7 @@ import com.rumal.promotion_service.entity.CouponReservationStatus;
 import com.rumal.promotion_service.exception.ResourceNotFoundException;
 import com.rumal.promotion_service.exception.ValidationException;
 import com.rumal.promotion_service.repo.CouponReservationRepository;
+import com.rumal.promotion_service.repo.PromotionCampaignRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -30,6 +31,7 @@ public class CouponReservationService {
 
     private final CouponValidationService couponValidationService;
     private final CouponReservationRepository couponReservationRepository;
+    private final PromotionCampaignRepository promotionCampaignRepository;
     private final PromotionQuoteService promotionQuoteService;
 
     @Value("${coupon.reservation.default-ttl-seconds:900}")
@@ -78,6 +80,8 @@ public class CouponReservationService {
             throw new ValidationException("Coupon code is valid but produced no discount for the provided quote");
         }
 
+        assertBudgetCanReserve(couponPromotionId, couponDiscount, now);
+
         int ttlSeconds = resolveReservationTtlSeconds(couponCode);
         CouponReservation reservation = CouponReservation.builder()
                 .couponCode(couponCode)
@@ -115,6 +119,7 @@ public class CouponReservationService {
             throw new ValidationException("Reservation has expired");
         }
 
+        incrementPromotionBurnedBudgetIfApplicable(reservation.getPromotionId(), reservation.getReservedDiscountAmount());
         reservation.setStatus(CouponReservationStatus.COMMITTED);
         reservation.setOrderId(request.orderId());
         reservation.setCommittedAt(Instant.now());
@@ -134,6 +139,9 @@ public class CouponReservationService {
             return toResponse(couponReservationRepository.save(reservation), null);
         }
 
+        if (reservation.getStatus() == CouponReservationStatus.COMMITTED) {
+            decrementPromotionBurnedBudgetIfApplicable(reservation.getPromotionId(), reservation.getReservedDiscountAmount());
+        }
         reservation.setStatus(CouponReservationStatus.RELEASED);
         reservation.setReleasedAt(Instant.now());
         reservation.setReleaseReason(request.reason().trim());
@@ -196,5 +204,64 @@ public class CouponReservationService {
 
     private BigDecimal normalizeMoney(BigDecimal value) {
         return (value == null ? BigDecimal.ZERO : value).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private void assertBudgetCanReserve(UUID promotionId, BigDecimal requestedDiscount, Instant now) {
+        if (promotionId == null) {
+            return;
+        }
+        var promotion = promotionCampaignRepository.findByIdForUpdate(promotionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Promotion not found: " + promotionId));
+        if (promotion.getBudgetAmount() == null) {
+            return;
+        }
+
+        BigDecimal budget = normalizeMoney(promotion.getBudgetAmount());
+        BigDecimal burned = normalizeMoney(promotion.getBurnedBudgetAmount());
+        BigDecimal activeReserved = normalizeMoney(couponReservationRepository.sumActiveReservedDiscountByPromotionId(promotionId, now));
+        BigDecimal remaining = normalizeMoney(budget.subtract(burned).subtract(activeReserved));
+        if (remaining.compareTo(normalizeMoney(requestedDiscount)) < 0) {
+            throw new ValidationException("Campaign budget remaining is insufficient for this reservation");
+        }
+    }
+
+    private void incrementPromotionBurnedBudgetIfApplicable(UUID promotionId, BigDecimal amount) {
+        if (promotionId == null) {
+            return;
+        }
+        var promotion = promotionCampaignRepository.findByIdForUpdate(promotionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Promotion not found: " + promotionId));
+        if (promotion.getBudgetAmount() == null) {
+            return;
+        }
+
+        BigDecimal increment = normalizeMoney(amount);
+        BigDecimal newBurned = normalizeMoney(normalizeMoney(promotion.getBurnedBudgetAmount()).add(increment));
+        BigDecimal budget = normalizeMoney(promotion.getBudgetAmount());
+        if (newBurned.compareTo(budget) > 0) {
+            throw new ValidationException("Campaign budget exhausted before reservation commit");
+        }
+        promotion.setBurnedBudgetAmount(newBurned);
+        promotionCampaignRepository.save(promotion);
+    }
+
+    private void decrementPromotionBurnedBudgetIfApplicable(UUID promotionId, BigDecimal amount) {
+        if (promotionId == null) {
+            return;
+        }
+        var promotion = promotionCampaignRepository.findByIdForUpdate(promotionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Promotion not found: " + promotionId));
+        if (promotion.getBudgetAmount() == null) {
+            return;
+        }
+
+        BigDecimal decrement = normalizeMoney(amount);
+        BigDecimal burned = normalizeMoney(promotion.getBurnedBudgetAmount());
+        BigDecimal newBurned = normalizeMoney(burned.subtract(decrement));
+        if (newBurned.compareTo(BigDecimal.ZERO) < 0) {
+            newBurned = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        promotion.setBurnedBudgetAmount(newBurned);
+        promotionCampaignRepository.save(promotion);
     }
 }

@@ -20,6 +20,7 @@ import com.rumal.promotion_service.entity.PromotionLifecycleStatus;
 import com.rumal.promotion_service.entity.PromotionScopeType;
 import com.rumal.promotion_service.exception.ValidationException;
 import com.rumal.promotion_service.repo.CouponReservationRepository;
+import com.rumal.promotion_service.repo.PromotionCampaignRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -62,6 +63,9 @@ class CouponReservationServiceIntegrationTest {
     @Autowired
     private TestEntityManager entityManager;
 
+    @Autowired
+    private PromotionCampaignRepository promotionCampaignRepository;
+
     private CouponValidationService couponValidationService;
     private PromotionQuoteService promotionQuoteService;
     private CouponReservationService couponReservationService;
@@ -73,6 +77,7 @@ class CouponReservationServiceIntegrationTest {
         couponReservationService = new CouponReservationService(
                 couponValidationService,
                 couponReservationRepository,
+                promotionCampaignRepository,
                 promotionQuoteService
         );
         ReflectionTestUtils.setField(couponReservationService, "defaultReservationTtlSeconds", 900);
@@ -137,7 +142,7 @@ class CouponReservationServiceIntegrationTest {
 
     @Test
     void commit_thenReleaseLifecycleTransitionsPersistCorrectly() {
-        PromotionCampaign promotion = persistPromotion("Coupon Promotion");
+        PromotionCampaign promotion = persistPromotion("Coupon Promotion", "100.00", "0.00");
         CouponCode couponCode = persistCoupon(promotion, "SAVE10", 600);
         UUID customerId = UUID.randomUUID();
         CouponReservation reservation = persistReservation(couponCode, promotion.getId(), customerId, CouponReservationStatus.RESERVED, 300);
@@ -147,6 +152,8 @@ class CouponReservationServiceIntegrationTest {
         assertEquals("COMMITTED", committed.status());
         assertEquals(orderId, committed.orderId());
         assertNotNull(committed.committedAt());
+        PromotionCampaign afterCommit = promotionCampaignRepository.findById(promotion.getId()).orElseThrow();
+        assertEquals(new BigDecimal("10.00"), afterCommit.getBurnedBudgetAmount());
 
         CouponReservationResponse committedAgain = couponReservationService.commit(reservation.getId(), new CommitCouponReservationRequest(orderId));
         assertEquals("COMMITTED", committedAgain.status());
@@ -164,6 +171,8 @@ class CouponReservationServiceIntegrationTest {
         CouponReservation stored = couponReservationRepository.findById(reservation.getId()).orElseThrow();
         assertEquals(CouponReservationStatus.RELEASED, stored.getStatus());
         assertEquals(orderId, stored.getOrderId());
+        PromotionCampaign afterRelease = promotionCampaignRepository.findById(promotion.getId()).orElseThrow();
+        assertEquals(new BigDecimal("0.00"), afterRelease.getBurnedBudgetAmount());
     }
 
     @Test
@@ -218,7 +227,30 @@ class CouponReservationServiceIntegrationTest {
         assertEquals(CouponReservationStatus.EXPIRED, stored.getStatus());
     }
 
+    @Test
+    void reserve_rejectsWhenCampaignBudgetRemainingIsInsufficient() {
+        PromotionCampaign promotion = persistPromotion("Budgeted Coupon Promotion", "15.00", "0.00");
+        CouponCode couponCode = persistCoupon(promotion, "SAVE10", 600);
+        UUID customerId = UUID.randomUUID();
+        persistReservation(couponCode, promotion.getId(), UUID.randomUUID(), CouponReservationStatus.RESERVED, 300);
+
+        CreateCouponReservationRequest request = reservationRequest("SAVE10", customerId, "budget-reserve-1");
+        PromotionQuoteResponse quote = quoteResponseForCoupon(promotion.getId(), "SAVE10", "100.00", "10.00", "90.00");
+
+        when(promotionQuoteService.quote(request.quoteRequest())).thenReturn(quote);
+        when(couponValidationService.findEligibleCouponForReservation(eq("SAVE10"), eq(customerId), any(Instant.class)))
+                .thenReturn(Optional.of(CouponValidationService.CouponEligibility.eligible(couponCode)));
+
+        ValidationException error = assertThrows(ValidationException.class, () -> couponReservationService.reserve(request));
+        assertTrue(error.getMessage().contains("budget"));
+        assertEquals(1L, couponReservationRepository.count());
+    }
+
     private PromotionCampaign persistPromotion(String name) {
+        return persistPromotion(name, null, "0.00");
+    }
+
+    private PromotionCampaign persistPromotion(String name, String budgetAmount, String burnedBudgetAmount) {
         PromotionCampaign promotion = new PromotionCampaign();
         promotion.setName(name);
         promotion.setDescription(name + " description");
@@ -229,6 +261,8 @@ class CouponReservationServiceIntegrationTest {
         promotion.setBenefitValue(new BigDecimal("10.00"));
         promotion.setMinimumOrderAmount(null);
         promotion.setMaximumDiscountAmount(null);
+        promotion.setBudgetAmount(budgetAmount == null ? null : new BigDecimal(budgetAmount));
+        promotion.setBurnedBudgetAmount(burnedBudgetAmount == null ? BigDecimal.ZERO : new BigDecimal(burnedBudgetAmount));
         promotion.setFundingSource(PromotionFundingSource.PLATFORM);
         promotion.setStackable(false);
         promotion.setExclusive(false);

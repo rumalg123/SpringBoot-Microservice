@@ -301,6 +301,9 @@ public class PromotionCampaignService {
                 && request.benefitValue().compareTo(BigDecimal.valueOf(100)) > 0) {
             throw new ValidationException("Percentage discount cannot exceed 100");
         }
+        if (request.budgetAmount() != null && request.budgetAmount().compareTo(BigDecimal.ZERO) < 0) {
+            throw new ValidationException("budgetAmount cannot be negative");
+        }
 
         if (request.scopeType() == PromotionScopeType.PRODUCT && request.targetProductIdsOrEmpty().isEmpty()) {
             throw new ValidationException("targetProductIds is required for PRODUCT scope");
@@ -346,6 +349,12 @@ public class PromotionCampaignService {
                 : new ArrayList<>());
         campaign.setMinimumOrderAmount(normalizeNullableMoney(request.minimumOrderAmount()));
         campaign.setMaximumDiscountAmount(normalizeNullableMoney(request.maximumDiscountAmount()));
+        campaign.setBudgetAmount(normalizeNullableMoney(request.budgetAmount()));
+        if (campaign.getBurnedBudgetAmount() == null) {
+            campaign.setBurnedBudgetAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        } else {
+            campaign.setBurnedBudgetAmount(normalizeNullableMoney(campaign.getBurnedBudgetAmount()));
+        }
         campaign.setFundingSource(request.fundingSource());
         campaign.setStackable(request.stackable());
         campaign.setExclusive(request.exclusive());
@@ -395,6 +404,9 @@ public class PromotionCampaignService {
                         .toList(),
                 entity.getMinimumOrderAmount(),
                 entity.getMaximumDiscountAmount(),
+                normalizeNullableMoney(entity.getBudgetAmount()),
+                normalizeNullableMoney(entity.getBurnedBudgetAmount()),
+                remainingBudgetAmount(entity),
                 entity.getFundingSource(),
                 entity.isStackable(),
                 entity.isExclusive(),
@@ -416,5 +428,18 @@ public class PromotionCampaignService {
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
         );
+    }
+
+    private BigDecimal remainingBudgetAmount(PromotionCampaign entity) {
+        if (entity == null || entity.getBudgetAmount() == null) {
+            return null;
+        }
+        BigDecimal budget = normalizeNullableMoney(entity.getBudgetAmount());
+        BigDecimal burned = normalizeNullableMoney(entity.getBurnedBudgetAmount());
+        BigDecimal remaining = budget.subtract(burned == null ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP) : burned);
+        if (remaining.compareTo(BigDecimal.ZERO) < 0) {
+            remaining = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        return remaining.setScale(2, RoundingMode.HALF_UP);
     }
 }

@@ -121,9 +121,21 @@ public class PromotionQuoteService {
                 continue;
             }
 
+            BigDecimal budgetRemaining = remainingBudgetForQuote(promotion);
+            if (budgetRemaining != null && budgetRemaining.compareTo(BigDecimal.ZERO) <= 0) {
+                rejected.add(new RejectedPromotionQuoteEntry(promotion.getId(), promotion.getName(), "Campaign budget exhausted"));
+                continue;
+            }
+            List<BigDecimal> lineDiscountSnapshot = budgetRemaining == null ? List.of() : snapshotLineDiscounts(lineStates);
+
             PromotionApplicationResult result = applyPromotion(promotion, lineStates, subtotal, shippingAmount, shippingDiscountTotal);
             if (!result.applied()) {
                 rejected.add(new RejectedPromotionQuoteEntry(promotion.getId(), promotion.getName(), result.reason()));
+                continue;
+            }
+            if (budgetRemaining != null && result.discountAmount().compareTo(budgetRemaining) > 0) {
+                restoreLineDiscounts(lineStates, lineDiscountSnapshot);
+                rejected.add(new RejectedPromotionQuoteEntry(promotion.getId(), promotion.getName(), "Campaign budget remaining is insufficient"));
                 continue;
             }
 
@@ -566,6 +578,37 @@ public class PromotionQuoteService {
         BigDecimal left = normalizeMoney(a);
         BigDecimal right = normalizeMoney(b);
         return left.compareTo(right) <= 0 ? left : right;
+    }
+
+    private BigDecimal remainingBudgetForQuote(PromotionCampaign promotion) {
+        if (promotion == null || promotion.getBudgetAmount() == null) {
+            return null;
+        }
+        BigDecimal budget = normalizeMoney(promotion.getBudgetAmount());
+        BigDecimal burned = normalizeMoney(promotion.getBurnedBudgetAmount());
+        BigDecimal remaining = normalizeMoney(budget.subtract(burned));
+        return remaining.compareTo(BigDecimal.ZERO) < 0
+                ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
+                : remaining;
+    }
+
+    private List<BigDecimal> snapshotLineDiscounts(List<LineState> lineStates) {
+        if (lineStates == null || lineStates.isEmpty()) {
+            return List.of();
+        }
+        return lineStates.stream()
+                .map(LineState::lineDiscount)
+                .map(this::normalizeMoney)
+                .toList();
+    }
+
+    private void restoreLineDiscounts(List<LineState> lineStates, List<BigDecimal> snapshot) {
+        if (lineStates == null || snapshot == null || lineStates.size() != snapshot.size()) {
+            return;
+        }
+        for (int i = 0; i < lineStates.size(); i++) {
+            lineStates.get(i).lineDiscount = normalizeMoney(snapshot.get(i));
+        }
     }
 
     private static final class LineState {

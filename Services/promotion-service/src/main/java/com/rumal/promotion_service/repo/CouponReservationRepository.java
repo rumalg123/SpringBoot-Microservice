@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -43,4 +44,13 @@ public interface CouponReservationRepository extends JpaRepository<CouponReserva
             @Param("customerId") UUID customerId,
             @Param("now") Instant now
     );
+
+    @Query("""
+            select coalesce(sum(r.reservedDiscountAmount), 0)
+            from CouponReservation r
+            where r.promotionId = :promotionId
+              and r.status = com.rumal.promotion_service.entity.CouponReservationStatus.RESERVED
+              and r.expiresAt > :now
+            """)
+    BigDecimal sumActiveReservedDiscountByPromotionId(@Param("promotionId") UUID promotionId, @Param("now") Instant now);
 }

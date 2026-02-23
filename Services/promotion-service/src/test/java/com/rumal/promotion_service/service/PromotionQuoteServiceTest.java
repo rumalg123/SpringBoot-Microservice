@@ -376,6 +376,59 @@ class PromotionQuoteServiceTest {
         assertTrue(quote.rejectedPromotions().getFirst().reason().contains("bundle"));
     }
 
+    @Test
+    void quote_budgetExhaustedRejectsPromotion() {
+        PromotionCampaign promo = basePromotion(
+                "Budgeted cart 10%",
+                PromotionApplicationLevel.CART,
+                PromotionScopeType.ORDER,
+                PromotionBenefitType.PERCENTAGE_OFF,
+                "10.00",
+                1,
+                true,
+                false
+        );
+        promo.setBudgetAmount(new BigDecimal("20.00"));
+        promo.setBurnedBudgetAmount(new BigDecimal("20.00"));
+
+        when(promotionCampaignRepository.findAll()).thenReturn(List.of(promo));
+
+        PromotionQuoteResponse quote = service.quote(singleLineOrderRequest("100.00", 1, "0.00"));
+
+        assertEquals(new BigDecimal("0.00"), quote.totalDiscount());
+        assertEquals(0, quote.appliedPromotions().size());
+        assertEquals(1, quote.rejectedPromotions().size());
+        assertEquals(promo.getId(), quote.rejectedPromotions().getFirst().promotionId());
+        assertTrue(quote.rejectedPromotions().getFirst().reason().contains("budget"));
+    }
+
+    @Test
+    void quote_budgetRemainingInsufficientRejectsLinePromotionWithoutMutatingLineDiscounts() {
+        PromotionCampaign linePromo = basePromotion(
+                "Line 10% budgeted",
+                PromotionApplicationLevel.LINE_ITEM,
+                PromotionScopeType.PRODUCT,
+                PromotionBenefitType.PERCENTAGE_OFF,
+                "10.00",
+                1,
+                true,
+                false
+        );
+        linePromo.setTargetProductIds(Set.of(productId));
+        linePromo.setBudgetAmount(new BigDecimal("5.00"));
+        linePromo.setBurnedBudgetAmount(BigDecimal.ZERO);
+
+        when(promotionCampaignRepository.findAll()).thenReturn(List.of(linePromo));
+
+        PromotionQuoteResponse quote = service.quote(singleLineOrderRequest("100.00", 1, "0.00"));
+
+        assertEquals(new BigDecimal("0.00"), quote.lineDiscountTotal());
+        assertEquals(new BigDecimal("100.00"), quote.lines().getFirst().lineTotal());
+        assertEquals(0, quote.appliedPromotions().size());
+        assertEquals(1, quote.rejectedPromotions().size());
+        assertTrue(quote.rejectedPromotions().getFirst().reason().contains("budget"));
+    }
+
     private PromotionQuoteRequest singleLineOrderRequest(String unitPrice, int quantity, String shippingAmount) {
         return new PromotionQuoteRequest(
                 List.of(new PromotionQuoteLineRequest(
@@ -414,6 +467,8 @@ class PromotionQuoteServiceTest {
         promotion.setBenefitValue(new BigDecimal(benefitValue));
         promotion.setMinimumOrderAmount(null);
         promotion.setMaximumDiscountAmount(null);
+        promotion.setBudgetAmount(null);
+        promotion.setBurnedBudgetAmount(BigDecimal.ZERO.setScale(2));
         promotion.setFundingSource(PromotionFundingSource.PLATFORM);
         promotion.setStackable(stackable);
         promotion.setExclusive(exclusive);

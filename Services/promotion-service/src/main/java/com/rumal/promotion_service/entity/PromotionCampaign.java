@@ -93,6 +93,13 @@ public class PromotionCampaign {
     @Column(name = "maximum_discount_amount", precision = 19, scale = 2)
     private BigDecimal maximumDiscountAmount;
 
+    @Column(name = "budget_amount", precision = 19, scale = 2)
+    private BigDecimal budgetAmount;
+
+    @Column(name = "burned_budget_amount", nullable = false, precision = 19, scale = 2)
+    @Builder.Default
+    private BigDecimal burnedBudgetAmount = BigDecimal.ZERO;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "funding_source", nullable = false, length = 20)
     private PromotionFundingSource fundingSource;
