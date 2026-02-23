@@ -10,6 +10,11 @@ type ConfirmModalProps = {
     cancelLabel?: string;
     danger?: boolean;
     loading?: boolean;
+    reasonEnabled?: boolean;
+    reasonLabel?: string;
+    reasonPlaceholder?: string;
+    reasonValue?: string;
+    onReasonChange?: (value: string) => void;
     onConfirm: () => void;
     onCancel: () => void;
 };
@@ -26,6 +31,11 @@ export default function ConfirmModal({
     cancelLabel = "Cancel",
     danger = false,
     loading = false,
+    reasonEnabled = false,
+    reasonLabel = "Reason (optional)",
+    reasonPlaceholder = "Add a reason for audit history...",
+    reasonValue = "",
+    onReasonChange,
     onConfirm,
     onCancel,
 }: ConfirmModalProps) {
@@ -63,6 +73,36 @@ export default function ConfirmModal({
                     {title}
                 </h3>
                 <p className="confirm-modal-message">{message}</p>
+                {reasonEnabled && (
+                    <div style={{ marginBottom: "0.9rem" }}>
+                        <label
+                            style={{
+                                display: "block",
+                                marginBottom: "0.35rem",
+                                fontSize: "0.8rem",
+                                color: "var(--ink-light, #dfe7ff)",
+                                fontWeight: 600,
+                            }}
+                        >
+                            {reasonLabel}
+                        </label>
+                        <textarea
+                            value={reasonValue}
+                            onChange={(e) => onReasonChange?.(e.target.value)}
+                            placeholder={reasonPlaceholder}
+                            rows={3}
+                            style={{
+                                width: "100%",
+                                borderRadius: 10,
+                                border: "1px solid var(--line, rgba(255,255,255,0.12))",
+                                background: "var(--surface-2, rgba(255,255,255,0.04))",
+                                color: "var(--ink, #fff)",
+                                padding: "0.65rem 0.75rem",
+                                resize: "vertical",
+                            }}
+                        />
+                    </div>
+                )}
                 <div className="confirm-modal-actions">
                     <button
                         onClick={onCancel}
