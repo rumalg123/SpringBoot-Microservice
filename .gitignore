@@ -10,6 +10,7 @@ env/access-service.env
 env/poster-service.env
 env/frontend.env
 env/admin-service.env
+env/promotion-service.env
 
 .idea
 .vscode

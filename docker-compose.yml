@@ -45,6 +45,7 @@ services:
       context: ./Services/order-service
     depends_on:
       - discovery-server
+      - promotion-service
       - redis
     env_file:
       - ./env/common.env
@@ -62,6 +63,7 @@ services:
       context: ./Services/cart-service
     depends_on:
       - discovery-server
+      - promotion-service
       - redis
     env_file:
       - ./env/common.env
@@ -154,6 +156,25 @@ services:
     environment:
       TZ: Asia/Colombo
       LOGGING_FILE_NAME: /logs/access-service.log
+    volumes:
+      - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+
+  promotion-service:
+    build:
+      context: ./Services/promotion-service
+    depends_on:
+      - discovery-server
+      - redis
+      - access-service
+      - vendor-service
+    env_file:
+      - ./env/common.env
+      - ./env/promotion-service.env
+    environment:
+      TZ: Asia/Colombo
+      LOGGING_FILE_NAME: /logs/promotion-service.log
     volumes:
       - /home/ubuntu/microservice-logs:/logs
       - /etc/localtime:/etc/localtime:ro

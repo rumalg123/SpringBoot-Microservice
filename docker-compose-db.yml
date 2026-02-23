@@ -137,6 +137,20 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
 
+  promotion-db:
+    image: postgres:16-alpine
+    environment:
+      TZ: Asia/Colombo
+      POSTGRES_DB: promotion_db
+      POSTGRES_USER: promotion_user
+      POSTGRES_PASSWORD: promotion_pass
+    ports:
+      - "5441:5432"
+    volumes:
+      - promotion-db-data:/var/lib/postgresql/data
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+
   customer-service:
     build:
       context: ./Services/customer-service
@@ -161,6 +175,7 @@ services:
     depends_on:
       - discovery-server
       - order-db
+      - promotion-service
       - redis
     env_file:
       - ./env/common.env
@@ -179,6 +194,7 @@ services:
     depends_on:
       - discovery-server
       - cart-db
+      - promotion-service
       - redis
     env_file:
       - ./env/common.env
@@ -281,6 +297,26 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
 
+  promotion-service:
+    build:
+      context: ./Services/promotion-service
+    depends_on:
+      - discovery-server
+      - promotion-db
+      - redis
+      - access-service
+      - vendor-service
+    env_file:
+      - ./env/common.env
+      - ./env/promotion-service.env
+    environment:
+      TZ: Asia/Colombo
+      LOGGING_FILE_NAME: /logs/promotion-service.log
+    volumes:
+      - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+
   admin-service:
     build:
       context: ./Services/admin-service
@@ -344,3 +380,4 @@ volumes:
   poster-db-data:
   vendor-db-data:
   access-db-data:
+  promotion-db-data:
