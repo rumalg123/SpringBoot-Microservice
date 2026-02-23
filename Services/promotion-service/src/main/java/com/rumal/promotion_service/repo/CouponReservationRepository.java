@@ -5,6 +5,7 @@ import com.rumal.promotion_service.entity.CouponReservationStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -77,4 +78,14 @@ public interface CouponReservationRepository extends JpaRepository<CouponReserva
               and r.expiresAt > :now
             """)
     BigDecimal sumActiveReservedDiscountByPromotionId(@Param("promotionId") UUID promotionId, @Param("now") Instant now);
+
+    @Modifying
+    @Query("""
+            update CouponReservation r
+            set r.status = com.rumal.promotion_service.entity.CouponReservationStatus.EXPIRED,
+                r.updatedAt = :now
+            where r.status = com.rumal.promotion_service.entity.CouponReservationStatus.RESERVED
+              and r.expiresAt <= :now
+            """)
+    int expireStaleReservations(@Param("now") Instant now);
 }

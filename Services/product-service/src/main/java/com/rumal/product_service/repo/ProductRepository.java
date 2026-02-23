@@ -4,7 +4,9 @@ import com.rumal.product_service.entity.Product;
 import com.rumal.product_service.entity.ProductType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
@@ -28,4 +30,8 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
               and p.productType = com.rumal.product_service.entity.ProductType.VARIATION
             """)
     Set<UUID> findParentIdsWithActiveVariationChildren();
+
+    @Modifying
+    @Query("update Product p set p.active = false where p.vendorId = :vendorId and p.active = true")
+    int deactivateAllByVendorId(@Param("vendorId") UUID vendorId);
 }

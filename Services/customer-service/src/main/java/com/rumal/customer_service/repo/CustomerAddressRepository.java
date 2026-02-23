@@ -12,4 +12,5 @@ public interface CustomerAddressRepository extends JpaRepository<CustomerAddress
     Optional<CustomerAddress> findByIdAndCustomerId(UUID id, UUID customerId);
     Optional<CustomerAddress> findByIdAndCustomerIdAndDeletedFalse(UUID id, UUID customerId);
     Optional<CustomerAddress> findFirstByCustomerIdAndDeletedFalseOrderByUpdatedAtDesc(UUID customerId);
+    long countByCustomerIdAndDeletedFalse(UUID customerId);
 }

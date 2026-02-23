@@ -96,6 +96,14 @@ spring:
               uri: lb://admin-service
               predicates:
                 - Path=/admin/access-audit,/admin/access-audit/**
+            - id: admin-promotions
+              uri: lb://promotion-service
+              predicates:
+                - Path=/admin/promotions,/admin/promotions/**
+            - id: admin-keycloak-users
+              uri: lb://admin-service
+              predicates:
+                - Path=/admin/keycloak/users,/admin/keycloak/users/**
             - id: admin-me
               uri: lb://admin-service
               predicates:

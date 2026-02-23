@@ -55,6 +55,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
 public class CartService {
+    private static final int MAX_DISTINCT_CART_ITEMS = 200;
 
     private final CartRepository cartRepository;
     private final ProductClient productClient;
@@ -98,6 +99,9 @@ public class CartService {
                     .orElse(null);
 
             if (existing == null) {
+                if (cart.getItems().size() >= MAX_DISTINCT_CART_ITEMS) {
+                    throw new ValidationException("Cart cannot contain more than " + MAX_DISTINCT_CART_ITEMS + " distinct items");
+                }
                 CartItem created = buildCartItem(cart, product, quantityToAdd);
                 cart.getItems().add(created);
             } else {
@@ -119,13 +123,6 @@ public class CartService {
     public CartResponse updateItem(String keycloakId, UUID itemId, UpdateCartItemRequest request) {
         String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
         int quantity = sanitizeQuantity(request.quantity());
-        UUID productId = cartRepository.findWithItemsByKeycloakId(normalizedKeycloakId)
-                .flatMap(cart -> cart.getItems().stream()
-                        .filter(existing -> existing.getId().equals(itemId))
-                        .findFirst()
-                        .map(CartItem::getProductId))
-                .orElseThrow(() -> new ResourceNotFoundException("Cart item not found: " + itemId));
-        ProductDetails product = resolvePurchasableProduct(productId);
 
         return transactionTemplate.execute(status -> {
             Cart cart = cartRepository.findWithItemsByKeycloakIdForUpdate(normalizedKeycloakId)
@@ -135,6 +132,8 @@ public class CartService {
                     .filter(existing -> existing.getId().equals(itemId))
                     .findFirst()
                     .orElseThrow(() -> new ResourceNotFoundException("Cart item not found: " + itemId));
+
+            ProductDetails product = resolvePurchasableProduct(item.getProductId());
 
             item.setQuantity(quantity);
             refreshCartItemSnapshot(item, product);
@@ -286,6 +285,15 @@ public class CartService {
                     promotionPricing,
                     downstreamOrderIdempotencyKey(idempotencyKey)
             );
+        } catch (ValidationException ex) {
+            if (couponReservation != null && couponReservation.id() != null) {
+                releaseCouponReservationQuietly(couponReservation.id(), "order_create_failed:" + ex.getClass().getSimpleName());
+            }
+            String msg = ex.getMessage();
+            if (msg != null && (msg.contains("does not match") || msg.contains("subtotal") || msg.contains("grandTotal"))) {
+                throw new ValidationException("Prices have changed since your checkout preview. Please review your cart and try again.");
+            }
+            throw ex;
         } catch (RuntimeException ex) {
             if (couponReservation != null && couponReservation.id() != null) {
                 releaseCouponReservationQuietly(couponReservation.id(), "order_create_failed:" + ex.getClass().getSimpleName());
@@ -293,13 +301,17 @@ public class CartService {
             throw ex;
         }
 
-        transactionTemplate.executeWithoutResult(status -> cartRepository.findWithItemsByKeycloakIdForUpdate(normalizedKeycloakId)
-                .ifPresent(cart -> {
-                    if (checkoutSnapshot(cart).equals(expectedSnapshot)) {
-                        cart.getItems().clear();
-                        cartRepository.save(cart);
-                    }
-                }));
+        boolean cartCleared = Boolean.TRUE.equals(transactionTemplate.execute(status ->
+                cartRepository.findWithItemsByKeycloakIdForUpdate(normalizedKeycloakId)
+                        .map(cart -> {
+                            if (checkoutSnapshot(cart).equals(expectedSnapshot)) {
+                                cart.getItems().clear();
+                                cartRepository.save(cart);
+                                return true;
+                            }
+                            return false;
+                        })
+                        .orElse(true)));
 
         return new CheckoutResponse(
                 order.id(),
@@ -313,7 +325,8 @@ public class CartService {
                 promotionPricing == null ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP) : normalizeMoney(promotionPricing.shippingAmount()),
                 promotionPricing == null ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP) : normalizeMoney(promotionPricing.shippingDiscountTotal()),
                 promotionPricing == null ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP) : normalizeMoney(promotionPricing.totalDiscount()),
-                promotionPricing == null ? prepared.subtotal() : normalizeMoney(promotionPricing.grandTotal())
+                promotionPricing == null ? prepared.subtotal() : normalizeMoney(promotionPricing.grandTotal()),
+                cartCleared
         );
     }
 

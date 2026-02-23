@@ -15,6 +15,7 @@ public record CheckoutResponse(
         BigDecimal shippingAmount,
         BigDecimal shippingDiscountTotal,
         BigDecimal totalDiscount,
-        BigDecimal grandTotal
+        BigDecimal grandTotal,
+        boolean cartCleared
 ) {
 }

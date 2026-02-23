@@ -13,6 +13,7 @@ import com.rumal.customer_service.entity.Customer;
 import com.rumal.customer_service.entity.CustomerAddress;
 import com.rumal.customer_service.exception.DuplicateResourceException;
 import com.rumal.customer_service.exception.ResourceNotFoundException;
+import com.rumal.customer_service.exception.ValidationException;
 import com.rumal.customer_service.repo.CustomerAddressRepository;
 import com.rumal.customer_service.repo.CustomerRepository;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
 public class CustomerServiceImpl implements CustomerService {
+    private static final int MAX_ADDRESSES_PER_CUSTOMER = 50;
 
     private final CustomerRepository customerRepository;
     private final CustomerAddressRepository customerAddressRepository;
@@ -202,6 +204,10 @@ public class CustomerServiceImpl implements CustomerService {
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public CustomerAddressResponse addAddressByKeycloak(String keycloakId, CustomerAddressRequest request) {
         Customer customer = findCustomerByKeycloakId(keycloakId);
+        long addressCount = customerAddressRepository.countByCustomerIdAndDeletedFalse(customer.getId());
+        if (addressCount >= MAX_ADDRESSES_PER_CUSTOMER) {
+            throw new ValidationException("Cannot add more than " + MAX_ADDRESSES_PER_CUSTOMER + " addresses");
+        }
 
         CustomerAddress address = CustomerAddress.builder()
                 .customer(customer)

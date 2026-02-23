@@ -39,6 +39,8 @@ import com.rumal.order_service.repo.OrderStatusAuditRepository;
 import com.rumal.order_service.repo.VendorOrderRepository;
 import com.rumal.order_service.repo.VendorOrderStatusAuditRepository;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -57,7 +59,9 @@ import java.util.*;
 @RequiredArgsConstructor
 @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
 public class OrderService {
+    private static final Logger log = LoggerFactory.getLogger(OrderService.class);
     private static final int MAX_ITEM_QUANTITY = 1000;
+    private static final int MAX_DISTINCT_ITEMS = 200;
 
     private static final Set<OrderStatus> VENDOR_DELETION_BLOCKING_STATUSES = EnumSet.of(
             OrderStatus.PENDING,
@@ -114,7 +118,15 @@ public class OrderService {
             evictOrdersListCaches();
             return order;
         });
-        maybeCommitCouponReservation(saved, customer.id(), pricingSnapshot);
+        try {
+            maybeCommitCouponReservation(saved, customer.id(), pricingSnapshot);
+        } catch (RuntimeException ex) {
+            log.warn("Coupon reservation commit failed after order {} was persisted. " +
+                    "Order is valid but coupon state may need reconciliation. reservationId={}",
+                    saved.getId(),
+                    pricingSnapshot == null ? null : pricingSnapshot.couponReservationId(),
+                    ex);
+        }
         return toResponse(saved);
     }
 
@@ -184,7 +196,7 @@ public class OrderService {
         if (status == null) {
             throw new ValidationException("status is required");
         }
-        Order order = orderRepository.findById(orderId)
+        Order order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId));
         if (order.getVendorOrders() != null && !order.getVendorOrders().isEmpty()) {
             if (order.getVendorOrders().size() > 1) {
@@ -251,7 +263,8 @@ public class OrderService {
                 "Vendor order status updated"
         );
 
-        Order parent = savedVendorOrder.getOrder();
+        Order parent = orderRepository.findByIdForUpdate(savedVendorOrder.getOrder().getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Parent order not found for vendor order: " + vendorOrderId));
         OrderStatus previousAggregate = parent.getStatus();
         OrderStatus nextAggregate = deriveAggregateOrderStatus(parent);
         if (previousAggregate != nextAggregate) {
@@ -493,6 +506,15 @@ public class OrderService {
     }
 
     private OrderAddressSnapshot toAddressSnapshot(CustomerAddressSummary address) {
+        if (!StringUtils.hasText(address.line1())) {
+            throw new ValidationException("Address line1 is required for order placement");
+        }
+        if (!StringUtils.hasText(address.city())) {
+            throw new ValidationException("Address city is required for order placement");
+        }
+        if (!StringUtils.hasText(address.countryCode())) {
+            throw new ValidationException("Address countryCode is required for order placement");
+        }
         return OrderAddressSnapshot.builder()
                 .label(address.label())
                 .recipientName(address.recipientName())
@@ -569,6 +591,10 @@ public class OrderService {
                 throw new ValidationException("quantity must be at least 1");
             }
             normalized.put(productId, normalizedQuantity);
+        }
+
+        if (normalized.size() > MAX_DISTINCT_ITEMS) {
+            throw new ValidationException("Order cannot contain more than " + MAX_DISTINCT_ITEMS + " distinct items");
         }
 
         return normalized.entrySet().stream()
@@ -756,8 +782,9 @@ public class OrderService {
         }
         try {
             promotionClient.releaseCouponReservation(reservationId, safePromotionReleaseReason(reason));
-        } catch (RuntimeException ignored) {
-            // Best-effort compensation; reservation service retains state for manual inspection if this fails.
+        } catch (RuntimeException ex) {
+            log.warn("Failed to release coupon reservation {} (reason: {}). " +
+                    "Reservation may need manual reconciliation.", reservationId, reason, ex);
         }
     }
 

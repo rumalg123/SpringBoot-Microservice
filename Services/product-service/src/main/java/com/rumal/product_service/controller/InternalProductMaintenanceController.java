@@ -32,4 +32,14 @@ public class InternalProductMaintenanceController {
         internalRequestVerifier.verify(internalAuth);
         productService.evictPublicCachesForVendorVisibilityChange(vendorId);
     }
+
+    @PostMapping("/vendors/{vendorId}/deactivate-all")
+    public java.util.Map<String, Object> deactivateAllByVendor(
+            @RequestHeader(INTERNAL_HEADER) String internalAuth,
+            @PathVariable UUID vendorId
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        int count = productService.deactivateAllByVendor(vendorId);
+        return java.util.Map.of("vendorId", vendorId, "deactivatedCount", count);
+    }
 }

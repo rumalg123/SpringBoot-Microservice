@@ -23,6 +23,8 @@ import com.rumal.vendor_service.repo.VendorLifecycleAuditRepository;
 import com.rumal.vendor_service.repo.VendorRepository;
 import com.rumal.vendor_service.repo.VendorUserRepository;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -47,6 +49,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
 public class VendorServiceImpl implements VendorService {
+    private static final Logger log = LoggerFactory.getLogger(VendorServiceImpl.class);
 
     private final VendorRepository vendorRepository;
     private final VendorLifecycleAuditRepository vendorLifecycleAuditRepository;
@@ -188,6 +191,16 @@ public class VendorServiceImpl implements VendorService {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @CacheEvict(cacheNames = "vendorOperationalState", key = "#id")
     public void confirmDelete(UUID id, String reason, String actorSub, String actorRoles) {
+        // Stop accepting orders first to prevent new orders during deletion check
+        transactionTemplate.executeWithoutResult(status -> {
+            Vendor v = vendorRepository.findById(id)
+                    .orElseThrow(() -> new ResourceNotFoundException("Vendor not found: " + id));
+            if (!v.isDeleted() && v.isAcceptingOrders()) {
+                v.setAcceptingOrders(false);
+                vendorRepository.save(v);
+            }
+        });
+
         // Check eligibility OUTSIDE transaction (involves HTTP call to order-service)
         VendorDeletionEligibilityResponse eligibility = getDeletionEligibility(id);
         if (!eligibility.eligible()) {
@@ -217,6 +230,14 @@ public class VendorServiceImpl implements VendorService {
             vendorRepository.save(vendor);
             recordLifecycleAudit(vendor, VendorLifecycleAction.DELETE_CONFIRMED, reason, actorSub, actorRoles);
         });
+
+        // Deactivate all vendor products in product-service (best-effort)
+        try {
+            productCatalogAdminClient.deactivateAllByVendor(id, requireInternalAuth());
+        } catch (RuntimeException ex) {
+            log.warn("Failed to deactivate products for deleted vendor {}. " +
+                    "Products may remain active until manual cleanup.", id, ex);
+        }
 
         syncProductCatalogVisibility(id);
     }
@@ -598,7 +619,14 @@ public class VendorServiceImpl implements VendorService {
         if (vendorId == null) {
             return;
         }
-        Runnable syncTask = () -> productCatalogAdminClient.evictPublicCachesForVendor(vendorId, requireInternalAuth());
+        Runnable syncTask = () -> {
+            try {
+                productCatalogAdminClient.evictPublicCachesForVendor(vendorId, requireInternalAuth());
+            } catch (RuntimeException ex) {
+                log.warn("Failed to sync product catalog visibility for vendor {}. " +
+                        "Stale cache entries may persist until TTL expiry.", vendorId, ex);
+            }
+        };
         if (TransactionSynchronizationManager.isSynchronizationActive()
                 && TransactionSynchronizationManager.isActualTransactionActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {

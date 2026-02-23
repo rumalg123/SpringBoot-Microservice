@@ -310,6 +310,16 @@ public class ProductServiceImpl implements ProductService {
         productCacheVersionService.bumpAllProductReadCaches();
     }
 
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 30)
+    public int deactivateAllByVendor(UUID vendorId) {
+        int count = productRepository.deactivateAllByVendorId(vendorId);
+        if (count > 0) {
+            productCacheVersionService.bumpAllProductReadCaches();
+        }
+        return count;
+    }
+
     private Product getActiveEntityById(UUID id) {
         return productRepository.findById(id)
                 .filter(product -> !product.isDeleted())

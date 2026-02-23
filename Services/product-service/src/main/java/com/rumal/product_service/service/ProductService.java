@@ -26,4 +26,5 @@ public interface ProductService {
     void softDelete(UUID id);
     ProductResponse restore(UUID id);
     void evictPublicCachesForVendorVisibilityChange(UUID vendorId);
+    int deactivateAllByVendor(UUID vendorId);
 }

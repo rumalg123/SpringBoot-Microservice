@@ -37,8 +37,30 @@ public class ProductCatalogAdminClient {
         }
     }
 
+    @Retry(name = "productService")
+    @CircuitBreaker(name = "productService", fallbackMethod = "fallbackDeactivateAllByVendor")
+    public void deactivateAllByVendor(UUID vendorId, String internalAuth) {
+        RestClient rc = lbRestClientBuilder.build();
+        try {
+            rc.post()
+                    .uri("http://product-service/internal/products/vendors/{vendorId}/deactivate-all", vendorId)
+                    .header("X-Internal-Auth", internalAuth)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (RestClientResponseException ex) {
+            throw new ServiceUnavailableException("Product deactivation failed (" + ex.getStatusCode().value() + ")", ex);
+        } catch (RestClientException | IllegalStateException ex) {
+            throw new ServiceUnavailableException("Product service unavailable for product deactivation", ex);
+        }
+    }
+
     @SuppressWarnings("unused")
     public void fallbackEvictPublicCachesForVendor(UUID vendorId, String internalAuth, Throwable ex) {
         throw new ServiceUnavailableException("Product service unavailable for cache eviction. Try again later.", ex);
+    }
+
+    @SuppressWarnings("unused")
+    public void fallbackDeactivateAllByVendor(UUID vendorId, String internalAuth, Throwable ex) {
+        throw new ServiceUnavailableException("Product service unavailable for product deactivation. Try again later.", ex);
     }
 }
