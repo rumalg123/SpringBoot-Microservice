@@ -23,5 +23,9 @@ public interface CouponCodeRepository extends JpaRepository<CouponCode, UUID> {
     @Query("select c from CouponCode c join fetch c.promotion p where p.id = :promotionId order by c.createdAt desc")
     List<CouponCode> findByPromotionIdOrderByCreatedAtDesc(@Param("promotionId") UUID promotionId);
 
+    long countByPromotion_Id(UUID promotionId);
+
+    long countByPromotion_IdAndActiveTrue(UUID promotionId);
+
     boolean existsByCodeIgnoreCase(String code);
 }

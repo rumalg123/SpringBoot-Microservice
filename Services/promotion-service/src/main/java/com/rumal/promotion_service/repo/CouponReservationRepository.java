@@ -1,6 +1,7 @@
 package com.rumal.promotion_service.repo;
 
 import com.rumal.promotion_service.entity.CouponReservation;
+import com.rumal.promotion_service.entity.CouponReservationStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -19,6 +20,10 @@ public interface CouponReservationRepository extends JpaRepository<CouponReserva
     Optional<CouponReservation> findByIdForUpdate(@Param("id") UUID id);
 
     Optional<CouponReservation> findByRequestKey(String requestKey);
+
+    long countByPromotionId(UUID promotionId);
+
+    long countByPromotionIdAndStatus(UUID promotionId, CouponReservationStatus status);
 
     @Query("""
             select count(r) from CouponReservation r
@@ -43,6 +48,25 @@ public interface CouponReservationRepository extends JpaRepository<CouponReserva
             @Param("couponCodeId") UUID couponCodeId,
             @Param("customerId") UUID customerId,
             @Param("now") Instant now
+    );
+
+    @Query("""
+            select count(r) from CouponReservation r
+            where r.promotionId = :promotionId
+              and r.status = com.rumal.promotion_service.entity.CouponReservationStatus.RESERVED
+              and r.expiresAt > :now
+            """)
+    long countActiveReservedByPromotionId(@Param("promotionId") UUID promotionId, @Param("now") Instant now);
+
+    @Query("""
+            select coalesce(sum(r.reservedDiscountAmount), 0)
+            from CouponReservation r
+            where r.promotionId = :promotionId
+              and r.status = :status
+            """)
+    BigDecimal sumReservedDiscountByPromotionIdAndStatus(
+            @Param("promotionId") UUID promotionId,
+            @Param("status") CouponReservationStatus status
     );
 
     @Query("""

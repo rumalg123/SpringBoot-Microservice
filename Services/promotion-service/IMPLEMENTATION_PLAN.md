@@ -76,4 +76,4 @@ Rules for execution:
 - [x] Tiered spend discounts.
 - [x] Bundle discounts.
 - [x] Promotion budgets and burn limits.
-- [ ] Analytics/reporting endpoints.
+- [x] Analytics/reporting endpoints.
