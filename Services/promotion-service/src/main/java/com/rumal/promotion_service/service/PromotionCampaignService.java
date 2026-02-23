@@ -1,0 +1,339 @@
+package com.rumal.promotion_service.service;
+
+import com.rumal.promotion_service.dto.PromotionApprovalDecisionRequest;
+import com.rumal.promotion_service.dto.PromotionResponse;
+import com.rumal.promotion_service.dto.UpsertPromotionRequest;
+import com.rumal.promotion_service.entity.PromotionApprovalStatus;
+import com.rumal.promotion_service.entity.PromotionBenefitType;
+import com.rumal.promotion_service.entity.PromotionCampaign;
+import com.rumal.promotion_service.entity.PromotionFundingSource;
+import com.rumal.promotion_service.entity.PromotionLifecycleStatus;
+import com.rumal.promotion_service.entity.PromotionScopeType;
+import com.rumal.promotion_service.exception.ResourceNotFoundException;
+import com.rumal.promotion_service.exception.ValidationException;
+import com.rumal.promotion_service.repo.PromotionCampaignRepository;
+import jakarta.persistence.criteria.Predicate;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+public class PromotionCampaignService {
+
+    private final PromotionCampaignRepository promotionCampaignRepository;
+
+    @Transactional(readOnly = true)
+    public Page<PromotionResponse> list(
+            Pageable pageable,
+            String q,
+            UUID vendorId,
+            PromotionLifecycleStatus lifecycleStatus,
+            PromotionApprovalStatus approvalStatus,
+            PromotionScopeType scopeType,
+            PromotionBenefitType benefitType
+    ) {
+        Specification<PromotionCampaign> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (StringUtils.hasText(q)) {
+                String pattern = "%" + q.trim().toLowerCase() + "%";
+                predicates.add(cb.or(
+                        cb.like(cb.lower(root.get("name")), pattern),
+                        cb.like(cb.lower(root.get("description")), pattern)
+                ));
+            }
+            if (vendorId != null) {
+                predicates.add(cb.equal(root.get("vendorId"), vendorId));
+            }
+            if (lifecycleStatus != null) {
+                predicates.add(cb.equal(root.get("lifecycleStatus"), lifecycleStatus));
+            }
+            if (approvalStatus != null) {
+                predicates.add(cb.equal(root.get("approvalStatus"), approvalStatus));
+            }
+            if (scopeType != null) {
+                predicates.add(cb.equal(root.get("scopeType"), scopeType));
+            }
+            if (benefitType != null) {
+                predicates.add(cb.equal(root.get("benefitType"), benefitType));
+            }
+            return cb.and(predicates.toArray(Predicate[]::new));
+        };
+        return promotionCampaignRepository.findAll(spec, pageable).map(this::toResponse);
+    }
+
+    @Transactional(readOnly = true)
+    public PromotionResponse get(UUID id) {
+        return toResponse(getEntity(id));
+    }
+
+    @Transactional
+    public PromotionResponse create(
+            UpsertPromotionRequest request,
+            String actorUserSub,
+            AdminPromotionAccessScopeService.AdminActorScope actorScope
+    ) {
+        validateRequest(request, actorScope, null);
+        PromotionCampaign campaign = new PromotionCampaign();
+        applyRequest(campaign, request);
+        campaign.setLifecycleStatus(PromotionLifecycleStatus.DRAFT);
+        if (actorScope.isPlatformPrivileged()) {
+            campaign.setApprovalStatus(PromotionApprovalStatus.NOT_REQUIRED);
+            campaign.setApprovedAt(Instant.now());
+            campaign.setApprovedByUserSub(actorUserSub);
+            campaign.setApprovalNote("Platform-created promotion");
+        } else {
+            campaign.setApprovalStatus(PromotionApprovalStatus.PENDING);
+            campaign.setSubmittedAt(Instant.now());
+            campaign.setSubmittedByUserSub(actorUserSub);
+            campaign.setApprovalNote("Awaiting platform approval");
+        }
+        campaign.setCreatedByUserSub(trimToNull(actorUserSub));
+        campaign.setUpdatedByUserSub(trimToNull(actorUserSub));
+        return toResponse(promotionCampaignRepository.save(campaign));
+    }
+
+    @Transactional
+    public PromotionResponse update(
+            UUID id,
+            UpsertPromotionRequest request,
+            String actorUserSub,
+            AdminPromotionAccessScopeService.AdminActorScope actorScope
+    ) {
+        PromotionCampaign campaign = getEntity(id);
+        validateRequest(request, actorScope, campaign);
+        applyRequest(campaign, request);
+        campaign.setUpdatedByUserSub(trimToNull(actorUserSub));
+        if (!actorScope.isPlatformPrivileged()) {
+            campaign.setApprovalStatus(PromotionApprovalStatus.PENDING);
+            campaign.setSubmittedAt(Instant.now());
+            campaign.setSubmittedByUserSub(trimToNull(actorUserSub));
+            campaign.setApprovalNote("Updated by vendor; pending platform re-approval");
+            if (campaign.getLifecycleStatus() == PromotionLifecycleStatus.ACTIVE) {
+                campaign.setLifecycleStatus(PromotionLifecycleStatus.PAUSED);
+            }
+        }
+        return toResponse(promotionCampaignRepository.save(campaign));
+    }
+
+    @Transactional
+    public PromotionResponse submitForApproval(UUID id, String actorUserSub) {
+        PromotionCampaign campaign = getEntity(id);
+        if (campaign.getVendorId() == null) {
+            throw new ValidationException("Platform-wide promotion does not require vendor submission");
+        }
+        if (campaign.getApprovalStatus() == PromotionApprovalStatus.APPROVED) {
+            throw new ValidationException("Promotion is already approved");
+        }
+        campaign.setApprovalStatus(PromotionApprovalStatus.PENDING);
+        campaign.setSubmittedAt(Instant.now());
+        campaign.setSubmittedByUserSub(trimToNull(actorUserSub));
+        campaign.setApprovalNote("Submitted for platform approval");
+        campaign.setUpdatedByUserSub(trimToNull(actorUserSub));
+        return toResponse(promotionCampaignRepository.save(campaign));
+    }
+
+    @Transactional
+    public PromotionResponse approve(UUID id, String actorUserSub, PromotionApprovalDecisionRequest request) {
+        PromotionCampaign campaign = getEntity(id);
+        if (campaign.getApprovalStatus() == PromotionApprovalStatus.NOT_REQUIRED) {
+            throw new ValidationException("Platform-created promotion does not require approval");
+        }
+        if (campaign.getApprovalStatus() == PromotionApprovalStatus.APPROVED) {
+            throw new ValidationException("Promotion is already approved");
+        }
+        campaign.setApprovalStatus(PromotionApprovalStatus.APPROVED);
+        campaign.setApprovedAt(Instant.now());
+        campaign.setApprovedByUserSub(trimToNull(actorUserSub));
+        campaign.setRejectedAt(null);
+        campaign.setRejectedByUserSub(null);
+        campaign.setApprovalNote(trimToNull(request == null ? null : request.note()));
+        campaign.setUpdatedByUserSub(trimToNull(actorUserSub));
+        return toResponse(promotionCampaignRepository.save(campaign));
+    }
+
+    @Transactional
+    public PromotionResponse reject(UUID id, String actorUserSub, PromotionApprovalDecisionRequest request) {
+        PromotionCampaign campaign = getEntity(id);
+        if (campaign.getApprovalStatus() == PromotionApprovalStatus.NOT_REQUIRED) {
+            throw new ValidationException("Platform-created promotion does not require approval");
+        }
+        campaign.setApprovalStatus(PromotionApprovalStatus.REJECTED);
+        campaign.setRejectedAt(Instant.now());
+        campaign.setRejectedByUserSub(trimToNull(actorUserSub));
+        campaign.setApprovalNote(trimToNull(request == null ? null : request.note()));
+        campaign.setUpdatedByUserSub(trimToNull(actorUserSub));
+        if (campaign.getLifecycleStatus() == PromotionLifecycleStatus.ACTIVE) {
+            campaign.setLifecycleStatus(PromotionLifecycleStatus.PAUSED);
+        }
+        return toResponse(promotionCampaignRepository.save(campaign));
+    }
+
+    @Transactional
+    public PromotionResponse activate(UUID id, String actorUserSub) {
+        PromotionCampaign campaign = getEntity(id);
+        if (campaign.getLifecycleStatus() == PromotionLifecycleStatus.ARCHIVED) {
+            throw new ValidationException("Archived promotion cannot be activated");
+        }
+        if (requiresApproval(campaign) && campaign.getApprovalStatus() != PromotionApprovalStatus.APPROVED) {
+            throw new ValidationException("Promotion must be approved before activation");
+        }
+        if (campaign.getEndsAt() != null && campaign.getEndsAt().isBefore(Instant.now())) {
+            throw new ValidationException("Promotion end time is already in the past");
+        }
+        campaign.setLifecycleStatus(PromotionLifecycleStatus.ACTIVE);
+        campaign.setUpdatedByUserSub(trimToNull(actorUserSub));
+        return toResponse(promotionCampaignRepository.save(campaign));
+    }
+
+    @Transactional
+    public PromotionResponse pause(UUID id, String actorUserSub) {
+        PromotionCampaign campaign = getEntity(id);
+        if (campaign.getLifecycleStatus() == PromotionLifecycleStatus.ARCHIVED) {
+            throw new ValidationException("Archived promotion cannot be paused");
+        }
+        campaign.setLifecycleStatus(PromotionLifecycleStatus.PAUSED);
+        campaign.setUpdatedByUserSub(trimToNull(actorUserSub));
+        return toResponse(promotionCampaignRepository.save(campaign));
+    }
+
+    @Transactional
+    public PromotionResponse archive(UUID id, String actorUserSub) {
+        PromotionCampaign campaign = getEntity(id);
+        campaign.setLifecycleStatus(PromotionLifecycleStatus.ARCHIVED);
+        campaign.setUpdatedByUserSub(trimToNull(actorUserSub));
+        return toResponse(promotionCampaignRepository.save(campaign));
+    }
+
+    private PromotionCampaign getEntity(UUID id) {
+        return promotionCampaignRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Promotion not found: " + id));
+    }
+
+    private void validateRequest(
+            UpsertPromotionRequest request,
+            AdminPromotionAccessScopeService.AdminActorScope actorScope,
+            PromotionCampaign existing
+    ) {
+        Objects.requireNonNull(request, "request is required");
+
+        if (request.benefitType() == PromotionBenefitType.FREE_SHIPPING) {
+            if (request.applicationLevel() != com.rumal.promotion_service.entity.PromotionApplicationLevel.SHIPPING) {
+                throw new ValidationException("FREE_SHIPPING promotions must use applicationLevel=SHIPPING");
+            }
+        } else {
+            if (request.benefitValue() == null || request.benefitValue().compareTo(BigDecimal.ZERO) <= 0) {
+                throw new ValidationException("benefitValue must be greater than 0 for non-shipping benefits");
+            }
+        }
+
+        if (request.benefitType() == PromotionBenefitType.PERCENTAGE_OFF
+                && request.benefitValue() != null
+                && request.benefitValue().compareTo(BigDecimal.valueOf(100)) > 0) {
+            throw new ValidationException("Percentage discount cannot exceed 100");
+        }
+
+        if (request.scopeType() == PromotionScopeType.PRODUCT && request.targetProductIdsOrEmpty().isEmpty()) {
+            throw new ValidationException("targetProductIds is required for PRODUCT scope");
+        }
+        if (request.scopeType() == PromotionScopeType.CATEGORY && request.targetCategoryIdsOrEmpty().isEmpty()) {
+            throw new ValidationException("targetCategoryIds is required for CATEGORY scope");
+        }
+        if ((request.scopeType() == PromotionScopeType.VENDOR || !actorScope.isPlatformPrivileged())
+                && request.vendorId() == null
+                && (existing == null || existing.getVendorId() == null)) {
+            throw new ValidationException("vendorId is required for vendor-scoped promotions");
+        }
+        if (!actorScope.isPlatformPrivileged() && request.fundingSource() != PromotionFundingSource.VENDOR) {
+            throw new ValidationException("Vendor-scoped users can only create vendor-funded promotions");
+        }
+    }
+
+    private boolean requiresApproval(PromotionCampaign campaign) {
+        return campaign.getApprovalStatus() != null && campaign.getApprovalStatus() != PromotionApprovalStatus.NOT_REQUIRED;
+    }
+
+    private void applyRequest(PromotionCampaign campaign, UpsertPromotionRequest request) {
+        campaign.setName(request.name().trim());
+        campaign.setDescription(request.description().trim());
+        campaign.setVendorId(request.vendorId());
+        campaign.setScopeType(request.scopeType());
+        campaign.setApplicationLevel(request.applicationLevel());
+        campaign.setBenefitType(request.benefitType());
+        campaign.setBenefitValue(normalizeNullableMoney(request.benefitValue()));
+        campaign.setMinimumOrderAmount(normalizeNullableMoney(request.minimumOrderAmount()));
+        campaign.setMaximumDiscountAmount(normalizeNullableMoney(request.maximumDiscountAmount()));
+        campaign.setFundingSource(request.fundingSource());
+        campaign.setStackable(request.stackable());
+        campaign.setExclusive(request.exclusive());
+        campaign.setAutoApply(request.autoApply());
+        campaign.setStartsAt(request.startsAt());
+        campaign.setEndsAt(request.endsAt());
+        campaign.setTargetProductIds(new LinkedHashSet<>(request.targetProductIdsOrEmpty()));
+        campaign.setTargetCategoryIds(new LinkedHashSet<>(request.targetCategoryIdsOrEmpty()));
+    }
+
+    private BigDecimal normalizeNullableMoney(BigDecimal value) {
+        if (value == null) {
+            return null;
+        }
+        return value.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private String trimToNull(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        return value.trim();
+    }
+
+    private PromotionResponse toResponse(PromotionCampaign entity) {
+        return new PromotionResponse(
+                entity.getId(),
+                entity.getName(),
+                entity.getDescription(),
+                entity.getVendorId(),
+                entity.getScopeType(),
+                entity.getTargetProductIds() == null ? Set.of() : Set.copyOf(entity.getTargetProductIds()),
+                entity.getTargetCategoryIds() == null ? Set.of() : Set.copyOf(entity.getTargetCategoryIds()),
+                entity.getApplicationLevel(),
+                entity.getBenefitType(),
+                entity.getBenefitValue(),
+                entity.getMinimumOrderAmount(),
+                entity.getMaximumDiscountAmount(),
+                entity.getFundingSource(),
+                entity.isStackable(),
+                entity.isExclusive(),
+                entity.isAutoApply(),
+                entity.getLifecycleStatus(),
+                entity.getApprovalStatus(),
+                entity.getApprovalNote(),
+                entity.getStartsAt(),
+                entity.getEndsAt(),
+                entity.getCreatedByUserSub(),
+                entity.getUpdatedByUserSub(),
+                entity.getSubmittedByUserSub(),
+                entity.getApprovedByUserSub(),
+                entity.getRejectedByUserSub(),
+                entity.getSubmittedAt(),
+                entity.getApprovedAt(),
+                entity.getRejectedAt(),
+                entity.getCreatedAt(),
+                entity.getUpdatedAt()
+        );
+    }
+}
