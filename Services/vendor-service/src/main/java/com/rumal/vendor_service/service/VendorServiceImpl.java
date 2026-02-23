@@ -24,6 +24,8 @@ import com.rumal.vendor_service.repo.VendorRepository;
 import com.rumal.vendor_service.repo.VendorUserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -66,6 +68,7 @@ public class VendorServiceImpl implements VendorService {
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    @CacheEvict(cacheNames = "vendorOperationalState", key = "#id")
     public VendorResponse update(UUID id, UpsertVendorRequest request) {
         Vendor vendor = getNonDeletedVendor(id);
         applyVendorRequest(vendor, request);
@@ -166,6 +169,9 @@ public class VendorServiceImpl implements VendorService {
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public VendorResponse requestDelete(UUID id, String reason, String actorSub, String actorRoles) {
         Vendor vendor = getNonDeletedVendor(id);
+        if (vendor.getDeletionRequestedAt() != null) {
+            return toVendorResponse(vendor);
+        }
         vendor.setDeletionRequestedAt(Instant.now());
         vendor.setDeletionRequestReason(trimToNull(reason));
         Vendor saved = vendorRepository.save(vendor);
@@ -175,8 +181,13 @@ public class VendorServiceImpl implements VendorService {
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    @CacheEvict(cacheNames = "vendorOperationalState", key = "#id")
     public void confirmDelete(UUID id, String reason, String actorSub, String actorRoles) {
-        Vendor vendor = getNonDeletedVendor(id);
+        Vendor vendor = vendorRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Vendor not found: " + id));
+        if (vendor.isDeleted()) {
+            return;
+        }
         if (vendor.getDeletionRequestedAt() == null) {
             throw new ValidationException("Delete request must be created before confirm delete");
         }
@@ -207,6 +218,7 @@ public class VendorServiceImpl implements VendorService {
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    @CacheEvict(cacheNames = "vendorOperationalState", key = "#id")
     public VendorResponse stopReceivingOrders(UUID id, String reason, String actorSub, String actorRoles) {
         Vendor vendor = getNonDeletedVendor(id);
         if (!vendor.isAcceptingOrders()) {
@@ -227,6 +239,7 @@ public class VendorServiceImpl implements VendorService {
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    @CacheEvict(cacheNames = "vendorOperationalState", key = "#id")
     public VendorResponse resumeReceivingOrders(UUID id, String reason, String actorSub, String actorRoles) {
         Vendor vendor = getNonDeletedVendor(id);
         if (!vendor.isActive()) {
@@ -253,11 +266,12 @@ public class VendorServiceImpl implements VendorService {
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    @CacheEvict(cacheNames = "vendorOperationalState", key = "#id")
     public VendorResponse restore(UUID id, String reason, String actorSub, String actorRoles) {
         Vendor vendor = vendorRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Vendor not found: " + id));
         if (!vendor.isDeleted()) {
-            throw new ValidationException("Vendor is not soft deleted: " + id);
+            return toVendorResponse(vendor);
         }
         vendor.setDeleted(false);
         vendor.setDeletedAt(null);
@@ -344,6 +358,7 @@ public class VendorServiceImpl implements VendorService {
     }
 
     @Override
+    @Cacheable(cacheNames = "vendorOperationalState", key = "#vendorId")
     public VendorOperationalStateResponse getOperationalState(UUID vendorId) {
         Vendor vendor = vendorRepository.findById(vendorId)
                 .orElseThrow(() -> new ResourceNotFoundException("Vendor not found: " + vendorId));

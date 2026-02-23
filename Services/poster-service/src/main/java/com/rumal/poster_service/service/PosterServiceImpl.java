@@ -9,9 +9,9 @@ import com.rumal.poster_service.exception.ResourceNotFoundException;
 import com.rumal.poster_service.exception.ValidationException;
 import com.rumal.poster_service.repo.PosterRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
-import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,29 +28,28 @@ import java.util.UUID;
 public class PosterServiceImpl implements PosterService {
 
     private final PosterRepository posterRepository;
+    private final CacheManager cacheManager;
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
-    @Caching(evict = {
-            @CacheEvict(cacheNames = "postersByPlacement", allEntries = true),
-            @CacheEvict(cacheNames = "posterById", allEntries = true)
-    })
     public PosterResponse create(UpsertPosterRequest request) {
         Poster poster = new Poster();
         applyRequest(poster, request);
-        return toResponse(posterRepository.save(poster));
+        Poster saved = posterRepository.save(poster);
+        evictPosterCaches(saved, null, null);
+        return toResponse(saved);
     }
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
-    @Caching(evict = {
-            @CacheEvict(cacheNames = "postersByPlacement", allEntries = true),
-            @CacheEvict(cacheNames = "posterById", allEntries = true)
-    })
     public PosterResponse update(UUID id, UpsertPosterRequest request) {
         Poster poster = getActiveEntity(id);
+        PosterPlacement previousPlacement = poster.getPlacement();
+        String previousSlug = poster.getSlug();
         applyRequest(poster, request);
-        return toResponse(posterRepository.save(poster));
+        Poster saved = posterRepository.save(poster);
+        evictPosterCaches(saved, previousPlacement, previousSlug);
+        return toResponse(saved);
     }
 
     @Override
@@ -115,24 +114,17 @@ public class PosterServiceImpl implements PosterService {
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
-    @Caching(evict = {
-            @CacheEvict(cacheNames = "postersByPlacement", allEntries = true),
-            @CacheEvict(cacheNames = "posterById", allEntries = true)
-    })
     public void softDelete(UUID id) {
         Poster poster = getActiveEntity(id);
         poster.setDeleted(true);
         poster.setDeletedAt(Instant.now());
         poster.setActive(false);
-        posterRepository.save(poster);
+        Poster saved = posterRepository.save(poster);
+        evictPosterCaches(saved, saved.getPlacement(), saved.getSlug());
     }
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
-    @Caching(evict = {
-            @CacheEvict(cacheNames = "postersByPlacement", allEntries = true),
-            @CacheEvict(cacheNames = "posterById", allEntries = true)
-    })
     public PosterResponse restore(UUID id) {
         Poster poster = posterRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Poster not found: " + id));
@@ -141,7 +133,9 @@ public class PosterServiceImpl implements PosterService {
         }
         poster.setDeleted(false);
         poster.setDeletedAt(null);
-        return toResponse(posterRepository.save(poster));
+        Poster saved = posterRepository.save(poster);
+        evictPosterCaches(saved, saved.getPlacement(), saved.getSlug());
+        return toResponse(saved);
     }
 
     @Override
@@ -295,5 +289,41 @@ public class PosterServiceImpl implements PosterService {
                 p.getCreatedAt(),
                 p.getUpdatedAt()
         );
+    }
+
+    private void evictPosterCaches(Poster poster, PosterPlacement previousPlacement, String previousSlug) {
+        if (poster == null) {
+            return;
+        }
+        evictPostersByPlacementCache(previousPlacement);
+        evictPostersByPlacementCache(poster.getPlacement());
+        evictPosterByIdCacheKey("any::" + poster.getId());
+        if (StringUtils.hasText(previousSlug)) {
+            evictPosterByIdCacheKey("any::" + previousSlug);
+        }
+        if (StringUtils.hasText(poster.getSlug())) {
+            evictPosterByIdCacheKey("any::" + poster.getSlug());
+        }
+    }
+
+    private void evictPostersByPlacementCache(PosterPlacement placement) {
+        Cache cache = cacheManager.getCache("postersByPlacement");
+        if (cache == null) {
+            return;
+        }
+        cache.evict("all-active");
+        if (placement != null) {
+            cache.evict("placement::" + placement);
+        }
+    }
+
+    private void evictPosterByIdCacheKey(String key) {
+        if (!StringUtils.hasText(key)) {
+            return;
+        }
+        Cache cache = cacheManager.getCache("posterById");
+        if (cache != null) {
+            cache.evict(key);
+        }
     }
 }

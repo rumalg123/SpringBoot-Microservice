@@ -20,9 +20,7 @@ import com.rumal.product_service.repo.CategoryRepository;
 import com.rumal.product_service.repo.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
-import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -58,17 +56,13 @@ public class ProductServiceImpl implements ProductService {
     private final ProductCatalogReadRepository productCatalogReadRepository;
     private final ProductCatalogReadModelProjector productCatalogReadModelProjector;
     private final VendorOperationalStateClient vendorOperationalStateClient;
+    private final ProductCacheVersionService productCacheVersionService;
 
     @Value("${internal.auth.shared-secret:}")
     private String internalAuthSharedSecret;
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
-    @Caching(evict = {
-            @CacheEvict(cacheNames = "productsList", allEntries = true),
-            @CacheEvict(cacheNames = "deletedProductsList", allEntries = true),
-            @CacheEvict(cacheNames = "productById", allEntries = true)
-    })
     public ProductResponse create(UpsertProductRequest request) {
         if (request.productType() == ProductType.VARIATION) {
             throw new ValidationException("Use /admin/products/{parentId}/variations to create variation products");
@@ -77,16 +71,12 @@ public class ProductServiceImpl implements ProductService {
         applyUpsertRequest(product, request, null, null);
         Product saved = productRepository.save(product);
         productCatalogReadModelProjector.upsert(saved);
+        productCacheVersionService.bumpAllProductReadCaches();
         return toResponse(saved);
     }
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
-    @Caching(evict = {
-            @CacheEvict(cacheNames = "productsList", allEntries = true),
-            @CacheEvict(cacheNames = "deletedProductsList", allEntries = true),
-            @CacheEvict(cacheNames = "productById", allEntries = true)
-    })
     public ProductResponse createVariation(UUID parentId, UpsertProductRequest request) {
         Product parent = getActiveEntityById(parentId);
         if (parent.getProductType() != ProductType.PARENT) {
@@ -102,18 +92,19 @@ public class ProductServiceImpl implements ProductService {
         Product saved = productRepository.save(variation);
         productCatalogReadModelProjector.upsert(saved);
         productCatalogReadModelProjector.refreshParentVariationFlag(parent.getId());
+        productCacheVersionService.bumpAllProductReadCaches();
         return toResponse(saved);
     }
 
     @Override
-    @Cacheable(cacheNames = "productById", key = "#id")
+    @Cacheable(cacheNames = "productById", key = "@productCacheVersionService.productByIdVersion() + '::id::' + #id")
     public ProductResponse getById(UUID id) {
         Product product = getActiveEntityById(id);
         return toPublicResponse(product);
     }
 
     @Override
-    @Cacheable(cacheNames = "productById", key = "'slug::' + #slug")
+    @Cacheable(cacheNames = "productById", key = "@productCacheVersionService.productByIdVersion() + '::slug::' + #slug")
     public ProductResponse getBySlug(String slug) {
         Product product = getActiveEntityBySlug(slug);
         return toPublicResponse(product);
@@ -145,14 +136,14 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    @Cacheable(cacheNames = "productsList", key = "'variations::' + #parentId")
+    @Cacheable(cacheNames = "productsList", key = "@productCacheVersionService.productsListVersion() + '::variations::' + #parentId")
     public List<ProductSummaryResponse> listVariations(UUID parentId) {
         Product parent = getActiveEntityById(parentId);
         return listVariationsForParent(parent);
     }
 
     @Override
-    @Cacheable(cacheNames = "productsList", key = "'variationsByAny::' + #parentIdOrSlug")
+    @Cacheable(cacheNames = "productsList", key = "@productCacheVersionService.productsListVersion() + '::variationsByAny::' + #parentIdOrSlug")
     public List<ProductSummaryResponse> listVariationsByIdOrSlug(String parentIdOrSlug) {
         Product parent = resolveProductByIdOrSlug(parentIdOrSlug);
         return listVariationsForParent(parent);
@@ -180,7 +171,7 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Cacheable(
             cacheNames = "productsList",
-            key = "T(com.rumal.product_service.service.ProductServiceImpl).listCacheKey(" +
+            key = "@productCacheVersionService.productsListVersion() + '::' + T(com.rumal.product_service.service.ProductServiceImpl).listCacheKey(" +
                     "#pageable,#q,#sku,#category,#mainCategory,#subCategory,#vendorId,#type,#minSellingPrice,#maxSellingPrice,#includeOrphanParents)"
     )
     public Page<ProductSummaryResponse> list(
@@ -217,7 +208,7 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Cacheable(
             cacheNames = "deletedProductsList",
-            key = "T(com.rumal.product_service.service.ProductServiceImpl).deletedListCacheKey(" +
+            key = "@productCacheVersionService.deletedProductsListVersion() + '::' + T(com.rumal.product_service.service.ProductServiceImpl).deletedListCacheKey(" +
                     "#pageable,#q,#sku,#category,#mainCategory,#subCategory,#vendorId,#type,#minSellingPrice,#maxSellingPrice)"
     )
     public Page<ProductSummaryResponse> listDeleted(
@@ -250,11 +241,6 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
-    @Caching(evict = {
-            @CacheEvict(cacheNames = "productsList", allEntries = true),
-            @CacheEvict(cacheNames = "deletedProductsList", allEntries = true),
-            @CacheEvict(cacheNames = "productById", allEntries = true)
-    })
     public ProductResponse update(UUID id, UpsertProductRequest request) {
         Product product = getActiveEntityById(id);
         UUID parentId = product.getParentProductId();
@@ -277,16 +263,12 @@ public class ProductServiceImpl implements ProductService {
         if (parentId != null) {
             productCatalogReadModelProjector.refreshParentVariationFlag(parentId);
         }
+        productCacheVersionService.bumpAllProductReadCaches();
         return toResponse(saved);
     }
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
-    @Caching(evict = {
-            @CacheEvict(cacheNames = "productsList", allEntries = true),
-            @CacheEvict(cacheNames = "deletedProductsList", allEntries = true),
-            @CacheEvict(cacheNames = "productById", allEntries = true)
-    })
     public void softDelete(UUID id) {
         Product product = getActiveEntityById(id);
         product.setDeleted(true);
@@ -297,15 +279,11 @@ public class ProductServiceImpl implements ProductService {
         if (saved.getParentProductId() != null) {
             productCatalogReadModelProjector.refreshParentVariationFlag(saved.getParentProductId());
         }
+        productCacheVersionService.bumpAllProductReadCaches();
     }
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
-    @Caching(evict = {
-            @CacheEvict(cacheNames = "productsList", allEntries = true),
-            @CacheEvict(cacheNames = "deletedProductsList", allEntries = true),
-            @CacheEvict(cacheNames = "productById", allEntries = true)
-    })
     public ProductResponse restore(UUID id) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + id));
@@ -320,19 +298,16 @@ public class ProductServiceImpl implements ProductService {
         if (saved.getParentProductId() != null) {
             productCatalogReadModelProjector.refreshParentVariationFlag(saved.getParentProductId());
         }
+        productCacheVersionService.bumpAllProductReadCaches();
         return toResponse(saved);
     }
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 10)
-    @Caching(evict = {
-            @CacheEvict(cacheNames = "productsList", allEntries = true),
-            @CacheEvict(cacheNames = "deletedProductsList", allEntries = true),
-            @CacheEvict(cacheNames = "productById", allEntries = true)
-    })
     public void evictPublicCachesForVendorVisibilityChange(UUID vendorId) {
         // Vendor visibility state is checked at read time, but list/detail caches must be evicted
         // when vendor state changes so storefront hides/shows products immediately.
+        productCacheVersionService.bumpAllProductReadCaches();
     }
 
     private Product getActiveEntityById(UUID id) {

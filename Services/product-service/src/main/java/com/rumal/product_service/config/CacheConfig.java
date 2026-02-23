@@ -106,7 +106,7 @@ public class CacheConfig extends CachingConfigurerSupport {
     @Bean
     public ApplicationRunner cacheStartupCleaner(
             CacheManager cacheManager,
-            @Value("${cache.clear-on-startup:true}") boolean clearOnStartup
+            @Value("${cache.clear-on-startup:false}") boolean clearOnStartup
     ) {
         return args -> {
             if (!clearOnStartup) {

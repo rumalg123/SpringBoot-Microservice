@@ -36,9 +36,7 @@ import com.rumal.order_service.repo.OrderStatusAuditRepository;
 import com.rumal.order_service.repo.VendorOrderRepository;
 import com.rumal.order_service.repo.VendorOrderStatusAuditRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
-import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -72,12 +70,9 @@ public class OrderService {
     private final ProductClient productClient;
     private final VendorOperationalStateClient vendorOperationalStateClient;
     private final OrderAggregationProperties props;
+    private final OrderCacheVersionService orderCacheVersionService;
 
-    @Caching(evict = {
-            @CacheEvict(cacheNames = "ordersByKeycloak", allEntries = true),
-            @CacheEvict(cacheNames = "orderDetailsByKeycloak", allEntries = true)
-    })
-    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 30)
+    @Transactional(isolation = Isolation.READ_COMMITTED, timeout = 30)
     public OrderResponse create(CreateOrderRequest req) {
         customerClient.assertCustomerExists(req.customerId());
         List<ResolvedOrderLine> lines = resolveOrderLines(req.productId(), req.quantity(), req.items());
@@ -89,15 +84,11 @@ public class OrderService {
         saved.getVendorOrders().forEach(vendorOrder ->
                 recordVendorOrderStatusAudit(vendorOrder, null, OrderStatus.PENDING, null, null, "system", "order_create", "Vendor order created")
         );
-
+        evictOrdersListCaches();
         return toResponse(saved);
     }
 
-    @Caching(evict = {
-            @CacheEvict(cacheNames = "ordersByKeycloak", allEntries = true),
-            @CacheEvict(cacheNames = "orderDetailsByKeycloak", allEntries = true)
-    })
-    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 30)
+    @Transactional(isolation = Isolation.READ_COMMITTED, timeout = 30)
     public OrderResponse createForKeycloak(String keycloakId, CreateMyOrderRequest req) {
         CustomerSummary customer = customerClient.getCustomerByKeycloakId(keycloakId);
         List<ResolvedOrderLine> lines = resolveOrderLines(req.productId(), req.quantity(), req.items());
@@ -109,7 +100,7 @@ public class OrderService {
         saved.getVendorOrders().forEach(vendorOrder ->
                 recordVendorOrderStatusAudit(vendorOrder, null, OrderStatus.PENDING, keycloakId, "customer", "customer", "order_create", "Vendor order created")
         );
-
+        evictOrdersListCaches();
         return toResponse(saved);
     }
 
@@ -159,18 +150,14 @@ public class OrderService {
 
     @Cacheable(
             cacheNames = "ordersByKeycloak",
-            key = "#keycloakId + '::' + #pageable.pageNumber + '::' + #pageable.pageSize + '::' + #pageable.sort.toString()"
+            key = "@orderCacheVersionService.ordersByKeycloakVersion() + '::' + #keycloakId + '::' + #pageable.pageNumber + '::' + #pageable.pageSize + '::' + #pageable.sort.toString()"
     )
     public Page<OrderResponse> listForKeycloakId(String keycloakId, Pageable pageable) {
         CustomerSummary customer = customerClient.getCustomerByKeycloakId(keycloakId);
         return list(customer.id(), pageable);
     }
 
-    @Caching(evict = {
-            @CacheEvict(cacheNames = "ordersByKeycloak", allEntries = true),
-            @CacheEvict(cacheNames = "orderDetailsByKeycloak", allEntries = true)
-    })
-    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 20)
+    @Transactional(isolation = Isolation.READ_COMMITTED, timeout = 20)
     public OrderResponse updateStatus(UUID orderId, OrderStatus status, String actorSub, String actorRoles) {
         if (status == null) {
             throw new ValidationException("status is required");
@@ -203,6 +190,7 @@ public class OrderService {
                 "status_update",
                 "Order status updated"
         );
+        evictOrderCachesAfterStatusMutation();
         return toResponse(saved);
     }
 
@@ -214,7 +202,7 @@ public class OrderService {
                 .toList();
     }
 
-    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 20)
+    @Transactional(isolation = Isolation.READ_COMMITTED, timeout = 20)
     public VendorOrderResponse updateVendorOrderStatus(UUID vendorOrderId, OrderStatus status, String actorSub, String actorRoles) {
         if (status == null) {
             throw new ValidationException("status is required");
@@ -257,7 +245,7 @@ public class OrderService {
                     "Order aggregate status synchronized from vendor order statuses"
             );
         }
-
+        evictOrderCachesAfterStatusMutation();
         return toVendorOrderResponse(savedVendorOrder);
     }
 
@@ -318,7 +306,10 @@ public class OrderService {
         );
     }
 
-    @Cacheable(cacheNames = "orderDetailsByKeycloak", key = "#keycloakId + '::' + #orderId")
+    @Cacheable(
+            cacheNames = "orderDetailsByKeycloak",
+            key = "@orderCacheVersionService.orderDetailsByKeycloakVersion() + '::' + #keycloakId + '::' + #orderId"
+    )
     public OrderDetailsResponse getMyDetails(String keycloakId, UUID orderId) {
         CustomerSummary customer = customerClient.getCustomerByKeycloakId(keycloakId);
         Order o = orderRepository.findById(orderId)
@@ -417,6 +408,15 @@ public class OrderService {
         return order;
     }
 
+    private void evictOrdersListCaches() {
+        orderCacheVersionService.bumpOrdersByKeycloakCache();
+    }
+
+    private void evictOrderCachesAfterStatusMutation() {
+        evictOrdersListCaches();
+        orderCacheVersionService.bumpOrderDetailsByKeycloakCache();
+    }
+
     private ResolvedOrderAddresses resolveOrderAddresses(UUID customerId, UUID shippingAddressId, UUID billingAddressId) {
         if (shippingAddressId == null) {
             throw new ValidationException("shippingAddressId is required");
@@ -500,9 +500,6 @@ public class OrderService {
             for (CreateOrderItemRequest item : items) {
                 if (item == null || item.productId() == null) {
                     throw new ValidationException("Each order item must include productId");
-                }
-                if (item.quantity() < 1) {
-                    throw new ValidationException("Each order item quantity must be at least 1");
                 }
                 normalized.merge(item.productId(), item.quantity(), Integer::sum);
             }

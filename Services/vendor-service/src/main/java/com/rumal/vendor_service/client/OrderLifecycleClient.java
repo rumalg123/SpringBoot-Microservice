@@ -2,6 +2,8 @@ package com.rumal.vendor_service.client;
 
 import com.rumal.vendor_service.dto.VendorOrderDeletionCheckResponse;
 import com.rumal.vendor_service.exception.ServiceUnavailableException;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -19,6 +21,8 @@ public class OrderLifecycleClient {
         this.lbRestClientBuilder = lbRestClientBuilder;
     }
 
+    @Retry(name = "orderService")
+    @CircuitBreaker(name = "orderService", fallbackMethod = "fallbackGetVendorDeletionCheck")
     public VendorOrderDeletionCheckResponse getVendorDeletionCheck(UUID vendorId, int refundHoldDays, String internalAuth) {
         RestClient rc = lbRestClientBuilder.build();
         try {
@@ -37,5 +41,15 @@ public class OrderLifecycleClient {
         } catch (RestClientException | IllegalStateException ex) {
             throw new ServiceUnavailableException("Order service unavailable for vendor deletion check", ex);
         }
+    }
+
+    @SuppressWarnings("unused")
+    public VendorOrderDeletionCheckResponse fallbackGetVendorDeletionCheck(
+            UUID vendorId,
+            int refundHoldDays,
+            String internalAuth,
+            Throwable ex
+    ) {
+        throw new ServiceUnavailableException("Order service unavailable for vendor deletion check. Try again later.", ex);
     }
 }

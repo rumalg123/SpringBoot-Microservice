@@ -9,6 +9,7 @@ import org.keycloak.admin.client.KeycloakBuilder;
 import org.keycloak.representations.idm.RoleRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.client.circuitbreaker.CircuitBreakerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
@@ -22,6 +23,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 
 @Service
 public class KeycloakVendorAdminManagementService {
@@ -32,6 +34,7 @@ public class KeycloakVendorAdminManagementService {
     private final String clientId;
     private final String clientSecret;
     private final String vendorAdminRoleName;
+    private final CircuitBreakerFactory<?, ?> circuitBreakerFactory;
 
     public KeycloakVendorAdminManagementService(
             @Value("${keycloak.issuer-uri}") String issuerUri,
@@ -39,7 +42,8 @@ public class KeycloakVendorAdminManagementService {
             @Value("${keycloak.admin.realm:${keycloak.realm}}") String adminRealm,
             @Value("${keycloak.admin.client-id}") String clientId,
             @Value("${keycloak.admin.client-secret}") String clientSecret,
-            @Value("${keycloak.vendor-admin-role:vendor_admin}") String vendorAdminRoleName
+            @Value("${keycloak.vendor-admin-role:vendor_admin}") String vendorAdminRoleName,
+            CircuitBreakerFactory<?, ?> circuitBreakerFactory
     ) {
         this.serverUrl = resolveBaseUrlFromIssuer(issuerUri);
         this.realm = realm;
@@ -47,6 +51,7 @@ public class KeycloakVendorAdminManagementService {
         this.clientId = clientId;
         this.clientSecret = clientSecret;
         this.vendorAdminRoleName = vendorAdminRoleName;
+        this.circuitBreakerFactory = circuitBreakerFactory;
         if (!StringUtils.hasText(this.clientId) || !StringUtils.hasText(this.clientSecret)) {
             throw new IllegalStateException("KEYCLOAK_ADMIN_CLIENT_ID and KEYCLOAK_ADMIN_CLIENT_SECRET must be configured");
         }
@@ -60,62 +65,64 @@ public class KeycloakVendorAdminManagementService {
             boolean createIfMissing
     ) {
         String normalizedEmail = normalizeEmail(email);
-        try (Keycloak keycloak = newAdminClient()) {
-            var realmResource = keycloak.realm(realm);
-            UserRepresentation user = null;
-            boolean created = false;
+        return runKeycloakCall(() -> {
+            try (Keycloak keycloak = newAdminClient()) {
+                var realmResource = keycloak.realm(realm);
+                UserRepresentation user = null;
+                boolean created = false;
 
-            if (StringUtils.hasText(requestedKeycloakUserId)) {
-                try {
-                    user = realmResource.users().get(requestedKeycloakUserId.trim()).toRepresentation();
-                } catch (NotFoundException ex) {
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Keycloak user not found: " + requestedKeycloakUserId);
+                if (StringUtils.hasText(requestedKeycloakUserId)) {
+                    try {
+                        user = realmResource.users().get(requestedKeycloakUserId.trim()).toRepresentation();
+                    } catch (NotFoundException ex) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Keycloak user not found: " + requestedKeycloakUserId);
+                    }
+                    if (user == null || !StringUtils.hasText(user.getId())) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Keycloak user not found: " + requestedKeycloakUserId);
+                    }
+                    String existingEmail = resolveEmail(user);
+                    if (StringUtils.hasText(existingEmail) && !normalizedEmail.equalsIgnoreCase(existingEmail)) {
+                        throw new ResponseStatusException(
+                                HttpStatus.BAD_REQUEST,
+                                "Provided email does not match Keycloak user email for id " + requestedKeycloakUserId
+                        );
+                    }
+                } else {
+                    user = findUserByEmail(realmResource.users().searchByEmail(normalizedEmail, true), normalizedEmail);
+                    if (user == null && createIfMissing) {
+                        user = createUser(realmResource, normalizedEmail, firstName, lastName);
+                        created = true;
+                    }
+                    if (user == null) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Keycloak user not found for email: " + normalizedEmail);
+                    }
                 }
-                if (user == null || !StringUtils.hasText(user.getId())) {
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Keycloak user not found: " + requestedKeycloakUserId);
+
+                updateNamesIfProvided(realmResource, user, firstName, lastName);
+                assignRealmRoleIfMissing(realmResource, user.getId(), vendorAdminRoleName);
+                boolean actionEmailSent = false;
+                if (created) {
+                    sendRequiredActionsEmail(realmResource, user.getId());
+                    actionEmailSent = true;
                 }
-                String existingEmail = resolveEmail(user);
-                if (StringUtils.hasText(existingEmail) && !normalizedEmail.equalsIgnoreCase(existingEmail)) {
-                    throw new ResponseStatusException(
-                            HttpStatus.BAD_REQUEST,
-                            "Provided email does not match Keycloak user email for id " + requestedKeycloakUserId
-                    );
-                }
-            } else {
-                user = findUserByEmail(realmResource.users().searchByEmail(normalizedEmail, true), normalizedEmail);
-                if (user == null && createIfMissing) {
-                    user = createUser(realmResource, normalizedEmail, firstName, lastName);
-                    created = true;
-                }
-                if (user == null) {
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Keycloak user not found for email: " + normalizedEmail);
-                }
+
+                UserRepresentation refreshed = realmResource.users().get(user.getId()).toRepresentation();
+                return new KeycloakManagedUser(
+                        refreshed.getId(),
+                        resolveEmail(refreshed),
+                        refreshed.getFirstName(),
+                        refreshed.getLastName(),
+                        created,
+                        actionEmailSent
+                );
+            } catch (ResponseStatusException ex) {
+                throw ex;
+            } catch (WebApplicationException ex) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak admin request failed: " + ex.getMessage(), ex);
+            } catch (Exception ex) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak admin operation failed", ex);
             }
-
-            updateNamesIfProvided(realmResource, user, firstName, lastName);
-            assignRealmRoleIfMissing(realmResource, user.getId(), vendorAdminRoleName);
-            boolean actionEmailSent = false;
-            if (created) {
-                sendRequiredActionsEmail(realmResource, user.getId());
-                actionEmailSent = true;
-            }
-
-            UserRepresentation refreshed = realmResource.users().get(user.getId()).toRepresentation();
-            return new KeycloakManagedUser(
-                    refreshed.getId(),
-                    resolveEmail(refreshed),
-                    refreshed.getFirstName(),
-                    refreshed.getLastName(),
-                    created,
-                    actionEmailSent
-            );
-        } catch (ResponseStatusException ex) {
-            throw ex;
-        } catch (WebApplicationException ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak admin request failed: " + ex.getMessage(), ex);
-        } catch (Exception ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak admin operation failed", ex);
-        }
+        });
     }
 
     public List<KeycloakUserSearchResult> searchUsers(String query, int limit) {
@@ -126,60 +133,64 @@ public class KeycloakVendorAdminManagementService {
 
         int safeLimit = Math.max(1, Math.min(limit, 20));
 
-        try (Keycloak keycloak = newAdminClient()) {
-            var realmResource = keycloak.realm(realm);
-            var usersResource = realmResource.users();
+        return runKeycloakCall(() -> {
+            try (Keycloak keycloak = newAdminClient()) {
+                var realmResource = keycloak.realm(realm);
+                var usersResource = realmResource.users();
 
-            Map<String, UserRepresentation> unique = new LinkedHashMap<>();
-            collectUsers(unique, usersResource.search(normalizedQuery, 0, safeLimit), safeLimit);
-            if (normalizedQuery.contains("@")) {
-                collectUsers(unique, usersResource.searchByEmail(normalizedQuery, false), safeLimit);
-            }
+                Map<String, UserRepresentation> unique = new LinkedHashMap<>();
+                collectUsers(unique, usersResource.search(normalizedQuery, 0, safeLimit), safeLimit);
+                if (normalizedQuery.contains("@")) {
+                    collectUsers(unique, usersResource.searchByEmail(normalizedQuery, false), safeLimit);
+                }
 
-            List<KeycloakUserSearchResult> results = new ArrayList<>();
-            for (UserRepresentation user : unique.values()) {
-                if (!StringUtils.hasText(user.getId())) {
-                    continue;
+                List<KeycloakUserSearchResult> results = new ArrayList<>();
+                for (UserRepresentation user : unique.values()) {
+                    if (!StringUtils.hasText(user.getId())) {
+                        continue;
+                    }
+                    results.add(new KeycloakUserSearchResult(
+                            user.getId(),
+                            resolveEmail(user),
+                            normalizeOptional(user.getUsername()),
+                            normalizeOptional(user.getFirstName()),
+                            normalizeOptional(user.getLastName()),
+                            composeDisplayName(user),
+                            Boolean.TRUE.equals(user.isEnabled()),
+                            Boolean.TRUE.equals(user.isEmailVerified())
+                    ));
+                    if (results.size() >= safeLimit) {
+                        break;
+                    }
                 }
-                results.add(new KeycloakUserSearchResult(
-                        user.getId(),
-                        resolveEmail(user),
-                        normalizeOptional(user.getUsername()),
-                        normalizeOptional(user.getFirstName()),
-                        normalizeOptional(user.getLastName()),
-                        composeDisplayName(user),
-                        Boolean.TRUE.equals(user.isEnabled()),
-                        Boolean.TRUE.equals(user.isEmailVerified())
-                ));
-                if (results.size() >= safeLimit) {
-                    break;
-                }
+                return List.copyOf(results);
+            } catch (ResponseStatusException ex) {
+                throw ex;
+            } catch (WebApplicationException ex) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak user search failed: " + ex.getMessage(), ex);
+            } catch (Exception ex) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak user search failed", ex);
             }
-            return List.copyOf(results);
-        } catch (ResponseStatusException ex) {
-            throw ex;
-        } catch (WebApplicationException ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak user search failed: " + ex.getMessage(), ex);
-        } catch (Exception ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak user search failed", ex);
-        }
+        });
     }
 
     public void logoutUserSessions(String keycloakUserId) {
         if (!StringUtils.hasText(keycloakUserId)) {
             return;
         }
-        try (Keycloak keycloak = newAdminClient()) {
-            try {
-                keycloak.realm(realm).users().get(keycloakUserId.trim()).logout();
-            } catch (NotFoundException ignored) {
-                // User already removed in Keycloak; nothing to revoke.
+        runKeycloakVoid(() -> {
+            try (Keycloak keycloak = newAdminClient()) {
+                try {
+                    keycloak.realm(realm).users().get(keycloakUserId.trim()).logout();
+                } catch (NotFoundException ignored) {
+                    // User already removed in Keycloak; nothing to revoke.
+                }
+            } catch (WebApplicationException ex) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak session logout failed", ex);
+            } catch (Exception ex) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak session logout failed", ex);
             }
-        } catch (WebApplicationException ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak session logout failed", ex);
-        } catch (Exception ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak session logout failed", ex);
-        }
+        });
     }
 
     public void logoutUserSessionsBulk(Collection<String> keycloakUserIds) {
@@ -195,20 +206,41 @@ public class KeycloakVendorAdminManagementService {
         if (unique.isEmpty()) {
             return;
         }
-        try (Keycloak keycloak = newAdminClient()) {
-            var users = keycloak.realm(realm).users();
-            for (String id : unique) {
-                try {
-                    users.get(id).logout();
-                } catch (NotFoundException ignored) {
-                    // Ignore orphaned/local stale rows.
+        runKeycloakVoid(() -> {
+            try (Keycloak keycloak = newAdminClient()) {
+                var users = keycloak.realm(realm).users();
+                for (String id : unique) {
+                    try {
+                        users.get(id).logout();
+                    } catch (NotFoundException ignored) {
+                        // Ignore orphaned/local stale rows.
+                    }
                 }
+            } catch (WebApplicationException ex) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak session logout failed", ex);
+            } catch (Exception ex) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak session logout failed", ex);
             }
-        } catch (WebApplicationException ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak session logout failed", ex);
-        } catch (Exception ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak session logout failed", ex);
-        }
+        });
+    }
+
+    private <T> T runKeycloakCall(Supplier<T> action) {
+        return circuitBreakerFactory.create("keycloakAdmin").run(
+                action,
+                throwable -> {
+                    if (throwable instanceof RuntimeException runtime) {
+                        throw runtime;
+                    }
+                    throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak admin operation failed", throwable);
+                }
+        );
+    }
+
+    private void runKeycloakVoid(Runnable action) {
+        runKeycloakCall(() -> {
+            action.run();
+            return null;
+        });
     }
 
     private UserRepresentation createUser(

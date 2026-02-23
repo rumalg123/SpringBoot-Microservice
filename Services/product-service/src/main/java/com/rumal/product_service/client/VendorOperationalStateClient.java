@@ -2,6 +2,8 @@ package com.rumal.product_service.client;
 
 import com.rumal.product_service.dto.VendorOperationalStateResponse;
 import com.rumal.product_service.exception.ServiceUnavailableException;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
@@ -29,6 +31,8 @@ public class VendorOperationalStateClient {
         this.lbRestClientBuilder = lbRestClientBuilder;
     }
 
+    @Retry(name = "vendorService")
+    @CircuitBreaker(name = "vendorService", fallbackMethod = "fallbackGetState")
     public VendorOperationalStateResponse getState(UUID vendorId, String internalAuth) {
         RestClient rc = lbRestClientBuilder.build();
         try {
@@ -44,6 +48,8 @@ public class VendorOperationalStateClient {
         }
     }
 
+    @Retry(name = "vendorService")
+    @CircuitBreaker(name = "vendorService", fallbackMethod = "fallbackGetStates")
     public Map<UUID, VendorOperationalStateResponse> getStates(Collection<UUID> vendorIds, String internalAuth) {
         if (vendorIds == null || vendorIds.isEmpty()) {
             return Map.of();
@@ -67,6 +73,16 @@ public class VendorOperationalStateClient {
         } catch (RestClientException | IllegalStateException ex) {
             throw new ServiceUnavailableException("Vendor service unavailable for operational-state batch lookup", ex);
         }
+    }
+
+    @SuppressWarnings("unused")
+    public VendorOperationalStateResponse fallbackGetState(UUID vendorId, String internalAuth, Throwable ex) {
+        throw new ServiceUnavailableException("Vendor service unavailable for operational-state lookup. Try again later.", ex);
+    }
+
+    @SuppressWarnings("unused")
+    public Map<UUID, VendorOperationalStateResponse> fallbackGetStates(Collection<UUID> vendorIds, String internalAuth, Throwable ex) {
+        throw new ServiceUnavailableException("Vendor service unavailable for operational-state batch lookup. Try again later.", ex);
     }
 
     private URI buildUri(String path) {

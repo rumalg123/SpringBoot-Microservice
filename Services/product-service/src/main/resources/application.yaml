@@ -34,6 +34,50 @@ logging:
   pattern:
     level: "%5p [${spring.application.name},traceId=%X{traceId},spanId=%X{spanId}]"
 
+http:
+  client:
+    connect-timeout-seconds: ${HTTP_CLIENT_CONNECT_TIMEOUT_SECONDS:2}
+    response-timeout-seconds: ${HTTP_CLIENT_RESPONSE_TIMEOUT_SECONDS:5}
+    idle-evict-seconds: ${HTTP_CLIENT_IDLE_EVICT_SECONDS:30}
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      vendorService:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 20
+        minimumNumberOfCalls: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 3
+      accessService:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 20
+        minimumNumberOfCalls: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 3
+  retry:
+    instances:
+      vendorService:
+        maxAttempts: 3
+        waitDuration: 300ms
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - java.io.IOException
+          - org.springframework.web.client.ResourceAccessException
+          - org.springframework.web.client.HttpServerErrorException
+      accessService:
+        maxAttempts: 3
+        waitDuration: 300ms
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - java.io.IOException
+          - org.springframework.web.client.ResourceAccessException
+          - org.springframework.web.client.HttpServerErrorException
+
 cache:
   clear-on-startup: ${CACHE_CLEAR_ON_STARTUP:true}
   key-prefix: ${CACHE_KEY_PREFIX:ps:v2::}

@@ -55,6 +55,22 @@ public class RateLimitConfig {
     }
 
     @Bean
+    public RedisRateLimiter customerAddressesRateLimiter(
+            @Value("${RATE_LIMIT_CUSTOMER_ADDRESSES_REPLENISH:20}") int replenishRate,
+            @Value("${RATE_LIMIT_CUSTOMER_ADDRESSES_BURST:40}") int burstCapacity
+    ) {
+        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+    }
+
+    @Bean
+    public RedisRateLimiter customerAddressesWriteRateLimiter(
+            @Value("${RATE_LIMIT_CUSTOMER_ADDRESSES_WRITE_REPLENISH:8}") int replenishRate,
+            @Value("${RATE_LIMIT_CUSTOMER_ADDRESSES_WRITE_BURST:16}") int burstCapacity
+    ) {
+        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+    }
+
+    @Bean
     public RedisRateLimiter ordersMeRateLimiter(
             @Value("${RATE_LIMIT_ORDERS_ME_REPLENISH:25}") int replenishRate,
             @Value("${RATE_LIMIT_ORDERS_ME_BURST:50}") int burstCapacity
@@ -138,6 +154,78 @@ public class RateLimitConfig {
     public RedisRateLimiter adminProductsWriteRateLimiter(
             @Value("${RATE_LIMIT_ADMIN_PRODUCTS_WRITE_REPLENISH:10}") int replenishRate,
             @Value("${RATE_LIMIT_ADMIN_PRODUCTS_WRITE_BURST:20}") int burstCapacity
+    ) {
+        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+    }
+
+    @Bean
+    public RedisRateLimiter publicCatalogAuxRateLimiter(
+            @Value("${RATE_LIMIT_PUBLIC_CATALOG_AUX_REPLENISH:25}") int replenishRate,
+            @Value("${RATE_LIMIT_PUBLIC_CATALOG_AUX_BURST:50}") int burstCapacity
+    ) {
+        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+    }
+
+    @Bean
+    public RedisRateLimiter adminVendorsRateLimiter(
+            @Value("${RATE_LIMIT_ADMIN_VENDORS_REPLENISH:15}") int replenishRate,
+            @Value("${RATE_LIMIT_ADMIN_VENDORS_BURST:30}") int burstCapacity
+    ) {
+        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+    }
+
+    @Bean
+    public RedisRateLimiter adminVendorsWriteRateLimiter(
+            @Value("${RATE_LIMIT_ADMIN_VENDORS_WRITE_REPLENISH:8}") int replenishRate,
+            @Value("${RATE_LIMIT_ADMIN_VENDORS_WRITE_BURST:16}") int burstCapacity
+    ) {
+        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+    }
+
+    @Bean
+    public RedisRateLimiter adminPostersRateLimiter(
+            @Value("${RATE_LIMIT_ADMIN_POSTERS_REPLENISH:15}") int replenishRate,
+            @Value("${RATE_LIMIT_ADMIN_POSTERS_BURST:30}") int burstCapacity
+    ) {
+        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+    }
+
+    @Bean
+    public RedisRateLimiter adminPostersWriteRateLimiter(
+            @Value("${RATE_LIMIT_ADMIN_POSTERS_WRITE_REPLENISH:8}") int replenishRate,
+            @Value("${RATE_LIMIT_ADMIN_POSTERS_WRITE_BURST:16}") int burstCapacity
+    ) {
+        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+    }
+
+    @Bean
+    public RedisRateLimiter adminAccessRateLimiter(
+            @Value("${RATE_LIMIT_ADMIN_ACCESS_REPLENISH:12}") int replenishRate,
+            @Value("${RATE_LIMIT_ADMIN_ACCESS_BURST:24}") int burstCapacity
+    ) {
+        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+    }
+
+    @Bean
+    public RedisRateLimiter adminAccessWriteRateLimiter(
+            @Value("${RATE_LIMIT_ADMIN_ACCESS_WRITE_REPLENISH:6}") int replenishRate,
+            @Value("${RATE_LIMIT_ADMIN_ACCESS_WRITE_BURST:12}") int burstCapacity
+    ) {
+        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+    }
+
+    @Bean
+    public RedisRateLimiter adminMeRateLimiter(
+            @Value("${RATE_LIMIT_ADMIN_ME_REPLENISH:20}") int replenishRate,
+            @Value("${RATE_LIMIT_ADMIN_ME_BURST:40}") int burstCapacity
+    ) {
+        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+    }
+
+    @Bean
+    public RedisRateLimiter adminKeycloakSearchRateLimiter(
+            @Value("${RATE_LIMIT_ADMIN_KEYCLOAK_SEARCH_REPLENISH:8}") int replenishRate,
+            @Value("${RATE_LIMIT_ADMIN_KEYCLOAK_SEARCH_BURST:16}") int burstCapacity
     ) {
         return new RedisRateLimiter(replenishRate, burstCapacity, 1);
     }

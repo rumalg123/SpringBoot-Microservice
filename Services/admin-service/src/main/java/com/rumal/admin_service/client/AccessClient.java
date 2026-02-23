@@ -3,6 +3,7 @@ package com.rumal.admin_service.client;
 import com.rumal.admin_service.exception.DownstreamHttpException;
 import com.rumal.admin_service.exception.ServiceUnavailableException;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.cloud.client.circuitbreaker.CircuitBreakerFactory;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -15,6 +16,7 @@ import java.net.URI;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 @Component
 public class AccessClient {
@@ -25,9 +27,14 @@ public class AccessClient {
             new ParameterizedTypeReference<>() {};
 
     private final RestClient.Builder lbRestClientBuilder;
+    private final CircuitBreakerFactory<?, ?> circuitBreakerFactory;
 
-    public AccessClient(@Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder) {
+    public AccessClient(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder,
+            CircuitBreakerFactory<?, ?> circuitBreakerFactory
+    ) {
         this.lbRestClientBuilder = lbRestClientBuilder;
+        this.circuitBreakerFactory = circuitBreakerFactory;
     }
 
     public Map<String, Object> getPlatformAccessByKeycloakUser(String keycloakUserId, String internalAuth) {
@@ -185,34 +192,38 @@ public class AccessClient {
     }
 
     private List<Map<String, Object>> getList(String path, String internalAuth) {
-        RestClient rc = lbRestClientBuilder.build();
-        try {
-            List<Map<String, Object>> response = rc.get().uri(buildUri(path))
-                    .header("X-Internal-Auth", internalAuth)
-                    .retrieve().body(LIST_MAP_TYPE);
-            return response == null ? List.of() : response;
-        } catch (RestClientResponseException ex) {
-            throw toDownstream(ex);
-        } catch (RestClientException | IllegalStateException ex) {
-            throw new ServiceUnavailableException("Access service unavailable. Try again later.", ex);
-        }
+        return runAccessCall(() -> {
+            RestClient rc = lbRestClientBuilder.build();
+            try {
+                List<Map<String, Object>> response = rc.get().uri(buildUri(path))
+                        .header("X-Internal-Auth", internalAuth)
+                        .retrieve().body(LIST_MAP_TYPE);
+                return response == null ? List.of() : response;
+            } catch (RestClientResponseException ex) {
+                throw toDownstream(ex);
+            } catch (RestClientException | IllegalStateException ex) {
+                throw new ServiceUnavailableException("Access service unavailable. Try again later.", ex);
+            }
+        });
     }
 
     private Map<String, Object> getMap(String path, String internalAuth) {
-        RestClient rc = lbRestClientBuilder.build();
-        try {
-            Map<String, Object> response = rc.get().uri(buildUri(path))
-                    .header("X-Internal-Auth", internalAuth)
-                    .retrieve().body(MAP_TYPE);
-            if (response == null) {
-                throw new ServiceUnavailableException("Access service returned an empty response", null);
+        return runAccessCall(() -> {
+            RestClient rc = lbRestClientBuilder.build();
+            try {
+                Map<String, Object> response = rc.get().uri(buildUri(path))
+                        .header("X-Internal-Auth", internalAuth)
+                        .retrieve().body(MAP_TYPE);
+                if (response == null) {
+                    throw new ServiceUnavailableException("Access service returned an empty response", null);
+                }
+                return response;
+            } catch (RestClientResponseException ex) {
+                throw toDownstream(ex);
+            } catch (RestClientException | IllegalStateException ex) {
+                throw new ServiceUnavailableException("Access service unavailable. Try again later.", ex);
             }
-            return response;
-        } catch (RestClientResponseException ex) {
-            throw toDownstream(ex);
-        } catch (RestClientException | IllegalStateException ex) {
-            throw new ServiceUnavailableException("Access service unavailable. Try again later.", ex);
-        }
+        });
     }
 
     private Map<String, Object> jsonRequest(String method, String path, Map<String, Object> request, String internalAuth) {
@@ -220,27 +231,29 @@ public class AccessClient {
     }
 
     private Map<String, Object> jsonRequest(String method, String path, Map<String, Object> request, String internalAuth, String userSub, String userRoles, String actionReason) {
-        RestClient rc = lbRestClientBuilder.build();
-        try {
-            RestClient.RequestBodySpec spec = switch (method) {
-                case "POST" -> rc.post().uri(buildUri(path));
-                case "PUT" -> rc.put().uri(buildUri(path));
-                default -> throw new IllegalArgumentException("Unsupported method: " + method);
-            };
-            Map<String, Object> response = ((RestClient.RequestBodySpec) applyActorHeaders(spec.header("X-Internal-Auth", internalAuth), userSub, userRoles, actionReason))
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(request)
-                    .retrieve()
-                    .body(MAP_TYPE);
-            if (response == null) {
-                throw new ServiceUnavailableException("Access service returned an empty response", null);
+        return runAccessCall(() -> {
+            RestClient rc = lbRestClientBuilder.build();
+            try {
+                RestClient.RequestBodySpec spec = switch (method) {
+                    case "POST" -> rc.post().uri(buildUri(path));
+                    case "PUT" -> rc.put().uri(buildUri(path));
+                    default -> throw new IllegalArgumentException("Unsupported method: " + method);
+                };
+                Map<String, Object> response = ((RestClient.RequestBodySpec) applyActorHeaders(spec.header("X-Internal-Auth", internalAuth), userSub, userRoles, actionReason))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(request)
+                        .retrieve()
+                        .body(MAP_TYPE);
+                if (response == null) {
+                    throw new ServiceUnavailableException("Access service returned an empty response", null);
+                }
+                return response;
+            } catch (RestClientResponseException ex) {
+                throw toDownstream(ex);
+            } catch (RestClientException | IllegalStateException ex) {
+                throw new ServiceUnavailableException("Access service unavailable. Try again later.", ex);
             }
-            return response;
-        } catch (RestClientResponseException ex) {
-            throw toDownstream(ex);
-        } catch (RestClientException | IllegalStateException ex) {
-            throw new ServiceUnavailableException("Access service unavailable. Try again later.", ex);
-        }
+        });
     }
 
     private void deleteNoContent(String path, String internalAuth) {
@@ -248,15 +261,17 @@ public class AccessClient {
     }
 
     private void deleteNoContent(String path, String internalAuth, String userSub, String userRoles, String actionReason) {
-        RestClient rc = lbRestClientBuilder.build();
-        try {
-            applyActorHeaders(rc.delete().uri(buildUri(path)).header("X-Internal-Auth", internalAuth), userSub, userRoles, actionReason)
-                    .retrieve().toBodilessEntity();
-        } catch (RestClientResponseException ex) {
-            throw toDownstream(ex);
-        } catch (RestClientException | IllegalStateException ex) {
-            throw new ServiceUnavailableException("Access service unavailable. Try again later.", ex);
-        }
+        runAccessVoid(() -> {
+            RestClient rc = lbRestClientBuilder.build();
+            try {
+                applyActorHeaders(rc.delete().uri(buildUri(path)).header("X-Internal-Auth", internalAuth), userSub, userRoles, actionReason)
+                        .retrieve().toBodilessEntity();
+            } catch (RestClientResponseException ex) {
+                throw toDownstream(ex);
+            } catch (RestClientException | IllegalStateException ex) {
+                throw new ServiceUnavailableException("Access service unavailable. Try again later.", ex);
+            }
+        });
     }
 
     private Map<String, Object> postNoBody(String path, String internalAuth) {
@@ -264,20 +279,22 @@ public class AccessClient {
     }
 
     private Map<String, Object> postNoBody(String path, String internalAuth, String userSub, String userRoles, String actionReason) {
-        RestClient rc = lbRestClientBuilder.build();
-        try {
-            Map<String, Object> response = applyActorHeaders(rc.post().uri(buildUri(path))
-                    .header("X-Internal-Auth", internalAuth), userSub, userRoles, actionReason)
-                    .retrieve().body(MAP_TYPE);
-            if (response == null) {
-                throw new ServiceUnavailableException("Access service returned an empty response", null);
+        return runAccessCall(() -> {
+            RestClient rc = lbRestClientBuilder.build();
+            try {
+                Map<String, Object> response = applyActorHeaders(rc.post().uri(buildUri(path))
+                        .header("X-Internal-Auth", internalAuth), userSub, userRoles, actionReason)
+                        .retrieve().body(MAP_TYPE);
+                if (response == null) {
+                    throw new ServiceUnavailableException("Access service returned an empty response", null);
+                }
+                return response;
+            } catch (RestClientResponseException ex) {
+                throw toDownstream(ex);
+            } catch (RestClientException | IllegalStateException ex) {
+                throw new ServiceUnavailableException("Access service unavailable. Try again later.", ex);
             }
-            return response;
-        } catch (RestClientResponseException ex) {
-            throw toDownstream(ex);
-        } catch (RestClientException | IllegalStateException ex) {
-            throw new ServiceUnavailableException("Access service unavailable. Try again later.", ex);
-        }
+        });
     }
 
     private DownstreamHttpException toDownstream(RestClientResponseException ex) {
@@ -316,5 +333,22 @@ public class AccessClient {
             next = next.header("X-Action-Reason", actionReason.trim());
         }
         return next;
+    }
+
+    private <T> T runAccessCall(Supplier<T> action) {
+        return circuitBreakerFactory.create("admin-access-client")
+                .run(action::get, throwable -> {
+                    if (throwable instanceof RuntimeException re) {
+                        throw re;
+                    }
+                    throw new ServiceUnavailableException("Access service unavailable. Try again later.", throwable);
+                });
+    }
+
+    private void runAccessVoid(Runnable action) {
+        runAccessCall(() -> {
+            action.run();
+            return Boolean.TRUE;
+        });
     }
 }

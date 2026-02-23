@@ -30,6 +30,12 @@ logging:
   pattern:
     level: "%5p [${spring.application.name},traceId=%X{traceId},spanId=%X{spanId}]"
 
+http:
+  client:
+    connect-timeout-seconds: ${HTTP_CLIENT_CONNECT_TIMEOUT_SECONDS:2}
+    response-timeout-seconds: ${HTTP_CLIENT_RESPONSE_TIMEOUT_SECONDS:5}
+    idle-evict-seconds: ${HTTP_CLIENT_IDLE_EVICT_SECONDS:30}
+
 resilience4j:
   circuitbreaker:
     instances:
@@ -91,3 +97,11 @@ internal:
 
 cache:
   cart-by-keycloak-ttl: ${CACHE_CART_BY_KEYCLOAK_TTL:30s}
+
+cart:
+  idempotency:
+    enabled: ${CART_IDEMPOTENCY_ENABLED:true}
+    key-header-name: ${CART_IDEMPOTENCY_KEY_HEADER:Idempotency-Key}
+    key-prefix: ${CART_IDEMPOTENCY_KEY_PREFIX:cs:idem:v1::}
+    pending-ttl: ${CART_IDEMPOTENCY_PENDING_TTL:30s}
+    response-ttl: ${CART_IDEMPOTENCY_RESPONSE_TTL:12h}

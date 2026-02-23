@@ -10,6 +10,7 @@ import com.rumal.admin_service.exception.ServiceUnavailableException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.cloud.client.circuitbreaker.CircuitBreakerFactory;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -23,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 @Component
 public class OrderClient {
@@ -38,163 +40,181 @@ public class OrderClient {
 
     private final RestClient.Builder lbRestClientBuilder;
     private final ObjectMapper objectMapper;
+    private final CircuitBreakerFactory<?, ?> circuitBreakerFactory;
 
     public OrderClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            CircuitBreakerFactory<?, ?> circuitBreakerFactory
     ) {
         this.lbRestClientBuilder = lbRestClientBuilder;
         this.objectMapper = objectMapper;
+        this.circuitBreakerFactory = circuitBreakerFactory;
     }
 
     public PageResponse<OrderResponse> listOrders(UUID customerId, String customerEmail, UUID vendorId, int page, int size, List<String> sort, String internalAuth) {
-        RestClient rc = lbRestClientBuilder.build();
+        return runOrderCall(() -> {
+            RestClient rc = lbRestClientBuilder.build();
+            try {
+                Map<String, Object> rawResponse = rc.get()
+                        .uri(uriBuilder -> buildListOrdersUri(uriBuilder, customerId, customerEmail, vendorId, page, size, sort))
+                        .header("X-Internal-Auth", internalAuth)
+                        .retrieve()
+                        .body(MAP_TYPE);
 
-        try {
-            Map<String, Object> rawResponse = rc.get()
-                    .uri(uriBuilder -> buildListOrdersUri(uriBuilder, customerId, customerEmail, vendorId, page, size, sort))
-                    .header("X-Internal-Auth", internalAuth)
-                    .retrieve()
-                    .body(MAP_TYPE);
-
-            if (rawResponse == null) {
-                throw new ServiceUnavailableException("Order service returned an empty response", null);
+                if (rawResponse == null) {
+                    throw new ServiceUnavailableException("Order service returned an empty response", null);
+                }
+                return toPageResponse(rawResponse);
+            } catch (RestClientException ex) {
+                throw new ServiceUnavailableException("Order service unavailable. Try again later.", ex);
             }
-            return toPageResponse(rawResponse);
-        } catch (RestClientException ex) {
-            throw new ServiceUnavailableException("Order service unavailable. Try again later.", ex);
-        }
+        });
     }
 
     public OrderResponse updateOrderStatus(UUID orderId, String status, String internalAuth, String userSub, String userRoles) {
-        RestClient rc = lbRestClientBuilder.build();
-        try {
-            var req = rc.patch()
-                    .uri("http://order-service/orders/{id}/status", orderId)
-                    .header("X-Internal-Auth", internalAuth);
-            if (userSub != null && !userSub.isBlank()) {
-                req = req.header("X-User-Sub", userSub);
+        return runOrderCall(() -> {
+            RestClient rc = lbRestClientBuilder.build();
+            try {
+                var req = rc.patch()
+                        .uri("http://order-service/orders/{id}/status", orderId)
+                        .header("X-Internal-Auth", internalAuth);
+                if (userSub != null && !userSub.isBlank()) {
+                    req = req.header("X-User-Sub", userSub);
+                }
+                if (userRoles != null && !userRoles.isBlank()) {
+                    req = req.header("X-User-Roles", userRoles);
+                }
+                return req.body(new UpdateOrderStatusRequest(status))
+                        .retrieve()
+                        .body(OrderResponse.class);
+            } catch (RestClientException ex) {
+                throw new ServiceUnavailableException("Order service unavailable. Try again later.", ex);
             }
-            if (userRoles != null && !userRoles.isBlank()) {
-                req = req.header("X-User-Roles", userRoles);
-            }
-            return req.body(new UpdateOrderStatusRequest(status))
-                    .retrieve()
-                    .body(OrderResponse.class);
-        } catch (RestClientException ex) {
-            throw new ServiceUnavailableException("Order service unavailable. Try again later.", ex);
-        }
+        });
     }
 
     public List<OrderStatusAuditResponse> getOrderStatusHistory(UUID orderId, String internalAuth) {
-        RestClient rc = lbRestClientBuilder.build();
-        try {
-            List<OrderStatusAuditResponse> rows = rc.get()
-                    .uri("http://order-service/orders/{id}/status-history", orderId)
-                    .header("X-Internal-Auth", internalAuth)
-                    .retrieve()
-                    .body(ORDER_STATUS_AUDIT_LIST_TYPE);
-            return rows == null ? List.of() : rows;
-        } catch (RestClientException ex) {
-            throw new ServiceUnavailableException("Order service unavailable. Try again later.", ex);
-        }
+        return runOrderCall(() -> {
+            RestClient rc = lbRestClientBuilder.build();
+            try {
+                List<OrderStatusAuditResponse> rows = rc.get()
+                        .uri("http://order-service/orders/{id}/status-history", orderId)
+                        .header("X-Internal-Auth", internalAuth)
+                        .retrieve()
+                        .body(ORDER_STATUS_AUDIT_LIST_TYPE);
+                return rows == null ? List.of() : rows;
+            } catch (RestClientException ex) {
+                throw new ServiceUnavailableException("Order service unavailable. Try again later.", ex);
+            }
+        });
     }
 
     public List<VendorOrderResponse> getVendorOrders(UUID orderId, String internalAuth) {
-        RestClient rc = lbRestClientBuilder.build();
-        try {
-            List<VendorOrderResponse> rows = rc.get()
-                    .uri("http://order-service/orders/{id}/vendor-orders", orderId)
-                    .header("X-Internal-Auth", internalAuth)
-                    .retrieve()
-                    .body(VENDOR_ORDER_LIST_TYPE);
-            return rows == null ? List.of() : rows;
-        } catch (RestClientException ex) {
-            throw new ServiceUnavailableException("Order service unavailable. Try again later.", ex);
-        }
+        return runOrderCall(() -> {
+            RestClient rc = lbRestClientBuilder.build();
+            try {
+                List<VendorOrderResponse> rows = rc.get()
+                        .uri("http://order-service/orders/{id}/vendor-orders", orderId)
+                        .header("X-Internal-Auth", internalAuth)
+                        .retrieve()
+                        .body(VENDOR_ORDER_LIST_TYPE);
+                return rows == null ? List.of() : rows;
+            } catch (RestClientException ex) {
+                throw new ServiceUnavailableException("Order service unavailable. Try again later.", ex);
+            }
+        });
     }
 
     public VendorOrderResponse getVendorOrder(UUID vendorOrderId, String internalAuth) {
-        RestClient rc = lbRestClientBuilder.build();
-        try {
-            return rc.get()
-                    .uri("http://order-service/orders/vendor-orders/{id}", vendorOrderId)
-                    .header("X-Internal-Auth", internalAuth)
-                    .retrieve()
-                    .body(VendorOrderResponse.class);
-        } catch (RestClientException ex) {
-            throw new ServiceUnavailableException("Order service unavailable. Try again later.", ex);
-        }
+        return runOrderCall(() -> {
+            RestClient rc = lbRestClientBuilder.build();
+            try {
+                return rc.get()
+                        .uri("http://order-service/orders/vendor-orders/{id}", vendorOrderId)
+                        .header("X-Internal-Auth", internalAuth)
+                        .retrieve()
+                        .body(VendorOrderResponse.class);
+            } catch (RestClientException ex) {
+                throw new ServiceUnavailableException("Order service unavailable. Try again later.", ex);
+            }
+        });
     }
 
     public VendorOrderResponse updateVendorOrderStatus(UUID vendorOrderId, String status, String internalAuth, String userSub, String userRoles) {
-        RestClient rc = lbRestClientBuilder.build();
-        try {
-            var req = rc.patch()
-                    .uri("http://order-service/orders/vendor-orders/{id}/status", vendorOrderId)
-                    .header("X-Internal-Auth", internalAuth);
-            if (userSub != null && !userSub.isBlank()) {
-                req = req.header("X-User-Sub", userSub);
+        return runOrderCall(() -> {
+            RestClient rc = lbRestClientBuilder.build();
+            try {
+                var req = rc.patch()
+                        .uri("http://order-service/orders/vendor-orders/{id}/status", vendorOrderId)
+                        .header("X-Internal-Auth", internalAuth);
+                if (userSub != null && !userSub.isBlank()) {
+                    req = req.header("X-User-Sub", userSub);
+                }
+                if (userRoles != null && !userRoles.isBlank()) {
+                    req = req.header("X-User-Roles", userRoles);
+                }
+                return req.body(new UpdateOrderStatusRequest(status))
+                        .retrieve()
+                        .body(VendorOrderResponse.class);
+            } catch (RestClientException ex) {
+                throw new ServiceUnavailableException("Order service unavailable. Try again later.", ex);
             }
-            if (userRoles != null && !userRoles.isBlank()) {
-                req = req.header("X-User-Roles", userRoles);
-            }
-            return req.body(new UpdateOrderStatusRequest(status))
-                    .retrieve()
-                    .body(VendorOrderResponse.class);
-        } catch (RestClientException ex) {
-            throw new ServiceUnavailableException("Order service unavailable. Try again later.", ex);
-        }
+        });
     }
 
     public List<VendorOrderStatusAuditResponse> getVendorOrderStatusHistory(UUID vendorOrderId, String internalAuth) {
-        RestClient rc = lbRestClientBuilder.build();
-        try {
-            List<VendorOrderStatusAuditResponse> rows = rc.get()
-                    .uri("http://order-service/orders/vendor-orders/{id}/status-history", vendorOrderId)
-                    .header("X-Internal-Auth", internalAuth)
-                    .retrieve()
-                    .body(VENDOR_ORDER_STATUS_AUDIT_LIST_TYPE);
-            return rows == null ? List.of() : rows;
-        } catch (RestClientException ex) {
-            throw new ServiceUnavailableException("Order service unavailable. Try again later.", ex);
-        }
+        return runOrderCall(() -> {
+            RestClient rc = lbRestClientBuilder.build();
+            try {
+                List<VendorOrderStatusAuditResponse> rows = rc.get()
+                        .uri("http://order-service/orders/vendor-orders/{id}/status-history", vendorOrderId)
+                        .header("X-Internal-Auth", internalAuth)
+                        .retrieve()
+                        .body(VENDOR_ORDER_STATUS_AUDIT_LIST_TYPE);
+                return rows == null ? List.of() : rows;
+            } catch (RestClientException ex) {
+                throw new ServiceUnavailableException("Order service unavailable. Try again later.", ex);
+            }
+        });
     }
 
     public Set<UUID> getOrderVendorIds(UUID orderId, String internalAuth) {
-        RestClient rc = lbRestClientBuilder.build();
-        try {
-            Map<String, Object> raw = rc.get()
-                    .uri("http://order-service/orders/{id}/details", orderId)
-                    .header("X-Internal-Auth", internalAuth)
-                    .retrieve()
-                    .body(MAP_TYPE);
-            if (raw == null) {
-                throw new ServiceUnavailableException("Order service returned an empty response", null);
-            }
-            Object rawItems = raw.get("items");
-            if (!(rawItems instanceof List<?> items)) {
-                return Set.of();
-            }
-            Set<UUID> vendorIds = new LinkedHashSet<>();
-            for (Object itemObj : items) {
-                if (!(itemObj instanceof Map<?, ?> itemMap)) {
-                    continue;
+        return runOrderCall(() -> {
+            RestClient rc = lbRestClientBuilder.build();
+            try {
+                Map<String, Object> raw = rc.get()
+                        .uri("http://order-service/orders/{id}/details", orderId)
+                        .header("X-Internal-Auth", internalAuth)
+                        .retrieve()
+                        .body(MAP_TYPE);
+                if (raw == null) {
+                    throw new ServiceUnavailableException("Order service returned an empty response", null);
                 }
-                Object rawVendorId = itemMap.get("vendorId");
-                if (rawVendorId == null) {
-                    continue;
+                Object rawItems = raw.get("items");
+                if (!(rawItems instanceof List<?> items)) {
+                    return Set.of();
                 }
-                try {
-                    vendorIds.add(UUID.fromString(String.valueOf(rawVendorId)));
-                } catch (IllegalArgumentException ignored) {
-                    // ignore malformed vendor id
+                Set<UUID> vendorIds = new LinkedHashSet<>();
+                for (Object itemObj : items) {
+                    if (!(itemObj instanceof Map<?, ?> itemMap)) {
+                        continue;
+                    }
+                    Object rawVendorId = itemMap.get("vendorId");
+                    if (rawVendorId == null) {
+                        continue;
+                    }
+                    try {
+                        vendorIds.add(UUID.fromString(String.valueOf(rawVendorId)));
+                    } catch (IllegalArgumentException ignored) {
+                        // ignore malformed vendor id
+                    }
                 }
+                return Set.copyOf(vendorIds);
+            } catch (RestClientException ex) {
+                throw new ServiceUnavailableException("Order service unavailable. Try again later.", ex);
             }
-            return Set.copyOf(vendorIds);
-        } catch (RestClientException ex) {
-            throw new ServiceUnavailableException("Order service unavailable. Try again later.", ex);
-        }
+        });
     }
 
     @SuppressWarnings("unchecked")
@@ -261,5 +281,15 @@ public class OrderClient {
         }
 
         return builder.build();
+    }
+
+    private <T> T runOrderCall(Supplier<T> action) {
+        return circuitBreakerFactory.create("admin-order-client")
+                .run(action::get, throwable -> {
+                    if (throwable instanceof RuntimeException re) {
+                        throw re;
+                    }
+                    throw new ServiceUnavailableException("Order service unavailable. Try again later.", throwable);
+                });
     }
 }

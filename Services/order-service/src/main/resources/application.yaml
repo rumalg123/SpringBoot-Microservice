@@ -31,6 +31,12 @@ logging:
   pattern:
     level: "%5p [${spring.application.name},traceId=%X{traceId},spanId=%X{spanId}]"
 
+http:
+  client:
+    connect-timeout-seconds: ${HTTP_CLIENT_CONNECT_TIMEOUT_SECONDS:2}
+    response-timeout-seconds: ${HTTP_CLIENT_RESPONSE_TIMEOUT_SECONDS:5}
+    idle-evict-seconds: ${HTTP_CLIENT_IDLE_EVICT_SECONDS:30}
+
 
 resilience4j:
   circuitbreaker:
@@ -90,6 +96,12 @@ resilience4j:
 order:
   aggregation:
     customerDetailsMode: GRACEFUL   # STRICT or GRACEFUL
+  idempotency:
+    enabled: ${ORDER_IDEMPOTENCY_ENABLED:true}
+    key-header-name: ${ORDER_IDEMPOTENCY_KEY_HEADER:Idempotency-Key}
+    key-prefix: ${ORDER_IDEMPOTENCY_KEY_PREFIX:os:idem:v1::}
+    pending-ttl: ${ORDER_IDEMPOTENCY_PENDING_TTL:30s}
+    response-ttl: ${ORDER_IDEMPOTENCY_RESPONSE_TTL:24h}
 
 internal:
   auth:

@@ -118,11 +118,12 @@ public class AdminVendorController {
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @PathVariable UUID id,
             @RequestBody(required = false) Map<String, Object> request
     ) {
         internalRequestVerifier.verify(internalAuth);
-        return adminVendorService.requestDelete(id, request, internalAuth, userSub, userRoles);
+        return adminVendorService.requestDelete(id, request, internalAuth, userSub, userRoles, idempotencyKey);
     }
 
     @PostMapping("/{id}/confirm-delete")
@@ -131,11 +132,12 @@ public class AdminVendorController {
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @PathVariable UUID id,
             @RequestBody(required = false) Map<String, Object> request
     ) {
         internalRequestVerifier.verify(internalAuth);
-        adminVendorService.confirmDelete(id, request, internalAuth, userSub, userRoles);
+        adminVendorService.confirmDelete(id, request, internalAuth, userSub, userRoles, idempotencyKey);
     }
 
     @PostMapping("/{id}/stop-orders")
@@ -143,11 +145,12 @@ public class AdminVendorController {
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @RequestBody(required = false) Map<String, Object> request,
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
-        return adminVendorService.stopReceivingOrders(id, request, internalAuth, userSub, userRoles);
+        return adminVendorService.stopReceivingOrders(id, request, internalAuth, userSub, userRoles, idempotencyKey);
     }
 
     @PostMapping("/{id}/resume-orders")
@@ -155,11 +158,12 @@ public class AdminVendorController {
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @RequestBody(required = false) Map<String, Object> request,
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
-        return adminVendorService.resumeReceivingOrders(id, request, internalAuth, userSub, userRoles);
+        return adminVendorService.resumeReceivingOrders(id, request, internalAuth, userSub, userRoles, idempotencyKey);
     }
 
     @PostMapping("/{id}/restore")
@@ -167,11 +171,12 @@ public class AdminVendorController {
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @RequestBody(required = false) Map<String, Object> request,
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
-        return adminVendorService.restore(id, request, internalAuth, userSub, userRoles);
+        return adminVendorService.restore(id, request, internalAuth, userSub, userRoles, idempotencyKey);
     }
 
     @GetMapping("/{vendorId}/users")

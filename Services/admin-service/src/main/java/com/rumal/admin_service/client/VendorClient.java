@@ -3,6 +3,7 @@ package com.rumal.admin_service.client;
 import com.rumal.admin_service.exception.DownstreamHttpException;
 import com.rumal.admin_service.exception.ServiceUnavailableException;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.cloud.client.circuitbreaker.CircuitBreakerFactory;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -15,6 +16,7 @@ import java.net.URI;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 @Component
 public class VendorClient {
@@ -26,9 +28,14 @@ public class VendorClient {
 
     @Qualifier("loadBalancedRestClientBuilder")
     private final RestClient.Builder lbRestClientBuilder;
+    private final CircuitBreakerFactory<?, ?> circuitBreakerFactory;
 
-    public VendorClient(@Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder) {
+    public VendorClient(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder,
+            CircuitBreakerFactory<?, ?> circuitBreakerFactory
+    ) {
         this.lbRestClientBuilder = lbRestClientBuilder;
+        this.circuitBreakerFactory = circuitBreakerFactory;
     }
 
     public List<Map<String, Object>> listAll(String internalAuth) {
@@ -68,20 +75,22 @@ public class VendorClient {
     }
 
     public void delete(UUID id, String internalAuth, String userSub, String userRoles) {
-        RestClient rc = lbRestClientBuilder.build();
-        try {
-            applyActorHeaders(rc.delete()
-                    .uri(buildUri("/admin/vendors/" + id))
-                    .header("X-Internal-Auth", internalAuth), userSub, userRoles)
-                    .retrieve()
-                    .toBodilessEntity();
-        } catch (RestClientResponseException ex) {
-            throw toDownstreamHttpException(ex);
-        } catch (RestClientException ex) {
-            throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
-        } catch (IllegalStateException ex) {
-            throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
-        }
+        runVendorVoid(() -> {
+            RestClient rc = lbRestClientBuilder.build();
+            try {
+                applyActorHeaders(rc.delete()
+                        .uri(buildUri("/admin/vendors/" + id))
+                        .header("X-Internal-Auth", internalAuth), userSub, userRoles)
+                        .retrieve()
+                        .toBodilessEntity();
+            } catch (RestClientResponseException ex) {
+                throw toDownstreamHttpException(ex);
+            } catch (RestClientException ex) {
+                throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
+            } catch (IllegalStateException ex) {
+                throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
+            }
+        });
     }
 
     public Map<String, Object> stopReceivingOrders(UUID id, String internalAuth) {
@@ -89,9 +98,13 @@ public class VendorClient {
     }
 
     public Map<String, Object> stopReceivingOrders(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
+        return stopReceivingOrders(id, request, internalAuth, userSub, userRoles, null);
+    }
+
+    public Map<String, Object> stopReceivingOrders(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles, String idempotencyKey) {
         return request == null
-                ? postNoBody("/admin/vendors/" + id + "/stop-orders", internalAuth, userSub, userRoles)
-                : jsonPost("/admin/vendors/" + id + "/stop-orders", request, internalAuth, userSub, userRoles);
+                ? postNoBody("/admin/vendors/" + id + "/stop-orders", internalAuth, userSub, userRoles, idempotencyKey)
+                : jsonPost("/admin/vendors/" + id + "/stop-orders", request, internalAuth, userSub, userRoles, idempotencyKey);
     }
 
     public Map<String, Object> resumeReceivingOrders(UUID id, String internalAuth) {
@@ -99,9 +112,13 @@ public class VendorClient {
     }
 
     public Map<String, Object> resumeReceivingOrders(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
+        return resumeReceivingOrders(id, request, internalAuth, userSub, userRoles, null);
+    }
+
+    public Map<String, Object> resumeReceivingOrders(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles, String idempotencyKey) {
         return request == null
-                ? postNoBody("/admin/vendors/" + id + "/resume-orders", internalAuth, userSub, userRoles)
-                : jsonPost("/admin/vendors/" + id + "/resume-orders", request, internalAuth, userSub, userRoles);
+                ? postNoBody("/admin/vendors/" + id + "/resume-orders", internalAuth, userSub, userRoles, idempotencyKey)
+                : jsonPost("/admin/vendors/" + id + "/resume-orders", request, internalAuth, userSub, userRoles, idempotencyKey);
     }
 
     public Map<String, Object> restore(UUID id, String internalAuth) {
@@ -109,31 +126,40 @@ public class VendorClient {
     }
 
     public Map<String, Object> restore(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
-        RestClient rc = lbRestClientBuilder.build();
-        try {
-            RestClient.RequestBodySpec spec = rc.post().uri(buildUri("/admin/vendors/" + id + "/restore"));
-            RestClient.RequestHeadersSpec<?> headersSpec = applyActorHeaders(spec.header("X-Internal-Auth", internalAuth), userSub, userRoles);
-            Map<String, Object> body;
-            if (request == null || request.isEmpty()) {
-                body = headersSpec.retrieve().body(MAP_TYPE);
-            } else {
-                body = ((RestClient.RequestBodySpec) headersSpec)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body(request)
-                        .retrieve()
-                        .body(MAP_TYPE);
+        return restore(id, request, internalAuth, userSub, userRoles, null);
+    }
+
+    public Map<String, Object> restore(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles, String idempotencyKey) {
+        return runVendorCall(() -> {
+            RestClient rc = lbRestClientBuilder.build();
+            try {
+                RestClient.RequestBodySpec spec = rc.post().uri(buildUri("/admin/vendors/" + id + "/restore"));
+                RestClient.RequestHeadersSpec<?> headersSpec = applyIdempotencyHeader(
+                        applyActorHeaders(spec.header("X-Internal-Auth", internalAuth), userSub, userRoles),
+                        idempotencyKey
+                );
+                Map<String, Object> body;
+                if (request == null || request.isEmpty()) {
+                    body = headersSpec.retrieve().body(MAP_TYPE);
+                } else {
+                    body = ((RestClient.RequestBodySpec) headersSpec)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .body(request)
+                            .retrieve()
+                            .body(MAP_TYPE);
+                }
+                if (body == null) {
+                    throw new ServiceUnavailableException("Vendor service returned an empty response", null);
+                }
+                return body;
+            } catch (RestClientResponseException ex) {
+                throw toDownstreamHttpException(ex);
+            } catch (RestClientException ex) {
+                throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
+            } catch (IllegalStateException ex) {
+                throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
             }
-            if (body == null) {
-                throw new ServiceUnavailableException("Vendor service returned an empty response", null);
-            }
-            return body;
-        } catch (RestClientResponseException ex) {
-            throw toDownstreamHttpException(ex);
-        } catch (RestClientException ex) {
-            throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
-        } catch (IllegalStateException ex) {
-            throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
-        }
+        });
     }
 
     public List<Map<String, Object>> listVendorUsers(UUID vendorId, String internalAuth) {
@@ -145,32 +171,45 @@ public class VendorClient {
     }
 
     public Map<String, Object> requestDelete(UUID vendorId, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
+        return requestDelete(vendorId, request, internalAuth, userSub, userRoles, null);
+    }
+
+    public Map<String, Object> requestDelete(UUID vendorId, Map<String, Object> request, String internalAuth, String userSub, String userRoles, String idempotencyKey) {
         return (request == null || request.isEmpty())
-                ? postNoBody("/admin/vendors/" + vendorId + "/delete-request", internalAuth, userSub, userRoles)
-                : jsonPost("/admin/vendors/" + vendorId + "/delete-request", request, internalAuth, userSub, userRoles);
+                ? postNoBody("/admin/vendors/" + vendorId + "/delete-request", internalAuth, userSub, userRoles, idempotencyKey)
+                : jsonPost("/admin/vendors/" + vendorId + "/delete-request", request, internalAuth, userSub, userRoles, idempotencyKey);
     }
 
     public void confirmDelete(UUID vendorId, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
-        RestClient rc = lbRestClientBuilder.build();
-        try {
-            RestClient.RequestBodySpec spec = rc.post().uri(buildUri("/admin/vendors/" + vendorId + "/confirm-delete"));
-            RestClient.RequestHeadersSpec<?> headersSpec = applyActorHeaders(spec.header("X-Internal-Auth", internalAuth), userSub, userRoles);
-            if (request == null || request.isEmpty()) {
-                headersSpec.retrieve().toBodilessEntity();
-            } else {
-                ((RestClient.RequestBodySpec) headersSpec)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body(request)
-                        .retrieve()
-                        .toBodilessEntity();
+        confirmDelete(vendorId, request, internalAuth, userSub, userRoles, null);
+    }
+
+    public void confirmDelete(UUID vendorId, Map<String, Object> request, String internalAuth, String userSub, String userRoles, String idempotencyKey) {
+        runVendorVoid(() -> {
+            RestClient rc = lbRestClientBuilder.build();
+            try {
+                RestClient.RequestBodySpec spec = rc.post().uri(buildUri("/admin/vendors/" + vendorId + "/confirm-delete"));
+                RestClient.RequestHeadersSpec<?> headersSpec = applyIdempotencyHeader(
+                        applyActorHeaders(spec.header("X-Internal-Auth", internalAuth), userSub, userRoles),
+                        idempotencyKey
+                );
+                if (request == null || request.isEmpty()) {
+                    headersSpec.retrieve().toBodilessEntity();
+                } else {
+                    ((RestClient.RequestBodySpec) headersSpec)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .body(request)
+                            .retrieve()
+                            .toBodilessEntity();
+                }
+            } catch (RestClientResponseException ex) {
+                throw toDownstreamHttpException(ex);
+            } catch (RestClientException ex) {
+                throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
+            } catch (IllegalStateException ex) {
+                throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
             }
-        } catch (RestClientResponseException ex) {
-            throw toDownstreamHttpException(ex);
-        } catch (RestClientException ex) {
-            throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
-        } catch (IllegalStateException ex) {
-            throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
-        }
+        });
     }
 
     public List<Map<String, Object>> listAccessibleVendorMembershipsByKeycloakUser(String keycloakUserId, String internalAuth) {
@@ -186,62 +225,68 @@ public class VendorClient {
     }
 
     public void removeVendorUser(UUID vendorId, UUID membershipId, String internalAuth) {
-        RestClient rc = lbRestClientBuilder.build();
-        try {
-            rc.delete()
-                    .uri(buildUri("/admin/vendors/" + vendorId + "/users/" + membershipId))
-                    .header("X-Internal-Auth", internalAuth)
-                    .retrieve()
-                    .toBodilessEntity();
-        } catch (RestClientResponseException ex) {
-            throw toDownstreamHttpException(ex);
-        } catch (RestClientException ex) {
-            throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
-        } catch (IllegalStateException ex) {
-            throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
-        }
+        runVendorVoid(() -> {
+            RestClient rc = lbRestClientBuilder.build();
+            try {
+                rc.delete()
+                        .uri(buildUri("/admin/vendors/" + vendorId + "/users/" + membershipId))
+                        .header("X-Internal-Auth", internalAuth)
+                        .retrieve()
+                        .toBodilessEntity();
+            } catch (RestClientResponseException ex) {
+                throw toDownstreamHttpException(ex);
+            } catch (RestClientException ex) {
+                throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
+            } catch (IllegalStateException ex) {
+                throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
+            }
+        });
     }
 
     private List<Map<String, Object>> getList(String path, String internalAuth) {
-        RestClient rc = lbRestClientBuilder.build();
-        try {
-            List<Map<String, Object>> response = rc.get()
-                    .uri(buildUri(path))
-                    .header("X-Internal-Auth", internalAuth)
-                    .retrieve()
-                    .body(LIST_MAP_TYPE);
-            if (response == null) {
-                throw new ServiceUnavailableException("Vendor service returned an empty response", null);
+        return runVendorCall(() -> {
+            RestClient rc = lbRestClientBuilder.build();
+            try {
+                List<Map<String, Object>> response = rc.get()
+                        .uri(buildUri(path))
+                        .header("X-Internal-Auth", internalAuth)
+                        .retrieve()
+                        .body(LIST_MAP_TYPE);
+                if (response == null) {
+                    throw new ServiceUnavailableException("Vendor service returned an empty response", null);
+                }
+                return response;
+            } catch (RestClientResponseException ex) {
+                throw toDownstreamHttpException(ex);
+            } catch (RestClientException ex) {
+                throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
+            } catch (IllegalStateException ex) {
+                throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
             }
-            return response;
-        } catch (RestClientResponseException ex) {
-            throw toDownstreamHttpException(ex);
-        } catch (RestClientException ex) {
-            throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
-        } catch (IllegalStateException ex) {
-            throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
-        }
+        });
     }
 
     private Map<String, Object> getMap(String path, String internalAuth) {
-        RestClient rc = lbRestClientBuilder.build();
-        try {
-            Map<String, Object> response = rc.get()
-                    .uri(buildUri(path))
-                    .header("X-Internal-Auth", internalAuth)
-                    .retrieve()
-                    .body(MAP_TYPE);
-            if (response == null) {
-                throw new ServiceUnavailableException("Vendor service returned an empty response", null);
+        return runVendorCall(() -> {
+            RestClient rc = lbRestClientBuilder.build();
+            try {
+                Map<String, Object> response = rc.get()
+                        .uri(buildUri(path))
+                        .header("X-Internal-Auth", internalAuth)
+                        .retrieve()
+                        .body(MAP_TYPE);
+                if (response == null) {
+                    throw new ServiceUnavailableException("Vendor service returned an empty response", null);
+                }
+                return response;
+            } catch (RestClientResponseException ex) {
+                throw toDownstreamHttpException(ex);
+            } catch (RestClientException ex) {
+                throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
+            } catch (IllegalStateException ex) {
+                throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
             }
-            return response;
-        } catch (RestClientResponseException ex) {
-            throw toDownstreamHttpException(ex);
-        } catch (RestClientException ex) {
-            throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
-        } catch (IllegalStateException ex) {
-            throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
-        }
+        });
     }
 
     private Map<String, Object> jsonRequest(String method, String path, Map<String, Object> request, String internalAuth) {
@@ -249,30 +294,38 @@ public class VendorClient {
     }
 
     private Map<String, Object> jsonRequest(String method, String path, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
-        RestClient rc = lbRestClientBuilder.build();
-        try {
-            RestClient.RequestBodySpec spec = switch (method) {
-                case "POST" -> rc.post().uri(buildUri(path));
-                case "PUT" -> rc.put().uri(buildUri(path));
-                default -> throw new IllegalArgumentException("Unsupported method: " + method);
-            };
-            Map<String, Object> response = ((RestClient.RequestBodySpec) applyActorHeaders(spec
-                    .header("X-Internal-Auth", internalAuth), userSub, userRoles))
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(request)
-                    .retrieve()
-                    .body(MAP_TYPE);
-            if (response == null) {
-                throw new ServiceUnavailableException("Vendor service returned an empty response", null);
+        return jsonRequest(method, path, request, internalAuth, userSub, userRoles, null);
+    }
+
+    private Map<String, Object> jsonRequest(String method, String path, Map<String, Object> request, String internalAuth, String userSub, String userRoles, String idempotencyKey) {
+        return runVendorCall(() -> {
+            RestClient rc = lbRestClientBuilder.build();
+            try {
+                RestClient.RequestBodySpec spec = switch (method) {
+                    case "POST" -> rc.post().uri(buildUri(path));
+                    case "PUT" -> rc.put().uri(buildUri(path));
+                    default -> throw new IllegalArgumentException("Unsupported method: " + method);
+                };
+                Map<String, Object> response = ((RestClient.RequestBodySpec) applyIdempotencyHeader(
+                                applyActorHeaders(spec.header("X-Internal-Auth", internalAuth), userSub, userRoles),
+                                idempotencyKey
+                        ))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(request)
+                        .retrieve()
+                        .body(MAP_TYPE);
+                if (response == null) {
+                    throw new ServiceUnavailableException("Vendor service returned an empty response", null);
+                }
+                return response;
+            } catch (RestClientResponseException ex) {
+                throw toDownstreamHttpException(ex);
+            } catch (RestClientException ex) {
+                throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
+            } catch (IllegalStateException ex) {
+                throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
             }
-            return response;
-        } catch (RestClientResponseException ex) {
-            throw toDownstreamHttpException(ex);
-        } catch (RestClientException ex) {
-            throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
-        } catch (IllegalStateException ex) {
-            throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
-        }
+        });
     }
 
     private Map<String, Object> postNoBody(String path, String internalAuth) {
@@ -280,28 +333,41 @@ public class VendorClient {
     }
 
     private Map<String, Object> postNoBody(String path, String internalAuth, String userSub, String userRoles) {
-        RestClient rc = lbRestClientBuilder.build();
-        try {
-            Map<String, Object> response = applyActorHeaders(rc.post()
-                    .uri(buildUri(path))
-                    .header("X-Internal-Auth", internalAuth), userSub, userRoles)
-                    .retrieve()
-                    .body(MAP_TYPE);
-            if (response == null) {
-                throw new ServiceUnavailableException("Vendor service returned an empty response", null);
+        return postNoBody(path, internalAuth, userSub, userRoles, null);
+    }
+
+    private Map<String, Object> postNoBody(String path, String internalAuth, String userSub, String userRoles, String idempotencyKey) {
+        return runVendorCall(() -> {
+            RestClient rc = lbRestClientBuilder.build();
+            try {
+                Map<String, Object> response = applyIdempotencyHeader(
+                                applyActorHeaders(rc.post()
+                                        .uri(buildUri(path))
+                                        .header("X-Internal-Auth", internalAuth), userSub, userRoles),
+                                idempotencyKey
+                        )
+                        .retrieve()
+                        .body(MAP_TYPE);
+                if (response == null) {
+                    throw new ServiceUnavailableException("Vendor service returned an empty response", null);
+                }
+                return response;
+            } catch (RestClientResponseException ex) {
+                throw toDownstreamHttpException(ex);
+            } catch (RestClientException ex) {
+                throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
+            } catch (IllegalStateException ex) {
+                throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
             }
-            return response;
-        } catch (RestClientResponseException ex) {
-            throw toDownstreamHttpException(ex);
-        } catch (RestClientException ex) {
-            throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
-        } catch (IllegalStateException ex) {
-            throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
-        }
+        });
     }
 
     private Map<String, Object> jsonPost(String path, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
-        return jsonRequest("POST", path, request, internalAuth, userSub, userRoles);
+        return jsonPost(path, request, internalAuth, userSub, userRoles, null);
+    }
+
+    private Map<String, Object> jsonPost(String path, Map<String, Object> request, String internalAuth, String userSub, String userRoles, String idempotencyKey) {
+        return jsonRequest("POST", path, request, internalAuth, userSub, userRoles, idempotencyKey);
     }
 
     private RestClient.RequestHeadersSpec<?> applyActorHeaders(RestClient.RequestHeadersSpec<?> spec, String userSub, String userRoles) {
@@ -313,6 +379,13 @@ public class VendorClient {
             next = next.header("X-User-Roles", userRoles);
         }
         return next;
+    }
+
+    private RestClient.RequestHeadersSpec<?> applyIdempotencyHeader(RestClient.RequestHeadersSpec<?> spec, String idempotencyKey) {
+        if (StringUtils.hasText(idempotencyKey)) {
+            return spec.header("Idempotency-Key", idempotencyKey.trim());
+        }
+        return spec;
     }
 
     private DownstreamHttpException toDownstreamHttpException(RestClientResponseException ex) {
@@ -332,5 +405,22 @@ public class VendorClient {
 
     private URI buildUri(String path) {
         return URI.create("http://vendor-service" + path);
+    }
+
+    private <T> T runVendorCall(Supplier<T> action) {
+        return circuitBreakerFactory.create("admin-vendor-client")
+                .run(action::get, throwable -> {
+                    if (throwable instanceof RuntimeException re) {
+                        throw re;
+                    }
+                    throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", throwable);
+                });
+    }
+
+    private void runVendorVoid(Runnable action) {
+        runVendorCall(() -> {
+            action.run();
+            return Boolean.TRUE;
+        });
     }
 }

@@ -18,6 +18,50 @@ eureka:
     service-url:
       defaultZone: ${EUREKA_URL:http://discovery-server:8761/eureka/}
 
+resilience4j:
+  circuitbreaker:
+    instances:
+      orderService:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 20
+        minimumNumberOfCalls: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 3
+      productService:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 20
+        minimumNumberOfCalls: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 3
+  retry:
+    instances:
+      orderService:
+        maxAttempts: 3
+        waitDuration: 300ms
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - java.io.IOException
+          - org.springframework.web.client.ResourceAccessException
+          - org.springframework.web.client.HttpServerErrorException
+      productService:
+        maxAttempts: 3
+        waitDuration: 300ms
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - java.io.IOException
+          - org.springframework.web.client.ResourceAccessException
+          - org.springframework.web.client.HttpServerErrorException
+
+http:
+  client:
+    connect-timeout-seconds: ${HTTP_CLIENT_CONNECT_TIMEOUT_SECONDS:2}
+    response-timeout-seconds: ${HTTP_CLIENT_RESPONSE_TIMEOUT_SECONDS:5}
+    idle-evict-seconds: ${HTTP_CLIENT_IDLE_EVICT_SECONDS:30}
+
 internal:
   auth:
     shared-secret: ${INTERNAL_AUTH_SHARED_SECRET:}
@@ -27,6 +71,15 @@ sample:
     seed:
       enabled: ${SAMPLE_VENDOR_SEED_ENABLED:true}
 
+cache:
+  vendor-operational-state-ttl: ${CACHE_VENDOR_OPERATIONAL_STATE_TTL:15s}
+
 vendor:
   delete:
     refund-hold-days: ${VENDOR_DELETE_REFUND_HOLD_DAYS:14}
+  idempotency:
+    enabled: ${VENDOR_IDEMPOTENCY_ENABLED:true}
+    key-header-name: ${VENDOR_IDEMPOTENCY_KEY_HEADER:Idempotency-Key}
+    key-prefix: ${VENDOR_IDEMPOTENCY_KEY_PREFIX:vs:idem:v1::}
+    pending-ttl: ${VENDOR_IDEMPOTENCY_PENDING_TTL:30s}
+    response-ttl: ${VENDOR_IDEMPOTENCY_RESPONSE_TTL:6h}

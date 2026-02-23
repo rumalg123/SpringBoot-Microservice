@@ -2,6 +2,8 @@ package com.rumal.product_service.client;
 
 import com.rumal.product_service.dto.VendorAccessMembershipResponse;
 import com.rumal.product_service.exception.ServiceUnavailableException;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
@@ -24,6 +26,8 @@ public class VendorAccessClient {
         this.lbRestClientBuilder = lbRestClientBuilder;
     }
 
+    @Retry(name = "vendorService")
+    @CircuitBreaker(name = "vendorService", fallbackMethod = "fallbackListAccessibleVendorsByKeycloakUser")
     public List<VendorAccessMembershipResponse> listAccessibleVendorsByKeycloakUser(String keycloakUserId, String internalAuth) {
         RestClient rc = lbRestClientBuilder.build();
         try {
@@ -40,6 +44,15 @@ public class VendorAccessClient {
         } catch (IllegalStateException ex) {
             throw new ServiceUnavailableException("Vendor service unavailable for access lookup", ex);
         }
+    }
+
+    @SuppressWarnings("unused")
+    public List<VendorAccessMembershipResponse> fallbackListAccessibleVendorsByKeycloakUser(
+            String keycloakUserId,
+            String internalAuth,
+            Throwable ex
+    ) {
+        throw new ServiceUnavailableException("Vendor service unavailable for access lookup. Try again later.", ex);
     }
 
     private URI buildUri(String path) {

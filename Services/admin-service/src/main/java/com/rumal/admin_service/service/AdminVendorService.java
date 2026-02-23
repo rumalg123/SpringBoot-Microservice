@@ -76,11 +76,19 @@ public class AdminVendorService {
     }
 
     public Map<String, Object> requestDelete(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
-        return vendorClient.requestDelete(id, request, internalAuth, userSub, userRoles);
+        return requestDelete(id, request, internalAuth, userSub, userRoles, null);
+    }
+
+    public Map<String, Object> requestDelete(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles, String idempotencyKey) {
+        return vendorClient.requestDelete(id, request, internalAuth, userSub, userRoles, idempotencyKey);
     }
 
     public void confirmDelete(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
-        vendorClient.confirmDelete(id, request, internalAuth, userSub, userRoles);
+        confirmDelete(id, request, internalAuth, userSub, userRoles, null);
+    }
+
+    public void confirmDelete(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles, String idempotencyKey) {
+        vendorClient.confirmDelete(id, request, internalAuth, userSub, userRoles, idempotencyKey);
         revokeSessionsForVendorPrincipals(id, internalAuth);
     }
 
@@ -89,7 +97,11 @@ public class AdminVendorService {
     }
 
     public Map<String, Object> stopReceivingOrders(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
-        return vendorClient.stopReceivingOrders(id, request, internalAuth, userSub, userRoles);
+        return stopReceivingOrders(id, request, internalAuth, userSub, userRoles, null);
+    }
+
+    public Map<String, Object> stopReceivingOrders(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles, String idempotencyKey) {
+        return vendorClient.stopReceivingOrders(id, request, internalAuth, userSub, userRoles, idempotencyKey);
     }
 
     public Map<String, Object> resumeReceivingOrders(UUID id, String internalAuth) {
@@ -97,7 +109,11 @@ public class AdminVendorService {
     }
 
     public Map<String, Object> resumeReceivingOrders(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
-        return vendorClient.resumeReceivingOrders(id, request, internalAuth, userSub, userRoles);
+        return resumeReceivingOrders(id, request, internalAuth, userSub, userRoles, null);
+    }
+
+    public Map<String, Object> resumeReceivingOrders(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles, String idempotencyKey) {
+        return vendorClient.resumeReceivingOrders(id, request, internalAuth, userSub, userRoles, idempotencyKey);
     }
 
     public Map<String, Object> restore(UUID id, String internalAuth) {
@@ -105,7 +121,11 @@ public class AdminVendorService {
     }
 
     public Map<String, Object> restore(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
-        return vendorClient.restore(id, request, internalAuth, userSub, userRoles);
+        return restore(id, request, internalAuth, userSub, userRoles, null);
+    }
+
+    public Map<String, Object> restore(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles, String idempotencyKey) {
+        return vendorClient.restore(id, request, internalAuth, userSub, userRoles, idempotencyKey);
     }
 
     public List<Map<String, Object>> listVendorUsers(UUID vendorId, String internalAuth) {

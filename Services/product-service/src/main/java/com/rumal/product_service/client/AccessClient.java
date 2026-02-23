@@ -3,6 +3,8 @@ package com.rumal.product_service.client;
 import com.rumal.product_service.dto.PlatformAccessLookupResponse;
 import com.rumal.product_service.dto.VendorStaffAccessLookupResponse;
 import com.rumal.product_service.exception.ServiceUnavailableException;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
@@ -25,6 +27,8 @@ public class AccessClient {
         this.lbRestClientBuilder = lbRestClientBuilder;
     }
 
+    @Retry(name = "accessService")
+    @CircuitBreaker(name = "accessService", fallbackMethod = "fallbackGetPlatformAccessByKeycloakUser")
     public PlatformAccessLookupResponse getPlatformAccessByKeycloakUser(String keycloakUserId, String internalAuth) {
         RestClient rc = lbRestClientBuilder.build();
         try {
@@ -41,6 +45,8 @@ public class AccessClient {
         }
     }
 
+    @Retry(name = "accessService")
+    @CircuitBreaker(name = "accessService", fallbackMethod = "fallbackListVendorStaffAccessByKeycloakUser")
     public List<VendorStaffAccessLookupResponse> listVendorStaffAccessByKeycloakUser(String keycloakUserId, String internalAuth) {
         RestClient rc = lbRestClientBuilder.build();
         try {
@@ -55,6 +61,20 @@ public class AccessClient {
         } catch (RestClientException | IllegalStateException ex) {
             throw new ServiceUnavailableException("Access service unavailable for vendor lookup", ex);
         }
+    }
+
+    @SuppressWarnings("unused")
+    public PlatformAccessLookupResponse fallbackGetPlatformAccessByKeycloakUser(String keycloakUserId, String internalAuth, Throwable ex) {
+        throw new ServiceUnavailableException("Access service unavailable for platform lookup. Try again later.", ex);
+    }
+
+    @SuppressWarnings("unused")
+    public List<VendorStaffAccessLookupResponse> fallbackListVendorStaffAccessByKeycloakUser(
+            String keycloakUserId,
+            String internalAuth,
+            Throwable ex
+    ) {
+        throw new ServiceUnavailableException("Access service unavailable for vendor lookup. Try again later.", ex);
     }
 
     private URI buildUri(String path) {

@@ -20,6 +20,9 @@ import com.rumal.access_service.repo.PlatformStaffAccessRepository;
 import com.rumal.access_service.repo.VendorStaffAccessRepository;
 import com.rumal.access_service.repo.AccessChangeAuditRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort;
@@ -46,6 +49,7 @@ public class AccessServiceImpl implements AccessService {
     private final PlatformStaffAccessRepository platformStaffAccessRepository;
     private final VendorStaffAccessRepository vendorStaffAccessRepository;
     private final AccessChangeAuditRepository accessChangeAuditRepository;
+    private final CacheManager cacheManager;
 
     @Override
     public AccessChangeAuditPageResponse listAccessAudit(
@@ -148,6 +152,7 @@ public class AccessServiceImpl implements AccessService {
         applyPlatformStaff(entity, request);
         PlatformStaffAccess saved = platformStaffAccessRepository.save(entity);
         recordPlatformAudit(saved, AccessChangeAction.CREATED, actorSub, actorRoles, reason);
+        evictPlatformAccessLookup(saved.getKeycloakUserId());
         return toPlatformStaffResponse(saved);
     }
 
@@ -162,9 +167,12 @@ public class AccessServiceImpl implements AccessService {
     public PlatformStaffAccessResponse updatePlatformStaff(UUID id, UpsertPlatformStaffAccessRequest request, String actorSub, String actorRoles, String reason) {
         PlatformStaffAccess entity = platformStaffAccessRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Platform staff not found: " + id));
+        String previousKeycloakUserId = entity.getKeycloakUserId();
         applyPlatformStaff(entity, request);
         PlatformStaffAccess saved = platformStaffAccessRepository.save(entity);
         recordPlatformAudit(saved, AccessChangeAction.UPDATED, actorSub, actorRoles, reason);
+        evictPlatformAccessLookup(previousKeycloakUserId);
+        evictPlatformAccessLookup(saved.getKeycloakUserId());
         return toPlatformStaffResponse(saved);
     }
 
@@ -184,6 +192,7 @@ public class AccessServiceImpl implements AccessService {
         entity.setActive(false);
         PlatformStaffAccess saved = platformStaffAccessRepository.save(entity);
         recordPlatformAudit(saved, AccessChangeAction.SOFT_DELETED, actorSub, actorRoles, reason);
+        evictPlatformAccessLookup(saved.getKeycloakUserId());
     }
 
     @Override
@@ -204,10 +213,12 @@ public class AccessServiceImpl implements AccessService {
         entity.setDeletedAt(null);
         PlatformStaffAccess saved = platformStaffAccessRepository.save(entity);
         recordPlatformAudit(saved, AccessChangeAction.RESTORED, actorSub, actorRoles, reason);
+        evictPlatformAccessLookup(saved.getKeycloakUserId());
         return toPlatformStaffResponse(saved);
     }
 
     @Override
+    @Cacheable(cacheNames = "platformAccessLookup", key = "#keycloakUserId == null ? '' : #keycloakUserId.trim().toLowerCase()")
     public PlatformAccessLookupResponse getPlatformAccessByKeycloakUser(String keycloakUserId) {
         String normalized = normalizeRequired(keycloakUserId, "keycloakUserId", 120);
         return platformStaffAccessRepository.findByKeycloakUserIdIgnoreCaseAndActiveTrueAndDeletedFalse(normalized)
@@ -257,6 +268,7 @@ public class AccessServiceImpl implements AccessService {
         applyVendorStaff(entity, request);
         VendorStaffAccess saved = vendorStaffAccessRepository.save(entity);
         recordVendorAudit(saved, AccessChangeAction.CREATED, actorSub, actorRoles, reason);
+        evictVendorAccessLookup(saved.getKeycloakUserId());
         return toVendorStaffResponse(saved);
     }
 
@@ -271,9 +283,12 @@ public class AccessServiceImpl implements AccessService {
     public VendorStaffAccessResponse updateVendorStaff(UUID id, UpsertVendorStaffAccessRequest request, String actorSub, String actorRoles, String reason) {
         VendorStaffAccess entity = vendorStaffAccessRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Vendor staff not found: " + id));
+        String previousKeycloakUserId = entity.getKeycloakUserId();
         applyVendorStaff(entity, request);
         VendorStaffAccess saved = vendorStaffAccessRepository.save(entity);
         recordVendorAudit(saved, AccessChangeAction.UPDATED, actorSub, actorRoles, reason);
+        evictVendorAccessLookup(previousKeycloakUserId);
+        evictVendorAccessLookup(saved.getKeycloakUserId());
         return toVendorStaffResponse(saved);
     }
 
@@ -293,6 +308,7 @@ public class AccessServiceImpl implements AccessService {
         entity.setActive(false);
         VendorStaffAccess saved = vendorStaffAccessRepository.save(entity);
         recordVendorAudit(saved, AccessChangeAction.SOFT_DELETED, actorSub, actorRoles, reason);
+        evictVendorAccessLookup(saved.getKeycloakUserId());
     }
 
     @Override
@@ -313,10 +329,12 @@ public class AccessServiceImpl implements AccessService {
         entity.setDeletedAt(null);
         VendorStaffAccess saved = vendorStaffAccessRepository.save(entity);
         recordVendorAudit(saved, AccessChangeAction.RESTORED, actorSub, actorRoles, reason);
+        evictVendorAccessLookup(saved.getKeycloakUserId());
         return toVendorStaffResponse(saved);
     }
 
     @Override
+    @Cacheable(cacheNames = "vendorAccessLookup", key = "#keycloakUserId == null ? '' : #keycloakUserId.trim().toLowerCase()")
     public List<VendorStaffAccessLookupResponse> listVendorStaffAccessByKeycloakUser(String keycloakUserId) {
         String normalized = normalizeRequired(keycloakUserId, "keycloakUserId", 120);
         return vendorStaffAccessRepository.findByKeycloakUserIdIgnoreCaseAndActiveTrueAndDeletedFalseOrderByVendorIdAsc(normalized)
@@ -570,5 +588,29 @@ public class AccessServiceImpl implements AccessService {
                 .map(String::trim)
                 .filter(StringUtils::hasText)
                 .toList();
+    }
+
+    private void evictPlatformAccessLookup(String keycloakUserId) {
+        evictCacheKey("platformAccessLookup", keycloakUserId);
+    }
+
+    private void evictVendorAccessLookup(String keycloakUserId) {
+        evictCacheKey("vendorAccessLookup", keycloakUserId);
+    }
+
+    private void evictCacheKey(String cacheName, String keycloakUserId) {
+        String key = normalizedLookupKey(keycloakUserId);
+        if (!StringUtils.hasText(key)) {
+            return;
+        }
+        Cache cache = cacheManager.getCache(cacheName);
+        if (cache != null) {
+            cache.evict(key);
+        }
+    }
+
+    private String normalizedLookupKey(String keycloakUserId) {
+        String trimmed = trimToNull(keycloakUserId);
+        return trimmed == null ? null : trimmed.toLowerCase(Locale.ROOT);
     }
 }

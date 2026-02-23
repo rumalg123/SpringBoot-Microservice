@@ -34,3 +34,29 @@ logging:
 
 cache:
   admin-orders-ttl: ${CACHE_ADMIN_ORDERS_TTL:30s}
+
+admin:
+  idempotency:
+    enabled: ${ADMIN_IDEMPOTENCY_ENABLED:true}
+    key-header-name: ${ADMIN_IDEMPOTENCY_KEY_HEADER_NAME:Idempotency-Key}
+    pending-ttl: ${ADMIN_IDEMPOTENCY_PENDING_TTL:30s}
+    response-ttl: ${ADMIN_IDEMPOTENCY_RESPONSE_TTL:6h}
+    key-prefix: ${ADMIN_IDEMPOTENCY_KEY_PREFIX:admin:idem:v1::}
+
+http:
+  client:
+    connect-timeout-seconds: ${ADMIN_HTTP_CLIENT_CONNECT_TIMEOUT_SECONDS:2}
+    response-timeout-seconds: ${ADMIN_HTTP_CLIENT_RESPONSE_TIMEOUT_SECONDS:5}
+    idle-evict-seconds: ${ADMIN_HTTP_CLIENT_IDLE_EVICT_SECONDS:30}
+
+resilience:
+  circuit-breaker:
+    failure-rate-threshold: ${ADMIN_CB_FAILURE_RATE_THRESHOLD:50}
+    slow-call-rate-threshold: ${ADMIN_CB_SLOW_CALL_RATE_THRESHOLD:70}
+    slow-call-duration-ms: ${ADMIN_CB_SLOW_CALL_DURATION_MS:3000}
+    sliding-window-size: ${ADMIN_CB_SLIDING_WINDOW_SIZE:20}
+    minimum-number-of-calls: ${ADMIN_CB_MIN_CALLS:10}
+    wait-open-ms: ${ADMIN_CB_WAIT_OPEN_MS:15000}
+    permitted-half-open-calls: ${ADMIN_CB_HALF_OPEN_CALLS:5}
+  time-limiter:
+    timeout-ms: ${ADMIN_CB_TIMEOUT_MS:4000}

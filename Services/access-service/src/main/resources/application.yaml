@@ -26,3 +26,7 @@ sample:
   access:
     seed:
       enabled: ${SAMPLE_ACCESS_SEED_ENABLED:true}
+
+cache:
+  platform-access-lookup-ttl: ${CACHE_PLATFORM_ACCESS_LOOKUP_TTL:20s}
+  vendor-access-lookup-ttl: ${CACHE_VENDOR_ACCESS_LOOKUP_TTL:20s}

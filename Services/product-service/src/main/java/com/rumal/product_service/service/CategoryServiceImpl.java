@@ -29,15 +29,13 @@ public class CategoryServiceImpl implements CategoryService {
     private final CategoryRepository categoryRepository;
     private final ProductRepository productRepository;
     private final ProductCatalogReadModelProjector productCatalogReadModelProjector;
+    private final ProductCacheVersionService productCacheVersionService;
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     @Caching(evict = {
             @CacheEvict(cacheNames = "categoriesList", allEntries = true),
-            @CacheEvict(cacheNames = "deletedCategoriesList", allEntries = true),
-            @CacheEvict(cacheNames = "productsList", allEntries = true),
-            @CacheEvict(cacheNames = "deletedProductsList", allEntries = true),
-            @CacheEvict(cacheNames = "productById", allEntries = true)
+            @CacheEvict(cacheNames = "deletedCategoriesList", allEntries = true)
     })
     public CategoryResponse create(UpsertCategoryRequest request) {
         String normalizedName = normalizeName(request.name());
@@ -53,17 +51,16 @@ public class CategoryServiceImpl implements CategoryService {
 
         Category category = Category.builder().build();
         applyRequest(category, request, baseSlug, autoSlug);
-        return toResponse(categoryRepository.save(category));
+        Category saved = categoryRepository.save(category);
+        productCacheVersionService.bumpAllProductReadCaches();
+        return toResponse(saved);
     }
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     @Caching(evict = {
             @CacheEvict(cacheNames = "categoriesList", allEntries = true),
-            @CacheEvict(cacheNames = "deletedCategoriesList", allEntries = true),
-            @CacheEvict(cacheNames = "productsList", allEntries = true),
-            @CacheEvict(cacheNames = "deletedProductsList", allEntries = true),
-            @CacheEvict(cacheNames = "productById", allEntries = true)
+            @CacheEvict(cacheNames = "deletedCategoriesList", allEntries = true)
     })
     public CategoryResponse update(UUID id, UpsertCategoryRequest request) {
         Category category = getActiveById(id);
@@ -81,6 +78,7 @@ public class CategoryServiceImpl implements CategoryService {
         applyRequest(category, request, baseSlug, autoSlug);
         Category saved = categoryRepository.save(category);
         productCatalogReadModelProjector.rebuildAll();
+        productCacheVersionService.bumpAllProductReadCaches();
         return toResponse(saved);
     }
 
@@ -88,10 +86,7 @@ public class CategoryServiceImpl implements CategoryService {
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     @Caching(evict = {
             @CacheEvict(cacheNames = "categoriesList", allEntries = true),
-            @CacheEvict(cacheNames = "deletedCategoriesList", allEntries = true),
-            @CacheEvict(cacheNames = "productsList", allEntries = true),
-            @CacheEvict(cacheNames = "deletedProductsList", allEntries = true),
-            @CacheEvict(cacheNames = "productById", allEntries = true)
+            @CacheEvict(cacheNames = "deletedCategoriesList", allEntries = true)
     })
     public void softDelete(UUID id) {
         Category category = getActiveById(id);
@@ -109,16 +104,14 @@ public class CategoryServiceImpl implements CategoryService {
         category.setDeletedAt(Instant.now());
         categoryRepository.save(category);
         productCatalogReadModelProjector.rebuildAll();
+        productCacheVersionService.bumpAllProductReadCaches();
     }
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     @Caching(evict = {
             @CacheEvict(cacheNames = "categoriesList", allEntries = true),
-            @CacheEvict(cacheNames = "deletedCategoriesList", allEntries = true),
-            @CacheEvict(cacheNames = "productsList", allEntries = true),
-            @CacheEvict(cacheNames = "deletedProductsList", allEntries = true),
-            @CacheEvict(cacheNames = "productById", allEntries = true)
+            @CacheEvict(cacheNames = "deletedCategoriesList", allEntries = true)
     })
     public CategoryResponse restore(UUID id) {
         Category category = categoryRepository.findById(id)
@@ -138,6 +131,7 @@ public class CategoryServiceImpl implements CategoryService {
         category.setDeletedAt(null);
         Category saved = categoryRepository.save(category);
         productCatalogReadModelProjector.rebuildAll();
+        productCacheVersionService.bumpAllProductReadCaches();
         return toResponse(saved);
     }
 

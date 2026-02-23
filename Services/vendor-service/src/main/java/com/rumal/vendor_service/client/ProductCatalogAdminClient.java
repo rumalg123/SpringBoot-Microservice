@@ -1,6 +1,8 @@
 package com.rumal.vendor_service.client;
 
 import com.rumal.vendor_service.exception.ServiceUnavailableException;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -18,6 +20,8 @@ public class ProductCatalogAdminClient {
         this.lbRestClientBuilder = lbRestClientBuilder;
     }
 
+    @Retry(name = "productService")
+    @CircuitBreaker(name = "productService", fallbackMethod = "fallbackEvictPublicCachesForVendor")
     public void evictPublicCachesForVendor(UUID vendorId, String internalAuth) {
         RestClient rc = lbRestClientBuilder.build();
         try {
@@ -31,5 +35,10 @@ public class ProductCatalogAdminClient {
         } catch (RestClientException | IllegalStateException ex) {
             throw new ServiceUnavailableException("Product service unavailable for cache eviction", ex);
         }
+    }
+
+    @SuppressWarnings("unused")
+    public void fallbackEvictPublicCachesForVendor(UUID vendorId, String internalAuth, Throwable ex) {
+        throw new ServiceUnavailableException("Product service unavailable for cache eviction. Try again later.", ex);
     }
 }
