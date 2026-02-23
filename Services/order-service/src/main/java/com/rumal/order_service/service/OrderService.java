@@ -76,6 +76,7 @@ public class OrderService {
     private final ProductClient productClient;
     private final PromotionClient promotionClient;
     private final VendorOperationalStateClient vendorOperationalStateClient;
+    private final ShippingFeeCalculator shippingFeeCalculator;
     private final OrderAggregationProperties props;
     private final OrderCacheVersionService orderCacheVersionService;
     private final TransactionTemplate transactionTemplate;
@@ -386,7 +387,8 @@ public class OrderService {
         BigDecimal itemSubtotal = normalizeMoney(lines.stream()
                 .map(ResolvedOrderLine::lineTotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add));
-        PromotionPricingSnapshot pricing = validateAndResolvePricingSnapshot(requestedPricing, itemSubtotal);
+        BigDecimal computedShippingAmount = calculateShippingForOrder(lines, addresses.shippingAddress().countryCode());
+        PromotionPricingSnapshot pricing = validateAndResolvePricingSnapshot(requestedPricing, itemSubtotal, computedShippingAmount);
         BigDecimal orderTotal = pricing.grandTotal();
         int itemCount = lines.size();
         String summaryItem = itemCount == 1
@@ -672,15 +674,36 @@ public class OrderService {
         );
     }
 
-    private PromotionPricingSnapshot validateAndResolvePricingSnapshot(PromotionPricingSnapshot requestedPricing, BigDecimal itemSubtotal) {
+    private PromotionPricingSnapshot validateAndResolvePricingSnapshot(
+            PromotionPricingSnapshot requestedPricing,
+            BigDecimal itemSubtotal,
+            BigDecimal computedShippingAmount
+    ) {
         BigDecimal normalizedItemSubtotal = normalizeMoney(itemSubtotal);
+        BigDecimal normalizedShippingAmount = normalizeMoney(computedShippingAmount);
         if (requestedPricing == null) {
-            return PromotionPricingSnapshot.none(normalizedItemSubtotal);
+            return PromotionPricingSnapshot.none(normalizedItemSubtotal, normalizedShippingAmount);
         }
         if (requestedPricing.subtotal().compareTo(normalizedItemSubtotal) != 0) {
             throw new ValidationException("promotionPricing subtotal does not match computed order subtotal");
         }
+        if (requestedPricing.shippingAmount().compareTo(normalizedShippingAmount) != 0) {
+            throw new ValidationException("promotionPricing shippingAmount does not match computed shipping fee");
+        }
         return requestedPricing;
+    }
+
+    private BigDecimal calculateShippingForOrder(List<ResolvedOrderLine> lines, String destinationCountryCode) {
+        if (lines == null || lines.isEmpty()) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        List<ShippingFeeCalculator.ShippingLine> shippingLines = lines.stream()
+                .map(line -> new ShippingFeeCalculator.ShippingLine(
+                        line == null || line.product() == null ? null : line.product().vendorId(),
+                        line == null ? 0 : line.quantity()
+                ))
+                .toList();
+        return shippingFeeCalculator.calculate(shippingLines, destinationCountryCode);
     }
 
     private void maybeCommitCouponReservation(Order order, UUID expectedCustomerId, PromotionPricingSnapshot pricing) {
@@ -777,8 +800,9 @@ public class OrderService {
             BigDecimal totalDiscount,
             BigDecimal grandTotal
     ) {
-        private static PromotionPricingSnapshot none(BigDecimal subtotal) {
+        private static PromotionPricingSnapshot none(BigDecimal subtotal, BigDecimal shippingAmount) {
             BigDecimal normalizedSubtotal = subtotal == null ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP) : subtotal.setScale(2, RoundingMode.HALF_UP);
+            BigDecimal normalizedShippingAmount = shippingAmount == null ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP) : shippingAmount.setScale(2, RoundingMode.HALF_UP);
             BigDecimal zero = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
             return new PromotionPricingSnapshot(
                     null,
@@ -786,10 +810,10 @@ public class OrderService {
                     normalizedSubtotal,
                     zero,
                     zero,
+                    normalizedShippingAmount,
                     zero,
                     zero,
-                    zero,
-                    normalizedSubtotal
+                    normalizedSubtotal.add(normalizedShippingAmount).setScale(2, RoundingMode.HALF_UP)
             );
         }
     }

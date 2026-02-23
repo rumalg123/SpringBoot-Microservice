@@ -1,5 +1,6 @@
 package com.rumal.cart_service.client;
 
+import com.rumal.cart_service.dto.CustomerAddressSummary;
 import com.rumal.cart_service.dto.CustomerSummary;
 import com.rumal.cart_service.exception.ResourceNotFoundException;
 import com.rumal.cart_service.exception.ServiceUnavailableException;
@@ -11,6 +12,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
+
+import java.util.UUID;
 
 @Component
 public class CustomerClient {
@@ -46,8 +49,33 @@ public class CustomerClient {
         }
     }
 
+    @Retry(name = "customerService")
+    @CircuitBreaker(name = "customerService", fallbackMethod = "customerFallbackGetCustomerAddress")
+    public CustomerAddressSummary getCustomerAddress(UUID customerId, UUID addressId) {
+        try {
+            return lbRestClientBuilder.build()
+                    .get()
+                    .uri("http://customer-service/customers/{customerId}/addresses/{addressId}", customerId, addressId)
+                    .retrieve()
+                    .body(CustomerAddressSummary.class);
+        } catch (HttpClientErrorException ex) {
+            if (ex.getStatusCode() == HttpStatus.NOT_FOUND) {
+                throw new ResourceNotFoundException("Address not found: " + addressId);
+            }
+            throw ex;
+        }
+    }
+
     @SuppressWarnings("unused")
     public CustomerSummary customerFallbackGetCustomerByKeycloak(String keycloakId, Throwable ex) {
         throw new ServiceUnavailableException("Customer service unavailable for principal " + keycloakId + ". Try again later.", ex);
+    }
+
+    @SuppressWarnings("unused")
+    public CustomerAddressSummary customerFallbackGetCustomerAddress(UUID customerId, UUID addressId, Throwable ex) {
+        throw new ServiceUnavailableException(
+                "Customer service unavailable for customer " + customerId + " address " + addressId + ". Try again later.",
+                ex
+        );
     }
 }

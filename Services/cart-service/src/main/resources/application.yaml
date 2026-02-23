@@ -137,3 +137,10 @@ cart:
     key-prefix: ${CART_IDEMPOTENCY_KEY_PREFIX:cs:idem:v1::}
     pending-ttl: ${CART_IDEMPOTENCY_PENDING_TTL:30s}
     response-ttl: ${CART_IDEMPOTENCY_RESPONSE_TTL:12h}
+
+shipping:
+  fee:
+    domestic-country-code: ${SHIPPING_FEE_DOMESTIC_COUNTRY_CODE:US}
+    base-per-vendor: ${SHIPPING_FEE_BASE_PER_VENDOR:4.99}
+    per-item: ${SHIPPING_FEE_PER_ITEM:0.80}
+    international-surcharge-per-vendor: ${SHIPPING_FEE_INTL_SURCHARGE_PER_VENDOR:3.50}

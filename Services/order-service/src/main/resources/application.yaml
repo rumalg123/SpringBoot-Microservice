@@ -126,3 +126,10 @@ internal:
 cache:
   orders-by-keycloak-ttl: ${CACHE_ORDERS_BY_KEYCLOAK_TTL:60s}
   order-details-by-keycloak-ttl: ${CACHE_ORDER_DETAILS_BY_KEYCLOAK_TTL:60s}
+
+shipping:
+  fee:
+    domestic-country-code: ${SHIPPING_FEE_DOMESTIC_COUNTRY_CODE:US}
+    base-per-vendor: ${SHIPPING_FEE_BASE_PER_VENDOR:4.99}
+    per-item: ${SHIPPING_FEE_PER_ITEM:0.80}
+    international-surcharge-per-vendor: ${SHIPPING_FEE_INTL_SURCHARGE_PER_VENDOR:3.50}

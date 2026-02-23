@@ -59,8 +59,8 @@ Rules for execution:
 
 ## Phase 6: Shipping Promotion Support
 
-- [ ] Add shipping fee modeling (if missing) needed for real free-delivery discounts.
-- [ ] Apply shipping discounts/free delivery in promotion engine and persist results in order snapshots.
+- [x] Add shipping fee modeling (if missing) needed for real free-delivery discounts.
+- [x] Apply shipping discounts/free delivery in promotion engine and persist results in order snapshots.
 
 ## Phase 7: Tests + Hardening
 

@@ -16,6 +16,7 @@ import com.rumal.cart_service.dto.CheckoutResponse;
 import com.rumal.cart_service.dto.CouponReservationResponse;
 import com.rumal.cart_service.dto.CreateCouponReservationRequest;
 import com.rumal.cart_service.dto.CreateMyOrderItemRequest;
+import com.rumal.cart_service.dto.CustomerAddressSummary;
 import com.rumal.cart_service.dto.CustomerSummary;
 import com.rumal.cart_service.dto.OrderResponse;
 import com.rumal.cart_service.dto.ProductDetails;
@@ -61,6 +62,7 @@ public class CartService {
     private final OrderClient orderClient;
     private final PromotionClient promotionClient;
     private final CustomerClient customerClient;
+    private final ShippingFeeCalculator shippingFeeCalculator;
     private final TransactionTemplate transactionTemplate;
 
     @Cacheable(cacheNames = "cartByKeycloak", key = "#keycloakId == null ? '' : #keycloakId.trim()")
@@ -231,14 +233,18 @@ public class CartService {
         if (customer == null || customer.id() == null) {
             throw new ValidationException("Customer not found for checkout");
         }
+        CustomerAddressSummary shippingAddress = customerClient.getCustomerAddress(customer.id(), request.shippingAddressId());
+        if (shippingAddress == null || shippingAddress.deleted()) {
+            throw new ValidationException("Shipping address is not available");
+        }
 
         PromotionQuoteRequest quoteRequest = buildPromotionQuoteRequest(
                 previewCart,
                 latestProductsById,
                 customer.id(),
-                request == null ? null : request.shippingAmount(),
+                calculateShippingForCart(previewCart, latestProductsById, shippingAddress.countryCode()),
                 request == null ? null : request.couponCode(),
-                request == null ? null : request.countryCode()
+                shippingAddress.countryCode()
         );
         PromotionQuoteResponse quotedPricing = promotionClient.quote(quoteRequest);
         if (quotedPricing == null) {
@@ -348,7 +354,11 @@ public class CartService {
                 cart,
                 latestProductsById,
                 customer.id(),
-                request == null ? null : request.shippingAmount(),
+                calculateShippingForCart(
+                        cart,
+                        latestProductsById,
+                        request == null ? null : request.countryCode()
+                ),
                 request == null ? null : request.couponCode(),
                 request == null ? null : request.countryCode()
         );
@@ -605,6 +615,25 @@ public class CartService {
                 trimToNull(countryCode),
                 null
         );
+    }
+
+    private BigDecimal calculateShippingForCart(
+            Cart cart,
+            Map<UUID, ProductDetails> latestProductsById,
+            String destinationCountryCode
+    ) {
+        if (cart == null || cart.getItems() == null || cart.getItems().isEmpty()) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        List<ShippingFeeCalculator.ShippingLine> shippingLines = new java.util.ArrayList<>(cart.getItems().size());
+        for (CartItem item : cart.getItems()) {
+            ProductDetails latest = latestProductsById.get(item.getProductId());
+            if (latest == null || latest.vendorId() == null) {
+                throw new ValidationException("Product vendorId is missing: " + item.getProductId());
+            }
+            shippingLines.add(new ShippingFeeCalculator.ShippingLine(latest.vendorId(), item.getQuantity()));
+        }
+        return shippingFeeCalculator.calculate(shippingLines, destinationCountryCode);
     }
 
     private PromotionCheckoutPricingRequest toPromotionCheckoutPricingRequest(
