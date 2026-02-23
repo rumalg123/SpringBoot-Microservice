@@ -51,8 +51,8 @@ Rules for execution:
 
 ## Phase 5: Real Monetary Integration (Cart + Order)
 
-- [ ] Extend `cart-service` DTOs/entities/responses for coupon input and monetary totals (`subtotal`, `discount`, `shipping`, `grandTotal`) as needed.
-- [ ] Integrate `cart-service` with promotion quote API for checkout preview.
+- [x] Extend `cart-service` DTOs/entities/responses for coupon input and monetary totals (`subtotal`, `discount`, `shipping`, `grandTotal`) as needed.
+- [x] Integrate `cart-service` with promotion quote API for checkout preview.
 - [ ] Extend `order-service` DTOs/entities to persist promotion snapshot and monetary breakdown.
 - [ ] Integrate `order-service` with promotion reservation commit/release flow.
 - [ ] Release/reconcile coupon reservations on cancel/refund paths.

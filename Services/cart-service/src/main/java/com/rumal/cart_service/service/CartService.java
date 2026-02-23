@@ -1,16 +1,26 @@
 package com.rumal.cart_service.service;
 
+import com.rumal.cart_service.client.CustomerClient;
 import com.rumal.cart_service.client.OrderClient;
 import com.rumal.cart_service.client.ProductClient;
+import com.rumal.cart_service.client.PromotionClient;
 import com.rumal.cart_service.client.VendorOperationalStateClient;
 import com.rumal.cart_service.dto.AddCartItemRequest;
+import com.rumal.cart_service.dto.AppliedPromotionPreviewResponse;
 import com.rumal.cart_service.dto.CartItemResponse;
 import com.rumal.cart_service.dto.CartResponse;
 import com.rumal.cart_service.dto.CheckoutCartRequest;
+import com.rumal.cart_service.dto.CheckoutPreviewRequest;
+import com.rumal.cart_service.dto.CheckoutPreviewResponse;
 import com.rumal.cart_service.dto.CheckoutResponse;
 import com.rumal.cart_service.dto.CreateMyOrderItemRequest;
+import com.rumal.cart_service.dto.CustomerSummary;
 import com.rumal.cart_service.dto.OrderResponse;
 import com.rumal.cart_service.dto.ProductDetails;
+import com.rumal.cart_service.dto.PromotionQuoteLineRequest;
+import com.rumal.cart_service.dto.PromotionQuoteRequest;
+import com.rumal.cart_service.dto.PromotionQuoteResponse;
+import com.rumal.cart_service.dto.RejectedPromotionPreviewResponse;
 import com.rumal.cart_service.dto.UpdateCartItemRequest;
 import com.rumal.cart_service.dto.VendorOperationalStateResponse;
 import com.rumal.cart_service.entity.Cart;
@@ -34,6 +44,7 @@ import java.math.RoundingMode;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -45,6 +56,8 @@ public class CartService {
     private final ProductClient productClient;
     private final VendorOperationalStateClient vendorOperationalStateClient;
     private final OrderClient orderClient;
+    private final PromotionClient promotionClient;
+    private final CustomerClient customerClient;
     private final TransactionTemplate transactionTemplate;
 
     @Cacheable(cacheNames = "cartByKeycloak", key = "#keycloakId == null ? '' : #keycloakId.trim()")
@@ -230,6 +243,94 @@ public class CartService {
         return new CheckoutResponse(order.id(), prepared.itemCount(), prepared.totalQuantity(), prepared.subtotal());
     }
 
+    @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 15)
+    public CheckoutPreviewResponse previewCheckout(String keycloakId, CheckoutPreviewRequest request) {
+        String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
+        Cart cart = cartRepository.findWithItemsByKeycloakId(normalizedKeycloakId)
+                .orElseThrow(() -> new ValidationException("Cart is empty"));
+        if (cart.getItems().isEmpty()) {
+            throw new ValidationException("Cart is empty");
+        }
+
+        List<CartCheckoutLine> snapshot = checkoutSnapshot(cart);
+        Map<UUID, ProductDetails> latestProductsById = snapshot.stream()
+                .map(CartCheckoutLine::productId)
+                .distinct()
+                .collect(java.util.stream.Collectors.toMap(
+                        productId -> productId,
+                        this::resolvePurchasableProduct,
+                        (a, b) -> a
+                ));
+
+        CustomerSummary customer = customerClient.getCustomerByKeycloakId(normalizedKeycloakId);
+        if (customer == null || customer.id() == null) {
+            throw new ValidationException("Customer not found for checkout preview");
+        }
+
+        List<PromotionQuoteLineRequest> quoteLines = new java.util.ArrayList<>(cart.getItems().size());
+        int totalQuantity = 0;
+        for (CartItem item : cart.getItems()) {
+            ProductDetails latest = latestProductsById.get(item.getProductId());
+            if (latest == null) {
+                throw new ValidationException("Product is not available: " + item.getProductId());
+            }
+            totalQuantity += item.getQuantity();
+            // Cart product snapshot currently does not include category IDs, so category promotions cannot be matched here yet.
+            quoteLines.add(new PromotionQuoteLineRequest(
+                    latest.id(),
+                    latest.vendorId(),
+                    Set.of(),
+                    normalizeMoney(latest.sellingPrice()),
+                    item.getQuantity()
+            ));
+        }
+
+        PromotionQuoteRequest quoteRequest = new PromotionQuoteRequest(
+                quoteLines,
+                request == null ? null : request.shippingAmount(),
+                customer.id(),
+                request == null ? null : trimToNull(request.couponCode()),
+                request == null ? null : trimToNull(request.countryCode()),
+                null
+        );
+        PromotionQuoteResponse quote = promotionClient.quote(quoteRequest);
+        if (quote == null) {
+            throw new ValidationException("Promotion quote is unavailable");
+        }
+
+        return new CheckoutPreviewResponse(
+                cart.getItems().size(),
+                totalQuantity,
+                quoteRequest.couponCode(),
+                normalizeMoney(quote.subtotal()),
+                normalizeMoney(quote.lineDiscountTotal()),
+                normalizeMoney(quote.cartDiscountTotal()),
+                normalizeMoney(quote.shippingAmount()),
+                normalizeMoney(quote.shippingDiscountTotal()),
+                normalizeMoney(quote.totalDiscount()),
+                normalizeMoney(quote.grandTotal()),
+                quote.appliedPromotions() == null ? List.of() : quote.appliedPromotions().stream()
+                        .map(entry -> new AppliedPromotionPreviewResponse(
+                                entry.promotionId(),
+                                entry.promotionName(),
+                                entry.applicationLevel(),
+                                entry.benefitType(),
+                                entry.priority(),
+                                entry.exclusive(),
+                                normalizeMoney(entry.discountAmount())
+                        ))
+                        .toList(),
+                quote.rejectedPromotions() == null ? List.of() : quote.rejectedPromotions().stream()
+                        .map(entry -> new RejectedPromotionPreviewResponse(
+                                entry.promotionId(),
+                                entry.promotionName(),
+                                entry.reason()
+                        ))
+                        .toList(),
+                quote.pricedAt()
+        );
+    }
+
     private ProductDetails resolvePurchasableProduct(UUID productId) {
         ProductDetails product = productClient.getById(productId);
         if (!product.active()) {
@@ -402,6 +503,13 @@ public class CartService {
             return null;
         }
         return "cart-checkout::" + incomingKey.trim();
+    }
+
+    private String trimToNull(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        return value.trim();
     }
 
     private record PreparedCheckout(

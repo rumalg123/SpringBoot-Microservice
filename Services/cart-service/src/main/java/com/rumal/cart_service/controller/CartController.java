@@ -3,6 +3,8 @@ package com.rumal.cart_service.controller;
 import com.rumal.cart_service.dto.AddCartItemRequest;
 import com.rumal.cart_service.dto.CartResponse;
 import com.rumal.cart_service.dto.CheckoutCartRequest;
+import com.rumal.cart_service.dto.CheckoutPreviewRequest;
+import com.rumal.cart_service.dto.CheckoutPreviewResponse;
 import com.rumal.cart_service.dto.CheckoutResponse;
 import com.rumal.cart_service.dto.UpdateCartItemRequest;
 import com.rumal.cart_service.exception.UnauthorizedException;
@@ -124,6 +126,21 @@ public class CartController {
             throw new UnauthorizedException("Missing authentication header");
         }
         return cartService.checkout(userSub, request, idempotencyKey);
+    }
+
+    @PostMapping("/me/checkout/preview")
+    public CheckoutPreviewResponse previewCheckout(
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Email-Verified", required = false) String userEmailVerified,
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @Valid @RequestBody CheckoutPreviewRequest request
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        verifyEmailVerified(userEmailVerified);
+        if (userSub == null || userSub.isBlank()) {
+            throw new UnauthorizedException("Missing authentication header");
+        }
+        return cartService.previewCheckout(userSub, request);
     }
 
     private void verifyEmailVerified(String emailVerified) {
