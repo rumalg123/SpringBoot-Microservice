@@ -3,12 +3,9 @@ package com.rumal.cart_service.dto;
 import java.math.BigDecimal;
 import java.util.UUID;
 
-public record CheckoutResponse(
-        UUID orderId,
-        int itemCount,
-        int totalQuantity,
-        String couponCode,
+public record PromotionCheckoutPricingRequest(
         UUID couponReservationId,
+        String couponCode,
         BigDecimal subtotal,
         BigDecimal lineDiscountTotal,
         BigDecimal cartDiscountTotal,

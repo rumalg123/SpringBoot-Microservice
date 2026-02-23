@@ -3,10 +3,12 @@ package com.rumal.order_service.service;
 
 import com.rumal.order_service.client.CustomerClient;
 import com.rumal.order_service.client.ProductClient;
+import com.rumal.order_service.client.PromotionClient;
 import com.rumal.order_service.client.VendorOperationalStateClient;
 import com.rumal.order_service.dto.CreateOrderItemRequest;
 import com.rumal.order_service.config.CustomerDetailsMode;
 import com.rumal.order_service.config.OrderAggregationProperties;
+import com.rumal.order_service.dto.CouponReservationResponse;
 import com.rumal.order_service.dto.CreateMyOrderRequest;
 import com.rumal.order_service.dto.CreateOrderRequest;
 import com.rumal.order_service.dto.CustomerAddressSummary;
@@ -17,6 +19,7 @@ import com.rumal.order_service.dto.OrderItemResponse;
 import com.rumal.order_service.dto.OrderResponse;
 import com.rumal.order_service.dto.OrderStatusAuditResponse;
 import com.rumal.order_service.dto.ProductSummary;
+import com.rumal.order_service.dto.PromotionCheckoutPricingRequest;
 import com.rumal.order_service.dto.VendorOrderDeletionCheckResponse;
 import com.rumal.order_service.dto.VendorOrderResponse;
 import com.rumal.order_service.dto.VendorOrderStatusAuditResponse;
@@ -71,6 +74,7 @@ public class OrderService {
     private final VendorOrderStatusAuditRepository vendorOrderStatusAuditRepository;
     private final CustomerClient customerClient;
     private final ProductClient productClient;
+    private final PromotionClient promotionClient;
     private final VendorOperationalStateClient vendorOperationalStateClient;
     private final OrderAggregationProperties props;
     private final OrderCacheVersionService orderCacheVersionService;
@@ -83,7 +87,7 @@ public class OrderService {
         assertVendorsAcceptingOrders(lines);
         ResolvedOrderAddresses addresses = resolveOrderAddresses(req.customerId(), req.shippingAddressId(), req.billingAddressId());
         return transactionTemplate.execute(status -> {
-            Order saved = orderRepository.save(buildOrder(req.customerId(), lines, addresses));
+            Order saved = orderRepository.save(buildOrder(req.customerId(), lines, addresses, null));
             recordStatusAudit(saved, null, OrderStatus.PENDING, null, null, "system", "order_create", "Order created");
             saved.getVendorOrders().forEach(vendorOrder ->
                     recordVendorOrderStatusAudit(vendorOrder, null, OrderStatus.PENDING, null, null, "system", "order_create", "Vendor order created")
@@ -99,8 +103,10 @@ public class OrderService {
         List<ResolvedOrderLine> lines = resolveOrderLines(req.productId(), req.quantity(), req.items());
         assertVendorsAcceptingOrders(lines);
         ResolvedOrderAddresses addresses = resolveOrderAddresses(customer.id(), req.shippingAddressId(), req.billingAddressId());
+        PromotionPricingSnapshot pricingSnapshot = toPromotionPricingSnapshot(req.promotionPricing());
         return transactionTemplate.execute(status -> {
-            Order saved = orderRepository.save(buildOrder(customer.id(), lines, addresses));
+            Order saved = orderRepository.save(buildOrder(customer.id(), lines, addresses, pricingSnapshot));
+            maybeCommitCouponReservation(saved, customer.id(), pricingSnapshot);
             recordStatusAudit(saved, null, OrderStatus.PENDING, keycloakId, "customer", "customer", "order_create", "Customer order created");
             saved.getVendorOrders().forEach(vendorOrder ->
                     recordVendorOrderStatusAudit(vendorOrder, null, OrderStatus.PENDING, keycloakId, "customer", "customer", "order_create", "Vendor order created")
@@ -124,6 +130,14 @@ public class OrderService {
                 o.getQuantity(),
                 o.getItemCount(),
                 normalizeMoney(o.getOrderTotal()),
+                normalizeMoney(o.getSubtotal()),
+                normalizeMoney(o.getLineDiscountTotal()),
+                normalizeMoney(o.getCartDiscountTotal()),
+                normalizeMoney(o.getShippingAmount()),
+                normalizeMoney(o.getShippingDiscountTotal()),
+                normalizeMoney(o.getTotalDiscount()),
+                o.getCouponCode(),
+                o.getCouponReservationId(),
                 o.getStatus() == null ? null : o.getStatus().name(),
                 o.getCreatedAt()
         );
@@ -196,6 +210,7 @@ public class OrderService {
                 "status_update",
                 "Order status updated"
         );
+        maybeReleaseCouponReservationForFinalStatus(saved, status);
         evictOrderCachesAfterStatusMutation();
         return toResponse(saved);
     }
@@ -250,6 +265,7 @@ public class OrderService {
                     "vendor_order_aggregate_sync",
                     "Order aggregate status synchronized from vendor order statuses"
             );
+            maybeReleaseCouponReservationForFinalStatus(savedOrder, nextAggregate);
         }
         evictOrderCachesAfterStatusMutation();
         return toVendorOrderResponse(savedVendorOrder);
@@ -302,6 +318,14 @@ public class OrderService {
                 o.getQuantity(),
                 o.getItemCount(),
                 normalizeMoney(o.getOrderTotal()),
+                normalizeMoney(o.getSubtotal()),
+                normalizeMoney(o.getLineDiscountTotal()),
+                normalizeMoney(o.getCartDiscountTotal()),
+                normalizeMoney(o.getShippingAmount()),
+                normalizeMoney(o.getShippingDiscountTotal()),
+                normalizeMoney(o.getTotalDiscount()),
+                o.getCouponCode(),
+                o.getCouponReservationId(),
                 o.getStatus() == null ? null : o.getStatus().name(),
                 o.getCreatedAt(),
                 toItems(o),
@@ -332,6 +356,14 @@ public class OrderService {
                 o.getQuantity(),
                 o.getItemCount(),
                 normalizeMoney(o.getOrderTotal()),
+                normalizeMoney(o.getSubtotal()),
+                normalizeMoney(o.getLineDiscountTotal()),
+                normalizeMoney(o.getCartDiscountTotal()),
+                normalizeMoney(o.getShippingAmount()),
+                normalizeMoney(o.getShippingDiscountTotal()),
+                normalizeMoney(o.getTotalDiscount()),
+                o.getCouponCode(),
+                o.getCouponReservationId(),
                 o.getStatus() == null ? null : o.getStatus().name(),
                 o.getCreatedAt(),
                 toItems(o),
@@ -342,13 +374,20 @@ public class OrderService {
         );
     }
 
-    private Order buildOrder(UUID customerId, List<ResolvedOrderLine> lines, ResolvedOrderAddresses addresses) {
+    private Order buildOrder(
+            UUID customerId,
+            List<ResolvedOrderLine> lines,
+            ResolvedOrderAddresses addresses,
+            PromotionPricingSnapshot requestedPricing
+    ) {
         int totalQuantity = lines.stream()
                 .mapToInt(ResolvedOrderLine::quantity)
                 .sum();
-        BigDecimal orderTotal = normalizeMoney(lines.stream()
+        BigDecimal itemSubtotal = normalizeMoney(lines.stream()
                 .map(ResolvedOrderLine::lineTotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add));
+        PromotionPricingSnapshot pricing = validateAndResolvePricingSnapshot(requestedPricing, itemSubtotal);
+        BigDecimal orderTotal = pricing.grandTotal();
         int itemCount = lines.size();
         String summaryItem = itemCount == 1
                 ? lines.getFirst().product().name().trim()
@@ -359,6 +398,14 @@ public class OrderService {
                 .item(summaryItem)
                 .quantity(totalQuantity)
                 .itemCount(itemCount)
+                .subtotal(pricing.subtotal())
+                .lineDiscountTotal(pricing.lineDiscountTotal())
+                .cartDiscountTotal(pricing.cartDiscountTotal())
+                .shippingAmount(pricing.shippingAmount())
+                .shippingDiscountTotal(pricing.shippingDiscountTotal())
+                .totalDiscount(pricing.totalDiscount())
+                .couponCode(pricing.couponCode())
+                .couponReservationId(pricing.couponReservationId())
                 .orderTotal(orderTotal)
                 .status(OrderStatus.PENDING)
                 .shippingAddressId(addresses.shippingAddress().id())
@@ -577,6 +624,134 @@ public class OrderService {
         return (int) merged;
     }
 
+    private PromotionPricingSnapshot toPromotionPricingSnapshot(PromotionCheckoutPricingRequest request) {
+        if (request == null) {
+            return null;
+        }
+        BigDecimal subtotal = normalizeMoney(request.subtotal());
+        BigDecimal lineDiscountTotal = normalizeMoney(request.lineDiscountTotal());
+        BigDecimal cartDiscountTotal = normalizeMoney(request.cartDiscountTotal());
+        BigDecimal shippingAmount = normalizeMoney(request.shippingAmount());
+        BigDecimal shippingDiscountTotal = normalizeMoney(request.shippingDiscountTotal());
+        BigDecimal totalDiscount = normalizeMoney(request.totalDiscount());
+        BigDecimal grandTotal = normalizeMoney(request.grandTotal());
+
+        BigDecimal computedTotalDiscount = normalizeMoney(lineDiscountTotal.add(cartDiscountTotal).add(shippingDiscountTotal));
+        if (computedTotalDiscount.compareTo(totalDiscount) != 0) {
+            throw new ValidationException("promotionPricing totalDiscount does not match line/cart/shipping discount totals");
+        }
+        if (shippingDiscountTotal.compareTo(shippingAmount) > 0) {
+            throw new ValidationException("promotionPricing shippingDiscountTotal cannot exceed shippingAmount");
+        }
+        if (lineDiscountTotal.add(cartDiscountTotal).compareTo(subtotal) > 0) {
+            throw new ValidationException("promotionPricing line/cart discounts cannot exceed subtotal");
+        }
+
+        BigDecimal expectedGrandTotal = normalizeMoney(
+                subtotal.subtract(lineDiscountTotal).subtract(cartDiscountTotal).add(shippingAmount).subtract(shippingDiscountTotal)
+        );
+        if (expectedGrandTotal.compareTo(grandTotal) != 0) {
+            throw new ValidationException("promotionPricing grandTotal does not match pricing breakdown");
+        }
+
+        String couponCode = trimToNull(request.couponCode());
+        if (couponCode != null && request.couponReservationId() == null) {
+            throw new ValidationException("promotionPricing.couponReservationId is required when couponCode is provided");
+        }
+
+        return new PromotionPricingSnapshot(
+                request.couponReservationId(),
+                couponCode,
+                subtotal,
+                lineDiscountTotal,
+                cartDiscountTotal,
+                shippingAmount,
+                shippingDiscountTotal,
+                totalDiscount,
+                grandTotal
+        );
+    }
+
+    private PromotionPricingSnapshot validateAndResolvePricingSnapshot(PromotionPricingSnapshot requestedPricing, BigDecimal itemSubtotal) {
+        BigDecimal normalizedItemSubtotal = normalizeMoney(itemSubtotal);
+        if (requestedPricing == null) {
+            return PromotionPricingSnapshot.none(normalizedItemSubtotal);
+        }
+        if (requestedPricing.subtotal().compareTo(normalizedItemSubtotal) != 0) {
+            throw new ValidationException("promotionPricing subtotal does not match computed order subtotal");
+        }
+        return requestedPricing;
+    }
+
+    private void maybeCommitCouponReservation(Order order, UUID expectedCustomerId, PromotionPricingSnapshot pricing) {
+        if (order == null || pricing == null || pricing.couponReservationId() == null) {
+            return;
+        }
+        CouponReservationResponse response = promotionClient.commitCouponReservation(pricing.couponReservationId(), order.getId());
+        if (response == null) {
+            throw new ValidationException("Coupon reservation commit response is missing");
+        }
+        if (response.customerId() == null || !response.customerId().equals(expectedCustomerId)) {
+            tryReleaseReservationCompensation(pricing.couponReservationId(), "customer_mismatch_after_commit");
+            throw new ValidationException("Coupon reservation does not belong to this customer");
+        }
+        if (response.quotedSubtotal() != null && normalizeMoney(response.quotedSubtotal()).compareTo(order.getSubtotal()) != 0) {
+            tryReleaseReservationCompensation(pricing.couponReservationId(), "subtotal_mismatch_after_commit");
+            throw new ValidationException("Coupon reservation subtotal does not match order subtotal");
+        }
+        if (response.quotedGrandTotal() != null && normalizeMoney(response.quotedGrandTotal()).compareTo(order.getOrderTotal()) != 0) {
+            tryReleaseReservationCompensation(pricing.couponReservationId(), "grand_total_mismatch_after_commit");
+            throw new ValidationException("Coupon reservation grand total does not match order total");
+        }
+        if (response.reservedDiscountAmount() != null && normalizeMoney(response.reservedDiscountAmount()).compareTo(order.getTotalDiscount()) != 0) {
+            tryReleaseReservationCompensation(pricing.couponReservationId(), "discount_mismatch_after_commit");
+            throw new ValidationException("Coupon reservation discount does not match order totalDiscount");
+        }
+        if (order.getCouponCode() == null && StringUtils.hasText(response.couponCode())) {
+            order.setCouponCode(response.couponCode().trim());
+            orderRepository.save(order);
+        }
+    }
+
+    private void maybeReleaseCouponReservationForFinalStatus(Order order, OrderStatus nextStatus) {
+        if (order == null || nextStatus == null) {
+            return;
+        }
+        if (nextStatus != OrderStatus.CANCELLED && nextStatus != OrderStatus.REFUNDED) {
+            return;
+        }
+        if (order.getCouponReservationId() == null) {
+            return;
+        }
+        tryReleaseReservationCompensation(order.getCouponReservationId(), "order_" + nextStatus.name().toLowerCase(Locale.ROOT));
+    }
+
+    private void tryReleaseReservationCompensation(UUID reservationId, String reason) {
+        if (reservationId == null) {
+            return;
+        }
+        try {
+            promotionClient.releaseCouponReservation(reservationId, safePromotionReleaseReason(reason));
+        } catch (RuntimeException ignored) {
+            // Best-effort compensation; reservation service retains state for manual inspection if this fails.
+        }
+    }
+
+    private String safePromotionReleaseReason(String reason) {
+        String normalized = trimToNull(reason);
+        if (normalized == null) {
+            return "order_final_status_release";
+        }
+        return normalized.length() > 500 ? normalized.substring(0, 500) : normalized;
+    }
+
+    private String trimToNull(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        return value.trim();
+    }
+
     private record ResolvedOrderAddresses(
             CustomerAddressSummary shippingAddress,
             CustomerAddressSummary billingAddress
@@ -589,6 +764,34 @@ public class OrderService {
             BigDecimal unitPrice,
             BigDecimal lineTotal
     ) {
+    }
+
+    private record PromotionPricingSnapshot(
+            UUID couponReservationId,
+            String couponCode,
+            BigDecimal subtotal,
+            BigDecimal lineDiscountTotal,
+            BigDecimal cartDiscountTotal,
+            BigDecimal shippingAmount,
+            BigDecimal shippingDiscountTotal,
+            BigDecimal totalDiscount,
+            BigDecimal grandTotal
+    ) {
+        private static PromotionPricingSnapshot none(BigDecimal subtotal) {
+            BigDecimal normalizedSubtotal = subtotal == null ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP) : subtotal.setScale(2, RoundingMode.HALF_UP);
+            BigDecimal zero = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+            return new PromotionPricingSnapshot(
+                    null,
+                    null,
+                    normalizedSubtotal,
+                    zero,
+                    zero,
+                    zero,
+                    zero,
+                    zero,
+                    normalizedSubtotal
+            );
+        }
     }
 
     private List<OrderItemResponse> toItems(Order order) {

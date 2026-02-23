@@ -6,6 +6,7 @@ import java.util.UUID;
 public record CreateMyOrderRequest(
         List<CreateMyOrderItemRequest> items,
         UUID shippingAddressId,
-        UUID billingAddressId
+        UUID billingAddressId,
+        PromotionCheckoutPricingRequest promotionPricing
 ) {
 }

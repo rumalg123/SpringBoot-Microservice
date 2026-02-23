@@ -1,12 +1,11 @@
-package com.rumal.cart_service.client;
+package com.rumal.order_service.client;
 
-import com.rumal.cart_service.dto.CouponReservationResponse;
-import com.rumal.cart_service.dto.CreateCouponReservationRequest;
-import com.rumal.cart_service.dto.PromotionQuoteRequest;
-import com.rumal.cart_service.dto.PromotionQuoteResponse;
-import com.rumal.cart_service.dto.ReleaseCouponReservationRequest;
-import com.rumal.cart_service.exception.ServiceUnavailableException;
-import com.rumal.cart_service.exception.ValidationException;
+import com.rumal.order_service.dto.CommitCouponReservationRequest;
+import com.rumal.order_service.dto.CouponReservationResponse;
+import com.rumal.order_service.dto.ReleaseCouponReservationRequest;
+import com.rumal.order_service.exception.ResourceNotFoundException;
+import com.rumal.order_service.exception.ServiceUnavailableException;
+import com.rumal.order_service.exception.ValidationException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -33,50 +32,28 @@ public class PromotionClient {
     }
 
     @Retry(name = "promotionService")
-    @CircuitBreaker(name = "promotionService", fallbackMethod = "promotionFallbackQuote")
-    public PromotionQuoteResponse quote(PromotionQuoteRequest request) {
+    @CircuitBreaker(name = "promotionService", fallbackMethod = "promotionFallbackCommit")
+    public CouponReservationResponse commitCouponReservation(UUID reservationId, UUID orderId) {
         try {
             return lbRestClientBuilder.build()
                     .post()
-                    .uri("http://promotion-service/internal/promotions/quote")
+                    .uri("http://promotion-service/internal/promotions/reservations/{reservationId}/commit", reservationId)
                     .header("X-Internal-Auth", internalSharedSecret)
-                    .body(request)
-                    .retrieve()
-                    .body(PromotionQuoteResponse.class);
-        } catch (HttpClientErrorException ex) {
-            HttpStatusCode status = ex.getStatusCode();
-            int code = status.value();
-            if (code == 400 || code == 409 || code == 422) {
-                throw new ValidationException(resolveErrorMessage(ex, "Promotion quote validation failed"));
-            }
-            if (code == 401 || code == 403) {
-                throw new ServiceUnavailableException("Promotion service rejected internal authentication.", ex);
-            }
-            throw new ServiceUnavailableException("Promotion service error during quote.", ex);
-        }
-    }
-
-    @Retry(name = "promotionService")
-    @CircuitBreaker(name = "promotionService", fallbackMethod = "promotionFallbackReserve")
-    public CouponReservationResponse reserveCoupon(CreateCouponReservationRequest request) {
-        try {
-            return lbRestClientBuilder.build()
-                    .post()
-                    .uri("http://promotion-service/internal/promotions/reservations")
-                    .header("X-Internal-Auth", internalSharedSecret)
-                    .body(request)
+                    .body(new CommitCouponReservationRequest(orderId))
                     .retrieve()
                     .body(CouponReservationResponse.class);
         } catch (HttpClientErrorException ex) {
-            HttpStatusCode status = ex.getStatusCode();
-            int code = status.value();
+            int code = ex.getStatusCode().value();
             if (code == 400 || code == 409 || code == 422) {
-                throw new ValidationException(resolveErrorMessage(ex, "Coupon reservation failed"));
+                throw new ValidationException(resolveErrorMessage(ex, "Coupon reservation commit failed"));
+            }
+            if (code == 404) {
+                throw new ResourceNotFoundException(resolveErrorMessage(ex, "Coupon reservation not found"));
             }
             if (code == 401 || code == 403) {
                 throw new ServiceUnavailableException("Promotion service rejected internal authentication.", ex);
             }
-            throw new ServiceUnavailableException("Promotion service error during coupon reservation.", ex);
+            throw new ServiceUnavailableException("Promotion service error during coupon reservation commit.", ex);
         }
     }
 
@@ -105,13 +82,8 @@ public class PromotionClient {
     }
 
     @SuppressWarnings("unused")
-    public PromotionQuoteResponse promotionFallbackQuote(PromotionQuoteRequest request, Throwable ex) {
-        throw new ServiceUnavailableException("Promotion service unavailable for pricing preview. Try again later.", ex);
-    }
-
-    @SuppressWarnings("unused")
-    public CouponReservationResponse promotionFallbackReserve(CreateCouponReservationRequest request, Throwable ex) {
-        throw new ServiceUnavailableException("Promotion service unavailable for coupon reservation. Try again later.", ex);
+    public CouponReservationResponse promotionFallbackCommit(UUID reservationId, UUID orderId, Throwable ex) {
+        throw new ServiceUnavailableException("Promotion service unavailable for coupon reservation commit. Try again later.", ex);
     }
 
     @SuppressWarnings("unused")

@@ -11,5 +11,6 @@ public record CreateMyOrderRequest(
         Integer quantity,
         List<@Valid CreateOrderItemRequest> items,
         @NotNull UUID shippingAddressId,
-        @NotNull UUID billingAddressId
+        @NotNull UUID billingAddressId,
+        @Valid PromotionCheckoutPricingRequest promotionPricing
 ) {}

@@ -53,9 +53,9 @@ Rules for execution:
 
 - [x] Extend `cart-service` DTOs/entities/responses for coupon input and monetary totals (`subtotal`, `discount`, `shipping`, `grandTotal`) as needed.
 - [x] Integrate `cart-service` with promotion quote API for checkout preview.
-- [ ] Extend `order-service` DTOs/entities to persist promotion snapshot and monetary breakdown.
-- [ ] Integrate `order-service` with promotion reservation commit/release flow.
-- [ ] Release/reconcile coupon reservations on cancel/refund paths.
+- [x] Extend `order-service` DTOs/entities to persist promotion snapshot and monetary breakdown.
+- [x] Integrate `order-service` with promotion reservation commit/release flow.
+- [x] Release/reconcile coupon reservations on cancel/refund paths.
 
 ## Phase 6: Shipping Promotion Support
 

@@ -3,6 +3,7 @@ package com.rumal.cart_service.client;
 import com.rumal.cart_service.dto.CreateMyOrderItemRequest;
 import com.rumal.cart_service.dto.CreateMyOrderRequest;
 import com.rumal.cart_service.dto.OrderResponse;
+import com.rumal.cart_service.dto.PromotionCheckoutPricingRequest;
 import com.rumal.cart_service.exception.ResourceNotFoundException;
 import com.rumal.cart_service.exception.ServiceUnavailableException;
 import com.rumal.cart_service.exception.ValidationException;
@@ -40,10 +41,11 @@ public class OrderClient {
             UUID shippingAddressId,
             UUID billingAddressId,
             List<CreateMyOrderItemRequest> items,
+            PromotionCheckoutPricingRequest promotionPricing,
             String idempotencyKey
     ) {
         RestClient rc = lbRestClientBuilder.build();
-        CreateMyOrderRequest request = new CreateMyOrderRequest(items, shippingAddressId, billingAddressId);
+        CreateMyOrderRequest request = new CreateMyOrderRequest(items, shippingAddressId, billingAddressId, promotionPricing);
 
         try {
             RestClient.RequestBodySpec spec = rc.post()
@@ -79,6 +81,7 @@ public class OrderClient {
             UUID shippingAddressId,
             UUID billingAddressId,
             List<CreateMyOrderItemRequest> items,
+            PromotionCheckoutPricingRequest promotionPricing,
             String idempotencyKey,
             Throwable ex
     ) {

@@ -13,10 +13,13 @@ import com.rumal.cart_service.dto.CheckoutCartRequest;
 import com.rumal.cart_service.dto.CheckoutPreviewRequest;
 import com.rumal.cart_service.dto.CheckoutPreviewResponse;
 import com.rumal.cart_service.dto.CheckoutResponse;
+import com.rumal.cart_service.dto.CouponReservationResponse;
+import com.rumal.cart_service.dto.CreateCouponReservationRequest;
 import com.rumal.cart_service.dto.CreateMyOrderItemRequest;
 import com.rumal.cart_service.dto.CustomerSummary;
 import com.rumal.cart_service.dto.OrderResponse;
 import com.rumal.cart_service.dto.ProductDetails;
+import com.rumal.cart_service.dto.PromotionCheckoutPricingRequest;
 import com.rumal.cart_service.dto.PromotionQuoteLineRequest;
 import com.rumal.cart_service.dto.PromotionQuoteRequest;
 import com.rumal.cart_service.dto.PromotionQuoteResponse;
@@ -224,13 +227,65 @@ public class CartService {
             throw new ValidationException("Unable to prepare checkout");
         }
 
-        OrderResponse order = orderClient.createMyOrder(
-                normalizedKeycloakId,
-                request.shippingAddressId(),
-                request.billingAddressId(),
-                prepared.orderItems(),
-                downstreamOrderIdempotencyKey(idempotencyKey)
+        CustomerSummary customer = customerClient.getCustomerByKeycloakId(normalizedKeycloakId);
+        if (customer == null || customer.id() == null) {
+            throw new ValidationException("Customer not found for checkout");
+        }
+
+        PromotionQuoteRequest quoteRequest = buildPromotionQuoteRequest(
+                previewCart,
+                latestProductsById,
+                customer.id(),
+                request == null ? null : request.shippingAmount(),
+                request == null ? null : request.couponCode(),
+                request == null ? null : request.countryCode()
         );
+        PromotionQuoteResponse quotedPricing = promotionClient.quote(quoteRequest);
+        if (quotedPricing == null) {
+            throw new ValidationException("Promotion quote is unavailable");
+        }
+
+        CouponReservationResponse couponReservation = null;
+        PromotionQuoteResponse authoritativeQuote = quotedPricing;
+        if (StringUtils.hasText(request == null ? null : request.couponCode())) {
+            couponReservation = promotionClient.reserveCoupon(new CreateCouponReservationRequest(
+                    request.couponCode().trim(),
+                    customer.id(),
+                    quoteRequest,
+                    downstreamPromotionReservationKey(idempotencyKey)
+            ));
+            if (couponReservation == null || couponReservation.id() == null) {
+                throw new ValidationException("Coupon reservation failed");
+            }
+            if (couponReservation.quote() != null) {
+                authoritativeQuote = couponReservation.quote();
+            }
+        }
+
+        PromotionCheckoutPricingRequest promotionPricing = toPromotionCheckoutPricingRequest(
+                authoritativeQuote,
+                couponReservation == null ? null : couponReservation.id(),
+                couponReservation != null && StringUtils.hasText(couponReservation.couponCode())
+                        ? couponReservation.couponCode()
+                        : (request == null ? null : trimToNull(request.couponCode()))
+        );
+
+        OrderResponse order;
+        try {
+            order = orderClient.createMyOrder(
+                    normalizedKeycloakId,
+                    request.shippingAddressId(),
+                    request.billingAddressId(),
+                    prepared.orderItems(),
+                    promotionPricing,
+                    downstreamOrderIdempotencyKey(idempotencyKey)
+            );
+        } catch (RuntimeException ex) {
+            if (couponReservation != null && couponReservation.id() != null) {
+                releaseCouponReservationQuietly(couponReservation.id(), "order_create_failed:" + ex.getClass().getSimpleName());
+            }
+            throw ex;
+        }
 
         transactionTemplate.executeWithoutResult(status -> cartRepository.findWithItemsByKeycloakIdForUpdate(normalizedKeycloakId)
                 .ifPresent(cart -> {
@@ -240,7 +295,20 @@ public class CartService {
                     }
                 }));
 
-        return new CheckoutResponse(order.id(), prepared.itemCount(), prepared.totalQuantity(), prepared.subtotal());
+        return new CheckoutResponse(
+                order.id(),
+                prepared.itemCount(),
+                prepared.totalQuantity(),
+                promotionPricing == null ? null : promotionPricing.couponCode(),
+                promotionPricing == null ? null : promotionPricing.couponReservationId(),
+                promotionPricing == null ? prepared.subtotal() : normalizeMoney(promotionPricing.subtotal()),
+                promotionPricing == null ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP) : normalizeMoney(promotionPricing.lineDiscountTotal()),
+                promotionPricing == null ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP) : normalizeMoney(promotionPricing.cartDiscountTotal()),
+                promotionPricing == null ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP) : normalizeMoney(promotionPricing.shippingAmount()),
+                promotionPricing == null ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP) : normalizeMoney(promotionPricing.shippingDiscountTotal()),
+                promotionPricing == null ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP) : normalizeMoney(promotionPricing.totalDiscount()),
+                promotionPricing == null ? prepared.subtotal() : normalizeMoney(promotionPricing.grandTotal())
+        );
     }
 
     @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 15)
@@ -267,7 +335,6 @@ public class CartService {
             throw new ValidationException("Customer not found for checkout preview");
         }
 
-        List<PromotionQuoteLineRequest> quoteLines = new java.util.ArrayList<>(cart.getItems().size());
         int totalQuantity = 0;
         for (CartItem item : cart.getItems()) {
             ProductDetails latest = latestProductsById.get(item.getProductId());
@@ -275,23 +342,15 @@ public class CartService {
                 throw new ValidationException("Product is not available: " + item.getProductId());
             }
             totalQuantity += item.getQuantity();
-            // Cart product snapshot currently does not include category IDs, so category promotions cannot be matched here yet.
-            quoteLines.add(new PromotionQuoteLineRequest(
-                    latest.id(),
-                    latest.vendorId(),
-                    Set.of(),
-                    normalizeMoney(latest.sellingPrice()),
-                    item.getQuantity()
-            ));
         }
 
-        PromotionQuoteRequest quoteRequest = new PromotionQuoteRequest(
-                quoteLines,
-                request == null ? null : request.shippingAmount(),
+        PromotionQuoteRequest quoteRequest = buildPromotionQuoteRequest(
+                cart,
+                latestProductsById,
                 customer.id(),
-                request == null ? null : trimToNull(request.couponCode()),
-                request == null ? null : trimToNull(request.countryCode()),
-                null
+                request == null ? null : request.shippingAmount(),
+                request == null ? null : request.couponCode(),
+                request == null ? null : request.countryCode()
         );
         PromotionQuoteResponse quote = promotionClient.quote(quoteRequest);
         if (quote == null) {
@@ -503,6 +562,86 @@ public class CartService {
             return null;
         }
         return "cart-checkout::" + incomingKey.trim();
+    }
+
+    private String downstreamPromotionReservationKey(String incomingKey) {
+        if (!StringUtils.hasText(incomingKey)) {
+            return null;
+        }
+        return "cart-coupon-reserve::" + incomingKey.trim();
+    }
+
+    private PromotionQuoteRequest buildPromotionQuoteRequest(
+            Cart cart,
+            Map<UUID, ProductDetails> latestProductsById,
+            UUID customerId,
+            BigDecimal shippingAmount,
+            String couponCode,
+            String countryCode
+    ) {
+        if (cart == null || cart.getItems() == null || cart.getItems().isEmpty()) {
+            throw new ValidationException("Cart is empty");
+        }
+        List<PromotionQuoteLineRequest> quoteLines = new java.util.ArrayList<>(cart.getItems().size());
+        for (CartItem item : cart.getItems()) {
+            ProductDetails latest = latestProductsById.get(item.getProductId());
+            if (latest == null) {
+                throw new ValidationException("Product is not available: " + item.getProductId());
+            }
+            // Cart product snapshot currently does not include category IDs, so category promotions cannot be matched here yet.
+            quoteLines.add(new PromotionQuoteLineRequest(
+                    latest.id(),
+                    latest.vendorId(),
+                    Set.of(),
+                    normalizeMoney(latest.sellingPrice()),
+                    item.getQuantity()
+            ));
+        }
+        return new PromotionQuoteRequest(
+                quoteLines,
+                shippingAmount,
+                customerId,
+                trimToNull(couponCode),
+                trimToNull(countryCode),
+                null
+        );
+    }
+
+    private PromotionCheckoutPricingRequest toPromotionCheckoutPricingRequest(
+            PromotionQuoteResponse quote,
+            UUID couponReservationId,
+            String couponCode
+    ) {
+        if (quote == null) {
+            return null;
+        }
+        return new PromotionCheckoutPricingRequest(
+                couponReservationId,
+                trimToNull(couponCode),
+                normalizeMoney(quote.subtotal()),
+                normalizeMoney(quote.lineDiscountTotal()),
+                normalizeMoney(quote.cartDiscountTotal()),
+                normalizeMoney(quote.shippingAmount()),
+                normalizeMoney(quote.shippingDiscountTotal()),
+                normalizeMoney(quote.totalDiscount()),
+                normalizeMoney(quote.grandTotal())
+        );
+    }
+
+    private void releaseCouponReservationQuietly(UUID reservationId, String reason) {
+        try {
+            promotionClient.releaseCouponReservation(reservationId, safeReleaseReason(reason));
+        } catch (RuntimeException ignored) {
+            // Reservation will expire by TTL if release call fails.
+        }
+    }
+
+    private String safeReleaseReason(String reason) {
+        String normalized = trimToNull(reason);
+        if (normalized == null) {
+            return "checkout_failed";
+        }
+        return normalized.length() > 500 ? normalized.substring(0, 500) : normalized;
     }
 
     private String trimToNull(String value) {

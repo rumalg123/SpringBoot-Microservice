@@ -38,6 +38,30 @@ public class Order {
     @Column(name = "order_total", nullable = false, precision = 19, scale = 2)
     private BigDecimal orderTotal;
 
+    @Column(name = "subtotal_amount", nullable = false, precision = 19, scale = 2)
+    private BigDecimal subtotal;
+
+    @Column(name = "line_discount_total", nullable = false, precision = 19, scale = 2)
+    private BigDecimal lineDiscountTotal;
+
+    @Column(name = "cart_discount_total", nullable = false, precision = 19, scale = 2)
+    private BigDecimal cartDiscountTotal;
+
+    @Column(name = "shipping_amount", nullable = false, precision = 19, scale = 2)
+    private BigDecimal shippingAmount;
+
+    @Column(name = "shipping_discount_total", nullable = false, precision = 19, scale = 2)
+    private BigDecimal shippingDiscountTotal;
+
+    @Column(name = "total_discount", nullable = false, precision = 19, scale = 2)
+    private BigDecimal totalDiscount;
+
+    @Column(name = "coupon_code", length = 64)
+    private String couponCode;
+
+    @Column(name = "coupon_reservation_id")
+    private UUID couponReservationId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
     private OrderStatus status;

@@ -11,6 +11,14 @@ public record OrderResponse(
         int quantity,
         int itemCount,
         BigDecimal orderTotal,
+        BigDecimal subtotal,
+        BigDecimal lineDiscountTotal,
+        BigDecimal cartDiscountTotal,
+        BigDecimal shippingAmount,
+        BigDecimal shippingDiscountTotal,
+        BigDecimal totalDiscount,
+        String couponCode,
+        UUID couponReservationId,
         String status,
         Instant createdAt
 ) {}
