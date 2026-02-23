@@ -235,6 +235,17 @@ public class PromotionCampaignService {
             if (request.applicationLevel() != com.rumal.promotion_service.entity.PromotionApplicationLevel.SHIPPING) {
                 throw new ValidationException("FREE_SHIPPING promotions must use applicationLevel=SHIPPING");
             }
+        } else if (request.benefitType() == PromotionBenefitType.BUY_X_GET_Y) {
+            if (request.applicationLevel() != com.rumal.promotion_service.entity.PromotionApplicationLevel.LINE_ITEM) {
+                throw new ValidationException("BUY_X_GET_Y promotions must use applicationLevel=LINE_ITEM");
+            }
+            if (request.buyQuantity() == null || request.buyQuantity() < 1
+                    || request.getQuantity() == null || request.getQuantity() < 1) {
+                throw new ValidationException("BUY_X_GET_Y promotions require buyQuantity and getQuantity");
+            }
+            if (request.benefitValue() != null && request.benefitValue().compareTo(BigDecimal.ZERO) > 0) {
+                throw new ValidationException("benefitValue is not used for BUY_X_GET_Y promotions");
+            }
         } else {
             if (request.benefitValue() == null || request.benefitValue().compareTo(BigDecimal.ZERO) <= 0) {
                 throw new ValidationException("benefitValue must be greater than 0 for non-shipping benefits");
@@ -274,7 +285,11 @@ public class PromotionCampaignService {
         campaign.setScopeType(request.scopeType());
         campaign.setApplicationLevel(request.applicationLevel());
         campaign.setBenefitType(request.benefitType());
-        campaign.setBenefitValue(normalizeNullableMoney(request.benefitValue()));
+        campaign.setBenefitValue(request.benefitType() == PromotionBenefitType.BUY_X_GET_Y
+                ? null
+                : normalizeNullableMoney(request.benefitValue()));
+        campaign.setBuyQuantity(request.benefitType() == PromotionBenefitType.BUY_X_GET_Y ? request.buyQuantity() : null);
+        campaign.setGetQuantity(request.benefitType() == PromotionBenefitType.BUY_X_GET_Y ? request.getQuantity() : null);
         campaign.setMinimumOrderAmount(normalizeNullableMoney(request.minimumOrderAmount()));
         campaign.setMaximumDiscountAmount(normalizeNullableMoney(request.maximumDiscountAmount()));
         campaign.setFundingSource(request.fundingSource());
@@ -314,6 +329,8 @@ public class PromotionCampaignService {
                 entity.getApplicationLevel(),
                 entity.getBenefitType(),
                 entity.getBenefitValue(),
+                entity.getBuyQuantity(),
+                entity.getGetQuantity(),
                 entity.getMinimumOrderAmount(),
                 entity.getMaximumDiscountAmount(),
                 entity.getFundingSource(),

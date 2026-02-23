@@ -215,6 +215,9 @@ public class PromotionQuoteService {
         if (eligibleLines.isEmpty()) {
             return PromotionApplicationResult.rejected("No eligible line items");
         }
+        if (promotion.getBenefitType() == PromotionBenefitType.BUY_X_GET_Y) {
+            return applyBuyXGetYLinePromotion(promotion, eligibleLines);
+        }
         if (promotion.getBenefitType() == PromotionBenefitType.FREE_SHIPPING) {
             return PromotionApplicationResult.rejected("FREE_SHIPPING promotions must use SHIPPING application level");
         }
@@ -239,9 +242,71 @@ public class PromotionQuoteService {
         return PromotionApplicationResult.applied(totalDiscount);
     }
 
+    private PromotionApplicationResult applyBuyXGetYLinePromotion(PromotionCampaign promotion, List<LineState> eligibleLines) {
+        Integer buyQty = promotion.getBuyQuantity();
+        Integer getQty = promotion.getGetQuantity();
+        if (buyQty == null || buyQty < 1 || getQty == null || getQty < 1) {
+            return PromotionApplicationResult.rejected("BUY_X_GET_Y promotion is missing buy/get quantities");
+        }
+
+        int bundleSize = buyQty + getQty;
+        int totalEligibleQuantity = eligibleLines.stream()
+                .filter(line -> line.request().quantity() > 0)
+                .filter(line -> line.lineTotal().compareTo(BigDecimal.ZERO) > 0)
+                .mapToInt(line -> line.request().quantity())
+                .sum();
+        if (totalEligibleQuantity < bundleSize) {
+            return PromotionApplicationResult.rejected("Not enough eligible quantity for BUY_X_GET_Y");
+        }
+
+        int freeUnitsRemaining = (totalEligibleQuantity / bundleSize) * getQty;
+        if (freeUnitsRemaining <= 0) {
+            return PromotionApplicationResult.rejected("BUY_X_GET_Y produced no free units");
+        }
+
+        List<LineState> cheapestFirst = eligibleLines.stream()
+                .sorted(Comparator
+                        .comparing(this::bogoUnitSortPrice)
+                        .thenComparing(line -> line.request().productId(), Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(line -> line.request().vendorId(), Comparator.nullsLast(Comparator.naturalOrder())))
+                .toList();
+
+        BigDecimal totalDiscount = BigDecimal.ZERO;
+        for (LineState line : cheapestFirst) {
+            if (freeUnitsRemaining <= 0) {
+                break;
+            }
+            if (line.request().quantity() <= 0 || line.lineTotal().compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            int freeUnitsForLine = Math.min(freeUnitsRemaining, line.request().quantity());
+            if (freeUnitsForLine <= 0) {
+                continue;
+            }
+            BigDecimal discount = bogoDiscountForUnits(line, freeUnitsForLine);
+            if (discount.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            BigDecimal applied = line.applyLineDiscount(discount);
+            if (applied.compareTo(BigDecimal.ZERO) > 0) {
+                totalDiscount = totalDiscount.add(applied);
+                freeUnitsRemaining -= freeUnitsForLine;
+            }
+        }
+
+        totalDiscount = applyPromotionCap(promotion, normalizeMoney(totalDiscount));
+        if (totalDiscount.compareTo(BigDecimal.ZERO) <= 0) {
+            return PromotionApplicationResult.rejected("BUY_X_GET_Y produced no discount");
+        }
+        return PromotionApplicationResult.applied(totalDiscount);
+    }
+
     private PromotionApplicationResult applyCartLevelPromotion(PromotionCampaign promotion, List<LineState> lineStates) {
         if (promotion.getBenefitType() == PromotionBenefitType.FREE_SHIPPING) {
             return PromotionApplicationResult.rejected("FREE_SHIPPING promotions must use SHIPPING application level");
+        }
+        if (promotion.getBenefitType() == PromotionBenefitType.BUY_X_GET_Y) {
+            return PromotionApplicationResult.rejected("BUY_X_GET_Y promotions must use LINE_ITEM application level");
         }
 
         BigDecimal eligibleBase = eligibleLinesForPromotion(promotion, lineStates).stream()
@@ -271,6 +336,9 @@ public class PromotionQuoteService {
         }
         if (promotion.getScopeType() != PromotionScopeType.ORDER) {
             return PromotionApplicationResult.rejected("Scoped shipping promotions require shipping allocation support (not implemented yet)");
+        }
+        if (promotion.getBenefitType() == PromotionBenefitType.BUY_X_GET_Y) {
+            return PromotionApplicationResult.rejected("BUY_X_GET_Y promotions must use LINE_ITEM application level");
         }
 
         BigDecimal shippingRemaining = normalizeMoney(shippingAmount.subtract(shippingDiscountAlreadyApplied));
@@ -322,8 +390,32 @@ public class PromotionQuoteService {
             }
             case FIXED_AMOUNT_OFF -> promotion.getBenefitValue() == null ? BigDecimal.ZERO : promotion.getBenefitValue();
             case FREE_SHIPPING -> BigDecimal.ZERO;
+            case BUY_X_GET_Y -> BigDecimal.ZERO;
         };
         return minMoney(normalizeMoney(discount), normalizeMoney(baseAmount));
+    }
+
+    private BigDecimal bogoUnitSortPrice(LineState line) {
+        if (line == null || line.request() == null || line.request().quantity() <= 0) {
+            return BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP);
+        }
+        if (line.lineTotal().compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP);
+        }
+        return line.lineTotal().divide(BigDecimal.valueOf(line.request().quantity()), 4, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal bogoDiscountForUnits(LineState line, int freeUnits) {
+        if (line == null || freeUnits <= 0 || line.request() == null || line.request().quantity() <= 0) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        if (line.lineTotal().compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        BigDecimal proportional = line.lineTotal()
+                .multiply(BigDecimal.valueOf(freeUnits))
+                .divide(BigDecimal.valueOf(line.request().quantity()), 2, RoundingMode.HALF_UP);
+        return minMoney(proportional, line.lineTotal());
     }
 
     private BigDecimal applyPromotionCap(PromotionCampaign promotion, BigDecimal discount) {
@@ -392,14 +484,15 @@ public class PromotionQuoteService {
                     : total.setScale(2, RoundingMode.HALF_UP);
         }
 
-        public void applyLineDiscount(BigDecimal discount) {
+        public BigDecimal applyLineDiscount(BigDecimal discount) {
             BigDecimal normalized = discount == null ? BigDecimal.ZERO : discount.setScale(2, RoundingMode.HALF_UP);
             if (normalized.compareTo(BigDecimal.ZERO) <= 0) {
-                return;
+                return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
             }
             BigDecimal maxAllowed = lineTotal();
             BigDecimal applied = normalized.compareTo(maxAllowed) > 0 ? maxAllowed : normalized;
             this.lineDiscount = this.lineDiscount.add(applied).setScale(2, RoundingMode.HALF_UP);
+            return applied;
         }
     }
 

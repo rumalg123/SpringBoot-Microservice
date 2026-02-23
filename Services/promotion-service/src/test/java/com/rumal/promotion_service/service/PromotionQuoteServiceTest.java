@@ -43,6 +43,7 @@ class PromotionQuoteServiceTest {
     private final UUID vendorId = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private final UUID productId = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private final UUID categoryId = UUID.fromString("33333333-3333-3333-3333-333333333333");
+    private final UUID productId2 = UUID.fromString("55555555-5555-5555-5555-555555555555");
 
     @BeforeEach
     void setUp() {
@@ -196,6 +197,46 @@ class PromotionQuoteServiceTest {
         assertEquals(new BigDecimal("10.00"), quote.lineDiscountTotal());
         assertEquals(new BigDecimal("0.00"), quote.cartDiscountTotal());
         assertEquals(new BigDecimal("90.00"), quote.grandTotal());
+    }
+
+    @Test
+    void quote_buyXGetYAppliesToCheapestEligibleUnitsAcrossLines() {
+        PromotionCampaign bogo = basePromotion(
+                "Buy 2 Get 1",
+                PromotionApplicationLevel.LINE_ITEM,
+                PromotionScopeType.ORDER,
+                PromotionBenefitType.BUY_X_GET_Y,
+                "0.00",
+                1,
+                true,
+                false
+        );
+        bogo.setBuyQuantity(2);
+        bogo.setGetQuantity(1);
+
+        when(promotionCampaignRepository.findAll()).thenReturn(List.of(bogo));
+
+        PromotionQuoteResponse quote = service.quote(new PromotionQuoteRequest(
+                List.of(
+                        new PromotionQuoteLineRequest(productId, vendorId, Set.of(categoryId), new BigDecimal("30.00"), 1),
+                        new PromotionQuoteLineRequest(productId2, vendorId, Set.of(categoryId), new BigDecimal("10.00"), 2)
+                ),
+                new BigDecimal("0.00"),
+                UUID.fromString("66666666-6666-6666-6666-666666666666"),
+                null,
+                "US",
+                pricingAt
+        ));
+
+        assertEquals(new BigDecimal("50.00"), quote.subtotal());
+        assertEquals(new BigDecimal("10.00"), quote.lineDiscountTotal());
+        assertEquals(new BigDecimal("10.00"), quote.totalDiscount());
+        assertEquals(new BigDecimal("40.00"), quote.grandTotal());
+        assertEquals(1, quote.appliedPromotions().size());
+        assertEquals(bogo.getId(), quote.appliedPromotions().getFirst().promotionId());
+        assertTrue(quote.rejectedPromotions().isEmpty());
+        assertEquals(new BigDecimal("30.00"), quote.lines().getFirst().lineTotal());
+        assertEquals(new BigDecimal("10.00"), quote.lines().get(1).lineDiscount());
     }
 
     private PromotionQuoteRequest singleLineOrderRequest(String unitPrice, int quantity, String shippingAmount) {

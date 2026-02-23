@@ -188,6 +188,8 @@ class AdminPromotionAccessScopeServiceTest {
                 PromotionApplicationLevel.CART,
                 PromotionBenefitType.PERCENTAGE_OFF,
                 new BigDecimal("10.00"),
+                null,
+                null,
                 new BigDecimal("50.00"),
                 new BigDecimal("25.00"),
                 fundingSource,

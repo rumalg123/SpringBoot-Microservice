@@ -23,6 +23,8 @@ public record PromotionResponse(
         PromotionApplicationLevel applicationLevel,
         PromotionBenefitType benefitType,
         BigDecimal benefitValue,
+        Integer buyQuantity,
+        Integer getQuantity,
         BigDecimal minimumOrderAmount,
         BigDecimal maximumDiscountAmount,
         PromotionFundingSource fundingSource,

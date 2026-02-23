@@ -72,6 +72,12 @@ public class PromotionCampaign {
     @Column(name = "benefit_value", precision = 19, scale = 2)
     private BigDecimal benefitValue;
 
+    @Column(name = "buy_quantity")
+    private Integer buyQuantity;
+
+    @Column(name = "get_quantity")
+    private Integer getQuantity;
+
     @Column(name = "minimum_order_amount", precision = 19, scale = 2)
     private BigDecimal minimumOrderAmount;
 

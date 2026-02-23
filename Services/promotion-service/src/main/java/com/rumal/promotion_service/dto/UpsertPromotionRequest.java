@@ -28,6 +28,8 @@ public record UpsertPromotionRequest(
         @NotNull PromotionApplicationLevel applicationLevel,
         @NotNull PromotionBenefitType benefitType,
         @DecimalMin(value = "0.00", message = "benefitValue cannot be negative") BigDecimal benefitValue,
+        @Min(value = 1, message = "buyQuantity must be at least 1") Integer buyQuantity,
+        @Min(value = 1, message = "getQuantity must be at least 1") Integer getQuantity,
         @DecimalMin(value = "0.00", message = "minimumOrderAmount cannot be negative") BigDecimal minimumOrderAmount,
         @DecimalMin(value = "0.00", message = "maximumDiscountAmount cannot be negative") BigDecimal maximumDiscountAmount,
         @NotNull PromotionFundingSource fundingSource,
@@ -54,5 +56,13 @@ public record UpsertPromotionRequest(
     @AssertTrue(message = "stackable and exclusive cannot both be true")
     public boolean isStackingFlagsValid() {
         return !(stackable && exclusive);
+    }
+
+    @AssertTrue(message = "BUY_X_GET_Y requires buyQuantity and getQuantity; other benefit types must not set them")
+    public boolean isBogoFieldsValid() {
+        if (benefitType == PromotionBenefitType.BUY_X_GET_Y) {
+            return buyQuantity != null && buyQuantity > 0 && getQuantity != null && getQuantity > 0;
+        }
+        return buyQuantity == null && getQuantity == null;
     }
 }

@@ -72,7 +72,7 @@ Rules for execution:
 
 ## Phase 8: Nice-to-Have (After MVP)
 
-- [ ] BOGO / Buy-X-Get-Y support.
+- [x] BOGO / Buy-X-Get-Y support.
 - [ ] Tiered spend discounts.
 - [ ] Bundle discounts.
 - [ ] Promotion budgets and burn limits.
