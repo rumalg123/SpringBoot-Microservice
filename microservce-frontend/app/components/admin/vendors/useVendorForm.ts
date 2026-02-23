@@ -78,6 +78,7 @@ export function useVendorForm({
       contactPersonName: vendor.contactPersonName || "",
       status: vendor.status,
       active: vendor.active,
+      acceptingOrders: vendor.acceptingOrders,
     });
     setSlugEdited(true);
     setSlugStatus("available");
@@ -116,6 +117,7 @@ export function useVendorForm({
         description: null,
         status: form.status,
         active: form.active,
+        acceptingOrders: form.acceptingOrders,
       };
       const isUpdate = Boolean(form.id);
       const res = isUpdate

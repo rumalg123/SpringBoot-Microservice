@@ -63,10 +63,13 @@ public class SecurityConfig {
                         .pathMatchers("/auth/logout", "/auth/resend-verification").authenticated()
                         .pathMatchers("/customers/me", "/customers/me/**", "/customers/register-identity", "/orders/me", "/orders/me/**", "/cart/me", "/cart/me/**", "/wishlist/me", "/wishlist/me/**")
                         .access(this::hasCustomerAccess)
-                        .pathMatchers("/admin/posters/**", "/admin/vendors/**", "/admin/categories/**").access(this::hasSuperAdminAccess)
-                        .pathMatchers("/admin/orders/**", "/admin/products/**").access(this::hasSuperAdminOrVendorAdminAccess)
+                        .pathMatchers("/admin/vendors/**", "/admin/platform-staff/**").access(this::hasSuperAdminAccess)
+                        .pathMatchers("/admin/vendor-staff/**", "/admin/keycloak/users/**", "/admin/access-audit/**").access(this::hasSuperAdminOrVendorAdminAccess)
+                        .pathMatchers("/admin/posters/**", "/admin/categories/**").access(this::hasSuperAdminOrPlatformStaffAccess)
+                        .pathMatchers("/admin/orders/**", "/admin/vendor-orders/**", "/admin/products/**").access(this::hasAnyScopedAdminAccess)
+                        .pathMatchers("/admin/me/**").access(this::hasAnyScopedAdminAccess)
                         .pathMatchers("/admin/**").access(this::hasSuperAdminAccess)
-                        .pathMatchers("/customer-service/**", "/order-service/**", "/cart-service/**", "/wishlist-service/**", "/admin-service/**", "/product-service/**", "/poster-service/**", "/vendor-service/**", "/discovery-server/**").denyAll()
+                        .pathMatchers("/customer-service/**", "/order-service/**", "/cart-service/**", "/wishlist-service/**", "/admin-service/**", "/product-service/**", "/poster-service/**", "/vendor-service/**", "/access-service/**", "/discovery-server/**").denyAll()
                         .pathMatchers("/customers/**", "/orders/**", "/cart/**", "/wishlist/**").denyAll()
                         .anyExchange().authenticated()
                 )
@@ -101,6 +104,33 @@ public class SecurityConfig {
                 .map(JwtAuthenticationToken::getToken)
                 .map(jwt -> (AuthorizationResult) new AuthorizationDecision(
                         hasRole(jwt, "super_admin") || hasRole(jwt, "vendor_admin")
+                ))
+                .defaultIfEmpty(new AuthorizationDecision(false));
+    }
+
+    private Mono<AuthorizationResult> hasSuperAdminOrPlatformStaffAccess(Mono<Authentication> authentication, AuthorizationContext context) {
+        return authentication
+                .filter(Authentication::isAuthenticated)
+                .filter(auth -> auth instanceof JwtAuthenticationToken)
+                .cast(JwtAuthenticationToken.class)
+                .map(JwtAuthenticationToken::getToken)
+                .map(jwt -> (AuthorizationResult) new AuthorizationDecision(
+                        hasRole(jwt, "super_admin") || hasRole(jwt, "platform_staff")
+                ))
+                .defaultIfEmpty(new AuthorizationDecision(false));
+    }
+
+    private Mono<AuthorizationResult> hasAnyScopedAdminAccess(Mono<Authentication> authentication, AuthorizationContext context) {
+        return authentication
+                .filter(Authentication::isAuthenticated)
+                .filter(auth -> auth instanceof JwtAuthenticationToken)
+                .cast(JwtAuthenticationToken.class)
+                .map(JwtAuthenticationToken::getToken)
+                .map(jwt -> (AuthorizationResult) new AuthorizationDecision(
+                        hasRole(jwt, "super_admin")
+                                || hasRole(jwt, "platform_staff")
+                                || hasRole(jwt, "vendor_admin")
+                                || hasRole(jwt, "vendor_staff")
                 ))
                 .defaultIfEmpty(new AuthorizationDecision(false));
     }

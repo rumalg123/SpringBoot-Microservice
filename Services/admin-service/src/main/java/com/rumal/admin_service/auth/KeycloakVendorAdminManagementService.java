@@ -15,8 +15,13 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 
 @Service
 public class KeycloakVendorAdminManagementService {
@@ -113,6 +118,99 @@ public class KeycloakVendorAdminManagementService {
         }
     }
 
+    public List<KeycloakUserSearchResult> searchUsers(String query, int limit) {
+        String normalizedQuery = query == null ? "" : query.trim();
+        if (normalizedQuery.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "q is required");
+        }
+
+        int safeLimit = Math.max(1, Math.min(limit, 20));
+
+        try (Keycloak keycloak = newAdminClient()) {
+            var realmResource = keycloak.realm(realm);
+            var usersResource = realmResource.users();
+
+            Map<String, UserRepresentation> unique = new LinkedHashMap<>();
+            collectUsers(unique, usersResource.search(normalizedQuery, 0, safeLimit), safeLimit);
+            if (normalizedQuery.contains("@")) {
+                collectUsers(unique, usersResource.searchByEmail(normalizedQuery, false), safeLimit);
+            }
+
+            List<KeycloakUserSearchResult> results = new ArrayList<>();
+            for (UserRepresentation user : unique.values()) {
+                if (!StringUtils.hasText(user.getId())) {
+                    continue;
+                }
+                results.add(new KeycloakUserSearchResult(
+                        user.getId(),
+                        resolveEmail(user),
+                        normalizeOptional(user.getUsername()),
+                        normalizeOptional(user.getFirstName()),
+                        normalizeOptional(user.getLastName()),
+                        composeDisplayName(user),
+                        Boolean.TRUE.equals(user.isEnabled()),
+                        Boolean.TRUE.equals(user.isEmailVerified())
+                ));
+                if (results.size() >= safeLimit) {
+                    break;
+                }
+            }
+            return List.copyOf(results);
+        } catch (ResponseStatusException ex) {
+            throw ex;
+        } catch (WebApplicationException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak user search failed: " + ex.getMessage(), ex);
+        } catch (Exception ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak user search failed", ex);
+        }
+    }
+
+    public void logoutUserSessions(String keycloakUserId) {
+        if (!StringUtils.hasText(keycloakUserId)) {
+            return;
+        }
+        try (Keycloak keycloak = newAdminClient()) {
+            try {
+                keycloak.realm(realm).users().get(keycloakUserId.trim()).logout();
+            } catch (NotFoundException ignored) {
+                // User already removed in Keycloak; nothing to revoke.
+            }
+        } catch (WebApplicationException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak session logout failed", ex);
+        } catch (Exception ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak session logout failed", ex);
+        }
+    }
+
+    public void logoutUserSessionsBulk(Collection<String> keycloakUserIds) {
+        if (keycloakUserIds == null || keycloakUserIds.isEmpty()) {
+            return;
+        }
+        Set<String> unique = new LinkedHashSet<>();
+        for (String id : keycloakUserIds) {
+            if (StringUtils.hasText(id)) {
+                unique.add(id.trim());
+            }
+        }
+        if (unique.isEmpty()) {
+            return;
+        }
+        try (Keycloak keycloak = newAdminClient()) {
+            var users = keycloak.realm(realm).users();
+            for (String id : unique) {
+                try {
+                    users.get(id).logout();
+                } catch (NotFoundException ignored) {
+                    // Ignore orphaned/local stale rows.
+                }
+            }
+        } catch (WebApplicationException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak session logout failed", ex);
+        } catch (Exception ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak session logout failed", ex);
+        }
+    }
+
     private UserRepresentation createUser(
             org.keycloak.admin.client.resource.RealmResource realmResource,
             String normalizedEmail,
@@ -188,6 +286,21 @@ public class KeycloakVendorAdminManagementService {
         }
     }
 
+    private void collectUsers(Map<String, UserRepresentation> unique, List<UserRepresentation> users, int limit) {
+        if (users == null || users.isEmpty() || unique.size() >= limit) {
+            return;
+        }
+        for (UserRepresentation user : users) {
+            if (user == null || !StringUtils.hasText(user.getId())) {
+                continue;
+            }
+            unique.putIfAbsent(user.getId(), user);
+            if (unique.size() >= limit) {
+                return;
+            }
+        }
+    }
+
     private void sendRequiredActionsEmail(org.keycloak.admin.client.resource.RealmResource realmResource, String userId) {
         try {
             realmResource.users()
@@ -230,6 +343,27 @@ public class KeycloakVendorAdminManagementService {
             return user.getUsername().trim().toLowerCase(Locale.ROOT);
         }
         return "";
+    }
+
+    private String normalizeOptional(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        return value.trim();
+    }
+
+    private String composeDisplayName(UserRepresentation user) {
+        String first = normalizeOptional(user == null ? null : user.getFirstName());
+        String last = normalizeOptional(user == null ? null : user.getLastName());
+        String full = ((first == null ? "" : first) + " " + (last == null ? "" : last)).trim();
+        if (!full.isEmpty()) {
+            return full;
+        }
+        String email = resolveEmail(user);
+        if (!email.isBlank()) {
+            return email;
+        }
+        return normalizeOptional(user == null ? null : user.getUsername());
     }
 
     private Keycloak newAdminClient() {
@@ -276,6 +410,18 @@ public class KeycloakVendorAdminManagementService {
             String lastName,
             boolean created,
             boolean actionEmailSent
+    ) {
+    }
+
+    public record KeycloakUserSearchResult(
+            String id,
+            String email,
+            String username,
+            String firstName,
+            String lastName,
+            String displayName,
+            boolean enabled,
+            boolean emailVerified
     ) {
     }
 }

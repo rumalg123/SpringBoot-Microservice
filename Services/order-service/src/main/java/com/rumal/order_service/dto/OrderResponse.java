@@ -11,5 +11,6 @@ public record OrderResponse(
         int quantity,
         int itemCount,
         BigDecimal orderTotal,
+        String status,
         Instant createdAt
 ) {}

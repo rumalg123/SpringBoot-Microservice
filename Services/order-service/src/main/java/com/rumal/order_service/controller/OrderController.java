@@ -4,6 +4,10 @@ import com.rumal.order_service.dto.CreateOrderRequest;
 import com.rumal.order_service.dto.CreateMyOrderRequest;
 import com.rumal.order_service.dto.OrderDetailsResponse;
 import com.rumal.order_service.dto.OrderResponse;
+import com.rumal.order_service.dto.OrderStatusAuditResponse;
+import com.rumal.order_service.dto.UpdateOrderStatusRequest;
+import com.rumal.order_service.dto.VendorOrderResponse;
+import com.rumal.order_service.dto.VendorOrderStatusAuditResponse;
 import com.rumal.order_service.exception.UnauthorizedException;
 import com.rumal.order_service.security.InternalRequestVerifier;
 import com.rumal.order_service.service.OrderService;
@@ -95,6 +99,66 @@ public class OrderController {
     @GetMapping("/{id}/details")
     public OrderDetailsResponse details(@PathVariable UUID id) {
         return orderService.getDetails(id);
+    }
+
+    @GetMapping("/{id}/status-history")
+    public java.util.List<OrderStatusAuditResponse> statusHistory(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @PathVariable UUID id
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        return orderService.getStatusHistory(id);
+    }
+
+    @GetMapping("/{id}/vendor-orders")
+    public java.util.List<VendorOrderResponse> vendorOrders(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @PathVariable UUID id
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        return orderService.getVendorOrders(id);
+    }
+
+    @GetMapping("/vendor-orders/{vendorOrderId}")
+    public VendorOrderResponse getVendorOrder(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @PathVariable UUID vendorOrderId
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        return orderService.getVendorOrder(vendorOrderId);
+    }
+
+    @GetMapping("/vendor-orders/{vendorOrderId}/status-history")
+    public java.util.List<VendorOrderStatusAuditResponse> vendorOrderStatusHistory(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @PathVariable UUID vendorOrderId
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        return orderService.getVendorOrderStatusHistory(vendorOrderId);
+    }
+
+    @PatchMapping("/{id}/status")
+    public OrderResponse updateStatus(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateOrderStatusRequest req
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        return orderService.updateStatus(id, req.status(), userSub, userRoles);
+    }
+
+    @PatchMapping("/vendor-orders/{vendorOrderId}/status")
+    public VendorOrderResponse updateVendorOrderStatus(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
+            @PathVariable UUID vendorOrderId,
+            @Valid @RequestBody UpdateOrderStatusRequest req
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        return orderService.updateVendorOrderStatus(vendorOrderId, req.status(), userSub, userRoles);
     }
 
     private void verifyEmailVerified(String emailVerified) {

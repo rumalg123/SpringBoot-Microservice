@@ -3,6 +3,7 @@ package com.rumal.order_service.service;
 
 import com.rumal.order_service.client.CustomerClient;
 import com.rumal.order_service.client.ProductClient;
+import com.rumal.order_service.client.VendorOperationalStateClient;
 import com.rumal.order_service.dto.CreateOrderItemRequest;
 import com.rumal.order_service.config.CustomerDetailsMode;
 import com.rumal.order_service.config.OrderAggregationProperties;
@@ -14,14 +15,26 @@ import com.rumal.order_service.dto.OrderAddressResponse;
 import com.rumal.order_service.dto.OrderDetailsResponse;
 import com.rumal.order_service.dto.OrderItemResponse;
 import com.rumal.order_service.dto.OrderResponse;
+import com.rumal.order_service.dto.OrderStatusAuditResponse;
 import com.rumal.order_service.dto.ProductSummary;
+import com.rumal.order_service.dto.VendorOrderDeletionCheckResponse;
+import com.rumal.order_service.dto.VendorOrderResponse;
+import com.rumal.order_service.dto.VendorOrderStatusAuditResponse;
+import com.rumal.order_service.dto.VendorOperationalStateResponse;
 import com.rumal.order_service.entity.Order;
 import com.rumal.order_service.entity.OrderAddressSnapshot;
 import com.rumal.order_service.entity.OrderItem;
+import com.rumal.order_service.entity.OrderStatus;
+import com.rumal.order_service.entity.OrderStatusAudit;
+import com.rumal.order_service.entity.VendorOrder;
+import com.rumal.order_service.entity.VendorOrderStatusAudit;
 import com.rumal.order_service.exception.ResourceNotFoundException;
 import com.rumal.order_service.exception.ServiceUnavailableException;
 import com.rumal.order_service.exception.ValidationException;
 import com.rumal.order_service.repo.OrderRepository;
+import com.rumal.order_service.repo.OrderStatusAuditRepository;
+import com.rumal.order_service.repo.VendorOrderRepository;
+import com.rumal.order_service.repo.VendorOrderStatusAuditRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -42,9 +55,22 @@ import java.util.*;
 @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
 public class OrderService {
 
+    private static final Set<OrderStatus> VENDOR_DELETION_BLOCKING_STATUSES = EnumSet.of(
+            OrderStatus.PENDING,
+            OrderStatus.CONFIRMED,
+            OrderStatus.PROCESSING,
+            OrderStatus.SHIPPED,
+            OrderStatus.RETURN_REQUESTED,
+            OrderStatus.REFUND_PENDING
+    );
+
     private final OrderRepository orderRepository;
+    private final OrderStatusAuditRepository orderStatusAuditRepository;
+    private final VendorOrderRepository vendorOrderRepository;
+    private final VendorOrderStatusAuditRepository vendorOrderStatusAuditRepository;
     private final CustomerClient customerClient;
     private final ProductClient productClient;
+    private final VendorOperationalStateClient vendorOperationalStateClient;
     private final OrderAggregationProperties props;
 
     @Caching(evict = {
@@ -55,9 +81,14 @@ public class OrderService {
     public OrderResponse create(CreateOrderRequest req) {
         customerClient.assertCustomerExists(req.customerId());
         List<ResolvedOrderLine> lines = resolveOrderLines(req.productId(), req.quantity(), req.items());
+        assertVendorsAcceptingOrders(lines);
         ResolvedOrderAddresses addresses = resolveOrderAddresses(req.customerId(), req.shippingAddressId(), req.billingAddressId());
 
         Order saved = orderRepository.save(buildOrder(req.customerId(), lines, addresses));
+        recordStatusAudit(saved, null, OrderStatus.PENDING, null, null, "system", "order_create", "Order created");
+        saved.getVendorOrders().forEach(vendorOrder ->
+                recordVendorOrderStatusAudit(vendorOrder, null, OrderStatus.PENDING, null, null, "system", "order_create", "Vendor order created")
+        );
 
         return toResponse(saved);
     }
@@ -70,9 +101,14 @@ public class OrderService {
     public OrderResponse createForKeycloak(String keycloakId, CreateMyOrderRequest req) {
         CustomerSummary customer = customerClient.getCustomerByKeycloakId(keycloakId);
         List<ResolvedOrderLine> lines = resolveOrderLines(req.productId(), req.quantity(), req.items());
+        assertVendorsAcceptingOrders(lines);
         ResolvedOrderAddresses addresses = resolveOrderAddresses(customer.id(), req.shippingAddressId(), req.billingAddressId());
 
         Order saved = orderRepository.save(buildOrder(customer.id(), lines, addresses));
+        recordStatusAudit(saved, null, OrderStatus.PENDING, keycloakId, "customer", "customer", "order_create", "Customer order created");
+        saved.getVendorOrders().forEach(vendorOrder ->
+                recordVendorOrderStatusAudit(vendorOrder, null, OrderStatus.PENDING, keycloakId, "customer", "customer", "order_create", "Vendor order created")
+        );
 
         return toResponse(saved);
     }
@@ -91,6 +127,7 @@ public class OrderService {
                 o.getQuantity(),
                 o.getItemCount(),
                 normalizeMoney(o.getOrderTotal()),
+                o.getStatus() == null ? null : o.getStatus().name(),
                 o.getCreatedAt()
         );
     }
@@ -129,6 +166,123 @@ public class OrderService {
         return list(customer.id(), pageable);
     }
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "ordersByKeycloak", allEntries = true),
+            @CacheEvict(cacheNames = "orderDetailsByKeycloak", allEntries = true)
+    })
+    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 20)
+    public OrderResponse updateStatus(UUID orderId, OrderStatus status, String actorSub, String actorRoles) {
+        if (status == null) {
+            throw new ValidationException("status is required");
+        }
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId));
+        if (order.getVendorOrders() != null && !order.getVendorOrders().isEmpty()) {
+            if (order.getVendorOrders().size() > 1) {
+                throw new ValidationException("Use vendor-order status updates for multi-vendor orders");
+            }
+            UUID vendorOrderId = order.getVendorOrders().getFirst().getId();
+            updateVendorOrderStatus(vendorOrderId, status, actorSub, actorRoles);
+            return toResponse(orderRepository.findById(orderId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId)));
+        }
+        OrderStatus current = order.getStatus();
+        validateStatusTransition(current, status);
+        if (current == status) {
+            return toResponse(order);
+        }
+        order.setStatus(status);
+        Order saved = orderRepository.save(order);
+        recordStatusAudit(
+                saved,
+                current,
+                status,
+                actorSub,
+                actorRoles,
+                StringUtils.hasText(actorSub) ? "admin_user" : "system",
+                "status_update",
+                "Order status updated"
+        );
+        return toResponse(saved);
+    }
+
+    public List<OrderStatusAuditResponse> getStatusHistory(UUID orderId) {
+        orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId));
+        return orderStatusAuditRepository.findByOrderIdOrderByCreatedAtDesc(orderId).stream()
+                .map(this::toStatusAuditResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 20)
+    public VendorOrderResponse updateVendorOrderStatus(UUID vendorOrderId, OrderStatus status, String actorSub, String actorRoles) {
+        if (status == null) {
+            throw new ValidationException("status is required");
+        }
+        VendorOrder vendorOrder = vendorOrderRepository.findById(vendorOrderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Vendor order not found: " + vendorOrderId));
+        OrderStatus current = vendorOrder.getStatus();
+        validateStatusTransition(current, status);
+        if (current == status) {
+            return toVendorOrderResponse(vendorOrder);
+        }
+
+        vendorOrder.setStatus(status);
+        VendorOrder savedVendorOrder = vendorOrderRepository.save(vendorOrder);
+        recordVendorOrderStatusAudit(
+                savedVendorOrder,
+                current,
+                status,
+                actorSub,
+                actorRoles,
+                StringUtils.hasText(actorSub) ? "admin_user" : "system",
+                "vendor_order_status_update",
+                "Vendor order status updated"
+        );
+
+        Order parent = savedVendorOrder.getOrder();
+        OrderStatus previousAggregate = parent.getStatus();
+        OrderStatus nextAggregate = deriveAggregateOrderStatus(parent);
+        if (previousAggregate != nextAggregate) {
+            parent.setStatus(nextAggregate);
+            Order savedOrder = orderRepository.save(parent);
+            recordStatusAudit(
+                    savedOrder,
+                    previousAggregate,
+                    nextAggregate,
+                    actorSub,
+                    actorRoles,
+                    StringUtils.hasText(actorSub) ? "admin_user" : "system",
+                    "vendor_order_aggregate_sync",
+                    "Order aggregate status synchronized from vendor order statuses"
+            );
+        }
+
+        return toVendorOrderResponse(savedVendorOrder);
+    }
+
+    public List<VendorOrderResponse> getVendorOrders(UUID orderId) {
+        orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId));
+        return vendorOrderRepository.findByOrderIdOrderByCreatedAtAsc(orderId).stream()
+                .map(this::toVendorOrderResponse)
+                .toList();
+    }
+
+    public VendorOrderResponse getVendorOrder(UUID vendorOrderId) {
+        VendorOrder vendorOrder = vendorOrderRepository.findById(vendorOrderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Vendor order not found: " + vendorOrderId));
+        return toVendorOrderResponse(vendorOrder);
+    }
+
+    public List<VendorOrderStatusAuditResponse> getVendorOrderStatusHistory(UUID vendorOrderId) {
+        vendorOrderRepository.findById(vendorOrderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Vendor order not found: " + vendorOrderId));
+        return vendorOrderStatusAuditRepository.findByVendorOrderIdOrderByCreatedAtDesc(vendorOrderId).stream()
+                .map(this::toVendorOrderStatusAuditResponse)
+                .toList();
+    }
+
     public OrderDetailsResponse getDetails(UUID orderId) {
         Order o = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId));
@@ -154,6 +308,7 @@ public class OrderService {
                 o.getQuantity(),
                 o.getItemCount(),
                 normalizeMoney(o.getOrderTotal()),
+                o.getStatus() == null ? null : o.getStatus().name(),
                 o.getCreatedAt(),
                 toItems(o),
                 toAddressResponse(o.getShippingAddressId(), o.getShippingAddress()),
@@ -180,6 +335,7 @@ public class OrderService {
                 o.getQuantity(),
                 o.getItemCount(),
                 normalizeMoney(o.getOrderTotal()),
+                o.getStatus() == null ? null : o.getStatus().name(),
                 o.getCreatedAt(),
                 toItems(o),
                 toAddressResponse(o.getShippingAddressId(), o.getShippingAddress()),
@@ -207,17 +363,49 @@ public class OrderService {
                 .quantity(totalQuantity)
                 .itemCount(itemCount)
                 .orderTotal(orderTotal)
+                .status(OrderStatus.PENDING)
                 .shippingAddressId(addresses.shippingAddress().id())
                 .billingAddressId(addresses.billingAddress().id())
                 .shippingAddress(toAddressSnapshot(addresses.shippingAddress()))
                 .billingAddress(toAddressSnapshot(addresses.billingAddress()))
                 .build();
 
+        Map<UUID, List<ResolvedOrderLine>> linesByVendor = new LinkedHashMap<>();
         for (ResolvedOrderLine line : lines) {
+            UUID vendorId = Objects.requireNonNull(line.product().vendorId(), "vendorId is required");
+            linesByVendor.computeIfAbsent(vendorId, k -> new ArrayList<>()).add(line);
+        }
+
+        Map<UUID, VendorOrder> vendorOrdersByVendorId = new LinkedHashMap<>();
+        for (Map.Entry<UUID, List<ResolvedOrderLine>> entry : linesByVendor.entrySet()) {
+            UUID vendorId = entry.getKey();
+            List<ResolvedOrderLine> vendorLines = entry.getValue();
+            int vendorQuantity = vendorLines.stream().mapToInt(ResolvedOrderLine::quantity).sum();
+            int vendorItemCount = vendorLines.size();
+            BigDecimal vendorTotal = normalizeMoney(vendorLines.stream()
+                    .map(ResolvedOrderLine::lineTotal)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add));
+
+            VendorOrder vendorOrder = VendorOrder.builder()
+                    .order(order)
+                    .vendorId(vendorId)
+                    .status(OrderStatus.PENDING)
+                    .itemCount(vendorItemCount)
+                    .quantity(vendorQuantity)
+                    .orderTotal(vendorTotal)
+                    .build();
+            order.getVendorOrders().add(vendorOrder);
+            vendorOrdersByVendorId.put(vendorId, vendorOrder);
+        }
+
+        for (ResolvedOrderLine line : lines) {
+            UUID vendorId = Objects.requireNonNull(line.product().vendorId(), "vendorId is required");
+            VendorOrder vendorOrder = Objects.requireNonNull(vendorOrdersByVendorId.get(vendorId), "vendorOrder is required");
             OrderItem orderItem = OrderItem.builder()
                     .order(order)
+                    .vendorOrder(vendorOrder)
                     .productId(line.product().id())
-                    .vendorId(Objects.requireNonNull(line.product().vendorId(), "vendorId is required"))
+                    .vendorId(vendorId)
                     .productSku(line.product().sku())
                     .item(line.product().name().trim())
                     .quantity(line.quantity())
@@ -339,6 +527,31 @@ public class OrderService {
                 .toList();
     }
 
+    private void assertVendorsAcceptingOrders(List<ResolvedOrderLine> lines) {
+        Set<UUID> vendorIds = lines.stream()
+                .map(line -> line.product().vendorId())
+                .filter(Objects::nonNull)
+                .collect(LinkedHashSet::new, Set::add, Set::addAll);
+        if (vendorIds.isEmpty()) {
+            throw new ValidationException("No vendorId found for order items");
+        }
+
+        Map<UUID, VendorOperationalStateResponse> states = vendorOperationalStateClient.batchGetStates(vendorIds);
+        for (UUID vendorId : vendorIds) {
+            VendorOperationalStateResponse state = states.get(vendorId);
+            if (state == null) {
+                throw new ValidationException("Vendor is unavailable for ordering: " + vendorId);
+            }
+            boolean visible = !state.deleted() && state.active()
+                    && "ACTIVE".equalsIgnoreCase(String.valueOf(state.status()))
+                    && state.acceptingOrders()
+                    && state.storefrontVisible();
+            if (!visible) {
+                throw new ValidationException("Vendor is not accepting orders: " + vendorId);
+            }
+        }
+    }
+
     private record ResolvedOrderAddresses(
             CustomerAddressSummary shippingAddress,
             CustomerAddressSummary billingAddress
@@ -384,6 +597,155 @@ public class OrderService {
 
     private BigDecimal normalizeMoney(BigDecimal value) {
         return Objects.requireNonNullElse(value, BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private void validateStatusTransition(OrderStatus current, OrderStatus next) {
+        if (next == null) {
+            throw new ValidationException("status is required");
+        }
+        if (current == null || current == next) {
+            return;
+        }
+        Set<OrderStatus> allowed = switch (current) {
+            case PENDING -> EnumSet.of(OrderStatus.CONFIRMED, OrderStatus.CANCELLED);
+            case CONFIRMED -> EnumSet.of(OrderStatus.PROCESSING, OrderStatus.CANCELLED);
+            case PROCESSING -> EnumSet.of(OrderStatus.SHIPPED, OrderStatus.CANCELLED);
+            case SHIPPED -> EnumSet.of(OrderStatus.DELIVERED, OrderStatus.RETURN_REQUESTED);
+            case DELIVERED -> EnumSet.of(OrderStatus.RETURN_REQUESTED, OrderStatus.CLOSED);
+            case RETURN_REQUESTED -> EnumSet.of(OrderStatus.REFUND_PENDING, OrderStatus.CLOSED);
+            case REFUND_PENDING -> EnumSet.of(OrderStatus.REFUNDED, OrderStatus.CLOSED);
+            case REFUNDED, CANCELLED, CLOSED -> EnumSet.noneOf(OrderStatus.class);
+        };
+        if (!allowed.contains(next)) {
+            throw new ValidationException("Invalid order status transition: " + current.name() + " -> " + next.name());
+        }
+    }
+
+    private void recordStatusAudit(
+            Order order,
+            OrderStatus fromStatus,
+            OrderStatus toStatus,
+            String actorSub,
+            String actorRoles,
+            String actorType,
+            String changeSource,
+            String note
+    ) {
+        orderStatusAuditRepository.save(OrderStatusAudit.builder()
+                .order(order)
+                .fromStatus(fromStatus)
+                .toStatus(toStatus)
+                .actorSub(StringUtils.hasText(actorSub) ? actorSub.trim() : null)
+                .actorRoles(StringUtils.hasText(actorRoles) ? actorRoles.trim() : null)
+                .actorType(actorType)
+                .changeSource(changeSource)
+                .note(note)
+                .build());
+    }
+
+    private void recordVendorOrderStatusAudit(
+            VendorOrder vendorOrder,
+            OrderStatus fromStatus,
+            OrderStatus toStatus,
+            String actorSub,
+            String actorRoles,
+            String actorType,
+            String changeSource,
+            String note
+    ) {
+        vendorOrderStatusAuditRepository.save(VendorOrderStatusAudit.builder()
+                .vendorOrder(vendorOrder)
+                .fromStatus(fromStatus)
+                .toStatus(toStatus)
+                .actorSub(StringUtils.hasText(actorSub) ? actorSub.trim() : null)
+                .actorRoles(StringUtils.hasText(actorRoles) ? actorRoles.trim() : null)
+                .actorType(actorType)
+                .changeSource(changeSource)
+                .note(note)
+                .build());
+    }
+
+    private OrderStatusAuditResponse toStatusAuditResponse(OrderStatusAudit audit) {
+        return new OrderStatusAuditResponse(
+                audit.getId(),
+                audit.getFromStatus() == null ? null : audit.getFromStatus().name(),
+                audit.getToStatus() == null ? null : audit.getToStatus().name(),
+                audit.getActorSub(),
+                audit.getActorRoles(),
+                audit.getActorType(),
+                audit.getChangeSource(),
+                audit.getNote(),
+                audit.getCreatedAt()
+        );
+    }
+
+    private VendorOrderStatusAuditResponse toVendorOrderStatusAuditResponse(VendorOrderStatusAudit audit) {
+        return new VendorOrderStatusAuditResponse(
+                audit.getId(),
+                audit.getFromStatus() == null ? null : audit.getFromStatus().name(),
+                audit.getToStatus() == null ? null : audit.getToStatus().name(),
+                audit.getActorSub(),
+                audit.getActorRoles(),
+                audit.getActorType(),
+                audit.getChangeSource(),
+                audit.getNote(),
+                audit.getCreatedAt()
+        );
+    }
+
+    private VendorOrderResponse toVendorOrderResponse(VendorOrder vendorOrder) {
+        return new VendorOrderResponse(
+                vendorOrder.getId(),
+                vendorOrder.getOrder() == null ? null : vendorOrder.getOrder().getId(),
+                vendorOrder.getVendorId(),
+                vendorOrder.getStatus() == null ? null : vendorOrder.getStatus().name(),
+                vendorOrder.getItemCount(),
+                vendorOrder.getQuantity(),
+                normalizeMoney(vendorOrder.getOrderTotal()),
+                vendorOrder.getCreatedAt()
+        );
+    }
+
+    private OrderStatus deriveAggregateOrderStatus(Order order) {
+        List<VendorOrder> vendorOrders = order.getVendorOrders() == null ? List.of() : order.getVendorOrders();
+        if (vendorOrders.isEmpty()) {
+            return order.getStatus() == null ? OrderStatus.PENDING : order.getStatus();
+        }
+        Set<OrderStatus> statuses = vendorOrders.stream()
+                .map(VendorOrder::getStatus)
+                .filter(Objects::nonNull)
+                .collect(LinkedHashSet::new, Set::add, Set::addAll);
+        if (statuses.isEmpty()) {
+            return OrderStatus.PENDING;
+        }
+        if (statuses.size() == 1) {
+            return statuses.iterator().next();
+        }
+        if (statuses.contains(OrderStatus.REFUND_PENDING)) return OrderStatus.REFUND_PENDING;
+        if (statuses.contains(OrderStatus.RETURN_REQUESTED)) return OrderStatus.RETURN_REQUESTED;
+        if (statuses.contains(OrderStatus.SHIPPED)) return OrderStatus.SHIPPED;
+        if (statuses.contains(OrderStatus.PROCESSING)) return OrderStatus.PROCESSING;
+        if (statuses.contains(OrderStatus.CONFIRMED)) return OrderStatus.CONFIRMED;
+        if (statuses.contains(OrderStatus.PENDING)) return OrderStatus.PENDING;
+        if (statuses.contains(OrderStatus.DELIVERED)) return OrderStatus.DELIVERED;
+        if (statuses.contains(OrderStatus.CLOSED)) return OrderStatus.CLOSED;
+        if (statuses.contains(OrderStatus.REFUNDED)) return OrderStatus.REFUNDED;
+        if (statuses.contains(OrderStatus.CANCELLED)) return OrderStatus.CANCELLED;
+        return OrderStatus.PROCESSING;
+    }
+
+    public VendorOrderDeletionCheckResponse getVendorDeletionCheck(UUID vendorId) {
+        long totalOrders = vendorOrderRepository.countDistinctParentOrdersByVendorId(vendorId);
+        long pendingOrders = vendorOrderRepository.countDistinctParentOrdersByVendorIdAndStatuses(
+                vendorId,
+                VENDOR_DELETION_BLOCKING_STATUSES
+        );
+        return new VendorOrderDeletionCheckResponse(
+                vendorId,
+                totalOrders,
+                pendingOrders,
+                vendorOrderRepository.findLatestParentOrderCreatedAtByVendorId(vendorId)
+        );
     }
 
 }

@@ -1,9 +1,12 @@
 "use client";
 
+import type { AxiosInstance } from "axios";
+import KeycloakUserLookupField from "@/app/components/admin/access/KeycloakUserLookupField";
 import type { OnboardForm, Vendor, VendorOnboardResponse, VendorUser, VendorUserRole } from "./types";
 import VendorUsersList from "./VendorUsersList";
 
 type VendorOnboardingPanelProps = {
+  apiClient: AxiosInstance | null;
   panelId?: string;
   emailInputId?: string;
   vendorUsersSectionId?: string;
@@ -26,6 +29,7 @@ type VendorOnboardingPanelProps = {
 };
 
 export default function VendorOnboardingPanel({
+  apiClient,
   panelId,
   emailInputId,
   vendorUsersSectionId,
@@ -46,6 +50,8 @@ export default function VendorOnboardingPanel({
   onRefreshUsers,
   onRemoveUser,
 }: VendorOnboardingPanelProps) {
+  const hasLinkedKeycloakUser = Boolean(onboardForm.keycloakUserId.trim());
+
   return (
     <section id={panelId} className="card-surface rounded-2xl p-5">
       <div className="mb-3 flex items-center justify-between gap-2">
@@ -110,6 +116,35 @@ export default function VendorOnboardingPanel({
         }}
         className="grid gap-3 text-sm"
       >
+        <KeycloakUserLookupField
+          apiClient={apiClient}
+          disabled={onboarding}
+          helperText="Search existing Keycloak users to autofill email, names and Keycloak user ID. Use for linking existing accounts."
+          onSelect={(user) =>
+            onChangeOnboardForm((s) => ({
+              ...s,
+              keycloakUserId: user.id || s.keycloakUserId,
+              email: (user.email || "").trim() || s.email,
+              firstName: (user.firstName || "").trim() || s.firstName,
+              lastName: (user.lastName || "").trim() || s.lastName,
+              displayName: (user.displayName || user.email || "").trim() || s.displayName,
+              createIfMissing: false,
+            }))
+          }
+        />
+
+        {hasLinkedKeycloakUser && (
+          <div
+            className="rounded-lg border px-3 py-2 text-xs"
+            style={{ background: "rgba(59,130,246,0.06)", borderColor: "rgba(59,130,246,0.22)" }}
+          >
+            <p className="font-semibold text-[var(--ink)]">Existing Keycloak user selected</p>
+            <p className="mt-1 text-[var(--muted)]">
+              The onboarding request will link this user and assign `vendor_admin`. `Create if missing` is disabled while a Keycloak User ID is set.
+            </p>
+          </div>
+        )}
+
         <div className="form-group">
           <label className="form-label">Admin Email</label>
           <input
@@ -172,7 +207,25 @@ export default function VendorOnboardingPanel({
         </div>
 
         <div className="form-group">
-          <label className="form-label">Keycloak User ID (optional)</label>
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <label className="form-label mb-0">Keycloak User ID (optional)</label>
+            {hasLinkedKeycloakUser && (
+              <button
+                type="button"
+                onClick={() =>
+                  onChangeOnboardForm((s) => ({
+                    ...s,
+                    keycloakUserId: "",
+                  }))
+                }
+                className="rounded-md border border-[var(--line)] px-2 py-1 text-[11px]"
+                style={{ background: "var(--surface-2)", color: "var(--ink-light)" }}
+                disabled={onboarding}
+              >
+                Clear Linked User
+              </button>
+            )}
+          </div>
           <input
             value={onboardForm.keycloakUserId}
             onChange={(e) => onChangeOnboardForm((s) => ({ ...s, keycloakUserId: e.target.value }))}
@@ -187,10 +240,15 @@ export default function VendorOnboardingPanel({
             type="checkbox"
             checked={onboardForm.createIfMissing}
             onChange={(e) => onChangeOnboardForm((s) => ({ ...s, createIfMissing: e.target.checked }))}
-            disabled={onboarding}
+            disabled={onboarding || hasLinkedKeycloakUser}
           />
           Create Keycloak user if email is not found (sends verify/password setup email)
         </label>
+        {hasLinkedKeycloakUser && (
+          <p className="text-[11px] text-[var(--muted)]">
+            Clear the linked Keycloak User ID to re-enable automatic user creation by email.
+          </p>
+        )}
 
         <button
           type="submit"

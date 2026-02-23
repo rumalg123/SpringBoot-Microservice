@@ -29,6 +29,10 @@ public class OrderItem {
     @JoinColumn(name = "order_id", nullable = false)
     private Order order;
 
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "vendor_order_id", nullable = false)
+    private VendorOrder vendorOrder;
+
     @Column(name = "product_id", nullable = false)
     private UUID productId;
 

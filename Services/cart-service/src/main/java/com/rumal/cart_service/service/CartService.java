@@ -2,6 +2,7 @@ package com.rumal.cart_service.service;
 
 import com.rumal.cart_service.client.OrderClient;
 import com.rumal.cart_service.client.ProductClient;
+import com.rumal.cart_service.client.VendorOperationalStateClient;
 import com.rumal.cart_service.dto.AddCartItemRequest;
 import com.rumal.cart_service.dto.CartItemResponse;
 import com.rumal.cart_service.dto.CartResponse;
@@ -11,6 +12,7 @@ import com.rumal.cart_service.dto.CreateMyOrderItemRequest;
 import com.rumal.cart_service.dto.OrderResponse;
 import com.rumal.cart_service.dto.ProductDetails;
 import com.rumal.cart_service.dto.UpdateCartItemRequest;
+import com.rumal.cart_service.dto.VendorOperationalStateResponse;
 import com.rumal.cart_service.entity.Cart;
 import com.rumal.cart_service.entity.CartItem;
 import com.rumal.cart_service.exception.ResourceNotFoundException;
@@ -38,6 +40,7 @@ public class CartService {
 
     private final CartRepository cartRepository;
     private final ProductClient productClient;
+    private final VendorOperationalStateClient vendorOperationalStateClient;
     private final OrderClient orderClient;
 
     @Cacheable(cacheNames = "cartByKeycloak", key = "#keycloakId")
@@ -196,7 +199,24 @@ public class CartService {
         if (product.sellingPrice() == null || product.sellingPrice().compareTo(BigDecimal.ZERO) <= 0) {
             throw new ValidationException("Product has invalid selling price: " + productId);
         }
+        if (product.vendorId() == null) {
+            throw new ValidationException("Product vendorId is missing: " + productId);
+        }
+        assertVendorCanAcceptOrders(product.vendorId());
         return product;
+    }
+
+    private void assertVendorCanAcceptOrders(UUID vendorId) {
+        VendorOperationalStateResponse state = vendorOperationalStateClient.getState(vendorId);
+        if (state == null || state.deleted() || !state.active()) {
+            throw new ValidationException("Vendor is unavailable for ordering: " + vendorId);
+        }
+        if (!"ACTIVE".equalsIgnoreCase(String.valueOf(state.status()))) {
+            throw new ValidationException("Vendor is not active for ordering: " + vendorId);
+        }
+        if (!state.acceptingOrders() || !state.storefrontVisible()) {
+            throw new ValidationException("Vendor is not accepting orders: " + vendorId);
+        }
     }
 
     private String normalizeKeycloakId(String keycloakId) {

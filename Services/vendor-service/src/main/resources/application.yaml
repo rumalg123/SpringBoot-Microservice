@@ -26,3 +26,7 @@ sample:
   vendor:
     seed:
       enabled: ${SAMPLE_VENDOR_SEED_ENABLED:true}
+
+vendor:
+  delete:
+    refund-hold-days: ${VENDOR_DELETE_REFUND_HOLD_DAYS:14}

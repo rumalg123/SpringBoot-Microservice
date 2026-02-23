@@ -10,9 +10,12 @@ import ProductSearchBar from "./search/ProductSearchBar";
 
 type Props = {
   email?: string;
+  isSuperAdmin?: boolean;
+  isVendorAdmin?: boolean;
   canViewAdmin?: boolean;
   canManageAdminOrders?: boolean;
   canManageAdminProducts?: boolean;
+  canManageAdminVendors?: boolean;
   canManageAdminPosters?: boolean;
   apiClient?: AxiosInstance | null;
   emailVerified?: boolean | null;
@@ -21,9 +24,12 @@ type Props = {
 
 export default function AppNav({
   email,
+  isSuperAdmin = false,
+  isVendorAdmin = false,
   canViewAdmin = false,
   canManageAdminOrders,
   canManageAdminProducts,
+  canManageAdminVendors,
   canManageAdminPosters,
   apiClient = null,
   emailVerified = null,
@@ -49,8 +55,10 @@ export default function AppNav({
 
   const showAdminOrders = canManageAdminOrders ?? canViewAdmin;
   const showAdminProducts = canManageAdminProducts ?? canViewAdmin;
+  const showAdminVendors = canManageAdminVendors ?? isSuperAdmin;
   const showAdminPosters = canManageAdminPosters ?? canViewAdmin;
-  const showAnyAdminLinks = showAdminOrders || showAdminProducts || showAdminPosters;
+  const showVendorStaffAdmin = isSuperAdmin || isVendorAdmin;
+  const showAnyAdminLinks = showAdminOrders || showAdminProducts || showAdminVendors || showVendorStaffAdmin || showAdminPosters;
 
   return (
     <header
@@ -203,7 +211,7 @@ export default function AppNav({
                   Admin Products
                 </Link>
               )}
-              {showAdminPosters && (
+              {showAdminVendors && (
                 <Link href="/admin/vendors"
                   className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
                   style={{
@@ -213,6 +221,30 @@ export default function AppNav({
                   }}
                 >
                   Admin Vendors
+                </Link>
+              )}
+              {showVendorStaffAdmin && (
+                <Link href="/admin/vendor-staff"
+                  className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
+                  style={{
+                    color: isActive("/admin/vendor-staff") ? "#a78bfa" : "rgba(167,139,250,0.6)",
+                    background: isActive("/admin/vendor-staff") ? "rgba(124,58,237,0.12)" : "transparent",
+                    border: isActive("/admin/vendor-staff") ? "1px solid rgba(124,58,237,0.3)" : "1px solid transparent",
+                  }}
+                >
+                  Vendor Staff
+                </Link>
+              )}
+              {showAdminVendors && (
+                <Link href="/admin/platform-staff"
+                  className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
+                  style={{
+                    color: isActive("/admin/platform-staff") ? "#a78bfa" : "rgba(167,139,250,0.6)",
+                    background: isActive("/admin/platform-staff") ? "rgba(124,58,237,0.12)" : "transparent",
+                    border: isActive("/admin/platform-staff") ? "1px solid rgba(124,58,237,0.3)" : "1px solid transparent",
+                  }}
+                >
+                  Platform Staff
                 </Link>
               )}
               {showAdminPosters && (

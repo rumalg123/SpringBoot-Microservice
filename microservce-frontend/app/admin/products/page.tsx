@@ -294,26 +294,28 @@ export default function AdminProductsPage() {
   const [loadingActiveList, setLoadingActiveList] = useState(false);
   const [loadingDeletedList, setLoadingDeletedList] = useState(false);
   const [loadingVendors, setLoadingVendors] = useState(false);
+  const canManageCategories = session.canManageAdminCategories;
+  const canSelectAnyVendor = session.isSuperAdmin || session.isPlatformStaff;
 
   const loadCategories = useCallback(async () => {
     if (!session.apiClient) return;
-    const res = await session.apiClient.get(session.isSuperAdmin ? "/admin/categories" : "/categories");
+    const res = await session.apiClient.get(canManageCategories ? "/admin/categories" : "/categories");
     setCategories((res.data as Category[]) || []);
-  }, [session.apiClient, session.isSuperAdmin]);
+  }, [session.apiClient, canManageCategories]);
 
   const loadDeletedCategories = useCallback(async () => {
     if (!session.apiClient) return;
-    if (!session.isSuperAdmin) {
+    if (!canManageCategories) {
       setDeletedCategories([]);
       return;
     }
     const res = await session.apiClient.get("/admin/categories/deleted");
     setDeletedCategories((res.data as Category[]) || []);
-  }, [session.apiClient, session.isSuperAdmin]);
+  }, [session.apiClient, canManageCategories]);
 
   const loadVendors = useCallback(async () => {
     if (!session.apiClient) return;
-    if (!session.isSuperAdmin) {
+    if (!canSelectAnyVendor) {
       setVendors([]);
       return;
     }
@@ -331,7 +333,7 @@ export default function AdminProductsPage() {
     } finally {
       setLoadingVendors(false);
     }
-  }, [session.apiClient, session.isSuperAdmin]);
+  }, [session.apiClient, canSelectAnyVendor]);
 
   const loadActive = useCallback(
     async (targetPage: number) => {
@@ -349,7 +351,7 @@ export default function AdminProductsPage() {
         if (type) params.set("type", type);
         if (vendorFilterId.trim()) params.set("vendorId", vendorFilterId.trim());
 
-        const res = await session.apiClient.get(`/products?${params.toString()}`);
+        const res = await session.apiClient.get(`/admin/products?${params.toString()}`);
         setActivePage(res.data as PagedResponse<ProductSummary>);
         setPage(targetPage);
       } finally {
@@ -394,7 +396,7 @@ export default function AdminProductsPage() {
       params.set("sort", "name,ASC");
       params.set("type", "PARENT");
       params.set("includeOrphanParents", "true");
-      const res = await session.apiClient.get(`/products?${params.toString()}`);
+      const res = await session.apiClient.get(`/admin/products?${params.toString()}`);
       const pageData = res.data as PagedResponse<ProductSummary>;
       setParentProducts((pageData.content || []).filter((p) => p.active));
     } finally {
@@ -424,8 +426,9 @@ export default function AdminProductsPage() {
     const run = async () => {
       try {
         const startupTasks: Promise<unknown>[] = [loadActive(0), loadDeleted(0), loadCategories(), loadParentProducts()];
-        if (session.isSuperAdmin) {
-          startupTasks.push(loadDeletedCategories(), loadVendors());
+        if (canManageCategories || canSelectAnyVendor) {
+          if (canManageCategories) startupTasks.push(loadDeletedCategories());
+          if (canSelectAnyVendor) startupTasks.push(loadVendors());
         }
         await Promise.all(startupTasks);
         setStatus("Admin product catalog loaded.");
@@ -434,7 +437,7 @@ export default function AdminProductsPage() {
       }
     };
     void run();
-  }, [router, session.status, session.isAuthenticated, session.canManageAdminProducts, session.isSuperAdmin, loadActive, loadDeleted, loadCategories, loadDeletedCategories, loadParentProducts, loadVendors]);
+  }, [router, session.status, session.isAuthenticated, session.canManageAdminProducts, canManageCategories, canSelectAnyVendor, loadActive, loadDeleted, loadCategories, loadDeletedCategories, loadParentProducts, loadVendors]);
 
   useEffect(() => {
     if (productSlugTouched) return;
@@ -1356,7 +1359,7 @@ export default function AdminProductsPage() {
               subCategories={subCategories}
               vendors={vendors}
               loadingVendors={loadingVendors}
-              showVendorFilter={session.isSuperAdmin}
+              showVendorFilter={canSelectAnyVendor}
               rows={rows}
               pageMeta={pageMeta}
               currentPage={showDeleted ? deletedPageIndex : page}
@@ -1455,13 +1458,13 @@ export default function AdminProductsPage() {
                   slugify,
                   resolveImageUrl,
                   MAX_IMAGE_COUNT,
-                  canSelectVendor: session.isSuperAdmin,
+                  canSelectVendor: canSelectAnyVendor,
                   preventNumberInputScroll,
                   preventNumberInputArrows,
                 }}
               />
 
-              {session.isSuperAdmin && (
+              {canManageCategories && (
                 <CategoryOperationsPanel
                   categoryForm={categoryForm}
                   categorySlugStatus={categorySlugStatus}

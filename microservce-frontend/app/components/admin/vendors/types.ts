@@ -10,7 +10,10 @@ export type Vendor = {
   contactPersonName: string | null;
   status: VendorStatus;
   active: boolean;
+  acceptingOrders: boolean;
   deleted: boolean;
+  deletionRequestedAt?: string | null;
+  deletionRequestReason?: string | null;
 };
 
 export type VendorUser = {
@@ -31,6 +34,39 @@ export type VendorForm = {
   contactPersonName: string;
   status: VendorStatus;
   active: boolean;
+  acceptingOrders: boolean;
+};
+
+export type VendorDeletionEligibility = {
+  vendorId: string;
+  eligible: boolean;
+  totalOrders: number;
+  pendingOrders: number;
+  lastOrderAt?: string | null;
+  refundHoldUntil?: string | null;
+  blockingReasons: string[];
+};
+
+export type VendorLifecycleAuditAction =
+  | "CREATED"
+  | "UPDATED"
+  | "STOP_ORDERS"
+  | "RESUME_ORDERS"
+  | "DELETE_REQUESTED"
+  | "DELETE_CONFIRMED"
+  | "DELETE_CONFIRMED_LEGACY"
+  | "RESTORED";
+
+export type VendorLifecycleAudit = {
+  id: string;
+  vendorId: string;
+  action: VendorLifecycleAuditAction | string;
+  actorSub?: string | null;
+  actorRoles?: string | null;
+  actorType?: string | null;
+  changeSource?: string | null;
+  reason?: string | null;
+  createdAt: string;
 };
 
 export type OnboardForm = {
@@ -61,6 +97,7 @@ export const emptyVendorForm: VendorForm = {
   contactPersonName: "",
   status: "PENDING",
   active: true,
+  acceptingOrders: true,
 };
 
 export const emptyOnboardForm: OnboardForm = {
@@ -72,4 +109,3 @@ export const emptyOnboardForm: OnboardForm = {
   vendorUserRole: "OWNER",
   createIfMissing: true,
 };
-

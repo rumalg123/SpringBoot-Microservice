@@ -142,11 +142,29 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
 
+  access-service:
+    build:
+      context: ./Services/access-service
+    depends_on:
+      - discovery-server
+      - redis
+    env_file:
+      - ./env/common.env
+      - ./env/access-service.env
+    environment:
+      TZ: Asia/Colombo
+      LOGGING_FILE_NAME: /logs/access-service.log
+    volumes:
+      - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+
   admin-service:
     build:
       context: ./Services/admin-service
     depends_on:
       - discovery-server
+      - access-service
     env_file:
       - ./env/common.env
       - ./env/admin-service.env
@@ -164,6 +182,7 @@ services:
     depends_on:
       - discovery-server
       - redis
+      - access-service
     ports:
       - "8095:8080"
     env_file:

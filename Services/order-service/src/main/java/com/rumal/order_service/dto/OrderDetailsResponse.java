@@ -12,6 +12,7 @@ public record OrderDetailsResponse(
         int quantity,
         int itemCount,
         BigDecimal orderTotal,
+        String status,
         Instant createdAt,
         List<OrderItemResponse> items,
         OrderAddressResponse shippingAddress,

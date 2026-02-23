@@ -25,4 +25,5 @@ public interface ProductService {
     ProductResponse update(UUID id, UpsertProductRequest request);
     void softDelete(UUID id);
     ProductResponse restore(UUID id);
+    void evictPublicCachesForVendorVisibilityChange(UUID vendorId);
 }

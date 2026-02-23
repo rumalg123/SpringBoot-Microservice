@@ -36,6 +36,12 @@ public class GlobalExceptionHandler {
         return error(HttpStatus.UNAUTHORIZED, ex.getMessage());
     }
 
+    @ExceptionHandler(ServiceUnavailableException.class)
+    public ResponseEntity<?> handleUnavailable(ServiceUnavailableException ex) {
+        log.warn("Vendor downstream service unavailable: {}", ex.getMessage(), ex);
+        return error(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage());
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<?> handleMethodArgumentNotValid(MethodArgumentNotValidException ex) {
         log.warn("Vendor request argument validation failed: {}", ex.getMessage(), ex);

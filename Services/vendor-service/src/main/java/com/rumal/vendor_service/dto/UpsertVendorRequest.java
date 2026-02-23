@@ -18,6 +18,7 @@ public record UpsertVendorRequest(
         @Size(max = 255) String websiteUrl,
         @Size(max = 500) String description,
         @NotNull VendorStatus status,
-        Boolean active
+        Boolean active,
+        Boolean acceptingOrders
 ) {
 }

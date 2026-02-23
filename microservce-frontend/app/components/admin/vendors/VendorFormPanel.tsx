@@ -142,6 +142,16 @@ export default function VendorFormPanel({
           </label>
         </div>
 
+        <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
+          <input
+            type="checkbox"
+            checked={form.acceptingOrders}
+            onChange={(e) => onChange((s) => ({ ...s, acceptingOrders: e.target.checked }))}
+            disabled={saving}
+          />
+          Accepting orders (storefront visible only when active + ACTIVE status + accepting orders)
+        </label>
+
         <button
           type="submit"
           disabled={saving || slugStatus === "checking" || slugStatus === "taken" || slugStatus === "invalid"}
@@ -153,4 +163,3 @@ export default function VendorFormPanel({
     </section>
   );
 }
-

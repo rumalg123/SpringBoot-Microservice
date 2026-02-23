@@ -44,6 +44,29 @@ public class AdminProductController {
     private final ProductImageStorageService productImageStorageService;
     private final InternalRequestVerifier internalRequestVerifier;
 
+    @GetMapping
+    public Page<ProductSummaryResponse> listActive(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) String sku,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String mainCategory,
+            @RequestParam(required = false) String subCategory,
+            @RequestParam(required = false) UUID vendorId,
+            @RequestParam(required = false) ProductType type,
+            @RequestParam(required = false) BigDecimal minSellingPrice,
+            @RequestParam(required = false) BigDecimal maxSellingPrice,
+            @RequestParam(defaultValue = "false") boolean includeOrphanParents,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        adminProductAccessScopeService.assertCanManageProductOperations(userSub, userRoles, internalAuth);
+        UUID scopedVendorId = adminProductAccessScopeService.resolveScopedVendorFilter(userSub, userRoles, vendorId, internalAuth);
+        return productService.list(pageable, q, sku, category, mainCategory, subCategory, scopedVendorId, type, minSellingPrice, maxSellingPrice, includeOrphanParents);
+    }
+
     @GetMapping("/deleted")
     public Page<ProductSummaryResponse> listDeleted(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
@@ -61,6 +84,7 @@ public class AdminProductController {
             @PageableDefault(size = 20, sort = "updatedAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         internalRequestVerifier.verify(internalAuth);
+        adminProductAccessScopeService.assertCanManageProductOperations(userSub, userRoles, internalAuth);
         UUID scopedVendorId = adminProductAccessScopeService.resolveScopedVendorFilter(userSub, userRoles, vendorId, internalAuth);
         return productService.listDeleted(pageable, q, sku, category, mainCategory, subCategory, scopedVendorId, type, minSellingPrice, maxSellingPrice);
     }
@@ -74,6 +98,7 @@ public class AdminProductController {
             @Valid @RequestBody UpsertProductRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
+        adminProductAccessScopeService.assertCanManageProductOperations(userSub, userRoles, internalAuth);
         UpsertProductRequest scopedRequest = adminProductAccessScopeService.scopeCreateRequest(userSub, userRoles, request, internalAuth);
         return productService.create(scopedRequest);
     }
@@ -82,10 +107,13 @@ public class AdminProductController {
     @ResponseStatus(HttpStatus.CREATED)
     public ProductImageUploadResponse uploadImages(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @RequestParam("files") java.util.List<MultipartFile> files,
             @RequestParam(value = "keys", required = false) java.util.List<String> keys
     ) {
         internalRequestVerifier.verify(internalAuth);
+        adminProductAccessScopeService.assertCanManageProductOperations(userSub, userRoles, internalAuth);
         return new ProductImageUploadResponse(productImageStorageService.uploadImages(files, keys));
     }
 
@@ -93,9 +121,12 @@ public class AdminProductController {
     @ResponseStatus(HttpStatus.CREATED)
     public ProductImageUploadResponse generateImageNames(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @Valid @RequestBody ProductImageNameRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
+        adminProductAccessScopeService.assertCanManageProductOperations(userSub, userRoles, internalAuth);
         return new ProductImageUploadResponse(productImageStorageService.generateImageNames(request.fileNames()));
     }
 
@@ -109,6 +140,7 @@ public class AdminProductController {
             @Valid @RequestBody UpsertProductRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
+        adminProductAccessScopeService.assertCanManageProductOperations(userSub, userRoles, internalAuth);
         adminProductAccessScopeService.assertCanManageProduct(parentId, userSub, userRoles, internalAuth);
         UpsertProductRequest scopedRequest = adminProductAccessScopeService.scopeCreateRequest(userSub, userRoles, request, internalAuth);
         return productService.createVariation(parentId, scopedRequest);
@@ -123,6 +155,7 @@ public class AdminProductController {
             @Valid @RequestBody UpsertProductRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
+        adminProductAccessScopeService.assertCanManageProductOperations(userSub, userRoles, internalAuth);
         UpsertProductRequest scopedRequest = adminProductAccessScopeService.scopeUpdateRequest(id, userSub, userRoles, request, internalAuth);
         return productService.update(id, scopedRequest);
     }

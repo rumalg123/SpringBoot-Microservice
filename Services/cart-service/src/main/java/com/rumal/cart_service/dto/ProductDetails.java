@@ -6,6 +6,7 @@ import java.util.UUID;
 
 public record ProductDetails(
         UUID id,
+        UUID vendorId,
         String slug,
         String name,
         String sku,

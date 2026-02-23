@@ -82,12 +82,22 @@ public class Vendor {
     @Builder.Default
     private boolean active = true;
 
+    @Column(name = "accepting_orders", nullable = false)
+    @Builder.Default
+    private boolean acceptingOrders = true;
+
     @Column(name = "is_deleted", nullable = false)
     @Builder.Default
     private boolean deleted = false;
 
     @Column(name = "deleted_at")
     private Instant deletedAt;
+
+    @Column(name = "deletion_requested_at")
+    private Instant deletionRequestedAt;
+
+    @Column(name = "deletion_request_reason", length = 500)
+    private String deletionRequestReason;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

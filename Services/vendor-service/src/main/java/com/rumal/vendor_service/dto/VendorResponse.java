@@ -19,8 +19,11 @@ public record VendorResponse(
         String description,
         VendorStatus status,
         boolean active,
+        boolean acceptingOrders,
         boolean deleted,
         Instant deletedAt,
+        Instant deletionRequestedAt,
+        String deletionRequestReason,
         Instant createdAt,
         Instant updatedAt
 ) {

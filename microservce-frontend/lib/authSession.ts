@@ -120,6 +120,20 @@ function isVendorAdminByClaims(
   return hasRoleByClaims(claims, namespace, "vendor_admin");
 }
 
+function isPlatformStaffByClaims(
+  claims: Record<string, unknown> | null,
+  namespace: string
+): boolean {
+  return hasRoleByClaims(claims, namespace, "platform_staff");
+}
+
+function isVendorStaffByClaims(
+  claims: Record<string, unknown> | null,
+  namespace: string
+): boolean {
+  return hasRoleByClaims(claims, namespace, "vendor_staff");
+}
+
 function isCustomerByClaims(
   claims: Record<string, unknown> | null,
   namespace: string
@@ -268,11 +282,15 @@ export function useAuthSession() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [profile, setProfile] = useState<UserProfile>(null);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [isPlatformStaff, setIsPlatformStaff] = useState(false);
   const [isVendorAdmin, setIsVendorAdmin] = useState(false);
+  const [isVendorStaff, setIsVendorStaff] = useState(false);
   const [canViewAdmin, setCanViewAdmin] = useState(false);
   const [canManageAdminOrders, setCanManageAdminOrders] = useState(false);
   const [canManageAdminProducts, setCanManageAdminProducts] = useState(false);
+  const [canManageAdminCategories, setCanManageAdminCategories] = useState(false);
   const [canManageAdminPosters, setCanManageAdminPosters] = useState(false);
+  const [canManageAdminVendors, setCanManageAdminVendors] = useState(false);
   const [hasCustomerRole, setHasCustomerRole] = useState(false);
   const [emailVerified, setEmailVerified] = useState<boolean | null>(null);
   const customerBootstrapDoneRef = useRef(false);
@@ -360,26 +378,63 @@ export function useAuthSession() {
           }
 
           const superAdmin = isSuperAdminByClaims(parsedClaims, env.claimsNamespace);
+          const platformStaff = isPlatformStaffByClaims(parsedClaims, env.claimsNamespace);
           const vendorAdmin = isVendorAdminByClaims(parsedClaims, env.claimsNamespace);
+          const vendorStaff = isVendorStaffByClaims(parsedClaims, env.claimsNamespace);
           const customerRole = isCustomerByClaims(parsedClaims, env.claimsNamespace);
-          const anyAdmin = superAdmin || vendorAdmin;
+          const anyAdmin = superAdmin || platformStaff || vendorAdmin || vendorStaff;
+          let manageOrders = superAdmin || platformStaff || vendorAdmin || vendorStaff;
+          let manageProducts = superAdmin || platformStaff || vendorAdmin || vendorStaff;
+          let manageCategories = superAdmin;
+          let managePosters = superAdmin;
+          let manageVendors = superAdmin;
+
+          if (anyAdmin && keycloak.token) {
+            try {
+              const capabilitiesRes = await fetch(`${env.apiBase}/admin/me/capabilities`, {
+                method: "GET",
+                headers: {
+                  Authorization: `Bearer ${keycloak.token}`,
+                },
+              });
+              if (capabilitiesRes.ok) {
+                const capabilities = (await capabilitiesRes.json()) as Record<string, unknown>;
+                manageOrders = Boolean(capabilities.canManageAdminOrders);
+                manageProducts = Boolean(capabilities.canManageAdminProducts);
+                manageCategories = Boolean(capabilities.canManageAdminCategories);
+                managePosters = Boolean(capabilities.canManageAdminPosters);
+                manageVendors = Boolean(capabilities.canManageAdminVendors);
+              }
+            } catch {
+              // Keep coarse-role fallback if capabilities endpoint is unavailable.
+            }
+          }
+
           setProfile(userProfile);
           setIsSuperAdmin(superAdmin);
+          setIsPlatformStaff(platformStaff);
           setIsVendorAdmin(vendorAdmin);
+          setIsVendorStaff(vendorStaff);
           setCanViewAdmin(anyAdmin);
-          setCanManageAdminOrders(anyAdmin);
-          setCanManageAdminProducts(anyAdmin);
-          setCanManageAdminPosters(superAdmin);
+          setCanManageAdminOrders(manageOrders);
+          setCanManageAdminProducts(manageProducts);
+          setCanManageAdminCategories(manageCategories);
+          setCanManageAdminPosters(managePosters);
+          setCanManageAdminVendors(manageVendors);
           setHasCustomerRole(customerRole);
           setEmailVerified(resolveEmailVerified(parsedClaims, userProfile, env.claimsNamespace));
         } else {
           setProfile(null);
           setIsSuperAdmin(false);
+          setIsPlatformStaff(false);
           setIsVendorAdmin(false);
+          setIsVendorStaff(false);
           setCanViewAdmin(false);
           setCanManageAdminOrders(false);
           setCanManageAdminProducts(false);
+          setCanManageAdminCategories(false);
           setCanManageAdminPosters(false);
+          setCanManageAdminVendors(false);
           setHasCustomerRole(false);
           setEmailVerified(null);
         }
@@ -524,11 +579,15 @@ export function useAuthSession() {
     error,
     isAuthenticated,
     isSuperAdmin,
+    isPlatformStaff,
     isVendorAdmin,
+    isVendorStaff,
     canViewAdmin,
     canManageAdminOrders,
     canManageAdminProducts,
+    canManageAdminCategories,
     canManageAdminPosters,
+    canManageAdminVendors,
     hasCustomerRole,
     emailVerified,
     profile,

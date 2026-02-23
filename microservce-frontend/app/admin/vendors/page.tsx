@@ -8,6 +8,8 @@ import ConfirmModal from "../../components/ConfirmModal";
 import Footer from "../../components/Footer";
 import VendorFormPanel from "../../components/admin/vendors/VendorFormPanel";
 import VendorListPanel from "../../components/admin/vendors/VendorListPanel";
+import VendorDeletionEligibilityPanel from "../../components/admin/vendors/VendorDeletionEligibilityPanel";
+import VendorLifecycleAuditPanel from "../../components/admin/vendors/VendorLifecycleAuditPanel";
 import VendorOnboardingPanel from "../../components/admin/vendors/VendorOnboardingPanel";
 import VendorSetupStepper from "../../components/admin/vendors/VendorSetupStepper";
 import { useAdminVendors } from "../../components/admin/vendors/useAdminVendors";
@@ -184,12 +186,18 @@ export default function AdminVendorsPage() {
                   loadingDeleted={vendors.loadingDeleted}
                   deletedLoaded={vendors.deletedLoaded}
                   selectedVendorId={vendors.selectedVendorId}
+                  vendorDeletionEligibilityById={vendors.vendorDeletionEligibilityById}
+                  eligibilityLoadingVendorId={vendors.eligibilityLoadingVendorId}
+                  orderToggleVendorId={vendors.orderToggleVendorId}
                   onRefresh={vendors.refreshCurrentVendorList}
                   onToggleShowDeleted={vendors.setShowDeleted}
                   onEditVendor={vendors.handleEditVendor}
                   onSelectVendor={vendors.handleSelectVendor}
                   onDeleteVendor={vendors.openDeleteVendorConfirm}
+                  onConfirmDeleteVendor={vendors.openConfirmDeleteVendorConfirm}
                   onRestoreVendor={vendors.openRestoreVendorConfirm}
+                  onStopOrders={(vendor) => { void vendors.stopVendorOrders(vendor); }}
+                  onResumeOrders={(vendor) => { void vendors.resumeVendorOrders(vendor); }}
                 />
               </div>
             </div>
@@ -204,33 +212,60 @@ export default function AdminVendorsPage() {
                     : undefined
               }
             >
-              <VendorOnboardingPanel
-                panelId={ONBOARDING_PANEL_ID}
-                emailInputId={ONBOARDING_EMAIL_ID}
-                vendorUsersSectionId={VENDOR_USERS_SECTION_ID}
-                vendors={vendors.vendors}
-                selectedVendorId={vendors.selectedVendorId}
-                selectedVendor={vendors.selectedVendor}
-                onboardForm={vendors.onboardForm}
-              onboarding={vendors.onboarding}
-              onboardStatus={vendors.onboardStatus}
-              lastOnboardResult={vendors.lastOnboardResult}
-              loadingUsers={vendors.loadingUsers}
-                vendorUsers={vendors.vendorUsers}
-                removingMembershipId={vendors.removingMembershipId}
-                onSelectVendorId={vendors.handleSelectVendorId}
-                onFillFromVendor={() => {
-                  if (vendors.selectedVendor) vendors.fillOnboardFromVendor(vendors.selectedVendor);
-                }}
-                onChangeOnboardForm={vendors.setOnboardForm}
-                onSubmit={() => {
-                  void vendors.onboardVendorAdmin();
-                }}
-                onRefreshUsers={() => {
-                  if (vendors.selectedVendorId) void vendors.loadVendorUsers(vendors.selectedVendorId);
-                }}
-                onRemoveUser={(user) => vendors.openRemoveVendorUserConfirm(vendors.selectedVendorId, user)}
-              />
+              <div className="space-y-4">
+                <VendorDeletionEligibilityPanel
+                  vendor={vendors.selectedVendor}
+                  eligibility={vendors.selectedVendorDeletionEligibility}
+                  loading={
+                    Boolean(vendors.selectedVendorId) &&
+                    vendors.eligibilityLoadingVendorId === vendors.selectedVendorId
+                  }
+                  onRefresh={() => {
+                    if (vendors.selectedVendorId) void vendors.loadVendorDeletionEligibility(vendors.selectedVendorId);
+                  }}
+                />
+
+                <VendorLifecycleAuditPanel
+                  vendor={vendors.selectedVendor}
+                  audits={vendors.selectedVendorLifecycleAudit}
+                  loading={
+                    Boolean(vendors.selectedVendorId) &&
+                    vendors.lifecycleAuditLoadingVendorId === vendors.selectedVendorId
+                  }
+                  onRefresh={() => {
+                    if (vendors.selectedVendorId) void vendors.loadVendorLifecycleAudit(vendors.selectedVendorId);
+                  }}
+                />
+
+                <VendorOnboardingPanel
+                  apiClient={session.apiClient}
+                  panelId={ONBOARDING_PANEL_ID}
+                  emailInputId={ONBOARDING_EMAIL_ID}
+                  vendorUsersSectionId={VENDOR_USERS_SECTION_ID}
+                  vendors={vendors.vendors}
+                  selectedVendorId={vendors.selectedVendorId}
+                  selectedVendor={vendors.selectedVendor}
+                  onboardForm={vendors.onboardForm}
+                  onboarding={vendors.onboarding}
+                  onboardStatus={vendors.onboardStatus}
+                  lastOnboardResult={vendors.lastOnboardResult}
+                  loadingUsers={vendors.loadingUsers}
+                  vendorUsers={vendors.vendorUsers}
+                  removingMembershipId={vendors.removingMembershipId}
+                  onSelectVendorId={vendors.handleSelectVendorId}
+                  onFillFromVendor={() => {
+                    if (vendors.selectedVendor) vendors.fillOnboardFromVendor(vendors.selectedVendor);
+                  }}
+                  onChangeOnboardForm={vendors.setOnboardForm}
+                  onSubmit={() => {
+                    void vendors.onboardVendorAdmin();
+                  }}
+                  onRefreshUsers={() => {
+                    if (vendors.selectedVendorId) void vendors.loadVendorUsers(vendors.selectedVendorId);
+                  }}
+                  onRemoveUser={(user) => vendors.openRemoveVendorUserConfirm(vendors.selectedVendorId, user)}
+                />
+              </div>
             </div>
           </div>
 
@@ -247,6 +282,11 @@ export default function AdminVendorsPage() {
         confirmLabel={vendors.confirmUi.confirmLabel}
         danger={vendors.confirmUi.danger}
         loading={vendors.confirmLoading}
+        reasonEnabled={vendors.confirmUi.reasonEnabled}
+        reasonLabel="Reason for audit (optional)"
+        reasonPlaceholder="Why are you performing this lifecycle action?"
+        reasonValue={vendors.confirmReason}
+        onReasonChange={vendors.setConfirmReason}
         onCancel={() => {
           if (!vendors.confirmLoading) vendors.setConfirmState(null);
         }}

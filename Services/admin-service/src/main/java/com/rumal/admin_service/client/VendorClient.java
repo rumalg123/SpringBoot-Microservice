@@ -43,20 +43,36 @@ public class VendorClient {
         return getMap("/admin/vendors/" + id, internalAuth);
     }
 
+    public Map<String, Object> getDeletionEligibility(UUID id, String internalAuth) {
+        return getMap("/admin/vendors/" + id + "/deletion-eligibility", internalAuth);
+    }
+
     public Map<String, Object> create(Map<String, Object> request, String internalAuth) {
         return jsonRequest("POST", "/admin/vendors", request, internalAuth);
+    }
+
+    public Map<String, Object> create(Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
+        return jsonRequest("POST", "/admin/vendors", request, internalAuth, userSub, userRoles);
     }
 
     public Map<String, Object> update(UUID id, Map<String, Object> request, String internalAuth) {
         return jsonRequest("PUT", "/admin/vendors/" + id, request, internalAuth);
     }
 
+    public Map<String, Object> update(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
+        return jsonRequest("PUT", "/admin/vendors/" + id, request, internalAuth, userSub, userRoles);
+    }
+
     public void delete(UUID id, String internalAuth) {
+        delete(id, internalAuth, null, null);
+    }
+
+    public void delete(UUID id, String internalAuth, String userSub, String userRoles) {
         RestClient rc = lbRestClientBuilder.build();
         try {
-            rc.delete()
+            applyActorHeaders(rc.delete()
                     .uri(buildUri("/admin/vendors/" + id))
-                    .header("X-Internal-Auth", internalAuth)
+                    .header("X-Internal-Auth", internalAuth), userSub, userRoles)
                     .retrieve()
                     .toBodilessEntity();
         } catch (RestClientResponseException ex) {
@@ -68,14 +84,45 @@ public class VendorClient {
         }
     }
 
+    public Map<String, Object> stopReceivingOrders(UUID id, String internalAuth) {
+        return postNoBody("/admin/vendors/" + id + "/stop-orders", internalAuth);
+    }
+
+    public Map<String, Object> stopReceivingOrders(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
+        return request == null
+                ? postNoBody("/admin/vendors/" + id + "/stop-orders", internalAuth, userSub, userRoles)
+                : jsonPost("/admin/vendors/" + id + "/stop-orders", request, internalAuth, userSub, userRoles);
+    }
+
+    public Map<String, Object> resumeReceivingOrders(UUID id, String internalAuth) {
+        return postNoBody("/admin/vendors/" + id + "/resume-orders", internalAuth);
+    }
+
+    public Map<String, Object> resumeReceivingOrders(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
+        return request == null
+                ? postNoBody("/admin/vendors/" + id + "/resume-orders", internalAuth, userSub, userRoles)
+                : jsonPost("/admin/vendors/" + id + "/resume-orders", request, internalAuth, userSub, userRoles);
+    }
+
     public Map<String, Object> restore(UUID id, String internalAuth) {
+        return restore(id, null, internalAuth, null, null);
+    }
+
+    public Map<String, Object> restore(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
         RestClient rc = lbRestClientBuilder.build();
         try {
-            Map<String, Object> body = rc.post()
-                    .uri(buildUri("/admin/vendors/" + id + "/restore"))
-                    .header("X-Internal-Auth", internalAuth)
-                    .retrieve()
-                    .body(MAP_TYPE);
+            RestClient.RequestBodySpec spec = rc.post().uri(buildUri("/admin/vendors/" + id + "/restore"));
+            RestClient.RequestHeadersSpec<?> headersSpec = applyActorHeaders(spec.header("X-Internal-Auth", internalAuth), userSub, userRoles);
+            Map<String, Object> body;
+            if (request == null || request.isEmpty()) {
+                body = headersSpec.retrieve().body(MAP_TYPE);
+            } else {
+                body = ((RestClient.RequestBodySpec) headersSpec)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(request)
+                        .retrieve()
+                        .body(MAP_TYPE);
+            }
             if (body == null) {
                 throw new ServiceUnavailableException("Vendor service returned an empty response", null);
             }
@@ -91,6 +138,39 @@ public class VendorClient {
 
     public List<Map<String, Object>> listVendorUsers(UUID vendorId, String internalAuth) {
         return getList("/admin/vendors/" + vendorId + "/users", internalAuth);
+    }
+
+    public List<Map<String, Object>> listLifecycleAudit(UUID vendorId, String internalAuth) {
+        return getList("/admin/vendors/" + vendorId + "/lifecycle-audit", internalAuth);
+    }
+
+    public Map<String, Object> requestDelete(UUID vendorId, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
+        return (request == null || request.isEmpty())
+                ? postNoBody("/admin/vendors/" + vendorId + "/delete-request", internalAuth, userSub, userRoles)
+                : jsonPost("/admin/vendors/" + vendorId + "/delete-request", request, internalAuth, userSub, userRoles);
+    }
+
+    public void confirmDelete(UUID vendorId, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
+        RestClient rc = lbRestClientBuilder.build();
+        try {
+            RestClient.RequestBodySpec spec = rc.post().uri(buildUri("/admin/vendors/" + vendorId + "/confirm-delete"));
+            RestClient.RequestHeadersSpec<?> headersSpec = applyActorHeaders(spec.header("X-Internal-Auth", internalAuth), userSub, userRoles);
+            if (request == null || request.isEmpty()) {
+                headersSpec.retrieve().toBodilessEntity();
+            } else {
+                ((RestClient.RequestBodySpec) headersSpec)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(request)
+                        .retrieve()
+                        .toBodilessEntity();
+            }
+        } catch (RestClientResponseException ex) {
+            throw toDownstreamHttpException(ex);
+        } catch (RestClientException ex) {
+            throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
+        } catch (IllegalStateException ex) {
+            throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
+        }
     }
 
     public List<Map<String, Object>> listAccessibleVendorMembershipsByKeycloakUser(String keycloakUserId, String internalAuth) {
@@ -165,6 +245,10 @@ public class VendorClient {
     }
 
     private Map<String, Object> jsonRequest(String method, String path, Map<String, Object> request, String internalAuth) {
+        return jsonRequest(method, path, request, internalAuth, null, null);
+    }
+
+    private Map<String, Object> jsonRequest(String method, String path, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
         RestClient rc = lbRestClientBuilder.build();
         try {
             RestClient.RequestBodySpec spec = switch (method) {
@@ -172,8 +256,8 @@ public class VendorClient {
                 case "PUT" -> rc.put().uri(buildUri(path));
                 default -> throw new IllegalArgumentException("Unsupported method: " + method);
             };
-            Map<String, Object> response = spec
-                    .header("X-Internal-Auth", internalAuth)
+            Map<String, Object> response = ((RestClient.RequestBodySpec) applyActorHeaders(spec
+                    .header("X-Internal-Auth", internalAuth), userSub, userRoles))
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(request)
                     .retrieve()
@@ -189,6 +273,46 @@ public class VendorClient {
         } catch (IllegalStateException ex) {
             throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
         }
+    }
+
+    private Map<String, Object> postNoBody(String path, String internalAuth) {
+        return postNoBody(path, internalAuth, null, null);
+    }
+
+    private Map<String, Object> postNoBody(String path, String internalAuth, String userSub, String userRoles) {
+        RestClient rc = lbRestClientBuilder.build();
+        try {
+            Map<String, Object> response = applyActorHeaders(rc.post()
+                    .uri(buildUri(path))
+                    .header("X-Internal-Auth", internalAuth), userSub, userRoles)
+                    .retrieve()
+                    .body(MAP_TYPE);
+            if (response == null) {
+                throw new ServiceUnavailableException("Vendor service returned an empty response", null);
+            }
+            return response;
+        } catch (RestClientResponseException ex) {
+            throw toDownstreamHttpException(ex);
+        } catch (RestClientException ex) {
+            throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
+        } catch (IllegalStateException ex) {
+            throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
+        }
+    }
+
+    private Map<String, Object> jsonPost(String path, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
+        return jsonRequest("POST", path, request, internalAuth, userSub, userRoles);
+    }
+
+    private RestClient.RequestHeadersSpec<?> applyActorHeaders(RestClient.RequestHeadersSpec<?> spec, String userSub, String userRoles) {
+        RestClient.RequestHeadersSpec<?> next = spec;
+        if (StringUtils.hasText(userSub)) {
+            next = next.header("X-User-Sub", userSub);
+        }
+        if (StringUtils.hasText(userRoles)) {
+            next = next.header("X-User-Roles", userRoles);
+        }
+        return next;
     }
 
     private DownstreamHttpException toDownstreamHttpException(RestClientResponseException ex) {

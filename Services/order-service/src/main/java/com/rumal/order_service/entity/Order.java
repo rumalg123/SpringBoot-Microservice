@@ -38,6 +38,10 @@ public class Order {
     @Column(name = "order_total", nullable = false, precision = 19, scale = 2)
     private BigDecimal orderTotal;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 32)
+    private OrderStatus status;
+
     @Column(name = "shipping_address_id", nullable = false)
     private UUID shippingAddressId;
 
@@ -75,6 +79,10 @@ public class Order {
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<OrderItem> orderItems = new ArrayList<>();
+
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<VendorOrder> vendorOrders = new ArrayList<>();
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)

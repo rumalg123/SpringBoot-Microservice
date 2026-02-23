@@ -1,7 +1,9 @@
 package com.rumal.product_service.service;
 
+import com.rumal.product_service.client.VendorOperationalStateClient;
 import com.rumal.product_service.dto.ProductResponse;
 import com.rumal.product_service.dto.ProductSummaryResponse;
+import com.rumal.product_service.dto.VendorOperationalStateResponse;
 import com.rumal.product_service.dto.ProductVariationAttributeRequest;
 import com.rumal.product_service.dto.ProductVariationAttributeResponse;
 import com.rumal.product_service.dto.UpsertProductRequest;
@@ -11,15 +13,18 @@ import com.rumal.product_service.entity.Product;
 import com.rumal.product_service.entity.ProductType;
 import com.rumal.product_service.entity.ProductVariationAttribute;
 import com.rumal.product_service.exception.ResourceNotFoundException;
+import com.rumal.product_service.exception.ServiceUnavailableException;
 import com.rumal.product_service.exception.ValidationException;
 import com.rumal.product_service.repo.ProductCatalogReadRepository;
 import com.rumal.product_service.repo.CategoryRepository;
 import com.rumal.product_service.repo.ProductRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -30,9 +35,11 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -50,6 +57,10 @@ public class ProductServiceImpl implements ProductService {
     private final CategoryRepository categoryRepository;
     private final ProductCatalogReadRepository productCatalogReadRepository;
     private final ProductCatalogReadModelProjector productCatalogReadModelProjector;
+    private final VendorOperationalStateClient vendorOperationalStateClient;
+
+    @Value("${internal.auth.shared-secret:}")
+    private String internalAuthSharedSecret;
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
@@ -154,9 +165,14 @@ public class ProductServiceImpl implements ProductService {
         if (!parent.isActive()) {
             throw new ResourceNotFoundException("Product not found: " + parent.getId());
         }
-        return productRepository.findByParentProductIdAndDeletedFalseAndActiveTrue(parent.getId())
-                .stream()
+        assertVendorStorefrontVisible(parent.getVendorId(), parent.getId());
+        List<Product> variations = productRepository.findByParentProductIdAndDeletedFalseAndActiveTrue(parent.getId());
+        Map<UUID, VendorOperationalStateResponse> states = resolveVendorStates(
+                variations.stream().map(Product::getVendorId).toList()
+        );
+        return variations.stream()
                 .filter(product -> product.getProductType() == ProductType.VARIATION)
+                .filter(product -> isVendorVisibleForStorefront(product.getVendorId(), states))
                 .map(this::toSummaryResponse)
                 .toList();
     }
@@ -194,7 +210,8 @@ public class ProductServiceImpl implements ProductService {
         )
                 .and((root, query, cb) -> cb.isFalse(root.get("deleted")))
                 .and((root, query, cb) -> cb.isTrue(root.get("active")));
-        return productCatalogReadRepository.findAll(spec, pageable).map(this::toSummaryResponse);
+        Page<ProductSummaryResponse> page = productCatalogReadRepository.findAll(spec, pageable).map(this::toSummaryResponse);
+        return filterHiddenVendorProducts(page, pageable);
     }
 
     @Override
@@ -304,6 +321,18 @@ public class ProductServiceImpl implements ProductService {
             productCatalogReadModelProjector.refreshParentVariationFlag(saved.getParentProductId());
         }
         return toResponse(saved);
+    }
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 10)
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "productsList", allEntries = true),
+            @CacheEvict(cacheNames = "deletedProductsList", allEntries = true),
+            @CacheEvict(cacheNames = "productById", allEntries = true)
+    })
+    public void evictPublicCachesForVendorVisibilityChange(UUID vendorId) {
+        // Vendor visibility state is checked at read time, but list/detail caches must be evicted
+        // when vendor state changes so storefront hides/shows products immediately.
     }
 
     private Product getActiveEntityById(UUID id) {
@@ -697,13 +726,68 @@ public class ProductServiceImpl implements ProductService {
         if (!product.isActive()) {
             throw new ResourceNotFoundException("Product not found: " + product.getId());
         }
+        assertVendorStorefrontVisible(product.getVendorId(), product.getId());
         if (product.getProductType() == ProductType.VARIATION && product.getParentProductId() != null) {
             Product parent = getActiveEntityById(product.getParentProductId());
             if (!parent.isActive()) {
                 throw new ResourceNotFoundException("Product not found: " + product.getId());
             }
+            assertVendorStorefrontVisible(parent.getVendorId(), product.getId());
         }
         return toResponse(product);
+    }
+
+    private Page<ProductSummaryResponse> filterHiddenVendorProducts(Page<ProductSummaryResponse> page, Pageable pageable) {
+        if (page == null || page.isEmpty()) {
+            return page;
+        }
+        Map<UUID, VendorOperationalStateResponse> states = resolveVendorStates(
+                page.getContent().stream().map(ProductSummaryResponse::vendorId).toList()
+        );
+        List<ProductSummaryResponse> filtered = page.getContent().stream()
+                .filter(row -> isVendorVisibleForStorefront(row.vendorId(), states))
+                .toList();
+        if (filtered.size() == page.getContent().size()) {
+            return page;
+        }
+        return new PageImpl<>(filtered, pageable, page.getTotalElements());
+    }
+
+    private void assertVendorStorefrontVisible(UUID vendorId, UUID productId) {
+        if (vendorId == null || ADMIN_VENDOR_UUID.equals(vendorId)) {
+            return;
+        }
+        VendorOperationalStateResponse state = vendorOperationalStateClient.getState(vendorId, requireInternalAuth());
+        if (state == null || !state.storefrontVisible()) {
+            throw new ResourceNotFoundException("Product not found: " + productId);
+        }
+    }
+
+    private Map<UUID, VendorOperationalStateResponse> resolveVendorStates(Collection<UUID> vendorIds) {
+        List<UUID> ids = vendorIds == null ? List.of() : vendorIds.stream()
+                .filter(Objects::nonNull)
+                .filter(id -> !ADMIN_VENDOR_UUID.equals(id))
+                .distinct()
+                .toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        return vendorOperationalStateClient.getStates(ids, requireInternalAuth());
+    }
+
+    private boolean isVendorVisibleForStorefront(UUID vendorId, Map<UUID, VendorOperationalStateResponse> states) {
+        if (vendorId == null || ADMIN_VENDOR_UUID.equals(vendorId)) {
+            return true;
+        }
+        VendorOperationalStateResponse state = states.get(vendorId);
+        return state != null && state.storefrontVisible();
+    }
+
+    private String requireInternalAuth() {
+        if (!StringUtils.hasText(internalAuthSharedSecret)) {
+            throw new ServiceUnavailableException("INTERNAL_AUTH_SHARED_SECRET is not configured in product-service");
+        }
+        return internalAuthSharedSecret;
     }
 
     private UUID tryParseUuid(String raw) {

@@ -1,0 +1,28 @@
+spring:
+  application:
+    name: access-service
+  datasource:
+    url: ${ACCESS_DB_URL:jdbc:postgresql://access-db:5432/access_db}
+    username: ${ACCESS_DB_USER:access_user}
+    password: ${ACCESS_DB_PASS:access_pass}
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+
+server:
+  port: 8091
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://discovery-server:8761/eureka/}
+
+internal:
+  auth:
+    shared-secret: ${INTERNAL_AUTH_SHARED_SECRET:}
+
+sample:
+  access:
+    seed:
+      enabled: ${SAMPLE_ACCESS_SEED_ENABLED:true}

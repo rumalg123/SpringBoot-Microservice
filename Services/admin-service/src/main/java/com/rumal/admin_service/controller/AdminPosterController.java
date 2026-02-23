@@ -1,6 +1,7 @@
 package com.rumal.admin_service.controller;
 
 import com.rumal.admin_service.security.InternalRequestVerifier;
+import com.rumal.admin_service.service.AdminActorScopeService;
 import com.rumal.admin_service.service.AdminPosterService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -28,21 +29,28 @@ import java.util.UUID;
 public class AdminPosterController {
 
     private final AdminPosterService adminPosterService;
+    private final AdminActorScopeService adminActorScopeService;
     private final InternalRequestVerifier internalRequestVerifier;
 
     @GetMapping
     public List<Map<String, Object>> listAll(
-            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles
     ) {
         internalRequestVerifier.verify(internalAuth);
+        adminActorScopeService.assertCanManagePosters(userSub, userRoles, internalAuth);
         return adminPosterService.listAll(internalAuth);
     }
 
     @GetMapping("/deleted")
     public List<Map<String, Object>> listDeleted(
-            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles
     ) {
         internalRequestVerifier.verify(internalAuth);
+        adminActorScopeService.assertCanManagePosters(userSub, userRoles, internalAuth);
         return adminPosterService.listDeleted(internalAuth);
     }
 
@@ -50,19 +58,25 @@ public class AdminPosterController {
     @ResponseStatus(HttpStatus.CREATED)
     public Map<String, Object> create(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @RequestBody Map<String, Object> request
     ) {
         internalRequestVerifier.verify(internalAuth);
+        adminActorScopeService.assertCanManagePosters(userSub, userRoles, internalAuth);
         return adminPosterService.create(request, internalAuth);
     }
 
     @PutMapping("/{id}")
     public Map<String, Object> update(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID id,
             @RequestBody Map<String, Object> request
     ) {
         internalRequestVerifier.verify(internalAuth);
+        adminActorScopeService.assertCanManagePosters(userSub, userRoles, internalAuth);
         return adminPosterService.update(id, request, internalAuth);
     }
 
@@ -70,18 +84,24 @@ public class AdminPosterController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
+        adminActorScopeService.assertCanManagePosters(userSub, userRoles, internalAuth);
         adminPosterService.delete(id, internalAuth);
     }
 
     @PostMapping("/{id}/restore")
     public Map<String, Object> restore(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
+        adminActorScopeService.assertCanManagePosters(userSub, userRoles, internalAuth);
         return adminPosterService.restore(id, internalAuth);
     }
 
@@ -89,9 +109,12 @@ public class AdminPosterController {
     @ResponseStatus(HttpStatus.CREATED)
     public Map<String, Object> generateImageNames(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @RequestBody Map<String, Object> request
     ) {
         internalRequestVerifier.verify(internalAuth);
+        adminActorScopeService.assertCanManagePosters(userSub, userRoles, internalAuth);
         return adminPosterService.generateImageNames(request, internalAuth);
     }
 
@@ -99,10 +122,13 @@ public class AdminPosterController {
     @ResponseStatus(HttpStatus.CREATED)
     public Map<String, Object> uploadImages(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @RequestParam("files") List<MultipartFile> files,
             @RequestParam(value = "keys", required = false) List<String> keys
     ) {
         internalRequestVerifier.verify(internalAuth);
+        adminActorScopeService.assertCanManagePosters(userSub, userRoles, internalAuth);
         return adminPosterService.uploadImages(files, keys, internalAuth);
     }
 }

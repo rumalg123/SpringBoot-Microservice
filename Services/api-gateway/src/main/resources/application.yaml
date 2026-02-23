@@ -64,6 +64,10 @@ spring:
               uri: lb://admin-service
               predicates:
                 - Path=/admin/orders,/admin/orders/**
+            - id: admin-vendor-orders
+              uri: lb://admin-service
+              predicates:
+                - Path=/admin/vendor-orders,/admin/vendor-orders/**
             - id: admin-products
               uri: lb://product-service
               predicates:
@@ -80,6 +84,22 @@ spring:
               uri: lb://admin-service
               predicates:
                 - Path=/admin/vendors,/admin/vendors/**
+            - id: admin-platform-staff
+              uri: lb://admin-service
+              predicates:
+                - Path=/admin/platform-staff,/admin/platform-staff/**
+            - id: admin-vendor-staff
+              uri: lb://admin-service
+              predicates:
+                - Path=/admin/vendor-staff,/admin/vendor-staff/**
+            - id: admin-access-audit
+              uri: lb://admin-service
+              predicates:
+                - Path=/admin/access-audit,/admin/access-audit/**
+            - id: admin-me
+              uri: lb://admin-service
+              predicates:
+                - Path=/admin/me,/admin/me/**
             - id: products-catalog
               uri: lb://product-service
               predicates:

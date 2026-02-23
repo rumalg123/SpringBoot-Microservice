@@ -123,6 +123,20 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
 
+  access-db:
+    image: postgres:16-alpine
+    environment:
+      TZ: Asia/Colombo
+      POSTGRES_DB: access_db
+      POSTGRES_USER: access_user
+      POSTGRES_PASSWORD: access_pass
+    ports:
+      - "5440:5432"
+    volumes:
+      - access-db-data:/var/lib/postgresql/data
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+
   customer-service:
     build:
       context: ./Services/customer-service
@@ -249,11 +263,30 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
 
+  access-service:
+    build:
+      context: ./Services/access-service
+    depends_on:
+      - discovery-server
+      - access-db
+      - redis
+    env_file:
+      - ./env/common.env
+      - ./env/access-service.env
+    environment:
+      TZ: Asia/Colombo
+      LOGGING_FILE_NAME: /logs/access-service.log
+    volumes:
+      - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+
   admin-service:
     build:
       context: ./Services/admin-service
     depends_on:
       - discovery-server
+      - access-service
     env_file:
       - ./env/common.env
       - ./env/admin-service.env
@@ -271,6 +304,7 @@ services:
     depends_on:
       - discovery-server
       - redis
+      - access-service
     ports:
       - "8080:8080"
     env_file:
@@ -309,3 +343,4 @@ volumes:
   product-db-data:
   poster-db-data:
   vendor-db-data:
+  access-db-data:
