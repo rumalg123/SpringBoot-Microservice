@@ -53,12 +53,13 @@ public class AdminOrderController {
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @PathVariable UUID orderId,
             @Valid @org.springframework.web.bind.annotation.RequestBody UpdateOrderStatusRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
         adminActorScopeService.assertCanUpdateOrderStatus(userSub, userRoles, orderId, internalAuth);
-        return adminOrderService.updateOrderStatus(orderId, request.status(), internalAuth, userSub, userRoles);
+        return adminOrderService.updateOrderStatus(orderId, request.status(), internalAuth, userSub, userRoles, idempotencyKey);
     }
 
     @GetMapping("/{orderId}/status-history")
@@ -90,12 +91,13 @@ public class AdminOrderController {
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @PathVariable UUID vendorOrderId,
             @Valid @org.springframework.web.bind.annotation.RequestBody UpdateOrderStatusRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
         adminActorScopeService.assertCanUpdateVendorOrderStatus(userSub, userRoles, vendorOrderId, internalAuth);
-        return adminOrderService.updateVendorOrderStatus(vendorOrderId, request.status(), internalAuth, userSub, userRoles);
+        return adminOrderService.updateVendorOrderStatus(vendorOrderId, request.status(), internalAuth, userSub, userRoles, idempotencyKey);
     }
 
     @GetMapping("/vendor-orders/{vendorOrderId}/status-history")

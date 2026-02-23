@@ -34,7 +34,23 @@ public class RateLimitConfig {
             @Value("${RATE_LIMIT_REGISTER_REPLENISH:5}") int replenishRate,
             @Value("${RATE_LIMIT_REGISTER_BURST:10}") int burstCapacity
     ) {
-        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+        return redisRateLimiter(replenishRate, burstCapacity);
+    }
+
+    @Bean
+    public RedisRateLimiter authLogoutRateLimiter(
+            @Value("${RATE_LIMIT_AUTH_LOGOUT_REPLENISH:20}") int replenishRate,
+            @Value("${RATE_LIMIT_AUTH_LOGOUT_BURST:40}") int burstCapacity
+    ) {
+        return redisRateLimiter(replenishRate, burstCapacity);
+    }
+
+    @Bean
+    public RedisRateLimiter authResendVerificationRateLimiter(
+            @Value("${RATE_LIMIT_AUTH_RESEND_VERIFICATION_REPLENISH:3}") int replenishRate,
+            @Value("${RATE_LIMIT_AUTH_RESEND_VERIFICATION_BURST:6}") int burstCapacity
+    ) {
+        return redisRateLimiter(replenishRate, burstCapacity);
     }
 
     @Bean
@@ -43,7 +59,7 @@ public class RateLimitConfig {
             @Value("${RATE_LIMIT_DEFAULT_REPLENISH:15}") int replenishRate,
             @Value("${RATE_LIMIT_DEFAULT_BURST:30}") int burstCapacity
     ) {
-        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+        return redisRateLimiter(replenishRate, burstCapacity);
     }
 
     @Bean
@@ -51,7 +67,7 @@ public class RateLimitConfig {
             @Value("${RATE_LIMIT_CUSTOMER_ME_REPLENISH:15}") int replenishRate,
             @Value("${RATE_LIMIT_CUSTOMER_ME_BURST:30}") int burstCapacity
     ) {
-        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+        return redisRateLimiter(replenishRate, burstCapacity);
     }
 
     @Bean
@@ -59,7 +75,7 @@ public class RateLimitConfig {
             @Value("${RATE_LIMIT_CUSTOMER_ADDRESSES_REPLENISH:20}") int replenishRate,
             @Value("${RATE_LIMIT_CUSTOMER_ADDRESSES_BURST:40}") int burstCapacity
     ) {
-        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+        return redisRateLimiter(replenishRate, burstCapacity);
     }
 
     @Bean
@@ -67,7 +83,7 @@ public class RateLimitConfig {
             @Value("${RATE_LIMIT_CUSTOMER_ADDRESSES_WRITE_REPLENISH:8}") int replenishRate,
             @Value("${RATE_LIMIT_CUSTOMER_ADDRESSES_WRITE_BURST:16}") int burstCapacity
     ) {
-        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+        return redisRateLimiter(replenishRate, burstCapacity);
     }
 
     @Bean
@@ -75,7 +91,7 @@ public class RateLimitConfig {
             @Value("${RATE_LIMIT_ORDERS_ME_REPLENISH:25}") int replenishRate,
             @Value("${RATE_LIMIT_ORDERS_ME_BURST:50}") int burstCapacity
     ) {
-        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+        return redisRateLimiter(replenishRate, burstCapacity);
     }
 
     @Bean
@@ -83,7 +99,7 @@ public class RateLimitConfig {
             @Value("${RATE_LIMIT_ORDERS_ME_WRITE_REPLENISH:8}") int replenishRate,
             @Value("${RATE_LIMIT_ORDERS_ME_WRITE_BURST:16}") int burstCapacity
     ) {
-        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+        return redisRateLimiter(replenishRate, burstCapacity);
     }
 
     @Bean
@@ -91,7 +107,7 @@ public class RateLimitConfig {
             @Value("${RATE_LIMIT_CART_ME_REPLENISH:30}") int replenishRate,
             @Value("${RATE_LIMIT_CART_ME_BURST:60}") int burstCapacity
     ) {
-        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+        return redisRateLimiter(replenishRate, burstCapacity);
     }
 
     @Bean
@@ -99,7 +115,7 @@ public class RateLimitConfig {
             @Value("${RATE_LIMIT_CART_ME_WRITE_REPLENISH:12}") int replenishRate,
             @Value("${RATE_LIMIT_CART_ME_WRITE_BURST:24}") int burstCapacity
     ) {
-        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+        return redisRateLimiter(replenishRate, burstCapacity);
     }
 
     @Bean
@@ -107,7 +123,7 @@ public class RateLimitConfig {
             @Value("${RATE_LIMIT_CART_ME_CHECKOUT_REPLENISH:6}") int replenishRate,
             @Value("${RATE_LIMIT_CART_ME_CHECKOUT_BURST:12}") int burstCapacity
     ) {
-        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+        return redisRateLimiter(replenishRate, burstCapacity);
     }
 
     @Bean
@@ -115,7 +131,7 @@ public class RateLimitConfig {
             @Value("${RATE_LIMIT_WISHLIST_ME_REPLENISH:25}") int replenishRate,
             @Value("${RATE_LIMIT_WISHLIST_ME_BURST:50}") int burstCapacity
     ) {
-        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+        return redisRateLimiter(replenishRate, burstCapacity);
     }
 
     @Bean
@@ -123,7 +139,7 @@ public class RateLimitConfig {
             @Value("${RATE_LIMIT_WISHLIST_ME_WRITE_REPLENISH:12}") int replenishRate,
             @Value("${RATE_LIMIT_WISHLIST_ME_WRITE_BURST:24}") int burstCapacity
     ) {
-        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+        return redisRateLimiter(replenishRate, burstCapacity);
     }
 
     @Bean
@@ -131,7 +147,7 @@ public class RateLimitConfig {
             @Value("${RATE_LIMIT_ADMIN_ORDERS_REPLENISH:20}") int replenishRate,
             @Value("${RATE_LIMIT_ADMIN_ORDERS_BURST:40}") int burstCapacity
     ) {
-        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+        return redisRateLimiter(replenishRate, burstCapacity);
     }
 
     @Bean
@@ -139,7 +155,7 @@ public class RateLimitConfig {
             @Value("${RATE_LIMIT_PRODUCTS_REPLENISH:40}") int replenishRate,
             @Value("${RATE_LIMIT_PRODUCTS_BURST:80}") int burstCapacity
     ) {
-        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+        return redisRateLimiter(replenishRate, burstCapacity);
     }
 
     @Bean
@@ -147,7 +163,7 @@ public class RateLimitConfig {
             @Value("${RATE_LIMIT_ADMIN_PRODUCTS_REPLENISH:20}") int replenishRate,
             @Value("${RATE_LIMIT_ADMIN_PRODUCTS_BURST:40}") int burstCapacity
     ) {
-        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+        return redisRateLimiter(replenishRate, burstCapacity);
     }
 
     @Bean
@@ -155,7 +171,7 @@ public class RateLimitConfig {
             @Value("${RATE_LIMIT_ADMIN_PRODUCTS_WRITE_REPLENISH:10}") int replenishRate,
             @Value("${RATE_LIMIT_ADMIN_PRODUCTS_WRITE_BURST:20}") int burstCapacity
     ) {
-        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+        return redisRateLimiter(replenishRate, burstCapacity);
     }
 
     @Bean
@@ -163,7 +179,7 @@ public class RateLimitConfig {
             @Value("${RATE_LIMIT_PUBLIC_CATALOG_AUX_REPLENISH:25}") int replenishRate,
             @Value("${RATE_LIMIT_PUBLIC_CATALOG_AUX_BURST:50}") int burstCapacity
     ) {
-        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+        return redisRateLimiter(replenishRate, burstCapacity);
     }
 
     @Bean
@@ -171,7 +187,7 @@ public class RateLimitConfig {
             @Value("${RATE_LIMIT_ADMIN_VENDORS_REPLENISH:15}") int replenishRate,
             @Value("${RATE_LIMIT_ADMIN_VENDORS_BURST:30}") int burstCapacity
     ) {
-        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+        return redisRateLimiter(replenishRate, burstCapacity);
     }
 
     @Bean
@@ -179,7 +195,7 @@ public class RateLimitConfig {
             @Value("${RATE_LIMIT_ADMIN_VENDORS_WRITE_REPLENISH:8}") int replenishRate,
             @Value("${RATE_LIMIT_ADMIN_VENDORS_WRITE_BURST:16}") int burstCapacity
     ) {
-        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+        return redisRateLimiter(replenishRate, burstCapacity);
     }
 
     @Bean
@@ -187,7 +203,7 @@ public class RateLimitConfig {
             @Value("${RATE_LIMIT_ADMIN_POSTERS_REPLENISH:15}") int replenishRate,
             @Value("${RATE_LIMIT_ADMIN_POSTERS_BURST:30}") int burstCapacity
     ) {
-        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+        return redisRateLimiter(replenishRate, burstCapacity);
     }
 
     @Bean
@@ -195,7 +211,7 @@ public class RateLimitConfig {
             @Value("${RATE_LIMIT_ADMIN_POSTERS_WRITE_REPLENISH:8}") int replenishRate,
             @Value("${RATE_LIMIT_ADMIN_POSTERS_WRITE_BURST:16}") int burstCapacity
     ) {
-        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+        return redisRateLimiter(replenishRate, burstCapacity);
     }
 
     @Bean
@@ -203,7 +219,7 @@ public class RateLimitConfig {
             @Value("${RATE_LIMIT_ADMIN_ACCESS_REPLENISH:12}") int replenishRate,
             @Value("${RATE_LIMIT_ADMIN_ACCESS_BURST:24}") int burstCapacity
     ) {
-        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+        return redisRateLimiter(replenishRate, burstCapacity);
     }
 
     @Bean
@@ -211,7 +227,7 @@ public class RateLimitConfig {
             @Value("${RATE_LIMIT_ADMIN_ACCESS_WRITE_REPLENISH:6}") int replenishRate,
             @Value("${RATE_LIMIT_ADMIN_ACCESS_WRITE_BURST:12}") int burstCapacity
     ) {
-        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+        return redisRateLimiter(replenishRate, burstCapacity);
     }
 
     @Bean
@@ -219,7 +235,7 @@ public class RateLimitConfig {
             @Value("${RATE_LIMIT_ADMIN_ME_REPLENISH:20}") int replenishRate,
             @Value("${RATE_LIMIT_ADMIN_ME_BURST:40}") int burstCapacity
     ) {
-        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+        return redisRateLimiter(replenishRate, burstCapacity);
     }
 
     @Bean
@@ -227,7 +243,7 @@ public class RateLimitConfig {
             @Value("${RATE_LIMIT_ADMIN_KEYCLOAK_SEARCH_REPLENISH:8}") int replenishRate,
             @Value("${RATE_LIMIT_ADMIN_KEYCLOAK_SEARCH_BURST:16}") int burstCapacity
     ) {
-        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
+        return redisRateLimiter(replenishRate, burstCapacity);
     }
 
     @Bean
@@ -243,6 +259,10 @@ public class RateLimitConfig {
     @Bean
     public KeyResolver ipKeyResolver() {
         return exchange -> reactor.core.publisher.Mono.just("ip:" + resolveClientIp(exchange));
+    }
+
+    private RedisRateLimiter redisRateLimiter(int replenishRate, int burstCapacity) {
+        return new RedisRateLimiter(replenishRate, burstCapacity, 1);
     }
 
     private String resolveClientIp(ServerWebExchange exchange) {

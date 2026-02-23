@@ -3,15 +3,19 @@ package com.rumal.api_gateway.config;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.cloud.gateway.filter.ratelimit.KeyResolver;
+import org.springframework.cloud.gateway.filter.ratelimit.RateLimiter;
 import org.springframework.cloud.gateway.filter.ratelimit.RedisRateLimiter;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.Ordered;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
@@ -22,8 +26,11 @@ import java.time.Instant;
 @Component
 @NullMarked
 public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
+    private static final Logger log = LoggerFactory.getLogger(RateLimitEnforcementFilter.class);
 
     private final RedisRateLimiter registerRateLimiter;
+    private final RedisRateLimiter authLogoutRateLimiter;
+    private final RedisRateLimiter authResendVerificationRateLimiter;
     private final RedisRateLimiter customerMeRateLimiter;
     private final RedisRateLimiter customerAddressesRateLimiter;
     private final RedisRateLimiter customerAddressesWriteRateLimiter;
@@ -49,9 +56,12 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
     private final RedisRateLimiter adminKeycloakSearchRateLimiter;
     private final KeyResolver ipKeyResolver;
     private final KeyResolver userOrIpKeyResolver;
+    private final boolean failOpenOnRateLimiterError;
 
     public RateLimitEnforcementFilter(
             @Qualifier("registerRateLimiter") RedisRateLimiter registerRateLimiter,
+            @Qualifier("authLogoutRateLimiter") RedisRateLimiter authLogoutRateLimiter,
+            @Qualifier("authResendVerificationRateLimiter") RedisRateLimiter authResendVerificationRateLimiter,
             @Qualifier("customerMeRateLimiter") RedisRateLimiter customerMeRateLimiter,
             @Qualifier("customerAddressesRateLimiter") RedisRateLimiter customerAddressesRateLimiter,
             @Qualifier("customerAddressesWriteRateLimiter") RedisRateLimiter customerAddressesWriteRateLimiter,
@@ -76,9 +86,12 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
             @Qualifier("adminMeRateLimiter") RedisRateLimiter adminMeRateLimiter,
             @Qualifier("adminKeycloakSearchRateLimiter") RedisRateLimiter adminKeycloakSearchRateLimiter,
             @Qualifier("ipKeyResolver") KeyResolver ipKeyResolver,
-            @Qualifier("userOrIpKeyResolver") KeyResolver userOrIpKeyResolver
+            @Qualifier("userOrIpKeyResolver") KeyResolver userOrIpKeyResolver,
+            @Value("${rate-limit.fail-open-on-error:true}") boolean failOpenOnRateLimiterError
     ) {
         this.registerRateLimiter = registerRateLimiter;
+        this.authLogoutRateLimiter = authLogoutRateLimiter;
+        this.authResendVerificationRateLimiter = authResendVerificationRateLimiter;
         this.customerMeRateLimiter = customerMeRateLimiter;
         this.customerAddressesRateLimiter = customerAddressesRateLimiter;
         this.customerAddressesWriteRateLimiter = customerAddressesWriteRateLimiter;
@@ -104,6 +117,7 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
         this.adminKeycloakSearchRateLimiter = adminKeycloakSearchRateLimiter;
         this.ipKeyResolver = ipKeyResolver;
         this.userOrIpKeyResolver = userOrIpKeyResolver;
+        this.failOpenOnRateLimiterError = failOpenOnRateLimiterError;
     }
 
     @Override
@@ -120,8 +134,18 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
 
         return policy.keyResolver().resolve(exchange)
                 .defaultIfEmpty("ip:unknown")
-                .flatMap(key -> policy.rateLimiter().isAllowed(policy.id(), key))
-                .flatMap(result -> {
+                .flatMap(key -> policy.rateLimiter().isAllowed(policy.id(), key)
+                        .map(RateLimitDecision::allowed)
+                        .onErrorResume(ex -> Mono.just(RateLimitDecision.error(ex))))
+                .flatMap(decision -> {
+                    if (decision.error() != null) {
+                        return handleRateLimiterError(exchange, chain, policy.id(), decision.error());
+                    }
+                    RateLimiter.Response result = decision.response();
+                    if (result == null) {
+                        return handleRateLimiterError(exchange, chain, policy.id(),
+                                new IllegalStateException("Rate limiter returned no decision"));
+                    }
                     result.getHeaders().forEach((header, value) ->
                             exchange.getResponse().getHeaders().add(header, value)
                     );
@@ -140,8 +164,8 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
                 "\"status\":429," +
                 "\"error\":\"Too Many Requests\"," +
                 "\"message\":\"Rate limit exceeded\"," +
-                "\"policyId\":\"" + policyId + "\"," +
-                "\"requestId\":\"" + (requestId == null ? "" : requestId) + "\"}";
+                "\"policyId\":\"" + escapeJson(policyId) + "\"," +
+                "\"requestId\":\"" + escapeJson(requestId) + "\"}";
 
         exchange.getResponse().setStatusCode(HttpStatus.TOO_MANY_REQUESTS);
         exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
@@ -151,10 +175,54 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
         return exchange.getResponse().writeWith(Mono.just(dataBuffer));
     }
 
+    private Mono<Void> handleRateLimiterError(
+            ServerWebExchange exchange,
+            GatewayFilterChain chain,
+            String policyId,
+            Throwable error
+    ) {
+        String path = exchange.getRequest().getPath().value();
+        String requestId = exchange.getRequest().getHeaders().getFirst(RequestIdFilter.REQUEST_ID_HEADER);
+        log.warn("Rate limiter unavailable for policy={} path={} requestId={} failOpen={}",
+                policyId, path, requestId, failOpenOnRateLimiterError, error);
+
+        exchange.getResponse().getHeaders().set("X-RateLimit-Policy", policyId);
+        exchange.getResponse().getHeaders().set("X-RateLimit-Status", "ERROR");
+
+        if (failOpenOnRateLimiterError) {
+            exchange.getResponse().getHeaders().set("X-RateLimit-Bypass", "RATE_LIMITER_UNAVAILABLE");
+            return chain.filter(exchange);
+        }
+        return writeRateLimitServiceUnavailable(exchange, policyId);
+    }
+
+    private Mono<Void> writeRateLimitServiceUnavailable(ServerWebExchange exchange, String policyId) {
+        String requestId = exchange.getRequest().getHeaders().getFirst(RequestIdFilter.REQUEST_ID_HEADER);
+        String body = "{\"timestamp\":\"" + Instant.now() + "\"," +
+                "\"path\":\"" + exchange.getRequest().getPath().value() + "\"," +
+                "\"status\":503," +
+                "\"error\":\"Service Unavailable\"," +
+                "\"message\":\"Rate limiting service unavailable\"," +
+                "\"policyId\":\"" + escapeJson(policyId) + "\"," +
+                "\"requestId\":\"" + escapeJson(requestId) + "\"}";
+
+        exchange.getResponse().setStatusCode(HttpStatus.SERVICE_UNAVAILABLE);
+        exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
+        DataBuffer dataBuffer = exchange.getResponse().bufferFactory()
+                .wrap(body.getBytes(StandardCharsets.UTF_8));
+        return exchange.getResponse().writeWith(Mono.just(dataBuffer));
+    }
+
     private @Nullable Policy resolvePolicy(String path, @Nullable HttpMethod method) {
         if (("/customers/register".equals(path) || "/customers/register-identity".equals(path))
                 && method == HttpMethod.POST) {
             return new Policy("register", registerRateLimiter, ipKeyResolver);
+        }
+        if ("/auth/logout".equals(path) && method == HttpMethod.POST) {
+            return new Policy("auth-logout", authLogoutRateLimiter, userOrIpKeyResolver);
+        }
+        if ("/auth/resend-verification".equals(path) && method == HttpMethod.POST) {
+            return new Policy("auth-resend-verification", authResendVerificationRateLimiter, userOrIpKeyResolver);
         }
         if ("/customers/me".equals(path) && (method == HttpMethod.GET || method == HttpMethod.PUT)) {
             return new Policy("customer-me", customerMeRateLimiter, userOrIpKeyResolver);
@@ -249,6 +317,27 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
         return Ordered.HIGHEST_PRECEDENCE + 10;
     }
 
+    private String escapeJson(@Nullable String value) {
+        if (value == null) {
+            return "";
+        }
+        return value
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r");
+    }
+
     private record Policy(String id, RedisRateLimiter rateLimiter, KeyResolver keyResolver) {
+    }
+
+    private record RateLimitDecision(RateLimiter.Response response, Throwable error) {
+        private static RateLimitDecision allowed(RateLimiter.Response response) {
+            return new RateLimitDecision(response, null);
+        }
+
+        private static RateLimitDecision error(Throwable error) {
+            return new RateLimitDecision(null, error);
+        }
     }
 }

@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
@@ -38,18 +39,22 @@ public class OrderClient {
             String keycloakId,
             UUID shippingAddressId,
             UUID billingAddressId,
-            List<CreateMyOrderItemRequest> items
+            List<CreateMyOrderItemRequest> items,
+            String idempotencyKey
     ) {
         RestClient rc = lbRestClientBuilder.build();
         CreateMyOrderRequest request = new CreateMyOrderRequest(items, shippingAddressId, billingAddressId);
 
         try {
-            return rc.post()
+            RestClient.RequestBodySpec spec = rc.post()
                     .uri("http://order-service/orders/me")
                     .header("X-User-Sub", keycloakId)
                     .header("X-User-Email-Verified", "true")
-                    .header("X-Internal-Auth", internalSharedSecret)
-                    .body(request)
+                    .header("X-Internal-Auth", internalSharedSecret);
+            if (StringUtils.hasText(idempotencyKey)) {
+                spec = spec.header("Idempotency-Key", idempotencyKey.trim());
+            }
+            return spec.body(request)
                     .retrieve()
                     .body(OrderResponse.class);
         } catch (HttpClientErrorException ex) {
@@ -74,6 +79,7 @@ public class OrderClient {
             UUID shippingAddressId,
             UUID billingAddressId,
             List<CreateMyOrderItemRequest> items,
+            String idempotencyKey,
             Throwable ex
     ) {
         throw new ServiceUnavailableException(

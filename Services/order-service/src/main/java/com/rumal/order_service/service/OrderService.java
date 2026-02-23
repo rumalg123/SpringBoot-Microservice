@@ -41,7 +41,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
@@ -52,6 +54,7 @@ import java.util.*;
 @RequiredArgsConstructor
 @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
 public class OrderService {
+    private static final int MAX_ITEM_QUANTITY = 1000;
 
     private static final Set<OrderStatus> VENDOR_DELETION_BLOCKING_STATUSES = EnumSet.of(
             OrderStatus.PENDING,
@@ -71,37 +74,40 @@ public class OrderService {
     private final VendorOperationalStateClient vendorOperationalStateClient;
     private final OrderAggregationProperties props;
     private final OrderCacheVersionService orderCacheVersionService;
+    private final TransactionTemplate transactionTemplate;
 
-    @Transactional(isolation = Isolation.READ_COMMITTED, timeout = 30)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public OrderResponse create(CreateOrderRequest req) {
         customerClient.assertCustomerExists(req.customerId());
         List<ResolvedOrderLine> lines = resolveOrderLines(req.productId(), req.quantity(), req.items());
         assertVendorsAcceptingOrders(lines);
         ResolvedOrderAddresses addresses = resolveOrderAddresses(req.customerId(), req.shippingAddressId(), req.billingAddressId());
-
-        Order saved = orderRepository.save(buildOrder(req.customerId(), lines, addresses));
-        recordStatusAudit(saved, null, OrderStatus.PENDING, null, null, "system", "order_create", "Order created");
-        saved.getVendorOrders().forEach(vendorOrder ->
-                recordVendorOrderStatusAudit(vendorOrder, null, OrderStatus.PENDING, null, null, "system", "order_create", "Vendor order created")
-        );
-        evictOrdersListCaches();
-        return toResponse(saved);
+        return transactionTemplate.execute(status -> {
+            Order saved = orderRepository.save(buildOrder(req.customerId(), lines, addresses));
+            recordStatusAudit(saved, null, OrderStatus.PENDING, null, null, "system", "order_create", "Order created");
+            saved.getVendorOrders().forEach(vendorOrder ->
+                    recordVendorOrderStatusAudit(vendorOrder, null, OrderStatus.PENDING, null, null, "system", "order_create", "Vendor order created")
+            );
+            evictOrdersListCaches();
+            return toResponse(saved);
+        });
     }
 
-    @Transactional(isolation = Isolation.READ_COMMITTED, timeout = 30)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public OrderResponse createForKeycloak(String keycloakId, CreateMyOrderRequest req) {
         CustomerSummary customer = customerClient.getCustomerByKeycloakId(keycloakId);
         List<ResolvedOrderLine> lines = resolveOrderLines(req.productId(), req.quantity(), req.items());
         assertVendorsAcceptingOrders(lines);
         ResolvedOrderAddresses addresses = resolveOrderAddresses(customer.id(), req.shippingAddressId(), req.billingAddressId());
-
-        Order saved = orderRepository.save(buildOrder(customer.id(), lines, addresses));
-        recordStatusAudit(saved, null, OrderStatus.PENDING, keycloakId, "customer", "customer", "order_create", "Customer order created");
-        saved.getVendorOrders().forEach(vendorOrder ->
-                recordVendorOrderStatusAudit(vendorOrder, null, OrderStatus.PENDING, keycloakId, "customer", "customer", "order_create", "Vendor order created")
-        );
-        evictOrdersListCaches();
-        return toResponse(saved);
+        return transactionTemplate.execute(status -> {
+            Order saved = orderRepository.save(buildOrder(customer.id(), lines, addresses));
+            recordStatusAudit(saved, null, OrderStatus.PENDING, keycloakId, "customer", "customer", "order_create", "Customer order created");
+            saved.getVendorOrders().forEach(vendorOrder ->
+                    recordVendorOrderStatusAudit(vendorOrder, null, OrderStatus.PENDING, keycloakId, "customer", "customer", "order_create", "Vendor order created")
+            );
+            evictOrdersListCaches();
+            return toResponse(saved);
+        });
     }
 
     public OrderResponse get(UUID id) {
@@ -501,7 +507,8 @@ public class OrderService {
                 if (item == null || item.productId() == null) {
                     throw new ValidationException("Each order item must include productId");
                 }
-                normalized.merge(item.productId(), item.quantity(), Integer::sum);
+                int requestedQuantity = validateOrderItemQuantity(item.quantity(), item.productId());
+                normalized.merge(item.productId(), requestedQuantity, this::mergeOrderItemQuantities);
             }
         } else {
             if (productId == null) {
@@ -547,6 +554,27 @@ public class OrderService {
                 throw new ValidationException("Vendor is not accepting orders: " + vendorId);
             }
         }
+    }
+
+    private int validateOrderItemQuantity(Integer quantity, UUID productId) {
+        if (quantity == null) {
+            throw new ValidationException("Each order item must include quantity");
+        }
+        if (quantity < 1) {
+            throw new ValidationException("quantity must be at least 1 for product: " + productId);
+        }
+        if (quantity > MAX_ITEM_QUANTITY) {
+            throw new ValidationException("quantity must be " + MAX_ITEM_QUANTITY + " or less for product: " + productId);
+        }
+        return quantity;
+    }
+
+    private int mergeOrderItemQuantities(int current, int incoming) {
+        long merged = (long) current + incoming;
+        if (merged > MAX_ITEM_QUANTITY) {
+            throw new ValidationException("Combined quantity for the same product must be " + MAX_ITEM_QUANTITY + " or less");
+        }
+        return (int) merged;
     }
 
     private record ResolvedOrderAddresses(

@@ -24,13 +24,16 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -42,8 +45,9 @@ public class CartService {
     private final ProductClient productClient;
     private final VendorOperationalStateClient vendorOperationalStateClient;
     private final OrderClient orderClient;
+    private final TransactionTemplate transactionTemplate;
 
-    @Cacheable(cacheNames = "cartByKeycloak", key = "#keycloakId")
+    @Cacheable(cacheNames = "cartByKeycloak", key = "#keycloakId == null ? '' : #keycloakId.trim()")
     @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
     public CartResponse getByKeycloakId(String keycloakId) {
         String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
@@ -53,69 +57,78 @@ public class CartService {
     }
 
     @Caching(evict = {
-            @CacheEvict(cacheNames = "cartByKeycloak", key = "#keycloakId")
+            @CacheEvict(cacheNames = "cartByKeycloak", key = "#keycloakId == null ? '' : #keycloakId.trim()")
     })
-    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 20)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public CartResponse addItem(String keycloakId, AddCartItemRequest request) {
         String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
         int quantityToAdd = sanitizeQuantity(request.quantity());
         ProductDetails product = resolvePurchasableProduct(request.productId());
+        return transactionTemplate.execute(status -> {
+            Cart cart = cartRepository.findWithItemsByKeycloakIdForUpdate(normalizedKeycloakId)
+                    .orElseGet(() -> {
+                        Cart created = Cart.builder()
+                                .keycloakId(normalizedKeycloakId)
+                                .build();
+                        created.setItems(new java.util.ArrayList<>());
+                        return created;
+                    });
 
-        Cart cart = cartRepository.findWithItemsByKeycloakIdForUpdate(normalizedKeycloakId)
-                .orElseGet(() -> {
-                    Cart created = Cart.builder()
-                            .keycloakId(normalizedKeycloakId)
-                            .build();
-                    created.setItems(new java.util.ArrayList<>());
-                    return created;
-                });
+            CartItem existing = cart.getItems().stream()
+                    .filter(item -> item.getProductId().equals(product.id()))
+                    .findFirst()
+                    .orElse(null);
 
-        CartItem existing = cart.getItems().stream()
-                .filter(item -> item.getProductId().equals(product.id()))
-                .findFirst()
-                .orElse(null);
+            if (existing == null) {
+                CartItem created = buildCartItem(cart, product, quantityToAdd);
+                cart.getItems().add(created);
+            } else {
+                int mergedQuantity = sanitizeQuantity(existing.getQuantity() + quantityToAdd);
+                existing.setQuantity(mergedQuantity);
+                refreshCartItemSnapshot(existing, product);
+                existing.setLineTotal(calculateLineTotal(existing.getUnitPrice(), existing.getQuantity()));
+            }
 
-        if (existing == null) {
-            CartItem created = buildCartItem(cart, product, quantityToAdd);
-            cart.getItems().add(created);
-        } else {
-            int mergedQuantity = sanitizeQuantity(existing.getQuantity() + quantityToAdd);
-            existing.setQuantity(mergedQuantity);
-            refreshCartItemSnapshot(existing, product);
-            existing.setLineTotal(calculateLineTotal(existing.getUnitPrice(), existing.getQuantity()));
-        }
-
-        Cart saved = cartRepository.save(cart);
-        return toResponse(saved);
+            Cart saved = cartRepository.save(cart);
+            return toResponse(saved);
+        });
     }
 
     @Caching(evict = {
-            @CacheEvict(cacheNames = "cartByKeycloak", key = "#keycloakId")
+            @CacheEvict(cacheNames = "cartByKeycloak", key = "#keycloakId == null ? '' : #keycloakId.trim()")
     })
-    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 20)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public CartResponse updateItem(String keycloakId, UUID itemId, UpdateCartItemRequest request) {
         String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
         int quantity = sanitizeQuantity(request.quantity());
-
-        Cart cart = cartRepository.findWithItemsByKeycloakIdForUpdate(normalizedKeycloakId)
+        UUID productId = cartRepository.findWithItemsByKeycloakId(normalizedKeycloakId)
+                .flatMap(cart -> cart.getItems().stream()
+                        .filter(existing -> existing.getId().equals(itemId))
+                        .findFirst()
+                        .map(CartItem::getProductId))
                 .orElseThrow(() -> new ResourceNotFoundException("Cart item not found: " + itemId));
+        ProductDetails product = resolvePurchasableProduct(productId);
 
-        CartItem item = cart.getItems().stream()
-                .filter(existing -> existing.getId().equals(itemId))
-                .findFirst()
-                .orElseThrow(() -> new ResourceNotFoundException("Cart item not found: " + itemId));
+        return transactionTemplate.execute(status -> {
+            Cart cart = cartRepository.findWithItemsByKeycloakIdForUpdate(normalizedKeycloakId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Cart item not found: " + itemId));
 
-        ProductDetails product = resolvePurchasableProduct(item.getProductId());
-        item.setQuantity(quantity);
-        refreshCartItemSnapshot(item, product);
-        item.setLineTotal(calculateLineTotal(item.getUnitPrice(), item.getQuantity()));
+            CartItem item = cart.getItems().stream()
+                    .filter(existing -> existing.getId().equals(itemId))
+                    .findFirst()
+                    .orElseThrow(() -> new ResourceNotFoundException("Cart item not found: " + itemId));
 
-        Cart saved = cartRepository.save(cart);
-        return toResponse(saved);
+            item.setQuantity(quantity);
+            refreshCartItemSnapshot(item, product);
+            item.setLineTotal(calculateLineTotal(item.getUnitPrice(), item.getQuantity()));
+
+            Cart saved = cartRepository.save(cart);
+            return toResponse(saved);
+        });
     }
 
     @Caching(evict = {
-            @CacheEvict(cacheNames = "cartByKeycloak", key = "#keycloakId")
+            @CacheEvict(cacheNames = "cartByKeycloak", key = "#keycloakId == null ? '' : #keycloakId.trim()")
     })
     @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 20)
     public void removeItem(String keycloakId, UUID itemId) {
@@ -132,7 +145,7 @@ public class CartService {
     }
 
     @Caching(evict = {
-            @CacheEvict(cacheNames = "cartByKeycloak", key = "#keycloakId")
+            @CacheEvict(cacheNames = "cartByKeycloak", key = "#keycloakId == null ? '' : #keycloakId.trim()")
     })
     @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 20)
     public void clear(String keycloakId) {
@@ -145,47 +158,76 @@ public class CartService {
     }
 
     @Caching(evict = {
-            @CacheEvict(cacheNames = "cartByKeycloak", key = "#keycloakId")
+            @CacheEvict(cacheNames = "cartByKeycloak", key = "#keycloakId == null ? '' : #keycloakId.trim()")
     })
-    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 20)
-    public CheckoutResponse checkout(String keycloakId, CheckoutCartRequest request) {
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public CheckoutResponse checkout(String keycloakId, CheckoutCartRequest request, String idempotencyKey) {
         String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
-        Cart cart = cartRepository.findWithItemsByKeycloakIdForUpdate(normalizedKeycloakId)
+        Cart previewCart = cartRepository.findWithItemsByKeycloakId(normalizedKeycloakId)
                 .orElseThrow(() -> new ValidationException("Cart is empty"));
 
-        if (cart.getItems().isEmpty()) {
+        if (previewCart.getItems().isEmpty()) {
             throw new ValidationException("Cart is empty");
         }
 
-        List<CreateMyOrderItemRequest> orderItems = cart.getItems().stream()
-                .map(cartItem -> {
-                    ProductDetails latest = resolvePurchasableProduct(cartItem.getProductId());
-                    refreshCartItemSnapshot(cartItem, latest);
-                    cartItem.setLineTotal(calculateLineTotal(cartItem.getUnitPrice(), cartItem.getQuantity()));
-                    return new CreateMyOrderItemRequest(cartItem.getProductId(), cartItem.getQuantity());
-                })
-                .toList();
+        List<CartCheckoutLine> expectedSnapshot = checkoutSnapshot(previewCart);
+        Map<UUID, ProductDetails> latestProductsById = expectedSnapshot.stream()
+                .map(CartCheckoutLine::productId)
+                .distinct()
+                .collect(java.util.stream.Collectors.toMap(
+                        productId -> productId,
+                        this::resolvePurchasableProduct,
+                        (a, b) -> a
+                ));
+
+        PreparedCheckout prepared = transactionTemplate.execute(status -> {
+            Cart cart = cartRepository.findWithItemsByKeycloakIdForUpdate(normalizedKeycloakId)
+                    .orElseThrow(() -> new ValidationException("Cart is empty"));
+
+            if (cart.getItems().isEmpty()) {
+                throw new ValidationException("Cart is empty");
+            }
+            if (!checkoutSnapshot(cart).equals(expectedSnapshot)) {
+                throw new ValidationException("Cart changed during checkout. Retry checkout.");
+            }
+
+            List<CreateMyOrderItemRequest> orderItems = new java.util.ArrayList<>(cart.getItems().size());
+            int totalQuantity = 0;
+            BigDecimal subtotal = BigDecimal.ZERO;
+
+            for (CartItem cartItem : cart.getItems()) {
+                ProductDetails latest = latestProductsById.get(cartItem.getProductId());
+                if (latest == null) {
+                    throw new ValidationException("Product is not available: " + cartItem.getProductId());
+                }
+                orderItems.add(new CreateMyOrderItemRequest(cartItem.getProductId(), cartItem.getQuantity()));
+                totalQuantity += cartItem.getQuantity();
+                subtotal = subtotal.add(calculateLineTotal(normalizeMoney(latest.sellingPrice()), cartItem.getQuantity()));
+            }
+
+            return new PreparedCheckout(orderItems, cart.getItems().size(), totalQuantity, normalizeMoney(subtotal));
+        });
+        if (prepared == null) {
+            throw new ValidationException("Unable to prepare checkout");
+        }
 
         OrderResponse order = orderClient.createMyOrder(
                 normalizedKeycloakId,
                 request.shippingAddressId(),
                 request.billingAddressId(),
-                orderItems
+                prepared.orderItems(),
+                downstreamOrderIdempotencyKey(idempotencyKey)
         );
 
-        int totalQuantity = cart.getItems().stream()
-                .mapToInt(CartItem::getQuantity)
-                .sum();
-        BigDecimal subtotal = cart.getItems().stream()
-                .map(CartItem::getLineTotal)
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .setScale(2, RoundingMode.HALF_UP);
-        int itemCount = cart.getItems().size();
+        transactionTemplate.executeWithoutResult(status -> cartRepository.findWithItemsByKeycloakIdForUpdate(normalizedKeycloakId)
+                .ifPresent(cart -> {
+                    if (checkoutSnapshot(cart).equals(expectedSnapshot)) {
+                        cart.getItems().clear();
+                        cartRepository.save(cart);
+                    }
+                }));
 
-        cart.getItems().clear();
-        cartRepository.save(cart);
-
-        return new CheckoutResponse(order.id(), itemCount, totalQuantity, subtotal);
+        return new CheckoutResponse(order.id(), prepared.itemCount(), prepared.totalQuantity(), prepared.subtotal());
     }
 
     private ProductDetails resolvePurchasableProduct(UUID productId) {
@@ -292,6 +334,16 @@ public class CartService {
         return value.setScale(2, RoundingMode.HALF_UP);
     }
 
+    private List<CartCheckoutLine> checkoutSnapshot(Cart cart) {
+        if (cart == null || cart.getItems() == null) {
+            return List.of();
+        }
+        return cart.getItems().stream()
+                .map(item -> new CartCheckoutLine(item.getProductId(), item.getQuantity()))
+                .sorted(Comparator.comparing(line -> line.productId() == null ? "" : line.productId().toString()))
+                .toList();
+    }
+
     private CartResponse toResponse(Cart cart) {
         List<CartItemResponse> items = cart.getItems().stream()
                 .sorted(Comparator.comparing(CartItem::getProductName, String.CASE_INSENSITIVE_ORDER))
@@ -343,5 +395,23 @@ public class CartService {
                 null,
                 null
         );
+    }
+
+    private String downstreamOrderIdempotencyKey(String incomingKey) {
+        if (!StringUtils.hasText(incomingKey)) {
+            return null;
+        }
+        return "cart-checkout::" + incomingKey.trim();
+    }
+
+    private record PreparedCheckout(
+            List<CreateMyOrderItemRequest> orderItems,
+            int itemCount,
+            int totalQuantity,
+            BigDecimal subtotal
+    ) {
+    }
+
+    private record CartCheckoutLine(UUID productId, int quantity) {
     }
 }

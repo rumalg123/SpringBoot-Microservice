@@ -19,21 +19,39 @@ import java.util.UUID;
 public class AdminOrderService {
 
     private final OrderClient orderClient;
+    private final AdminOrderCacheVersionService adminOrderCacheVersionService;
 
     @Cacheable(
             cacheNames = "adminOrders",
-            key = "(#customerId == null ? 'ALL' : #customerId.toString()) + '::' + (#customerEmail == null ? 'NO_EMAIL' : #customerEmail) + '::' + (#vendorId == null ? 'NO_VENDOR' : #vendorId.toString()) + '::' + #page + '::' + #size + '::' + #sort.toString()"
+            key = "@adminOrderCacheVersionService.adminOrdersVersion() + '::' + "
+                    + "(#customerId == null ? 'ALL' : #customerId.toString()) + '::' + "
+                    + "(#customerEmail == null ? 'NO_EMAIL' : #customerEmail) + '::' + "
+                    + "(#vendorId == null ? 'NO_VENDOR' : #vendorId.toString()) + '::' + "
+                    + "#page + '::' + #size + '::' + #sort.toString()"
     )
     public PageResponse<OrderResponse> listOrders(UUID customerId, String customerEmail, UUID vendorId, int page, int size, List<String> sort, String internalAuth) {
         return orderClient.listOrders(customerId, customerEmail, vendorId, page, size, sort, internalAuth);
     }
 
     public OrderResponse updateOrderStatus(UUID orderId, String status, String internalAuth) {
-        return orderClient.updateOrderStatus(orderId, status, internalAuth, null, null);
+        return updateOrderStatus(orderId, status, internalAuth, null, null);
     }
 
     public OrderResponse updateOrderStatus(UUID orderId, String status, String internalAuth, String userSub, String userRoles) {
-        return orderClient.updateOrderStatus(orderId, status, internalAuth, userSub, userRoles);
+        return updateOrderStatus(orderId, status, internalAuth, userSub, userRoles, null);
+    }
+
+    public OrderResponse updateOrderStatus(
+            UUID orderId,
+            String status,
+            String internalAuth,
+            String userSub,
+            String userRoles,
+            String idempotencyKey
+    ) {
+        OrderResponse response = orderClient.updateOrderStatus(orderId, status, internalAuth, userSub, userRoles, idempotencyKey);
+        adminOrderCacheVersionService.bumpAdminOrdersCache();
+        return response;
     }
 
     public Set<UUID> getOrderVendorIds(UUID orderId, String internalAuth) {
@@ -53,7 +71,21 @@ public class AdminOrderService {
     }
 
     public VendorOrderResponse updateVendorOrderStatus(UUID vendorOrderId, String status, String internalAuth, String userSub, String userRoles) {
-        return orderClient.updateVendorOrderStatus(vendorOrderId, status, internalAuth, userSub, userRoles);
+        return updateVendorOrderStatus(vendorOrderId, status, internalAuth, userSub, userRoles, null);
+    }
+
+    public VendorOrderResponse updateVendorOrderStatus(
+            UUID vendorOrderId,
+            String status,
+            String internalAuth,
+            String userSub,
+            String userRoles,
+            String idempotencyKey
+    ) {
+        VendorOrderResponse response = orderClient.updateVendorOrderStatus(
+                vendorOrderId, status, internalAuth, userSub, userRoles, idempotencyKey);
+        adminOrderCacheVersionService.bumpAdminOrdersCache();
+        return response;
     }
 
     public List<VendorOrderStatusAuditResponse> getVendorOrderStatusHistory(UUID vendorOrderId, String internalAuth) {

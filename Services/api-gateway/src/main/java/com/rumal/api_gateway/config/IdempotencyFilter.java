@@ -93,17 +93,19 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
             return chain.filter(exchange);
         }
 
+        boolean keyRequired = requireKeyForMutatingRequests || isProtectedMutation(exchange);
         String idempotencyKey = exchange.getRequest().getHeaders().getFirst(keyHeaderName);
         if (!StringUtils.hasText(idempotencyKey)) {
-            if (!requireKeyForMutatingRequests) {
+            if (!keyRequired) {
                 return chain.filter(exchange);
             }
-            return writeJsonError(exchange, HttpStatus.BAD_REQUEST, "Idempotency-Key header is required");
+            return writeJsonError(exchange, HttpStatus.BAD_REQUEST, "Idempotency-Key header is required", "MISSING_KEY");
         }
 
         return readRequestBody(exchange)
                 .flatMap(requestBody -> userOrIpKeyResolver.resolve(exchange)
                         .defaultIfEmpty("ip:unknown")
+                        .map(this::normalizeScopeKey)
                         .flatMap(scopeKey -> applyIdempotency(exchange, chain, scopeKey, idempotencyKey.trim(), requestBody)));
     }
 
@@ -167,7 +169,7 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
     ) {
         String pendingJson = serializeEntry(IdempotencyEntry.pending(requestHash));
         if (pendingJson == null) {
-            return writeJsonError(exchange, HttpStatus.INTERNAL_SERVER_ERROR, "Unable to initialize idempotency state");
+            return writeJsonError(exchange, HttpStatus.INTERNAL_SERVER_ERROR, "Unable to initialize idempotency state", "ERROR");
         }
 
         return redisTemplate.opsForValue().setIfAbsent(redisKey, pendingJson, pendingTtl)
@@ -307,6 +309,10 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
     }
 
     private Mono<Void> writeJsonError(ServerWebExchange exchange, HttpStatus status, String message) {
+        return writeJsonError(exchange, status, message, "CONFLICT");
+    }
+
+    private Mono<Void> writeJsonError(ServerWebExchange exchange, HttpStatus status, String message, String idempotencyStatus) {
         String requestId = exchange.getRequest().getHeaders().getFirst(RequestIdFilter.REQUEST_ID_HEADER);
         String body = "{\"timestamp\":\"" + Instant.now() + "\"," +
                 "\"path\":\"" + exchange.getRequest().getPath().value() + "\"," +
@@ -316,7 +322,7 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
                 "\"requestId\":\"" + escapeJson(requestId == null ? "" : requestId) + "\"}";
         exchange.getResponse().setStatusCode(status);
         exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
-        exchange.getResponse().getHeaders().set("X-Idempotency-Status", "CONFLICT");
+        exchange.getResponse().getHeaders().set("X-Idempotency-Status", idempotencyStatus);
         DataBuffer dataBuffer = exchange.getResponse().bufferFactory()
                 .wrap(body.getBytes(StandardCharsets.UTF_8));
         return exchange.getResponse().writeWith(Mono.just(dataBuffer));
@@ -368,11 +374,52 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
         return contentType != null && MediaType.MULTIPART_FORM_DATA.isCompatibleWith(contentType);
     }
 
+    private boolean isProtectedMutation(ServerWebExchange exchange) {
+        HttpMethod method = exchange.getRequest().getMethod();
+        if (method == null) {
+            return false;
+        }
+        String path = exchange.getRequest().getPath().value();
+
+        if (path.startsWith("/admin/")) {
+            return true;
+        }
+        if ("/orders/me".equals(path) && method == HttpMethod.POST) {
+            return true;
+        }
+        if (("/customers/me/addresses".equals(path) || path.startsWith("/customers/me/addresses/"))
+                && (method == HttpMethod.POST || method == HttpMethod.PUT || method == HttpMethod.DELETE)) {
+            return true;
+        }
+        if ("/customers/me".equals(path) && method == HttpMethod.PUT) {
+            return true;
+        }
+        if ("/cart/me/checkout".equals(path) && method == HttpMethod.POST) {
+            return true;
+        }
+        if (("/cart/me".equals(path) || "/cart/me/items".equals(path) || path.startsWith("/cart/me/items/"))
+                && (method == HttpMethod.POST || method == HttpMethod.PUT || method == HttpMethod.DELETE)) {
+            return true;
+        }
+        if (("/wishlist/me".equals(path) || "/wishlist/me/items".equals(path) || path.startsWith("/wishlist/me/items/"))
+                && (method == HttpMethod.POST || method == HttpMethod.PUT || method == HttpMethod.DELETE)) {
+            return true;
+        }
+        return false;
+    }
+
     private String buildRedisKey(String scopeKey, String method, String path, String idempotencyKey) {
         String encodedIdempotencyKey = Base64.getUrlEncoder()
                 .withoutPadding()
                 .encodeToString(idempotencyKey.getBytes(StandardCharsets.UTF_8));
         return keyPrefix + scopeKey + "::" + method + "::" + path + "::" + encodedIdempotencyKey;
+    }
+
+    private String normalizeScopeKey(String scopeKey) {
+        if (!StringUtils.hasText(scopeKey)) {
+            return "ip:unknown";
+        }
+        return scopeKey.trim();
     }
 
     private String sha256Hex(String value) {

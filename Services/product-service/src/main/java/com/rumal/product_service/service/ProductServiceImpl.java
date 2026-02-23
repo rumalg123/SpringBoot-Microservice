@@ -725,7 +725,8 @@ public class ProductServiceImpl implements ProductService {
         if (filtered.size() == page.getContent().size()) {
             return page;
         }
-        return new PageImpl<>(filtered, pageable, page.getTotalElements());
+        long adjustedTotal = Math.min(page.getTotalElements(), pageable.getOffset() + filtered.size());
+        return new PageImpl<>(filtered, pageable, adjustedTotal);
     }
 
     private void assertVendorStorefrontVisible(UUID vendorId, UUID productId) {

@@ -381,13 +381,6 @@ public class VendorClient {
         return next;
     }
 
-    private RestClient.RequestHeadersSpec<?> applyIdempotencyHeader(RestClient.RequestHeadersSpec<?> spec, String idempotencyKey) {
-        if (StringUtils.hasText(idempotencyKey)) {
-            return spec.header("Idempotency-Key", idempotencyKey.trim());
-        }
-        return spec;
-    }
-
     private DownstreamHttpException toDownstreamHttpException(RestClientResponseException ex) {
         String body = ex.getResponseBodyAsString();
         String message;
@@ -401,6 +394,10 @@ public class VendorClient {
             message = "Vendor service responded with " + ex.getStatusCode().value();
         }
         return new DownstreamHttpException(ex.getStatusCode(), message, ex);
+    }
+
+    private RestClient.RequestHeadersSpec<?> applyIdempotencyHeader(RestClient.RequestHeadersSpec<?> spec, String idempotencyKey) {
+        return ClientRequestUtils.applyIdempotencyHeader(spec, idempotencyKey);
     }
 
     private URI buildUri(String path) {

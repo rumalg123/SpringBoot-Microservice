@@ -15,7 +15,9 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
@@ -30,8 +32,9 @@ public class WishlistService {
 
     private final WishlistItemRepository wishlistItemRepository;
     private final ProductClient productClient;
+    private final TransactionTemplate transactionTemplate;
 
-    @Cacheable(cacheNames = "wishlistByKeycloak", key = "#keycloakId")
+    @Cacheable(cacheNames = "wishlistByKeycloak", key = "#keycloakId == null ? '' : #keycloakId.trim()")
     @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
     public WishlistResponse getByKeycloakId(String keycloakId) {
         String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
@@ -40,31 +43,32 @@ public class WishlistService {
     }
 
     @Caching(evict = {
-            @CacheEvict(cacheNames = "wishlistByKeycloak", key = "#keycloakId")
+            @CacheEvict(cacheNames = "wishlistByKeycloak", key = "#keycloakId == null ? '' : #keycloakId.trim()")
     })
-    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 15)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public WishlistResponse addItem(String keycloakId, AddWishlistItemRequest request) {
         String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
         ProductDetails product = resolveWishlistProduct(request.productId());
+        return transactionTemplate.execute(status -> {
+            WishlistItem item = wishlistItemRepository.findByKeycloakIdAndProductId(normalizedKeycloakId, request.productId())
+                    .orElseGet(WishlistItem::new);
 
-        WishlistItem item = wishlistItemRepository.findByKeycloakIdAndProductId(normalizedKeycloakId, request.productId())
-                .orElseGet(WishlistItem::new);
+            item.setKeycloakId(normalizedKeycloakId);
+            item.setProductId(product.id());
+            item.setProductSlug(resolveSlug(product));
+            item.setProductName(resolveName(product));
+            item.setProductType(resolveProductType(product));
+            item.setMainImage(resolveMainImage(product));
+            item.setSellingPriceSnapshot(normalizeMoney(product.sellingPrice()));
+            wishlistItemRepository.save(item);
 
-        item.setKeycloakId(normalizedKeycloakId);
-        item.setProductId(product.id());
-        item.setProductSlug(resolveSlug(product));
-        item.setProductName(resolveName(product));
-        item.setProductType(resolveProductType(product));
-        item.setMainImage(resolveMainImage(product));
-        item.setSellingPriceSnapshot(normalizeMoney(product.sellingPrice()));
-        wishlistItemRepository.save(item);
-
-        List<WishlistItem> items = wishlistItemRepository.findByKeycloakIdOrderByCreatedAtDesc(normalizedKeycloakId);
-        return toResponse(normalizedKeycloakId, items);
+            List<WishlistItem> items = wishlistItemRepository.findByKeycloakIdOrderByCreatedAtDesc(normalizedKeycloakId);
+            return toResponse(normalizedKeycloakId, items);
+        });
     }
 
     @Caching(evict = {
-            @CacheEvict(cacheNames = "wishlistByKeycloak", key = "#keycloakId")
+            @CacheEvict(cacheNames = "wishlistByKeycloak", key = "#keycloakId == null ? '' : #keycloakId.trim()")
     })
     @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 15)
     public void removeItem(String keycloakId, UUID itemId) {
@@ -75,7 +79,7 @@ public class WishlistService {
     }
 
     @Caching(evict = {
-            @CacheEvict(cacheNames = "wishlistByKeycloak", key = "#keycloakId")
+            @CacheEvict(cacheNames = "wishlistByKeycloak", key = "#keycloakId == null ? '' : #keycloakId.trim()")
     })
     @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 15)
     public void removeByProductId(String keycloakId, UUID productId) {
@@ -86,7 +90,7 @@ public class WishlistService {
     }
 
     @Caching(evict = {
-            @CacheEvict(cacheNames = "wishlistByKeycloak", key = "#keycloakId")
+            @CacheEvict(cacheNames = "wishlistByKeycloak", key = "#keycloakId == null ? '' : #keycloakId.trim()")
     })
     @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 15)
     public void clear(String keycloakId) {

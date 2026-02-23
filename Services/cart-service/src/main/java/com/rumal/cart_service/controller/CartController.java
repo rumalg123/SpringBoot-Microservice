@@ -115,6 +115,7 @@ public class CartController {
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Email-Verified", required = false) String userEmailVerified,
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody CheckoutCartRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
@@ -122,7 +123,7 @@ public class CartController {
         if (userSub == null || userSub.isBlank()) {
             throw new UnauthorizedException("Missing authentication header");
         }
-        return cartService.checkout(userSub, request);
+        return cartService.checkout(userSub, request, idempotencyKey);
     }
 
     private void verifyEmailVerified(String emailVerified) {

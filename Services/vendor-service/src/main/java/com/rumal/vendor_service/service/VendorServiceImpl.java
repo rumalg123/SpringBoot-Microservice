@@ -29,6 +29,8 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
 import java.time.Duration;
@@ -586,7 +588,18 @@ public class VendorServiceImpl implements VendorService {
         if (vendorId == null) {
             return;
         }
-        productCatalogAdminClient.evictPublicCachesForVendor(vendorId, requireInternalAuth());
+        Runnable syncTask = () -> productCatalogAdminClient.evictPublicCachesForVendor(vendorId, requireInternalAuth());
+        if (TransactionSynchronizationManager.isSynchronizationActive()
+                && TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    syncTask.run();
+                }
+            });
+            return;
+        }
+        syncTask.run();
     }
 
     private void recordLifecycleAudit(Vendor vendor, VendorLifecycleAction action, String reason, String actorSub, String actorRoles) {

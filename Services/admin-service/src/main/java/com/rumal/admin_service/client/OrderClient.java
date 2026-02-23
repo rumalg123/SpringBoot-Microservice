@@ -73,10 +73,21 @@ public class OrderClient {
     }
 
     public OrderResponse updateOrderStatus(UUID orderId, String status, String internalAuth, String userSub, String userRoles) {
+        return updateOrderStatus(orderId, status, internalAuth, userSub, userRoles, null);
+    }
+
+    public OrderResponse updateOrderStatus(
+            UUID orderId,
+            String status,
+            String internalAuth,
+            String userSub,
+            String userRoles,
+            String idempotencyKey
+    ) {
         return runOrderCall(() -> {
             RestClient rc = lbRestClientBuilder.build();
             try {
-                var req = rc.patch()
+                RestClient.RequestBodySpec req = rc.patch()
                         .uri("http://order-service/orders/{id}/status", orderId)
                         .header("X-Internal-Auth", internalAuth);
                 if (userSub != null && !userSub.isBlank()) {
@@ -85,7 +96,8 @@ public class OrderClient {
                 if (userRoles != null && !userRoles.isBlank()) {
                     req = req.header("X-User-Roles", userRoles);
                 }
-                return req.body(new UpdateOrderStatusRequest(status))
+                return ((RestClient.RequestBodySpec) ClientRequestUtils.applyIdempotencyHeader(req, idempotencyKey))
+                        .body(new UpdateOrderStatusRequest(status))
                         .retrieve()
                         .body(OrderResponse.class);
             } catch (RestClientException ex) {
@@ -142,10 +154,21 @@ public class OrderClient {
     }
 
     public VendorOrderResponse updateVendorOrderStatus(UUID vendorOrderId, String status, String internalAuth, String userSub, String userRoles) {
+        return updateVendorOrderStatus(vendorOrderId, status, internalAuth, userSub, userRoles, null);
+    }
+
+    public VendorOrderResponse updateVendorOrderStatus(
+            UUID vendorOrderId,
+            String status,
+            String internalAuth,
+            String userSub,
+            String userRoles,
+            String idempotencyKey
+    ) {
         return runOrderCall(() -> {
             RestClient rc = lbRestClientBuilder.build();
             try {
-                var req = rc.patch()
+                RestClient.RequestBodySpec req = rc.patch()
                         .uri("http://order-service/orders/vendor-orders/{id}/status", vendorOrderId)
                         .header("X-Internal-Auth", internalAuth);
                 if (userSub != null && !userSub.isBlank()) {
@@ -154,7 +177,8 @@ public class OrderClient {
                 if (userRoles != null && !userRoles.isBlank()) {
                     req = req.header("X-User-Roles", userRoles);
                 }
-                return req.body(new UpdateOrderStatusRequest(status))
+                return ((RestClient.RequestBodySpec) ClientRequestUtils.applyIdempotencyHeader(req, idempotencyKey))
+                        .body(new UpdateOrderStatusRequest(status))
                         .retrieve()
                         .body(VendorOrderResponse.class);
             } catch (RestClientException ex) {

@@ -20,7 +20,9 @@ import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 import java.util.List;
@@ -34,6 +36,7 @@ public class CustomerServiceImpl implements CustomerService {
     private final CustomerRepository customerRepository;
     private final CustomerAddressRepository customerAddressRepository;
     private final KeycloakManagementService keycloakManagementService;
+    private final TransactionTemplate transactionTemplate;
 
     @Override
     public CustomerResponse getByEmail(String email) {
@@ -46,13 +49,11 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
-    @Cacheable(cacheNames = "customerByKeycloak", key = "#keycloakId")
+    @Cacheable(cacheNames = "customerByKeycloak", key = "#keycloakId == null ? '' : #keycloakId.trim()")
     public CustomerResponse getByKeycloakId(String keycloakId) {
-        if (keycloakId == null || keycloakId.isBlank()) {
-            throw new ResourceNotFoundException("Customer not found for keycloak id");
-        }
+        String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
 
-        Customer c = customerRepository.findByKeycloakId(keycloakId)
+        Customer c = customerRepository.findByKeycloakId(normalizedKeycloakId)
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found for keycloak id"));
 
         return toResponse(c);
@@ -78,7 +79,7 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
-    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public CustomerResponse register(RegisterCustomerRequest request) {
         String email = request.email().trim().toLowerCase();
 
@@ -92,30 +93,30 @@ public class CustomerServiceImpl implements CustomerService {
         } catch (KeycloakUserExistsException ex) {
             keycloakId = keycloakManagementService.getUserIdByEmail(email);
         }
+        final String resolvedKeycloakId = keycloakId;
 
-        Customer saved = customerRepository.save(
-                Customer.builder()
-                        .name(request.name().trim())
-                        .email(email)
-                        .keycloakId(keycloakId)
-                        .build()
-        );
-
-        return toResponse(saved);
+        return transactionTemplate.execute(status -> {
+            Customer saved = customerRepository.save(
+                    Customer.builder()
+                            .name(request.name().trim())
+                            .email(email)
+                            .keycloakId(resolvedKeycloakId)
+                            .build()
+            );
+            return toResponse(saved);
+        });
     }
 
     @Override
-    @CachePut(cacheNames = "customerByKeycloak", key = "#keycloakId")
+    @CachePut(cacheNames = "customerByKeycloak", key = "#keycloakId == null ? '' : #keycloakId.trim()")
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public CustomerResponse registerIdentity(String keycloakId, String email, RegisterIdentityCustomerRequest request) {
-        if (keycloakId == null || keycloakId.isBlank()) {
-            throw new ResourceNotFoundException("Customer not found for keycloak id");
-        }
+        String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
         String resolvedEmail = email;
         String resolvedName = request != null ? request.name() : null;
 
         if (resolvedEmail == null || resolvedEmail.isBlank() || resolvedName == null || resolvedName.isBlank()) {
-            var user = keycloakManagementService.getUserById(keycloakId);
+            var user = keycloakManagementService.getUserById(normalizedKeycloakId);
             if (resolvedEmail == null || resolvedEmail.isBlank()) {
                 resolvedEmail = user.email();
             }
@@ -130,7 +131,7 @@ public class CustomerServiceImpl implements CustomerService {
 
         String normalizedEmail = resolvedEmail.trim().toLowerCase();
 
-        Customer existingByKeycloak = customerRepository.findByKeycloakId(keycloakId).orElse(null);
+        Customer existingByKeycloak = customerRepository.findByKeycloakId(normalizedKeycloakId).orElse(null);
         if (existingByKeycloak != null) {
             return toResponse(existingByKeycloak);
         }
@@ -147,7 +148,7 @@ public class CustomerServiceImpl implements CustomerService {
                 Customer.builder()
                         .name(name)
                         .email(normalizedEmail)
-                        .keycloakId(keycloakId)
+                        .keycloakId(normalizedKeycloakId)
                         .build()
         );
 
@@ -155,27 +156,30 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
-    @CachePut(cacheNames = "customerByKeycloak", key = "#keycloakId")
-    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    @CachePut(cacheNames = "customerByKeycloak", key = "#keycloakId == null ? '' : #keycloakId.trim()")
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public CustomerResponse updateProfile(String keycloakId, UpdateCustomerProfileRequest request) {
-        if (!StringUtils.hasText(keycloakId)) {
-            throw new ResourceNotFoundException("Customer not found for keycloak id");
-        }
+        String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
 
-        Customer customer = customerRepository.findByKeycloakId(keycloakId)
+        Customer customer = customerRepository.findByKeycloakId(normalizedKeycloakId)
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found for keycloak id"));
 
         String firstName = request.firstName().trim();
         String lastName = request.lastName().trim();
         String fullName = (firstName + " " + lastName).trim();
-        customer.setName(fullName);
+        String customerDbKeycloakId = customer.getKeycloakId();
 
-        if (StringUtils.hasText(customer.getKeycloakId())) {
-            keycloakManagementService.updateUserNames(customer.getKeycloakId(), firstName, lastName);
+        if (StringUtils.hasText(customerDbKeycloakId)) {
+            keycloakManagementService.updateUserNames(customerDbKeycloakId, firstName, lastName);
         }
 
-        Customer saved = customerRepository.save(customer);
-        return toResponse(saved);
+        return transactionTemplate.execute(status -> {
+            Customer managed = customerRepository.findByKeycloakId(normalizedKeycloakId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Customer not found for keycloak id"));
+            managed.setName(fullName);
+            Customer saved = customerRepository.save(managed);
+            return toResponse(saved);
+        });
     }
 
     @Override
@@ -186,10 +190,9 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
-    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
     public List<CustomerAddressResponse> listAddressesByKeycloak(String keycloakId) {
         Customer customer = findCustomerByKeycloakId(keycloakId);
-        rebalanceDefaults(customer.getId(), null, null);
         return customerAddressRepository.findByCustomerIdAndDeletedFalseOrderByUpdatedAtDesc(customer.getId()).stream()
                 .map(this::toAddressResponse)
                 .toList();
@@ -302,11 +305,15 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     private Customer findCustomerByKeycloakId(String keycloakId) {
+        return customerRepository.findByKeycloakId(normalizeKeycloakId(keycloakId))
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found for keycloak id"));
+    }
+
+    private String normalizeKeycloakId(String keycloakId) {
         if (!StringUtils.hasText(keycloakId)) {
             throw new ResourceNotFoundException("Customer not found for keycloak id");
         }
-        return customerRepository.findByKeycloakId(keycloakId)
-                .orElseThrow(() -> new ResourceNotFoundException("Customer not found for keycloak id"));
+        return keycloakId.trim();
     }
 
     private CustomerAddress findActiveAddress(UUID customerId, UUID addressId) {
