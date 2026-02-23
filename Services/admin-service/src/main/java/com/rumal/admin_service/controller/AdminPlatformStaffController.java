@@ -15,6 +15,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import jakarta.validation.constraints.NotNull;
+
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -46,7 +48,7 @@ public class AdminPlatformStaffController {
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @RequestHeader(value = "X-Action-Reason", required = false) String actionReason,
-            @RequestBody Map<String, Object> request
+            @RequestBody @NotNull Map<String, Object> request
     ) {
         internalRequestVerifier.verify(internalAuth);
         return adminAccessService.createPlatformStaff(request, internalAuth, userSub, userRoles, actionReason);
@@ -59,7 +61,7 @@ public class AdminPlatformStaffController {
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @RequestHeader(value = "X-Action-Reason", required = false) String actionReason,
             @PathVariable UUID id,
-            @RequestBody Map<String, Object> request
+            @RequestBody @NotNull Map<String, Object> request
     ) {
         internalRequestVerifier.verify(internalAuth);
         return adminAccessService.updatePlatformStaff(id, request, internalAuth, userSub, userRoles, actionReason);

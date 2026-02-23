@@ -28,9 +28,11 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 import java.time.Duration;
@@ -51,6 +53,7 @@ public class VendorServiceImpl implements VendorService {
     private final VendorUserRepository vendorUserRepository;
     private final OrderLifecycleClient orderLifecycleClient;
     private final ProductCatalogAdminClient productCatalogAdminClient;
+    private final TransactionTemplate transactionTemplate;
 
     @Value("${internal.auth.shared-secret:}")
     private String internalAuthSharedSecret;
@@ -182,17 +185,10 @@ public class VendorServiceImpl implements VendorService {
     }
 
     @Override
-    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @CacheEvict(cacheNames = "vendorOperationalState", key = "#id")
     public void confirmDelete(UUID id, String reason, String actorSub, String actorRoles) {
-        Vendor vendor = vendorRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Vendor not found: " + id));
-        if (vendor.isDeleted()) {
-            return;
-        }
-        if (vendor.getDeletionRequestedAt() == null) {
-            throw new ValidationException("Delete request must be created before confirm delete");
-        }
+        // Check eligibility OUTSIDE transaction (involves HTTP call to order-service)
         VendorDeletionEligibilityResponse eligibility = getDeletionEligibility(id);
         if (!eligibility.eligible()) {
             String blocker = eligibility.blockingReasons().isEmpty()
@@ -200,16 +196,29 @@ public class VendorServiceImpl implements VendorService {
                     : String.join(", ", eligibility.blockingReasons());
             throw new ValidationException("Vendor cannot be deleted: " + blocker);
         }
-        vendor.setDeleted(true);
-        vendor.setDeletedAt(Instant.now());
-        vendor.setActive(false);
-        vendor.setAcceptingOrders(false);
-        if (StringUtils.hasText(reason)) {
-            vendor.setDeletionRequestReason(trimToNull(reason));
-        }
-        vendorRepository.save(vendor);
-        recordLifecycleAudit(vendor, VendorLifecycleAction.DELETE_CONFIRMED, reason, actorSub, actorRoles);
-        syncProductCatalogVisibility(vendor.getId());
+
+        // DB mutation inside a short transaction
+        transactionTemplate.executeWithoutResult(status -> {
+            Vendor vendor = vendorRepository.findById(id)
+                    .orElseThrow(() -> new ResourceNotFoundException("Vendor not found: " + id));
+            if (vendor.isDeleted()) {
+                return;
+            }
+            if (vendor.getDeletionRequestedAt() == null) {
+                throw new ValidationException("Delete request must be created before confirm delete");
+            }
+            vendor.setDeleted(true);
+            vendor.setDeletedAt(Instant.now());
+            vendor.setActive(false);
+            vendor.setAcceptingOrders(false);
+            if (StringUtils.hasText(reason)) {
+                vendor.setDeletionRequestReason(trimToNull(reason));
+            }
+            vendorRepository.save(vendor);
+            recordLifecycleAudit(vendor, VendorLifecycleAction.DELETE_CONFIRMED, reason, actorSub, actorRoles);
+        });
+
+        syncProductCatalogVisibility(id);
     }
 
     @Override
@@ -372,8 +381,9 @@ public class VendorServiceImpl implements VendorService {
         if (vendorIds == null || vendorIds.isEmpty()) {
             return List.of();
         }
-        return vendorRepository.findAllById(vendorIds).stream()
-                .map(this::toOperationalState)
+        return vendorIds.stream()
+                .distinct()
+                .map(this::getOperationalState)
                 .toList();
     }
 

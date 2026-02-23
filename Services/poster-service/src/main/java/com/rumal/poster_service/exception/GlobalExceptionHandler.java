@@ -47,6 +47,7 @@ public class GlobalExceptionHandler {
         body.put("timestamp", Instant.now());
         body.put("status", HttpStatus.BAD_REQUEST.value());
         body.put("error", "Validation failed");
+        body.put("message", "Validation failed");
         body.put("fieldErrors", fieldErrors);
         return ResponseEntity.badRequest().body(body);
     }
@@ -62,6 +63,7 @@ public class GlobalExceptionHandler {
         body.put("timestamp", Instant.now());
         body.put("status", status.value());
         body.put("error", message);
+        body.put("message", message);
         return ResponseEntity.status(status).body(body);
     }
 }

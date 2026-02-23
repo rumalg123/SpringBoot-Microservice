@@ -16,10 +16,14 @@ import com.rumal.promotion_service.exception.ValidationException;
 import com.rumal.promotion_service.repo.PromotionCampaignRepository;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
@@ -37,6 +41,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
 public class PromotionCampaignService {
 
     private final PromotionCampaignRepository promotionCampaignRepository;
@@ -80,12 +85,14 @@ public class PromotionCampaignService {
         return promotionCampaignRepository.findAll(spec, pageable).map(this::toResponse);
     }
 
+    @Cacheable(cacheNames = "promotionById", key = "#id")
     @Transactional(readOnly = true)
     public PromotionResponse get(UUID id) {
         return toResponse(getEntity(id));
     }
 
-    @Transactional
+    @CacheEvict(cacheNames = "promotionAdminList", allEntries = true)
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public PromotionResponse create(
             UpsertPromotionRequest request,
             String actorUserSub,
@@ -111,7 +118,11 @@ public class PromotionCampaignService {
         return toResponse(promotionCampaignRepository.save(campaign));
     }
 
-    @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "promotionById", key = "#id"),
+            @CacheEvict(cacheNames = "promotionAdminList", allEntries = true)
+    })
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public PromotionResponse update(
             UUID id,
             UpsertPromotionRequest request,
@@ -134,7 +145,11 @@ public class PromotionCampaignService {
         return toResponse(promotionCampaignRepository.save(campaign));
     }
 
-    @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "promotionById", key = "#id"),
+            @CacheEvict(cacheNames = "promotionAdminList", allEntries = true)
+    })
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public PromotionResponse submitForApproval(UUID id, String actorUserSub) {
         PromotionCampaign campaign = getEntity(id);
         if (campaign.getVendorId() == null) {
@@ -151,7 +166,11 @@ public class PromotionCampaignService {
         return toResponse(promotionCampaignRepository.save(campaign));
     }
 
-    @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "promotionById", key = "#id"),
+            @CacheEvict(cacheNames = "promotionAdminList", allEntries = true)
+    })
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public PromotionResponse approve(UUID id, String actorUserSub, PromotionApprovalDecisionRequest request) {
         PromotionCampaign campaign = getEntity(id);
         if (campaign.getApprovalStatus() == PromotionApprovalStatus.NOT_REQUIRED) {
@@ -170,7 +189,11 @@ public class PromotionCampaignService {
         return toResponse(promotionCampaignRepository.save(campaign));
     }
 
-    @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "promotionById", key = "#id"),
+            @CacheEvict(cacheNames = "promotionAdminList", allEntries = true)
+    })
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public PromotionResponse reject(UUID id, String actorUserSub, PromotionApprovalDecisionRequest request) {
         PromotionCampaign campaign = getEntity(id);
         if (campaign.getApprovalStatus() == PromotionApprovalStatus.NOT_REQUIRED) {
@@ -187,7 +210,11 @@ public class PromotionCampaignService {
         return toResponse(promotionCampaignRepository.save(campaign));
     }
 
-    @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "promotionById", key = "#id"),
+            @CacheEvict(cacheNames = "promotionAdminList", allEntries = true)
+    })
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public PromotionResponse activate(UUID id, String actorUserSub) {
         PromotionCampaign campaign = getEntity(id);
         if (campaign.getLifecycleStatus() == PromotionLifecycleStatus.ARCHIVED) {
@@ -204,7 +231,11 @@ public class PromotionCampaignService {
         return toResponse(promotionCampaignRepository.save(campaign));
     }
 
-    @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "promotionById", key = "#id"),
+            @CacheEvict(cacheNames = "promotionAdminList", allEntries = true)
+    })
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public PromotionResponse pause(UUID id, String actorUserSub) {
         PromotionCampaign campaign = getEntity(id);
         if (campaign.getLifecycleStatus() == PromotionLifecycleStatus.ARCHIVED) {
@@ -215,7 +246,11 @@ public class PromotionCampaignService {
         return toResponse(promotionCampaignRepository.save(campaign));
     }
 
-    @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "promotionById", key = "#id"),
+            @CacheEvict(cacheNames = "promotionAdminList", allEntries = true)
+    })
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public PromotionResponse archive(UUID id, String actorUserSub) {
         PromotionCampaign campaign = getEntity(id);
         campaign.setLifecycleStatus(PromotionLifecycleStatus.ARCHIVED);

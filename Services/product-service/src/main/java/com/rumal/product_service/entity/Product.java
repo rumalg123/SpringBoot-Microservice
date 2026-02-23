@@ -19,6 +19,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -68,6 +69,7 @@ public class Product {
     @CollectionTable(name = "product_images", joinColumns = @JoinColumn(name = "product_id"))
     @OrderColumn(name = "image_order")
     @Column(name = "image_name", nullable = false, length = 260)
+    @BatchSize(size = 50)
     @Builder.Default
     private List<String> images = new ArrayList<>();
 
@@ -98,6 +100,7 @@ public class Product {
 
     @ElementCollection
     @CollectionTable(name = "product_variation_attributes", joinColumns = @JoinColumn(name = "product_id"))
+    @BatchSize(size = 50)
     @Builder.Default
     private List<ProductVariationAttribute> variations = new ArrayList<>();
 

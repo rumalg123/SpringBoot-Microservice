@@ -7,6 +7,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -20,7 +21,9 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "customer_addresses")
+@Table(name = "customer_addresses", indexes = {
+        @Index(name = "idx_customer_addresses_customer_id", columnList = "customer_id")
+})
 @Getter
 @Setter
 @NoArgsConstructor

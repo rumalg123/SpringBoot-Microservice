@@ -60,3 +60,6 @@ resilience:
     permitted-half-open-calls: ${ADMIN_CB_HALF_OPEN_CALLS:5}
   time-limiter:
     timeout-ms: ${ADMIN_CB_TIMEOUT_MS:4000}
+  retry:
+    max-attempts: ${ADMIN_RETRY_MAX_ATTEMPTS:3}
+    wait-duration-ms: ${ADMIN_RETRY_WAIT_DURATION_MS:500}

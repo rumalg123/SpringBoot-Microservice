@@ -25,6 +25,12 @@ public class HttpClientConfig {
     @Value("${http.client.idle-evict-seconds:30}")
     private int idleEvictSeconds;
 
+    @Value("${http.client.max-connections:100}")
+    private int maxConnections;
+
+    @Value("${http.client.max-connections-per-route:20}")
+    private int maxConnectionsPerRoute;
+
     @Bean
     @Primary
     public RestClient.Builder restClientBuilder() {
@@ -38,6 +44,8 @@ public class HttpClientConfig {
                 .setDefaultConnectionConfig(ConnectionConfig.custom()
                         .setConnectTimeout(Timeout.ofSeconds(Math.max(1, connectTimeoutSeconds)))
                         .build())
+                .setMaxConnTotal(Math.max(10, maxConnections))
+                .setMaxConnPerRoute(Math.max(5, maxConnectionsPerRoute))
                 .build();
 
         var httpClient = HttpClients.custom()

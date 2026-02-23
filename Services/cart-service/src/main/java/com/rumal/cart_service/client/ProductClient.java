@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 import java.util.UUID;
 
@@ -39,6 +40,8 @@ public class ProductClient {
                 throw new ValidationException(resolveErrorMessage(ex, "Invalid product request"));
             }
             throw new ServiceUnavailableException("Product service error for product " + productId + ".", ex);
+        } catch (RestClientException ex) {
+            throw new ServiceUnavailableException("Service unavailable: " + ex.getMessage());
         }
     }
 

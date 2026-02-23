@@ -16,6 +16,7 @@ import com.rumal.promotion_service.repo.PromotionCampaignRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
@@ -27,6 +28,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
 public class CouponReservationService {
 
     private final CouponValidationService couponValidationService;
@@ -40,7 +42,7 @@ public class CouponReservationService {
     @Value("${coupon.reservation.max-ttl-seconds:1800}")
     private int maxReservationTtlSeconds;
 
-    @Transactional
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public CouponReservationResponse reserve(CreateCouponReservationRequest request) {
         validateReservationRequest(request);
 
@@ -100,7 +102,7 @@ public class CouponReservationService {
         return toResponse(couponReservationRepository.save(reservation), quote);
     }
 
-    @Transactional
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public CouponReservationResponse commit(UUID reservationId, CommitCouponReservationRequest request) {
         CouponReservation reservation = couponReservationRepository.findByIdForUpdate(reservationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Coupon reservation not found: " + reservationId));
@@ -126,7 +128,7 @@ public class CouponReservationService {
         return toResponse(couponReservationRepository.save(reservation), null);
     }
 
-    @Transactional
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public CouponReservationResponse release(UUID reservationId, ReleaseCouponReservationRequest request) {
         CouponReservation reservation = couponReservationRepository.findByIdForUpdate(reservationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Coupon reservation not found: " + reservationId));
@@ -144,7 +146,7 @@ public class CouponReservationService {
         }
         reservation.setStatus(CouponReservationStatus.RELEASED);
         reservation.setReleasedAt(Instant.now());
-        reservation.setReleaseReason(request.reason().trim());
+        reservation.setReleaseReason(request.reason() != null ? request.reason().trim() : null);
         return toResponse(couponReservationRepository.save(reservation), null);
     }
 

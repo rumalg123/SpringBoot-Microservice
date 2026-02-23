@@ -17,6 +17,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -84,6 +85,7 @@ public class PromotionCampaign {
     @ElementCollection
     @CollectionTable(name = "promotion_spend_tiers", joinColumns = @JoinColumn(name = "promotion_id"))
     @OrderColumn(name = "tier_order_index")
+    @BatchSize(size = 50)
     @Builder.Default
     private List<PromotionSpendTier> spendTiers = new ArrayList<>();
 
@@ -123,12 +125,14 @@ public class PromotionCampaign {
     @ElementCollection
     @CollectionTable(name = "promotion_target_product_ids", joinColumns = @JoinColumn(name = "promotion_id"))
     @Column(name = "product_id", nullable = false)
+    @BatchSize(size = 50)
     @Builder.Default
     private Set<UUID> targetProductIds = new LinkedHashSet<>();
 
     @ElementCollection
     @CollectionTable(name = "promotion_target_category_ids", joinColumns = @JoinColumn(name = "promotion_id"))
     @Column(name = "category_id", nullable = false)
+    @BatchSize(size = 50)
     @Builder.Default
     private Set<UUID> targetCategoryIds = new LinkedHashSet<>();
 

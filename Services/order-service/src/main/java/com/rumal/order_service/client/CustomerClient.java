@@ -12,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 import java.util.UUID;
 
@@ -45,6 +46,8 @@ public class CustomerClient {
                 throw new ResourceNotFoundException("Customer not found: " + customerId);
             }
             throw ex;
+        } catch (RestClientException ex) {
+            throw new ServiceUnavailableException("Service unavailable: " + ex.getMessage(), ex);
         }
     }
 
@@ -63,6 +66,8 @@ public class CustomerClient {
                 throw new ResourceNotFoundException("Customer not found: " + customerId);
             }
             throw ex;
+        } catch (RestClientException ex) {
+            throw new ServiceUnavailableException("Service unavailable: " + ex.getMessage(), ex);
         }
     }
 
@@ -84,6 +89,8 @@ public class CustomerClient {
                 throw new ResourceNotFoundException("Customer not found for keycloak id");
             }
             throw ex;
+        } catch (RestClientException ex) {
+            throw new ServiceUnavailableException("Service unavailable: " + ex.getMessage(), ex);
         }
     }
 
@@ -103,6 +110,8 @@ public class CustomerClient {
                 throw new ResourceNotFoundException("Customer not found: " + normalizedEmail);
             }
             throw ex;
+        } catch (RestClientException ex) {
+            throw new ServiceUnavailableException("Service unavailable: " + ex.getMessage(), ex);
         }
     }
 
@@ -120,6 +129,8 @@ public class CustomerClient {
                 throw new ResourceNotFoundException("Address not found: " + addressId);
             }
             throw ex;
+        } catch (RestClientException ex) {
+            throw new ServiceUnavailableException("Service unavailable: " + ex.getMessage(), ex);
         }
     }
 

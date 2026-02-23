@@ -1,17 +1,20 @@
 package com.rumal.poster_service.service;
 
+import java.text.Normalizer;
 import java.util.Locale;
 
 public final class SlugUtils {
     private SlugUtils() {
     }
 
-    public static String toSlug(String value) {
-        if (value == null) {
+    public static String toSlug(String input) {
+        if (input == null) {
             return "";
         }
-        String slug = value.toLowerCase(Locale.ROOT)
-                .trim()
+        String normalized = Normalizer.normalize(input, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}+", "");
+        String slug = normalized
+                .toLowerCase(Locale.ROOT)
                 .replaceAll("[^a-z0-9]+", "-")
                 .replaceAll("^-+|-+$", "")
                 .replaceAll("-{2,}", "-");

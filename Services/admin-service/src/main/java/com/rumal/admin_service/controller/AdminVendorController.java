@@ -5,6 +5,7 @@ import com.rumal.admin_service.dto.VendorAdminOnboardResponse;
 import com.rumal.admin_service.security.InternalRequestVerifier;
 import com.rumal.admin_service.service.AdminVendorService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -80,7 +81,7 @@ public class AdminVendorController {
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
-            @RequestBody Map<String, Object> request
+            @RequestBody @NotNull Map<String, Object> request
     ) {
         internalRequestVerifier.verify(internalAuth);
         return adminVendorService.create(request, internalAuth, userSub, userRoles);
@@ -92,7 +93,7 @@ public class AdminVendorController {
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID id,
-            @RequestBody Map<String, Object> request
+            @RequestBody @NotNull Map<String, Object> request
     ) {
         internalRequestVerifier.verify(internalAuth);
         return adminVendorService.update(id, request, internalAuth, userSub, userRoles);
@@ -193,7 +194,7 @@ public class AdminVendorController {
     public Map<String, Object> addVendorUser(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @PathVariable UUID vendorId,
-            @RequestBody Map<String, Object> request
+            @RequestBody @NotNull Map<String, Object> request
     ) {
         internalRequestVerifier.verify(internalAuth);
         return adminVendorService.addVendorUser(vendorId, request, internalAuth);
@@ -204,7 +205,7 @@ public class AdminVendorController {
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @PathVariable UUID vendorId,
             @PathVariable UUID membershipId,
-            @RequestBody Map<String, Object> request
+            @RequestBody @NotNull Map<String, Object> request
     ) {
         internalRequestVerifier.verify(internalAuth);
         return adminVendorService.updateVendorUser(vendorId, membershipId, request, internalAuth);

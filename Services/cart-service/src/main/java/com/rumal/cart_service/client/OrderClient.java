@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 import java.util.List;
 import java.util.UUID;
@@ -72,6 +73,8 @@ public class OrderClient {
                 throw new ServiceUnavailableException("Order service rejected internal authentication.", ex);
             }
             throw new ServiceUnavailableException("Order service error during checkout.", ex);
+        } catch (RestClientException ex) {
+            throw new ServiceUnavailableException("Service unavailable: " + ex.getMessage());
         }
     }
 

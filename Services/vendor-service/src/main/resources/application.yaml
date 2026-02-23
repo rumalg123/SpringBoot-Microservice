@@ -28,6 +28,12 @@ resilience4j:
         failureRateThreshold: 50
         waitDurationInOpenState: 10s
         permittedNumberOfCallsInHalfOpenState: 3
+        slowCallRateThreshold: 70
+        slowCallDurationThreshold: 3000
+        ignoreExceptions:
+          - com.rumal.vendor_service.exception.ResourceNotFoundException
+          - com.rumal.vendor_service.exception.ValidationException
+          - com.rumal.vendor_service.exception.UnauthorizedException
       productService:
         slidingWindowType: COUNT_BASED
         slidingWindowSize: 20
@@ -35,6 +41,12 @@ resilience4j:
         failureRateThreshold: 50
         waitDurationInOpenState: 10s
         permittedNumberOfCallsInHalfOpenState: 3
+        slowCallRateThreshold: 70
+        slowCallDurationThreshold: 3000
+        ignoreExceptions:
+          - com.rumal.vendor_service.exception.ResourceNotFoundException
+          - com.rumal.vendor_service.exception.ValidationException
+          - com.rumal.vendor_service.exception.UnauthorizedException
   retry:
     instances:
       orderService:

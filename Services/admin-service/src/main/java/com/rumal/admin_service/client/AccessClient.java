@@ -2,6 +2,7 @@ package com.rumal.admin_service.client;
 
 import com.rumal.admin_service.exception.DownstreamHttpException;
 import com.rumal.admin_service.exception.ServiceUnavailableException;
+import io.github.resilience4j.retry.RetryRegistry;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.cloud.client.circuitbreaker.CircuitBreakerFactory;
 import org.springframework.core.ParameterizedTypeReference;
@@ -28,13 +29,16 @@ public class AccessClient {
 
     private final RestClient.Builder lbRestClientBuilder;
     private final CircuitBreakerFactory<?, ?> circuitBreakerFactory;
+    private final RetryRegistry retryRegistry;
 
     public AccessClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder,
-            CircuitBreakerFactory<?, ?> circuitBreakerFactory
+            CircuitBreakerFactory<?, ?> circuitBreakerFactory,
+            RetryRegistry retryRegistry
     ) {
         this.lbRestClientBuilder = lbRestClientBuilder;
         this.circuitBreakerFactory = circuitBreakerFactory;
+        this.retryRegistry = retryRegistry;
     }
 
     public Map<String, Object> getPlatformAccessByKeycloakUser(String keycloakUserId, String internalAuth) {
@@ -336,13 +340,17 @@ public class AccessClient {
     }
 
     private <T> T runAccessCall(Supplier<T> action) {
-        return circuitBreakerFactory.create("admin-access-client")
-                .run(action::get, throwable -> {
-                    if (throwable instanceof RuntimeException re) {
-                        throw re;
-                    }
-                    throw new ServiceUnavailableException("Access service unavailable. Try again later.", throwable);
-                });
+        var retry = retryRegistry.retry("admin-access-client");
+        Supplier<T> retryableAction = io.github.resilience4j.retry.Retry.decorateSupplier(retry, () ->
+                circuitBreakerFactory.create("admin-access-client")
+                        .run(action::get, throwable -> {
+                            if (throwable instanceof RuntimeException re) {
+                                throw re;
+                            }
+                            throw new ServiceUnavailableException("Access service unavailable. Try again later.", throwable);
+                        })
+        );
+        return retryableAction.get();
     }
 
     private void runAccessVoid(Runnable action) {

@@ -2,6 +2,7 @@ package com.rumal.admin_service.client;
 
 import com.rumal.admin_service.exception.DownstreamHttpException;
 import com.rumal.admin_service.exception.ServiceUnavailableException;
+import io.github.resilience4j.retry.RetryRegistry;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.cloud.client.circuitbreaker.CircuitBreakerFactory;
 import org.springframework.core.ParameterizedTypeReference;
@@ -29,13 +30,16 @@ public class VendorClient {
     @Qualifier("loadBalancedRestClientBuilder")
     private final RestClient.Builder lbRestClientBuilder;
     private final CircuitBreakerFactory<?, ?> circuitBreakerFactory;
+    private final RetryRegistry retryRegistry;
 
     public VendorClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder,
-            CircuitBreakerFactory<?, ?> circuitBreakerFactory
+            CircuitBreakerFactory<?, ?> circuitBreakerFactory,
+            RetryRegistry retryRegistry
     ) {
         this.lbRestClientBuilder = lbRestClientBuilder;
         this.circuitBreakerFactory = circuitBreakerFactory;
+        this.retryRegistry = retryRegistry;
     }
 
     public List<Map<String, Object>> listAll(String internalAuth) {
@@ -405,13 +409,17 @@ public class VendorClient {
     }
 
     private <T> T runVendorCall(Supplier<T> action) {
-        return circuitBreakerFactory.create("admin-vendor-client")
-                .run(action::get, throwable -> {
-                    if (throwable instanceof RuntimeException re) {
-                        throw re;
-                    }
-                    throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", throwable);
-                });
+        var retry = retryRegistry.retry("admin-vendor-client");
+        Supplier<T> retryableAction = io.github.resilience4j.retry.Retry.decorateSupplier(retry, () ->
+                circuitBreakerFactory.create("admin-vendor-client")
+                        .run(action::get, throwable -> {
+                            if (throwable instanceof RuntimeException re) {
+                                throw re;
+                            }
+                            throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", throwable);
+                        })
+        );
+        return retryableAction.get();
     }
 
     private void runVendorVoid(Runnable action) {

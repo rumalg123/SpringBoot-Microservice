@@ -2,6 +2,7 @@ package com.rumal.admin_service.client;
 
 import com.rumal.admin_service.exception.DownstreamHttpException;
 import com.rumal.admin_service.exception.ServiceUnavailableException;
+import io.github.resilience4j.retry.RetryRegistry;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.cloud.client.circuitbreaker.CircuitBreakerFactory;
 import org.springframework.core.ParameterizedTypeReference;
@@ -35,13 +36,16 @@ public class PosterClient {
     @Qualifier("loadBalancedRestClientBuilder")
     private final RestClient.Builder lbRestClientBuilder;
     private final CircuitBreakerFactory<?, ?> circuitBreakerFactory;
+    private final RetryRegistry retryRegistry;
 
     public PosterClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder,
-            CircuitBreakerFactory<?, ?> circuitBreakerFactory
+            CircuitBreakerFactory<?, ?> circuitBreakerFactory,
+            RetryRegistry retryRegistry
     ) {
         this.lbRestClientBuilder = lbRestClientBuilder;
         this.circuitBreakerFactory = circuitBreakerFactory;
+        this.retryRegistry = retryRegistry;
     }
 
     public List<Map<String, Object>> listAll(String internalAuth) {
@@ -215,13 +219,17 @@ public class PosterClient {
     }
 
     private <T> T runPosterCall(Supplier<T> action) {
-        return circuitBreakerFactory.create("admin-poster-client")
-                .run(action::get, throwable -> {
-                    if (throwable instanceof RuntimeException re) {
-                        throw re;
-                    }
-                    throw new ServiceUnavailableException("Poster service unavailable. Try again later.", throwable);
-                });
+        var retry = retryRegistry.retry("admin-poster-client");
+        Supplier<T> retryableAction = io.github.resilience4j.retry.Retry.decorateSupplier(retry, () ->
+                circuitBreakerFactory.create("admin-poster-client")
+                        .run(action::get, throwable -> {
+                            if (throwable instanceof RuntimeException re) {
+                                throw re;
+                            }
+                            throw new ServiceUnavailableException("Poster service unavailable. Try again later.", throwable);
+                        })
+        );
+        return retryableAction.get();
     }
 
     private void runPosterVoid(Runnable action) {

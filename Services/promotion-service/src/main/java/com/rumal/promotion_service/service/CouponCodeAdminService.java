@@ -9,6 +9,7 @@ import com.rumal.promotion_service.exception.ValidationException;
 import com.rumal.promotion_service.repo.CouponCodeRepository;
 import com.rumal.promotion_service.repo.PromotionCampaignRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -32,6 +33,7 @@ public class CouponCodeAdminService {
                 .toList();
     }
 
+    @CacheEvict(cacheNames = "promotionAdminList", allEntries = true)
     @Transactional
     public CouponCodeResponse create(UUID promotionId, CreateCouponCodeRequest request, String actorUserSub) {
         PromotionCampaign promotion = requirePromotion(promotionId);

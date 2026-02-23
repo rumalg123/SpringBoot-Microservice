@@ -6,6 +6,7 @@ import org.springframework.cloud.gateway.filter.ratelimit.KeyResolver;
 import org.springframework.cloud.gateway.filter.ratelimit.RateLimiter;
 import org.springframework.cloud.gateway.filter.ratelimit.RedisRateLimiter;
 import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.NullUnmarked;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -54,6 +55,7 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
     private final RedisRateLimiter adminAccessWriteRateLimiter;
     private final RedisRateLimiter adminMeRateLimiter;
     private final RedisRateLimiter adminKeycloakSearchRateLimiter;
+    private final RedisRateLimiter gatewayDefaultRateLimiter;
     private final KeyResolver ipKeyResolver;
     private final KeyResolver userOrIpKeyResolver;
     private final boolean failOpenOnRateLimiterError;
@@ -85,6 +87,7 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
             @Qualifier("adminAccessWriteRateLimiter") RedisRateLimiter adminAccessWriteRateLimiter,
             @Qualifier("adminMeRateLimiter") RedisRateLimiter adminMeRateLimiter,
             @Qualifier("adminKeycloakSearchRateLimiter") RedisRateLimiter adminKeycloakSearchRateLimiter,
+            @Qualifier("gatewayDefaultRateLimiter") RedisRateLimiter gatewayDefaultRateLimiter,
             @Qualifier("ipKeyResolver") KeyResolver ipKeyResolver,
             @Qualifier("userOrIpKeyResolver") KeyResolver userOrIpKeyResolver,
             @Value("${rate-limit.fail-open-on-error:true}") boolean failOpenOnRateLimiterError
@@ -115,6 +118,7 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
         this.adminAccessWriteRateLimiter = adminAccessWriteRateLimiter;
         this.adminMeRateLimiter = adminMeRateLimiter;
         this.adminKeycloakSearchRateLimiter = adminKeycloakSearchRateLimiter;
+        this.gatewayDefaultRateLimiter = gatewayDefaultRateLimiter;
         this.ipKeyResolver = ipKeyResolver;
         this.userOrIpKeyResolver = userOrIpKeyResolver;
         this.failOpenOnRateLimiterError = failOpenOnRateLimiterError;
@@ -128,9 +132,6 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
         String path = exchange.getRequest().getPath().value();
         HttpMethod method = exchange.getRequest().getMethod();
         Policy policy = resolvePolicy(path, method);
-        if (policy == null) {
-            return chain.filter(exchange);
-        }
 
         return policy.keyResolver().resolve(exchange)
                 .defaultIfEmpty("ip:unknown")
@@ -213,7 +214,7 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
         return exchange.getResponse().writeWith(Mono.just(dataBuffer));
     }
 
-    private @Nullable Policy resolvePolicy(String path, @Nullable HttpMethod method) {
+    private Policy resolvePolicy(String path, @Nullable HttpMethod method) {
         if (("/customers/register".equals(path) || "/customers/register-identity".equals(path))
                 && method == HttpMethod.POST) {
             return new Policy("register", registerRateLimiter, ipKeyResolver);
@@ -309,7 +310,7 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
             }
             return new Policy("admin-access-write", adminAccessWriteRateLimiter, userOrIpKeyResolver);
         }
-        return null;
+        return new Policy("default", gatewayDefaultRateLimiter, userOrIpKeyResolver);
     }
 
     @Override
@@ -331,6 +332,7 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
     private record Policy(String id, RedisRateLimiter rateLimiter, KeyResolver keyResolver) {
     }
 
+    @NullUnmarked
     private record RateLimitDecision(RateLimiter.Response response, Throwable error) {
         private static RateLimitDecision allowed(RateLimiter.Response response) {
             return new RateLimitDecision(response, null);

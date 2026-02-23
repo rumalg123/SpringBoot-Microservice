@@ -55,7 +55,7 @@ public class RateLimitConfig {
 
     @Bean
     @Primary
-    public RateLimiter<?> gatewayDefaultRateLimiter(
+    public RedisRateLimiter gatewayDefaultRateLimiter(
             @Value("${RATE_LIMIT_DEFAULT_REPLENISH:15}") int replenishRate,
             @Value("${RATE_LIMIT_DEFAULT_BURST:30}") int burstCapacity
     ) {

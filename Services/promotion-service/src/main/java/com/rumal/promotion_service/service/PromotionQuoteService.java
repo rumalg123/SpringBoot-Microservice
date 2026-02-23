@@ -79,9 +79,10 @@ public class PromotionQuoteService {
         }
 
         Map<UUID, PromotionCandidate> candidatesById = new LinkedHashMap<>();
-        promotionCampaignRepository.findAll().stream()
-                .filter(p -> p.getLifecycleStatus() == PromotionLifecycleStatus.ACTIVE)
-                .filter(this::isApprovalEligible)
+        promotionCampaignRepository.findByLifecycleStatusAndApprovalStatusIn(
+                        PromotionLifecycleStatus.ACTIVE,
+                        List.of(PromotionApprovalStatus.NOT_REQUIRED, PromotionApprovalStatus.APPROVED)
+                ).stream()
                 .filter(p -> withinWindow(p, pricedAt))
                 .forEach(p -> candidatesById.put(p.getId(), new PromotionCandidate(p, false, null)));
         if (couponPromotion != null && couponPromotion.getId() != null) {

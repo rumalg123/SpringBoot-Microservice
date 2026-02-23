@@ -105,16 +105,17 @@ public class OrderService {
         assertVendorsAcceptingOrders(lines);
         ResolvedOrderAddresses addresses = resolveOrderAddresses(customer.id(), req.shippingAddressId(), req.billingAddressId());
         PromotionPricingSnapshot pricingSnapshot = toPromotionPricingSnapshot(req.promotionPricing());
-        return transactionTemplate.execute(status -> {
-            Order saved = orderRepository.save(buildOrder(customer.id(), lines, addresses, pricingSnapshot));
-            maybeCommitCouponReservation(saved, customer.id(), pricingSnapshot);
-            recordStatusAudit(saved, null, OrderStatus.PENDING, keycloakId, "customer", "customer", "order_create", "Customer order created");
-            saved.getVendorOrders().forEach(vendorOrder ->
+        Order saved = transactionTemplate.execute(status -> {
+            Order order = orderRepository.save(buildOrder(customer.id(), lines, addresses, pricingSnapshot));
+            recordStatusAudit(order, null, OrderStatus.PENDING, keycloakId, "customer", "customer", "order_create", "Customer order created");
+            order.getVendorOrders().forEach(vendorOrder ->
                     recordVendorOrderStatusAudit(vendorOrder, null, OrderStatus.PENDING, keycloakId, "customer", "customer", "order_create", "Vendor order created")
             );
             evictOrdersListCaches();
-            return toResponse(saved);
+            return order;
         });
+        maybeCommitCouponReservation(saved, customer.id(), pricingSnapshot);
+        return toResponse(saved);
     }
 
     public OrderResponse get(UUID id) {

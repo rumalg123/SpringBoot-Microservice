@@ -9,6 +9,7 @@ import com.rumal.admin_service.dto.VendorOrderStatusAuditResponse;
 import com.rumal.admin_service.exception.ServiceUnavailableException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.resilience4j.retry.RetryRegistry;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.cloud.client.circuitbreaker.CircuitBreakerFactory;
 import org.springframework.core.ParameterizedTypeReference;
@@ -41,15 +42,18 @@ public class OrderClient {
     private final RestClient.Builder lbRestClientBuilder;
     private final ObjectMapper objectMapper;
     private final CircuitBreakerFactory<?, ?> circuitBreakerFactory;
+    private final RetryRegistry retryRegistry;
 
     public OrderClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder,
             ObjectMapper objectMapper,
-            CircuitBreakerFactory<?, ?> circuitBreakerFactory
+            CircuitBreakerFactory<?, ?> circuitBreakerFactory,
+            RetryRegistry retryRegistry
     ) {
         this.lbRestClientBuilder = lbRestClientBuilder;
         this.objectMapper = objectMapper;
         this.circuitBreakerFactory = circuitBreakerFactory;
+        this.retryRegistry = retryRegistry;
     }
 
     public PageResponse<OrderResponse> listOrders(UUID customerId, String customerEmail, UUID vendorId, int page, int size, List<String> sort, String internalAuth) {
@@ -308,12 +312,16 @@ public class OrderClient {
     }
 
     private <T> T runOrderCall(Supplier<T> action) {
-        return circuitBreakerFactory.create("admin-order-client")
-                .run(action::get, throwable -> {
-                    if (throwable instanceof RuntimeException re) {
-                        throw re;
-                    }
-                    throw new ServiceUnavailableException("Order service unavailable. Try again later.", throwable);
-                });
+        var retry = retryRegistry.retry("admin-order-client");
+        Supplier<T> retryableAction = io.github.resilience4j.retry.Retry.decorateSupplier(retry, () ->
+                circuitBreakerFactory.create("admin-order-client")
+                        .run(action::get, throwable -> {
+                            if (throwable instanceof RuntimeException re) {
+                                throw re;
+                            }
+                            throw new ServiceUnavailableException("Order service unavailable. Try again later.", throwable);
+                        })
+        );
+        return retryableAction.get();
     }
 }

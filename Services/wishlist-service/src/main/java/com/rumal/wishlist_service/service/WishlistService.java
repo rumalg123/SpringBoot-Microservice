@@ -178,7 +178,7 @@ public class WishlistService {
 
     private BigDecimal normalizeMoney(BigDecimal value) {
         if (value == null) {
-            return null;
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         }
         return value.setScale(2, RoundingMode.HALF_UP);
     }

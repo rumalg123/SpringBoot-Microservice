@@ -2,6 +2,8 @@ package com.rumal.admin_service.config;
 
 import com.rumal.admin_service.exception.DownstreamHttpException;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig.SlidingWindowType;
+import io.github.resilience4j.retry.RetryConfig;
+import io.github.resilience4j.retry.RetryRegistry;
 import io.github.resilience4j.timelimiter.TimeLimiterConfig;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.circuitbreaker.resilience4j.Resilience4JConfigBuilder;
@@ -51,5 +53,18 @@ public class CircuitBreakerConfig {
                     .build());
         };
     }
-}
 
+    @Bean
+    public RetryRegistry adminRetryRegistry(
+            @Value("${resilience.retry.max-attempts:3}") int maxAttempts,
+            @Value("${resilience.retry.wait-duration-ms:500}") long waitDurationMs
+    ) {
+        var retryConfig = RetryConfig.custom()
+                .maxAttempts(Math.max(1, maxAttempts))
+                .waitDuration(Duration.ofMillis(Math.max(100, waitDurationMs)))
+                .ignoreExceptions(DownstreamHttpException.class, IllegalArgumentException.class)
+                .build();
+
+        return RetryRegistry.of(retryConfig);
+    }
+}

@@ -17,6 +17,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import jakarta.validation.constraints.NotNull;
+
 import java.util.List;
 import java.util.Map;
 import java.util.LinkedHashMap;
@@ -68,7 +70,7 @@ public class AdminVendorStaffController {
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @RequestHeader(value = "X-Action-Reason", required = false) String actionReason,
-            @RequestBody Map<String, Object> request
+            @RequestBody @NotNull Map<String, Object> request
     ) {
         internalRequestVerifier.verify(internalAuth);
         UUID vendorId = parseUuid(request.get("vendorId"));
@@ -99,7 +101,7 @@ public class AdminVendorStaffController {
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @RequestHeader(value = "X-Action-Reason", required = false) String actionReason,
             @PathVariable UUID id,
-            @RequestBody Map<String, Object> request
+            @RequestBody @NotNull Map<String, Object> request
     ) {
         internalRequestVerifier.verify(internalAuth);
         UUID vendorId = parseUuid(request.get("vendorId"));
