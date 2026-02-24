@@ -5,9 +5,11 @@ import com.rumal.product_service.dto.ProductResponse;
 import com.rumal.product_service.dto.ProductVariationAttributeRequest;
 import com.rumal.product_service.dto.UpsertCategoryRequest;
 import com.rumal.product_service.dto.UpsertProductRequest;
+import com.rumal.product_service.entity.ApprovalStatus;
 import com.rumal.product_service.entity.CategoryType;
 import com.rumal.product_service.entity.ProductType;
 import com.rumal.product_service.repo.CategoryRepository;
+import com.rumal.product_service.repo.ProductCatalogReadRepository;
 import com.rumal.product_service.repo.ProductRepository;
 import com.rumal.product_service.service.CategoryService;
 import com.rumal.product_service.service.ProductService;
@@ -55,6 +57,7 @@ public class SampleCatalogDataSeeder implements ApplicationRunner {
     private final ProductService productService;
     private final CategoryRepository categoryRepository;
     private final ProductRepository productRepository;
+    private final ProductCatalogReadRepository productCatalogReadRepository;
 
     @Value("${sample.catalog.seed.enabled:true}")
     private boolean seedEnabled;
@@ -69,6 +72,7 @@ public class SampleCatalogDataSeeder implements ApplicationRunner {
 
         if (categoryRepository.count() > 0 || productRepository.count() > 0) {
             log.info("Skipping sample catalog seed because data already exists.");
+            approveAllDraftProducts();
             return;
         }
 
@@ -262,9 +266,9 @@ public class SampleCatalogDataSeeder implements ApplicationRunner {
 
         seedPaginationSingles();
 
-        int approved = productRepository.approveAllDraft();
-        log.info("Sample catalog seed completed: categories={}, products={}, auto-approved={}",
-                categoryRepository.count(), productRepository.count(), approved);
+        approveAllDraftProducts();
+        log.info("Sample catalog seed completed: categories={}, products={}",
+                categoryRepository.count(), productRepository.count());
     }
 
     private void seedPaginationSingles() {
@@ -429,6 +433,14 @@ public class SampleCatalogDataSeeder implements ApplicationRunner {
                 null,
                 null, null
         ));
+    }
+
+    private void approveAllDraftProducts() {
+        int products = productRepository.approveAllDraft();
+        int readModel = productCatalogReadRepository.bulkUpdateApprovalStatus(ApprovalStatus.DRAFT, ApprovalStatus.APPROVED);
+        if (products > 0 || readModel > 0) {
+            log.info("Auto-approved DRAFT products: {} in products table, {} in read model", products, readModel);
+        }
     }
 
     private UUID resolveSeedVendorId(Set<String> categories) {

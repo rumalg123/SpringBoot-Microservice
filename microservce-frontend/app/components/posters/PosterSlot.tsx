@@ -368,7 +368,8 @@ export default function PosterSlot({
         const apiBase = (process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me").trim();
         const res = await fetch(`${apiBase}/posters?placement=${encodeURIComponent(placement)}`, { cache: "no-store" });
         if (!res.ok) throw new Error("Failed");
-        const data = ((await res.json()) as PosterItem[]) || [];
+        const json = await res.json();
+        const data: PosterItem[] = Array.isArray(json) ? json : (json.content ?? []);
         if (!active) return;
         setItems(data.slice(0, Math.max(1, maxItems)));
       } catch {
