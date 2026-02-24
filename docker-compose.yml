@@ -197,6 +197,23 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
 
+  payment-service:
+    build:
+      context: ./Services/payment-service
+    depends_on:
+      - discovery-server
+      - redis
+    env_file:
+      - ./env/common.env
+      - ./env/payment-service.env
+    environment:
+      TZ: Asia/Colombo
+      LOGGING_FILE_NAME: /logs/payment-service.log
+    volumes:
+      - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+
   api-gateway:
     build:
       context: ./Services/api-gateway

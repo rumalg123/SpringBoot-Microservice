@@ -7,6 +7,7 @@ import toast from "react-hot-toast";
 import AppNav from "../components/AppNav";
 import Footer from "../components/Footer";
 import { useAuthSession } from "../../lib/authSession";
+import { PayHereFormData, submitToPayHere } from "../../lib/payhere";
 
 type CartItem = {
   id: string;
@@ -246,14 +247,17 @@ export default function CartPage() {
       const data = res.data as CheckoutResponse;
       await loadCart();
       setPreview(null);
-      setStatus("Order placed successfully.");
+
+      setStatus("Redirecting to payment...");
       toast.success(`Order placed! Total: ${money(data.grandTotal)}`);
-      router.push("/orders");
+      const payRes = await apiClient.post("/payments/me/initiate", { orderId: data.orderId });
+      submitToPayHere(payRes.data as PayHereFormData);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Checkout failed";
       setStatus(message);
       toast.error(message);
-    } finally { setCheckingOut(false); }
+      setCheckingOut(false);
+    }
   };
 
   const resendVerification = async () => {
@@ -669,7 +673,7 @@ export default function CartPage() {
                 }}
               >
                 {checkingOut && <span className="spinner-sm" />}
-                {checkingOut ? "Placing Order..." : "Checkout"}
+                {checkingOut ? "Processing..." : "Checkout & Pay"}
               </button>
             </div>
           </aside>

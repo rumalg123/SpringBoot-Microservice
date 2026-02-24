@@ -165,6 +165,20 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
 
+  payment-db:
+    image: postgres:16-alpine
+    environment:
+      TZ: Asia/Colombo
+      POSTGRES_DB: payment_db
+      POSTGRES_USER: payment_user
+      POSTGRES_PASSWORD: payment_pass
+    ports:
+      - "5443:5432"
+    volumes:
+      - payment-db-data:/var/lib/postgresql/data
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+
   customer-service:
     build:
       context: ./Services/customer-service
@@ -331,6 +345,24 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
 
+  payment-service:
+    build:
+      context: ./Services/payment-service
+    depends_on:
+      - discovery-server
+      - payment-db
+      - redis
+    env_file:
+      - ./env/common.env
+      - ./env/payment-service.env
+    environment:
+      TZ: Asia/Colombo
+      LOGGING_FILE_NAME: /logs/payment-service.log
+    volumes:
+      - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+
   admin-service:
     build:
       context: ./Services/admin-service
@@ -397,3 +429,4 @@ volumes:
   access-db-data:
   promotion-db-data:
   admin-db-data:
+  payment-db-data:

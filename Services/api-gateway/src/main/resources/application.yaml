@@ -301,6 +301,42 @@ spring:
                   args:
                     name: posterService
                     fallbackUri: forward:/fallback/unavailable
+            - id: payment-me
+              uri: lb://payment-service
+              predicates:
+                - Path=/payments/me,/payments/me/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: paymentService
+                    fallbackUri: forward:/fallback/unavailable
+            - id: payment-vendor-me
+              uri: lb://payment-service
+              predicates:
+                - Path=/payments/vendor/me,/payments/vendor/me/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: paymentService
+                    fallbackUri: forward:/fallback/unavailable
+            - id: payhere-webhook
+              uri: lb://payment-service
+              predicates:
+                - Path=/webhooks/payhere,/webhooks/payhere/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: paymentService
+                    fallbackUri: forward:/fallback/unavailable
+            - id: admin-payments
+              uri: lb://payment-service
+              predicates:
+                - Path=/admin/payments,/admin/payments/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: paymentService
+                    fallbackUri: forward:/fallback/unavailable
             - id: vendors-me
               uri: lb://vendor-service
               predicates:
@@ -391,6 +427,8 @@ resilience4j:
         base-config: default
       vendorService:
         base-config: default
+      paymentService:
+        base-config: default
   timelimiter:
     configs:
       default:
@@ -413,6 +451,8 @@ resilience4j:
       posterService:
         base-config: default
       vendorService:
+        base-config: default
+      paymentService:
         base-config: default
 
 logging:

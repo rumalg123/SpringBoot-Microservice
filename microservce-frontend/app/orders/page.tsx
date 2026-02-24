@@ -7,6 +7,7 @@ import toast from "react-hot-toast";
 import AppNav from "../components/AppNav";
 import Footer from "../components/Footer";
 import { useAuthSession } from "../../lib/authSession";
+import { PayHereFormData, submitToPayHere } from "../../lib/payhere";
 
 const CREATING_STATUS = "Creating purchase...";
 
@@ -43,6 +44,8 @@ function money(value: number) {
 }
 
 const STATUS_COLORS: Record<string, { bg: string; border: string; color: string }> = {
+  PAYMENT_PENDING: { bg: "var(--warning-soft)", border: "var(--warning-border)", color: "var(--warning-text)" },
+  PAYMENT_FAILED: { bg: "var(--danger-soft)", border: "var(--danger-glow)", color: "var(--danger)" },
   PENDING: { bg: "var(--warning-soft)", border: "var(--warning-border)", color: "var(--warning-text)" },
   CONFIRMED: { bg: "var(--brand-soft)", border: "var(--line-bright)", color: "var(--brand)" },
   PROCESSING: { bg: "var(--brand-soft)", border: "var(--line-bright)", color: "var(--brand)" },
@@ -67,6 +70,7 @@ export default function OrdersPage() {
   const [selectedDetail, setSelectedDetail] = useState<OrderDetail | null>(null);
   const [resendingVerification, setResendingVerification] = useState(false);
   const [detailLoadingTarget, setDetailLoadingTarget] = useState<string | null>(null);
+  const [payingOrderId, setPayingOrderId] = useState<string | null>(null);
 
   const loadOrders = useCallback(async () => {
     if (!apiClient) return;
@@ -153,6 +157,18 @@ export default function OrdersPage() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to resend verification email");
     } finally { setResendingVerification(false); }
+  };
+
+  const payNow = async (orderId: string) => {
+    if (!apiClient || payingOrderId) return;
+    setPayingOrderId(orderId);
+    try {
+      const res = await apiClient.post("/payments/me/initiate", { orderId });
+      submitToPayHere(res.data as PayHereFormData);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to initiate payment");
+      setPayingOrderId(null);
+    }
   };
 
   if (sessionStatus === "loading" || sessionStatus === "idle") {
@@ -310,20 +326,40 @@ export default function OrdersPage() {
                         </span>
                       </div>
                     </div>
-                    <button
-                      onClick={() => { void loadDetail(order.id); }}
-                      disabled={Boolean(detailLoadingTarget)}
-                      style={{
-                        padding: "7px 14px", borderRadius: "9px",
-                        border: "1px solid var(--line-bright)", background: "var(--brand-soft)",
-                        color: "var(--brand)", fontSize: "0.75rem", fontWeight: 700,
-                        cursor: detailLoadingTarget ? "not-allowed" : "pointer",
-                        opacity: detailLoadingTarget && detailLoadingTarget !== order.id ? 0.5 : 1,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {detailLoadingTarget === order.id ? "Loading..." : "View Details"}
-                    </button>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "6px", alignItems: "flex-end" }}>
+                      {(order.status === "PAYMENT_PENDING" || order.status === "PAYMENT_FAILED") && (
+                        <button
+                          onClick={() => { void payNow(order.id); }}
+                          disabled={Boolean(payingOrderId)}
+                          style={{
+                            padding: "7px 14px", borderRadius: "9px", border: "none",
+                            background: "var(--gradient-brand)", color: "#fff",
+                            fontSize: "0.75rem", fontWeight: 700,
+                            cursor: payingOrderId ? "not-allowed" : "pointer",
+                            opacity: payingOrderId && payingOrderId !== order.id ? 0.5 : 1,
+                            whiteSpace: "nowrap",
+                            display: "inline-flex", alignItems: "center", gap: "6px",
+                          }}
+                        >
+                          {payingOrderId === order.id && <span className="spinner-sm" />}
+                          {payingOrderId === order.id ? "Redirecting..." : "Pay Now"}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => { void loadDetail(order.id); }}
+                        disabled={Boolean(detailLoadingTarget)}
+                        style={{
+                          padding: "7px 14px", borderRadius: "9px",
+                          border: "1px solid var(--line-bright)", background: "var(--brand-soft)",
+                          color: "var(--brand)", fontSize: "0.75rem", fontWeight: 700,
+                          cursor: detailLoadingTarget ? "not-allowed" : "pointer",
+                          opacity: detailLoadingTarget && detailLoadingTarget !== order.id ? 0.5 : 1,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {detailLoadingTarget === order.id ? "Loading..." : "View Details"}
+                      </button>
+                    </div>
                   </div>
                 </article>
               );
@@ -491,6 +527,21 @@ export default function OrdersPage() {
                           {new Date(selectedDetail.createdAt).toLocaleString()}
                         </span>
                       </p>
+                      {(selectedDetail.status === "PAYMENT_PENDING" || selectedDetail.status === "PAYMENT_FAILED") && (
+                        <button
+                          onClick={() => { void payNow(selectedDetail.id); }}
+                          disabled={Boolean(payingOrderId)}
+                          style={{
+                            marginTop: "10px", padding: "8px 16px", borderRadius: "9px", border: "none",
+                            background: "var(--gradient-brand)", color: "#fff",
+                            fontSize: "0.78rem", fontWeight: 700, cursor: payingOrderId ? "not-allowed" : "pointer",
+                            display: "inline-flex", alignItems: "center", gap: "6px",
+                          }}
+                        >
+                          {payingOrderId === selectedDetail.id && <span className="spinner-sm" />}
+                          {payingOrderId === selectedDetail.id ? "Redirecting..." : "Pay Now"}
+                        </button>
+                      )}
                     </div>
 
                     {/* Price Breakdown */}
