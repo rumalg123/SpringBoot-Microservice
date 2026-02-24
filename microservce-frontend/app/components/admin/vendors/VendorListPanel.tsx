@@ -1,6 +1,7 @@
 "use client";
 
 import type { Vendor, VendorDeletionEligibility } from "./types";
+import StatusBadge, { VERIFICATION_COLORS } from "../../ui/StatusBadge";
 
 type VendorListPanelProps = {
   vendors: Vendor[];
@@ -23,6 +24,10 @@ type VendorListPanelProps = {
   onRestoreVendor: (vendor: Vendor) => void;
   onStopOrders: (vendor: Vendor) => void;
   onResumeOrders: (vendor: Vendor) => void;
+  verifyingVendorId?: string | null;
+  rejectingVerificationId?: string | null;
+  onVerifyVendor: (vendor: Vendor) => void;
+  onRejectVerification: (vendor: Vendor) => void;
 };
 
 function VendorRow({
@@ -31,6 +36,8 @@ function VendorRow({
   vendorDeletionEligibilityById,
   eligibilityLoadingVendorId = null,
   orderToggleVendorId = null,
+  verifyingVendorId = null,
+  rejectingVerificationId = null,
   showDeleted,
   onEditVendor,
   onSelectVendor,
@@ -40,12 +47,16 @@ function VendorRow({
   onRestoreVendor,
   onStopOrders,
   onResumeOrders,
+  onVerifyVendor,
+  onRejectVerification,
 }: {
   vendor: Vendor;
   selectedVendorId: string;
   vendorDeletionEligibilityById: Record<string, VendorDeletionEligibility>;
   eligibilityLoadingVendorId?: string | null;
   orderToggleVendorId?: string | null;
+  verifyingVendorId?: string | null;
+  rejectingVerificationId?: string | null;
   showDeleted: boolean;
   onEditVendor: (vendor: Vendor) => void;
   onSelectVendor: (vendor: Vendor) => void;
@@ -55,6 +66,8 @@ function VendorRow({
   onRestoreVendor: (vendor: Vendor) => void;
   onStopOrders: (vendor: Vendor) => void;
   onResumeOrders: (vendor: Vendor) => void;
+  onVerifyVendor: (vendor: Vendor) => void;
+  onRejectVerification: (vendor: Vendor) => void;
 }) {
   const eligibility = vendorDeletionEligibilityById[vendor.id];
   const eligibilityLoading = eligibilityLoadingVendorId === vendor.id;
@@ -79,6 +92,11 @@ function VendorRow({
       <td className="px-3 py-2 text-xs text-[var(--muted)]">
         <div>{vendor.status} | {vendor.active ? "active" : "inactive"}</div>
         <div>{vendor.acceptingOrders ? "accepting orders" : "orders stopped"} | {storefrontVisible ? "storefront visible" : "storefront hidden"}</div>
+        {vendor.verificationStatus && (
+          <div className="mt-1">
+            <StatusBadge value={vendor.verificationStatus} colorMap={VERIFICATION_COLORS} />
+          </div>
+        )}
         {!showDeleted && deleteRequested && (
           <div className="mt-1 text-[11px]" style={{ color: "#fca5a5" }}>
             Delete requested{vendor.deletionRequestedAt ? ` (${new Date(vendor.deletionRequestedAt).toLocaleString()})` : ""}
@@ -150,6 +168,38 @@ function VendorRow({
               >
                 {orderToggleLoading ? "Saving..." : vendor.acceptingOrders ? "Stop Orders" : "Resume Orders"}
               </button>
+              {vendor.verificationStatus === "PENDING_VERIFICATION" && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onVerifyVendor(vendor)}
+                    className="rounded-md border px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
+                    style={{
+                      borderColor: "rgba(34,197,94,0.4)",
+                      background: "rgba(34,197,94,0.10)",
+                      color: "#86efac",
+                    }}
+                    disabled={verifyingVendorId === vendor.id}
+                    title="Verify this vendor"
+                  >
+                    {verifyingVendorId === vendor.id ? "Verifying..." : "Verify"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onRejectVerification(vendor)}
+                    className="rounded-md border px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
+                    style={{
+                      borderColor: "rgba(239,68,68,0.4)",
+                      background: "rgba(239,68,68,0.08)",
+                      color: "#fca5a5",
+                    }}
+                    disabled={rejectingVerificationId === vendor.id}
+                    title="Reject verification for this vendor"
+                  >
+                    {rejectingVerificationId === vendor.id ? "Rejecting..." : "Reject Verification"}
+                  </button>
+                </>
+              )}
               <button
                 type="button"
                 onClick={() => void (deleteRequested ? onConfirmDeleteVendor(vendor) : onDeleteVendor(vendor))}
@@ -197,6 +247,10 @@ export default function VendorListPanel({
   onRestoreVendor,
   onStopOrders,
   onResumeOrders,
+  verifyingVendorId = null,
+  rejectingVerificationId = null,
+  onVerifyVendor,
+  onRejectVerification,
 }: VendorListPanelProps) {
   const rows = showDeleted ? deletedVendors : vendors;
   const isLoadingCurrent = showDeleted ? loadingDeleted && !deletedLoaded : loading;
@@ -274,6 +328,10 @@ export default function VendorListPanel({
                   onRestoreVendor={onRestoreVendor}
                   onStopOrders={onStopOrders}
                   onResumeOrders={onResumeOrders}
+                  verifyingVendorId={verifyingVendorId}
+                  rejectingVerificationId={rejectingVerificationId}
+                  onVerifyVendor={onVerifyVendor}
+                  onRejectVerification={onRejectVerification}
                 />
               ))}
           </tbody>

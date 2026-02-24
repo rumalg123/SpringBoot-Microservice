@@ -16,6 +16,8 @@ export type VendorConfirmState =
   | { kind: "confirmDeleteVendor"; vendor: Vendor }
   | { kind: "restoreVendor"; vendor: Vendor }
   | { kind: "removeVendorUser"; vendorId: string; user: VendorUser }
+  | { kind: "verifyVendor"; vendor: Vendor }
+  | { kind: "rejectVerification"; vendor: Vendor }
   | null;
 
 export function useAdminVendors(apiClient: AxiosInstance | null) {
@@ -44,6 +46,8 @@ export function useAdminVendors(apiClient: AxiosInstance | null) {
   const [eligibilityLoadingVendorId, setEligibilityLoadingVendorId] = useState<string | null>(null);
   const [lifecycleAuditLoadingVendorId, setLifecycleAuditLoadingVendorId] = useState<string | null>(null);
   const [orderToggleVendorId, setOrderToggleVendorId] = useState<string | null>(null);
+  const [verifyingVendorId, setVerifyingVendorId] = useState<string | null>(null);
+  const [rejectingVerificationId, setRejectingVerificationId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!confirmState) {
@@ -196,6 +200,45 @@ export function useAdminVendors(apiClient: AxiosInstance | null) {
     openResumeOrdersConfirm(vendor);
   };
 
+  const openVerifyVendorConfirm = (vendor: Vendor) => setConfirmState({ kind: "verifyVendor", vendor });
+  const openRejectVerificationConfirm = (vendor: Vendor) => setConfirmState({ kind: "rejectVerification", vendor });
+
+  const executeVerifyVendor = async (vendor: Vendor) => {
+    if (!apiClient || verifyingVendorId) return;
+    setVerifyingVendorId(vendor.id);
+    try {
+      await apiClient.post(`/admin/vendors/${vendor.id}/verify`);
+      await vendorList.loadVendors();
+      if (vendorList.deletedLoaded || vendorList.showDeleted) {
+        await vendorList.loadDeletedVendors();
+      }
+      vendorList.setStatus(`Vendor "${vendor.name}" verified.`);
+      toast.success("Vendor verified successfully");
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, "Failed to verify vendor."));
+    } finally {
+      setVerifyingVendorId(null);
+    }
+  };
+
+  const executeRejectVerification = async (vendor: Vendor, reason: string) => {
+    if (!apiClient || rejectingVerificationId) return;
+    setRejectingVerificationId(vendor.id);
+    try {
+      await apiClient.post(`/admin/vendors/${vendor.id}/reject-verification`, { reason });
+      await vendorList.loadVendors();
+      if (vendorList.deletedLoaded || vendorList.showDeleted) {
+        await vendorList.loadDeletedVendors();
+      }
+      vendorList.setStatus(`Vendor "${vendor.name}" verification rejected.`);
+      toast.success("Vendor verification rejected");
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, "Failed to reject vendor verification."));
+    } finally {
+      setRejectingVerificationId(null);
+    }
+  };
+
   const handleConfirmAction = async () => {
     if (!apiClient || !confirmState || confirmLoading) return;
     const reason = confirmReason.trim() || null;
@@ -266,6 +309,15 @@ export function useAdminVendors(apiClient: AxiosInstance | null) {
         const { vendorId, user } = confirmState;
         await vendorOnboarding.removeVendorUser(vendorId, user);
         toast.success("Vendor user removed");
+      } else if (confirmState.kind === "verifyVendor") {
+        await executeVerifyVendor(confirmState.vendor);
+      } else if (confirmState.kind === "rejectVerification") {
+        if (!reason) {
+          toast.error("A reason is required to reject verification.");
+          setConfirmLoading(false);
+          return;
+        }
+        await executeRejectVerification(confirmState.vendor, reason);
       }
       setConfirmState(null);
     } catch (err) {
@@ -344,6 +396,26 @@ export function useAdminVendors(apiClient: AxiosInstance | null) {
       };
     }
 
+    if (confirmState.kind === "verifyVendor") {
+      return {
+        title: "Verify Vendor",
+        message: `Verify vendor "${confirmState.vendor.name}"? This will mark the vendor as trusted and verified.`,
+        confirmLabel: "Verify",
+        danger: false,
+        reasonEnabled: false,
+      };
+    }
+
+    if (confirmState.kind === "rejectVerification") {
+      return {
+        title: "Reject Vendor Verification",
+        message: `Reject verification for vendor "${confirmState.vendor.name}"? A reason is required.`,
+        confirmLabel: "Reject Verification",
+        danger: true,
+        reasonEnabled: true,
+      };
+    }
+
     return {
       title: "Remove Vendor User",
       message: `Remove ${confirmState.user.displayName || confirmState.user.email} from this vendor?`,
@@ -374,6 +446,8 @@ export function useAdminVendors(apiClient: AxiosInstance | null) {
     eligibilityLoadingVendorId,
     lifecycleAuditLoadingVendorId,
     orderToggleVendorId,
+    verifyingVendorId,
+    rejectingVerificationId,
 
     form: vendorForm.form,
     slugStatus: vendorForm.slugStatus,
@@ -424,6 +498,8 @@ export function useAdminVendors(apiClient: AxiosInstance | null) {
     loadVendorLifecycleAudit,
     stopVendorOrders,
     resumeVendorOrders,
+    openVerifyVendorConfirm,
+    openRejectVerificationConfirm,
     handleConfirmAction,
   };
 }

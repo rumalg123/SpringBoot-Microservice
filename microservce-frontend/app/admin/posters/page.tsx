@@ -10,6 +10,7 @@ import Footer from "../../components/Footer";
 import ConfirmModal from "../../components/ConfirmModal";
 import PosterFormField from "../../components/posters/admin/PosterFormField";
 import PosterLinkTargetEditor from "../../components/posters/admin/PosterLinkTargetEditor";
+import StatusBadge, { ACTIVE_INACTIVE_COLORS } from "../../components/ui/StatusBadge";
 import { useAuthSession } from "../../../lib/authSession";
 
 type Placement =
@@ -47,6 +48,36 @@ type Poster = {
   endAt: string | null;
 };
 
+type PosterAnalytics = {
+  id: string;
+  name: string;
+  slug: string;
+  placement: string;
+  clickCount: number;
+  impressionCount: number;
+  clickThroughRate: number;
+  lastClickAt: string | null;
+  lastImpressionAt: string | null;
+  createdAt: string;
+};
+
+type PosterVariant = {
+  id: string;
+  posterId: string;
+  variantName: string;
+  weight: number;
+  desktopImage: string | null;
+  mobileImage: string | null;
+  tabletImage: string | null;
+  linkUrl: string | null;
+  impressions: number;
+  clicks: number;
+  clickThroughRate: number;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
 type FormState = {
   id?: string;
   name: string;
@@ -66,6 +97,16 @@ type FormState = {
   active: boolean;
   startAt: string;
   endAt: string;
+};
+
+type VariantFormState = {
+  variantName: string;
+  weight: string;
+  desktopImage: string;
+  mobileImage: string;
+  tabletImage: string;
+  linkUrl: string;
+  active: boolean;
 };
 
 const placementDefaultSize: Record<Placement, Size> = {
@@ -97,6 +138,16 @@ const emptyForm: FormState = {
   active: true,
   startAt: "",
   endAt: "",
+};
+
+const emptyVariantForm: VariantFormState = {
+  variantName: "",
+  weight: "50",
+  desktopImage: "",
+  mobileImage: "",
+  tabletImage: "",
+  linkUrl: "",
+  active: true,
 };
 
 const fieldBaseStyle: React.CSSProperties = {
@@ -176,17 +227,7 @@ function PosterImageFill({ imageKey, alt }: { imageKey: string | null; alt: stri
   );
 }
 
-function badgeStyle(active: boolean): React.CSSProperties {
-  return {
-    padding: "2px 8px",
-    borderRadius: 999,
-    fontSize: "0.68rem",
-    fontWeight: 700,
-    border: active ? "1px solid rgba(34,197,94,0.3)" : "1px solid rgba(239,68,68,0.25)",
-    color: active ? "#22c55e" : "#ef4444",
-    background: active ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)",
-  };
-}
+/* badgeStyle replaced by StatusBadge + ACTIVE_INACTIVE_COLORS from components/ui/StatusBadge */
 
 function getApiErrorMessage(err: unknown, fallback: string) {
   if (typeof err === "object" && err !== null) {
@@ -204,6 +245,21 @@ function getApiErrorMessage(err: unknown, fallback: string) {
   }
   return fallback;
 }
+
+const statCardStyle: React.CSSProperties = {
+  background: "rgba(255,255,255,0.04)",
+  border: "1px solid var(--line)",
+  borderRadius: 12,
+  padding: "14px 18px",
+  textAlign: "center",
+};
+
+const variantTableCellStyle: React.CSSProperties = {
+  padding: "8px 10px",
+  borderBottom: "1px solid var(--line)",
+  fontSize: "0.8rem",
+  color: "var(--ink-light)",
+};
 
 export default function AdminPostersPage() {
   const router = useRouter();
@@ -223,6 +279,21 @@ export default function AdminPostersPage() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [restoreId, setRestoreId] = useState<string | null>(null);
 
+  // Analytics state
+  const [analytics, setAnalytics] = useState<PosterAnalytics[]>([]);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
+
+  // Variants state
+  const [variants, setVariants] = useState<PosterVariant[]>([]);
+  const [variantsLoading, setVariantsLoading] = useState(false);
+  const [variantForm, setVariantForm] = useState<VariantFormState>(emptyVariantForm);
+  const [showVariantForm, setShowVariantForm] = useState(false);
+  const [editingVariantId, setEditingVariantId] = useState<string | null>(null);
+  const [savingVariant, setSavingVariant] = useState(false);
+  const [deleteVariantTarget, setDeleteVariantTarget] = useState<PosterVariant | null>(null);
+  const [deletingVariant, setDeletingVariant] = useState(false);
+
   const list = showDeleted ? deletedItems : items;
   const grouped = useMemo(() => {
     const m = new Map<string, Poster[]>();
@@ -234,7 +305,24 @@ export default function AdminPostersPage() {
     return m;
   }, [list]);
 
+  // Analytics summary computed from fetched data
+  const analyticsSummary = useMemo(() => {
+    if (analytics.length === 0) return { totalImpressions: 0, totalClicks: 0, avgCtr: 0 };
+    const totalImpressions = analytics.reduce((sum, a) => sum + a.impressionCount, 0);
+    const totalClicks = analytics.reduce((sum, a) => sum + a.clickCount, 0);
+    const avgCtr = analytics.reduce((sum, a) => sum + a.clickThroughRate, 0) / analytics.length;
+    return { totalImpressions, totalClicks, avgCtr };
+  }, [analytics]);
+
+  // Build a lookup map from poster id -> analytics
+  const analyticsMap = useMemo(() => {
+    const m = new Map<string, PosterAnalytics>();
+    for (const a of analytics) m.set(a.id, a);
+    return m;
+  }, [analytics]);
+
   const setField = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((s) => ({ ...s, [key]: value }));
+  const setVariantField = <K extends keyof VariantFormState>(key: K, value: VariantFormState[K]) => setVariantForm((s) => ({ ...s, [key]: value }));
 
   const load = async () => {
     if (!session.apiClient) return;
@@ -265,6 +353,101 @@ export default function AdminPostersPage() {
     }
   };
 
+  const loadAnalytics = async () => {
+    if (!session.apiClient) return;
+    setAnalyticsLoading(true);
+    try {
+      const res = await session.apiClient.get("/admin/posters/analytics");
+      setAnalytics((res.data as PosterAnalytics[]) || []);
+    } catch (e) {
+      toast.error(getApiErrorMessage(e, "Failed to load analytics."));
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  };
+
+  const loadVariants = async (posterId: string) => {
+    if (!session.apiClient) return;
+    setVariantsLoading(true);
+    try {
+      const res = await session.apiClient.get(`/admin/posters/${posterId}/variants`);
+      setVariants((res.data as PosterVariant[]) || []);
+    } catch (e) {
+      toast.error(getApiErrorMessage(e, "Failed to load variants."));
+    } finally {
+      setVariantsLoading(false);
+    }
+  };
+
+  const saveVariant = async () => {
+    if (!session.apiClient || !form.id || savingVariant) return;
+    if (!variantForm.variantName.trim()) {
+      toast.error("Variant name is required");
+      return;
+    }
+    const weight = Number(variantForm.weight);
+    if (!Number.isFinite(weight) || weight < 1 || weight > 100) {
+      toast.error("Weight must be between 1 and 100");
+      return;
+    }
+    setSavingVariant(true);
+    try {
+      const payload = {
+        variantName: variantForm.variantName.trim(),
+        weight,
+        desktopImage: variantForm.desktopImage.trim() || undefined,
+        mobileImage: variantForm.mobileImage.trim() || undefined,
+        tabletImage: variantForm.tabletImage.trim() || undefined,
+        linkUrl: variantForm.linkUrl.trim() || undefined,
+        active: variantForm.active,
+      };
+      if (editingVariantId) {
+        await session.apiClient.put(`/admin/posters/${form.id}/variants/${editingVariantId}`, payload);
+        toast.success("Variant updated");
+      } else {
+        await session.apiClient.post(`/admin/posters/${form.id}/variants`, payload);
+        toast.success("Variant created");
+      }
+      setVariantForm(emptyVariantForm);
+      setShowVariantForm(false);
+      setEditingVariantId(null);
+      await loadVariants(form.id);
+    } catch (e) {
+      toast.error(getApiErrorMessage(e, "Failed to save variant"));
+    } finally {
+      setSavingVariant(false);
+    }
+  };
+
+  const deleteVariant = async () => {
+    if (!session.apiClient || !form.id || !deleteVariantTarget || deletingVariant) return;
+    setDeletingVariant(true);
+    try {
+      await session.apiClient.delete(`/admin/posters/${form.id}/variants/${deleteVariantTarget.id}`);
+      toast.success("Variant deleted");
+      setDeleteVariantTarget(null);
+      await loadVariants(form.id);
+    } catch (e) {
+      toast.error(getApiErrorMessage(e, "Failed to delete variant"));
+    } finally {
+      setDeletingVariant(false);
+    }
+  };
+
+  const editVariant = (v: PosterVariant) => {
+    setVariantForm({
+      variantName: v.variantName,
+      weight: String(v.weight),
+      desktopImage: v.desktopImage || "",
+      mobileImage: v.mobileImage || "",
+      tabletImage: v.tabletImage || "",
+      linkUrl: v.linkUrl || "",
+      active: v.active,
+    });
+    setEditingVariantId(v.id);
+    setShowVariantForm(true);
+  };
+
   useEffect(() => {
     if (session.status !== "ready") return;
     if (!session.isAuthenticated) {
@@ -283,6 +466,24 @@ export default function AdminPostersPage() {
     if (!session.apiClient) return;
     void loadDeleted();
   }, [showDeleted, deletedLoaded, session.apiClient]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load analytics when toggled on
+  useEffect(() => {
+    if (!showAnalytics || !session.apiClient) return;
+    void loadAnalytics();
+  }, [showAnalytics, session.apiClient]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load variants when editing a poster
+  useEffect(() => {
+    if (!form.id || !session.apiClient) {
+      setVariants([]);
+      setShowVariantForm(false);
+      setEditingVariantId(null);
+      setVariantForm(emptyVariantForm);
+      return;
+    }
+    void loadVariants(form.id);
+  }, [form.id, session.apiClient]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (slugEdited) return;
@@ -440,6 +641,7 @@ export default function AdminPostersPage() {
       setSlugEdited(false);
       await load();
       if (deletedLoaded) await loadDeleted();
+      if (showAnalytics) await loadAnalytics();
     } catch (err) {
       toast.error(getApiErrorMessage(err, "Save failed"));
     } finally {
@@ -514,10 +716,70 @@ export default function AdminPostersPage() {
             <h1 style={{ margin: 0, color: "var(--ink)", fontFamily: "'Syne', sans-serif", fontWeight: 800 }}>Admin Posters</h1>
             <p style={{ margin: "4px 0 0", color: "var(--muted)", fontSize: "0.85rem" }}>Placement presets, image uploads, auto slug, scheduling, and duplicate flow.</p>
           </div>
-          <button type="button" onClick={() => setShowDeleted((v) => !v)} disabled={loading} style={{ padding: "8px 12px", borderRadius: "10px", border: "1px solid var(--line-bright)", background: showDeleted ? "rgba(239,68,68,0.1)" : "var(--brand-soft)", color: showDeleted ? "#f87171" : "var(--brand)", fontWeight: 700, opacity: loading ? 0.7 : 1, cursor: loading ? "not-allowed" : "pointer" }}>
-            {showDeleted ? "Showing Deleted" : "Show Deleted"}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => setShowAnalytics((v) => !v)} disabled={analyticsLoading} style={{ padding: "8px 12px", borderRadius: "10px", border: "1px solid var(--line-bright)", background: showAnalytics ? "rgba(59,130,246,0.12)" : "var(--brand-soft)", color: showAnalytics ? "#60a5fa" : "var(--brand)", fontWeight: 700, opacity: analyticsLoading ? 0.7 : 1, cursor: analyticsLoading ? "not-allowed" : "pointer" }}>
+              {analyticsLoading ? "Loading..." : showAnalytics ? "Hide Analytics" : "Show Analytics"}
+            </button>
+            <button type="button" onClick={() => setShowDeleted((v) => !v)} disabled={loading} style={{ padding: "8px 12px", borderRadius: "10px", border: "1px solid var(--line-bright)", background: showDeleted ? "rgba(239,68,68,0.1)" : "var(--brand-soft)", color: showDeleted ? "#f87171" : "var(--brand)", fontWeight: 700, opacity: loading ? 0.7 : 1, cursor: loading ? "not-allowed" : "pointer" }}>
+              {showDeleted ? "Showing Deleted" : "Show Deleted"}
+            </button>
+          </div>
         </div>
+
+        {/* Analytics Summary */}
+        {showAnalytics && (
+          <section className="mb-5" style={panelStyle}>
+            <h2 style={{ margin: "0 0 12px", color: "var(--ink)", fontSize: "1.05rem" }}>Analytics Overview</h2>
+            {analyticsLoading ? (
+              <div className="skeleton" style={{ height: 80, borderRadius: 12 }} />
+            ) : analytics.length === 0 ? (
+              <p style={{ color: "var(--muted)", fontSize: "0.85rem" }}>No analytics data available yet.</p>
+            ) : (
+              <>
+                <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}>
+                  <div style={statCardStyle}>
+                    <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#60a5fa" }}>{analyticsSummary.totalImpressions.toLocaleString()}</div>
+                    <div style={{ fontSize: "0.75rem", color: "var(--muted)", marginTop: 2 }}>Total Impressions</div>
+                  </div>
+                  <div style={statCardStyle}>
+                    <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#34d399" }}>{analyticsSummary.totalClicks.toLocaleString()}</div>
+                    <div style={{ fontSize: "0.75rem", color: "var(--muted)", marginTop: 2 }}>Total Clicks</div>
+                  </div>
+                  <div style={statCardStyle}>
+                    <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#c084fc" }}>{analyticsSummary.avgCtr.toFixed(2)}%</div>
+                    <div style={{ fontSize: "0.75rem", color: "var(--muted)", marginTop: 2 }}>Average CTR</div>
+                  </div>
+                </div>
+
+                {/* Per-poster analytics table */}
+                <div style={{ marginTop: 16, overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ borderBottom: "2px solid var(--line)" }}>
+                        {["Poster", "Placement", "Impressions", "Clicks", "CTR", "Last Click", "Last Impression"].map((h) => (
+                          <th key={h} style={{ padding: "8px 10px", textAlign: "left", fontSize: "0.72rem", color: "var(--muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {analytics.map((a) => (
+                        <tr key={a.id} style={{ borderBottom: "1px solid var(--line)" }}>
+                          <td style={{ padding: "8px 10px", fontSize: "0.82rem", color: "var(--ink)" }}>{a.name}</td>
+                          <td style={{ padding: "8px 10px", fontSize: "0.78rem", color: "var(--ink-light)" }}>{a.placement}</td>
+                          <td style={{ padding: "8px 10px", fontSize: "0.82rem", color: "#60a5fa", fontWeight: 600 }}>{a.impressionCount.toLocaleString()}</td>
+                          <td style={{ padding: "8px 10px", fontSize: "0.82rem", color: "#34d399", fontWeight: 600 }}>{a.clickCount.toLocaleString()}</td>
+                          <td style={{ padding: "8px 10px", fontSize: "0.82rem", color: "#c084fc", fontWeight: 600 }}>{a.clickThroughRate.toFixed(2)}%</td>
+                          <td style={{ padding: "8px 10px", fontSize: "0.75rem", color: "var(--muted)" }}>{a.lastClickAt ? new Date(a.lastClickAt).toLocaleDateString() : "--"}</td>
+                          <td style={{ padding: "8px 10px", fontSize: "0.75rem", color: "var(--muted)" }}>{a.lastImpressionAt ? new Date(a.lastImpressionAt).toLocaleDateString() : "--"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </section>
+        )}
 
         <section className="mb-5" style={panelStyle}>
           <form onSubmit={(e) => { void submit(e); }} className="grid gap-3">
@@ -642,6 +904,108 @@ export default function AdminPostersPage() {
               {form.id && <button type="button" onClick={() => { setForm(emptyForm); setSlugEdited(false); }} style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface-2)", color: "var(--ink-light)", fontWeight: 700 }}>Cancel Edit</button>}
             </div>
           </form>
+
+          {/* A/B Variants Section - shown only when editing a poster */}
+          {form.id && (
+            <div style={{ marginTop: 24, borderTop: "1px solid var(--line)", paddingTop: 20 }}>
+              <div className="mb-3 flex items-center justify-between">
+                <h3 style={{ margin: 0, color: "var(--ink)", fontSize: "1rem" }}>A/B Variants</h3>
+                {!showVariantForm && (
+                  <button type="button" onClick={() => { setVariantForm(emptyVariantForm); setEditingVariantId(null); setShowVariantForm(true); }} style={{ padding: "7px 14px", borderRadius: 8, border: "1px solid var(--line-bright)", background: "var(--brand-soft)", color: "#9fe9ff", fontWeight: 700, fontSize: "0.8rem" }}>
+                    + Add Variant
+                  </button>
+                )}
+              </div>
+
+              {/* Variant Form */}
+              {showVariantForm && (
+                <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--line)", borderRadius: 12, padding: 14, marginBottom: 16 }}>
+                  <h4 style={{ margin: "0 0 12px", color: "var(--ink-light)", fontSize: "0.88rem" }}>
+                    {editingVariantId ? "Edit Variant" : "New Variant"}
+                  </h4>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <PosterFormField label="Variant Name">
+                      <input value={variantForm.variantName} onChange={(e) => setVariantField("variantName", e.target.value)} placeholder="e.g. Control, Variant A" className="rounded-lg border px-3 py-2.5" style={fieldBaseStyle} />
+                    </PosterFormField>
+                    <PosterFormField label="Weight (1-100)" hint="Higher weight = more traffic share.">
+                      <input type="number" min={1} max={100} value={variantForm.weight} onChange={(e) => setVariantField("weight", e.target.value)} className="rounded-lg border px-3 py-2.5" style={fieldBaseStyle} />
+                    </PosterFormField>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-3" style={{ marginTop: 12 }}>
+                    <PosterFormField label="Desktop Image URL (Optional)">
+                      <input value={variantForm.desktopImage} onChange={(e) => setVariantField("desktopImage", e.target.value)} placeholder="posters/variant-desktop.jpg" className="rounded-lg border px-3 py-2.5" style={fieldBaseStyle} />
+                    </PosterFormField>
+                    <PosterFormField label="Mobile Image URL (Optional)">
+                      <input value={variantForm.mobileImage} onChange={(e) => setVariantField("mobileImage", e.target.value)} placeholder="posters/variant-mobile.jpg" className="rounded-lg border px-3 py-2.5" style={fieldBaseStyle} />
+                    </PosterFormField>
+                    <PosterFormField label="Tablet Image URL (Optional)">
+                      <input value={variantForm.tabletImage} onChange={(e) => setVariantField("tabletImage", e.target.value)} placeholder="posters/variant-tablet.jpg" className="rounded-lg border px-3 py-2.5" style={fieldBaseStyle} />
+                    </PosterFormField>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2" style={{ marginTop: 12 }}>
+                    <PosterFormField label="Link URL (Optional)">
+                      <input value={variantForm.linkUrl} onChange={(e) => setVariantField("linkUrl", e.target.value)} placeholder="https://example.com/sale" className="rounded-lg border px-3 py-2.5" style={fieldBaseStyle} />
+                    </PosterFormField>
+                    <PosterFormField label="Status">
+                      <label className="flex items-center gap-2 rounded-lg border px-3 py-2.5" style={{ ...fieldBaseStyle, display: "flex" }}>
+                        <input type="checkbox" checked={variantForm.active} onChange={(e) => setVariantField("active", e.target.checked)} />
+                        Active variant
+                      </label>
+                    </PosterFormField>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button type="button" disabled={savingVariant} onClick={() => { void saveVariant(); }} className="btn-primary" style={{ padding: "8px 14px", borderRadius: 8, fontWeight: 700, fontSize: "0.82rem" }}>
+                      {savingVariant ? "Saving..." : editingVariantId ? "Update Variant" : "Create Variant"}
+                    </button>
+                    <button type="button" onClick={() => { setShowVariantForm(false); setEditingVariantId(null); setVariantForm(emptyVariantForm); }} style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface-2)", color: "var(--ink-light)", fontWeight: 700, fontSize: "0.82rem" }}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Variants Table */}
+              {variantsLoading ? (
+                <div className="skeleton" style={{ height: 80, borderRadius: 12 }} />
+              ) : variants.length === 0 ? (
+                <p style={{ color: "var(--muted)", fontSize: "0.82rem" }}>No variants yet. Add one to start A/B testing.</p>
+              ) : (
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ borderBottom: "2px solid var(--line)" }}>
+                        {["Name", "Weight", "Active", "Impressions", "Clicks", "CTR", "Actions"].map((h) => (
+                          <th key={h} style={{ padding: "8px 10px", textAlign: "left", fontSize: "0.72rem", color: "var(--muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {variants.map((v) => (
+                        <tr key={v.id} style={{ borderBottom: "1px solid var(--line)" }}>
+                          <td style={variantTableCellStyle}>
+                            <span style={{ fontWeight: 600, color: "var(--ink)" }}>{v.variantName}</span>
+                          </td>
+                          <td style={variantTableCellStyle}>{v.weight}</td>
+                          <td style={variantTableCellStyle}>
+                            <StatusBadge value={v.active ? "Active" : "Inactive"} colorMap={ACTIVE_INACTIVE_COLORS} />
+                          </td>
+                          <td style={{ ...variantTableCellStyle, color: "#60a5fa", fontWeight: 600 }}>{v.impressions.toLocaleString()}</td>
+                          <td style={{ ...variantTableCellStyle, color: "#34d399", fontWeight: 600 }}>{v.clicks.toLocaleString()}</td>
+                          <td style={{ ...variantTableCellStyle, color: "#c084fc", fontWeight: 600 }}>{v.clickThroughRate.toFixed(2)}%</td>
+                          <td style={variantTableCellStyle}>
+                            <div className="flex gap-2">
+                              <button type="button" onClick={() => editVariant(v)} style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid var(--line-bright)", background: "var(--brand-soft)", color: "#9fe9ff", fontWeight: 700, fontSize: "0.72rem" }}>Edit</button>
+                              <button type="button" onClick={() => setDeleteVariantTarget(v)} style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid rgba(239,68,68,0.2)", background: "rgba(239,68,68,0.08)", color: "#fca5a5", fontWeight: 700, fontSize: "0.72rem" }}>Delete</button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
         </section>
 
         <section style={panelStyle}>
@@ -653,7 +1017,9 @@ export default function AdminPostersPage() {
               <div key={placement} style={{ border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden" }}>
                 <div style={{ padding: "10px 12px", background: "var(--brand-soft)", borderBottom: "1px solid var(--line)", color: "#dbeafe", fontWeight: 800 }}>{placement}</div>
                 <div className="grid gap-3 p-3">
-                  {arr.sort((a, b) => (a.sortOrder - b.sortOrder) || a.name.localeCompare(b.name)).map((p) => (
+                  {arr.sort((a, b) => (a.sortOrder - b.sortOrder) || a.name.localeCompare(b.name)).map((p) => {
+                    const posterAnalytics = analyticsMap.get(p.id);
+                    return (
                     <div key={p.id} className="poster-card-row" style={{ display: "grid", gridTemplateColumns: "170px 1fr", gap: 12, border: "1px solid var(--line)", borderRadius: 12, padding: 10, background: "rgba(255,255,255,0.02)" }}>
                       <div style={{ position: "relative", aspectRatio: "16/7", borderRadius: 10, overflow: "hidden", background: "var(--surface-3)" }}>
                         {p.desktopImage ? <PosterImageFill imageKey={p.desktopImage} alt={p.name} /> : null}
@@ -662,7 +1028,7 @@ export default function AdminPostersPage() {
                         <div className="mb-2 flex flex-wrap items-center gap-2">
                           <strong style={{ color: "var(--ink)" }}>{p.name}</strong>
                           <span style={{ padding: "2px 8px", borderRadius: 999, fontSize: "0.68rem", border: "1px solid var(--line)", color: "var(--ink-light)" }}>{p.size}</span>
-                          <span style={badgeStyle(p.active)}>{p.active ? "Active" : "Inactive"}</span>
+                          <StatusBadge value={p.active ? "Active" : "Inactive"} colorMap={ACTIVE_INACTIVE_COLORS} />
                           <span style={{ fontSize: "0.72rem", color: "var(--muted)" }}>#{p.sortOrder}</span>
                         </div>
                         <div style={{ fontSize: "0.78rem", color: "var(--muted)", display: "grid", gap: 3 }}>
@@ -670,6 +1036,16 @@ export default function AdminPostersPage() {
                           <div>Link: {p.linkType}{p.linkTarget ? ` -> ${p.linkTarget}` : ""}{p.openInNewTab ? " (new tab)" : ""}</div>
                           {p.title && <div>Title: {p.title}</div>}
                         </div>
+
+                        {/* Inline analytics for this poster */}
+                        {showAnalytics && posterAnalytics && (
+                          <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 12, fontSize: "0.75rem" }}>
+                            <span style={{ color: "#60a5fa" }}>{posterAnalytics.impressionCount.toLocaleString()} impressions</span>
+                            <span style={{ color: "#34d399" }}>{posterAnalytics.clickCount.toLocaleString()} clicks</span>
+                            <span style={{ color: "#c084fc" }}>{posterAnalytics.clickThroughRate.toFixed(2)}% CTR</span>
+                          </div>
+                        )}
+
                         <div className="mt-3 flex flex-wrap gap-2">
                           {!showDeleted && <>
                             <button type="button" onClick={() => edit(p)} style={{ padding: "7px 12px", borderRadius: 8, border: "1px solid var(--line-bright)", background: "var(--brand-soft)", color: "#9fe9ff", fontWeight: 700, fontSize: "0.75rem" }}>Edit</button>
@@ -680,7 +1056,8 @@ export default function AdminPostersPage() {
                         </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ))}
@@ -698,6 +1075,17 @@ export default function AdminPostersPage() {
         loading={deleteBusy}
         onConfirm={() => { void deletePoster(); }}
         onCancel={() => { if (!deleteBusy) setDeleteTarget(null); }}
+      />
+      <ConfirmModal
+        open={Boolean(deleteVariantTarget)}
+        title="Delete Variant"
+        message={deleteVariantTarget ? `Delete variant \"${deleteVariantTarget.variantName}\"? This cannot be undone.` : ""}
+        confirmLabel={deletingVariant ? "Deleting..." : "Delete"}
+        cancelLabel="Cancel"
+        danger
+        loading={deletingVariant}
+        onConfirm={() => { void deleteVariant(); }}
+        onCancel={() => { if (!deletingVariant) setDeleteVariantTarget(null); }}
       />
       <style jsx>{`
         .poster-select {
@@ -725,6 +1113,3 @@ export default function AdminPostersPage() {
     </div>
   );
 }
-
-
-

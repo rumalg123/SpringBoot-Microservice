@@ -236,6 +236,10 @@ export default function AdminVendorsPage() {
                   onRestoreVendor={vendors.openRestoreVendorConfirm}
                   onStopOrders={(vendor) => { void vendors.stopVendorOrders(vendor); }}
                   onResumeOrders={(vendor) => { void vendors.resumeVendorOrders(vendor); }}
+                  verifyingVendorId={vendors.verifyingVendorId}
+                  rejectingVerificationId={vendors.rejectingVerificationId}
+                  onVerifyVendor={(vendor) => { vendors.openVerifyVendorConfirm(vendor); }}
+                  onRejectVerification={(vendor) => { vendors.openRejectVerificationConfirm(vendor); }}
                 />
               </div>
             </div>
@@ -323,8 +327,16 @@ export default function AdminVendorsPage() {
         danger={vendors.confirmUi.danger}
         loading={vendors.confirmLoading}
         reasonEnabled={vendors.confirmUi.reasonEnabled}
-        reasonLabel="Reason for audit (optional)"
-        reasonPlaceholder="Why are you performing this lifecycle action?"
+        reasonLabel={
+          vendors.confirmState?.kind === "rejectVerification"
+            ? "Reason for rejection (required)"
+            : "Reason for audit (optional)"
+        }
+        reasonPlaceholder={
+          vendors.confirmState?.kind === "rejectVerification"
+            ? "Why is this vendor's verification being rejected?"
+            : "Why are you performing this lifecycle action?"
+        }
         reasonValue={vendors.confirmReason}
         onReasonChange={vendors.setConfirmReason}
         onCancel={() => {

@@ -1,8 +1,10 @@
-﻿"use client";
+"use client";
 
 import Pagination from "../../Pagination";
+import StatusBadge, { APPROVAL_COLORS } from "../../ui/StatusBadge";
 
 type ProductType = "SINGLE" | "PARENT" | "VARIATION";
+type ApprovalStatus = "NOT_REQUIRED" | "PENDING" | "APPROVED" | "REJECTED";
 
 type ProductSummary = {
   id: string;
@@ -16,6 +18,7 @@ type ProductSummary = {
   vendorId: string;
   categories: string[];
   active: boolean;
+  approvalStatus?: ApprovalStatus;
   variations?: Array<{ name: string; value: string }>;
 };
 
@@ -65,6 +68,11 @@ type Props = {
   productRowActionBusy: boolean;
   loadingProductId: string | null;
   restoringProductId: string | null;
+  /* Selection props (optional) */
+  selectedProductIds?: string[];
+  onToggleProductSelection?: (id: string) => void;
+  onToggleSelectAllCurrentPage?: () => void;
+  /* Callbacks */
   onShowActive: () => void;
   onShowDeleted: () => void;
   onQChange: (value: string) => void;
@@ -78,6 +86,14 @@ type Props = {
   onDeleteProductRequest: (product: ProductSummary) => void;
   onRestoreProduct: (id: string) => void | Promise<void>;
   onPageChange: (page: number) => void | Promise<void>;
+  /* Approval workflow (optional) */
+  canApproveReject?: boolean;
+  approvingProductId?: string | null;
+  rejectingProductId?: string | null;
+  submitForReviewProductId?: string | null;
+  onSubmitForReview?: (id: string) => void | Promise<void>;
+  onApproveProduct?: (id: string) => void | Promise<void>;
+  onRejectProductRequest?: (product: ProductSummary) => void;
 };
 
 function money(value: number) {
@@ -106,6 +122,9 @@ export default function ProductCatalogPanel({
   productRowActionBusy,
   loadingProductId,
   restoringProductId,
+  selectedProductIds,
+  onToggleProductSelection,
+  onToggleSelectAllCurrentPage,
   onShowActive,
   onShowDeleted,
   onQChange,
@@ -119,7 +138,19 @@ export default function ProductCatalogPanel({
   onDeleteProductRequest,
   onRestoreProduct,
   onPageChange,
+  canApproveReject = false,
+  approvingProductId,
+  rejectingProductId,
+  submitForReviewProductId,
+  onSubmitForReview,
+  onApproveProduct,
+  onRejectProductRequest,
 }: Props) {
+  const selectionEnabled = !showDeleted && Boolean(onToggleProductSelection) && Boolean(onToggleSelectAllCurrentPage);
+  const selectedSet = new Set(selectedProductIds || []);
+  const allCurrentSelected = selectionEnabled && rows.length > 0 && rows.every((p) => selectedSet.has(p.id));
+  const someCurrentSelected = selectionEnabled && rows.some((p) => selectedSet.has(p.id));
+
   const filteredVendors = vendors
     .filter((vendor) => !vendor.deleted)
     .filter((vendor) => {
@@ -132,6 +163,13 @@ export default function ProductCatalogPanel({
     })
     .sort((a, b) => a.name.localeCompare(b.name))
     .slice(0, 100);
+
+  const checkboxStyle: React.CSSProperties = {
+    width: 16,
+    height: 16,
+    accentColor: "var(--brand, #00d4ff)",
+    cursor: "pointer",
+  };
 
   return (
     <div className="order-2 lg:order-1">
@@ -256,17 +294,30 @@ export default function ProductCatalogPanel({
         <table className="w-full text-left text-sm">
           <thead style={{ background: "var(--surface-2)", color: "var(--ink)" }}>
             <tr>
+              {selectionEnabled && (
+                <th className="px-3 py-2" style={{ width: 40 }}>
+                  <input
+                    type="checkbox"
+                    checked={allCurrentSelected}
+                    ref={(el) => { if (el) el.indeterminate = someCurrentSelected && !allCurrentSelected; }}
+                    onChange={() => onToggleSelectAllCurrentPage?.()}
+                    style={checkboxStyle}
+                    title="Select all on this page"
+                  />
+                </th>
+              )}
               <th className="px-3 py-2">Name</th>
               <th className="px-3 py-2">SKU</th>
               <th className="px-3 py-2">Type</th>
               <th className="px-3 py-2">Price</th>
+              <th className="px-3 py-2">Approval</th>
               <th className="px-3 py-2">Actions</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={5}>
+                <td colSpan={selectionEnabled ? 7 : 6}>
                   <div className="empty-state">
                     <div className="empty-state-icon">Items</div>
                     <p className="empty-state-title">No products</p>
@@ -276,7 +327,21 @@ export default function ProductCatalogPanel({
               </tr>
             )}
             {rows.map((p) => (
-              <tr key={p.id} className="border-t border-[var(--line)]">
+              <tr
+                key={p.id}
+                className="border-t border-[var(--line)]"
+                style={selectionEnabled && selectedSet.has(p.id) ? { background: "rgba(0,212,255,0.04)" } : undefined}
+              >
+                {selectionEnabled && (
+                  <td className="px-3 py-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedSet.has(p.id)}
+                      onChange={() => onToggleProductSelection?.(p.id)}
+                      style={checkboxStyle}
+                    />
+                  </td>
+                )}
                 <td className="px-3 py-2">
                   <p className="font-semibold text-[var(--ink)]">{p.name}</p>
                   <p className="line-clamp-1 text-xs text-[var(--muted)]">{p.shortDescription}</p>
@@ -286,6 +351,13 @@ export default function ProductCatalogPanel({
                   <span className={`type-badge type-badge--${p.productType.toLowerCase()}`}>{p.productType}</span>
                 </td>
                 <td className="px-3 py-2 text-[var(--ink)]">{money(p.sellingPrice)}</td>
+                <td className="px-3 py-2">
+                  {p.approvalStatus ? (
+                    <StatusBadge value={p.approvalStatus} colorMap={APPROVAL_COLORS} />
+                  ) : (
+                    <span className="text-xs text-[var(--muted)]">--</span>
+                  )}
+                </td>
                 <td className="px-3 py-2">
                   <div className="flex flex-wrap gap-2">
                     {!showDeleted && (
@@ -310,6 +382,54 @@ export default function ProductCatalogPanel({
                         >
                           Delete
                         </button>
+                        {/* Submit for Review - shown when NOT_REQUIRED or REJECTED */}
+                        {onSubmitForReview && (p.approvalStatus === "NOT_REQUIRED" || p.approvalStatus === "REJECTED") && (
+                          <button
+                            type="button"
+                            onClick={() => { void onSubmitForReview(p.id); }}
+                            disabled={productRowActionBusy || submitForReviewProductId === p.id}
+                            className="rounded-md border px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
+                            style={{
+                              borderColor: "rgba(0,212,255,0.25)",
+                              background: "rgba(0,212,255,0.06)",
+                              color: "var(--brand, #00d4ff)",
+                            }}
+                          >
+                            {submitForReviewProductId === p.id ? "Submitting..." : "Submit for Review"}
+                          </button>
+                        )}
+                        {/* Approve - shown when PENDING, for platform staff/super admin */}
+                        {canApproveReject && onApproveProduct && p.approvalStatus === "PENDING" && (
+                          <button
+                            type="button"
+                            onClick={() => { void onApproveProduct(p.id); }}
+                            disabled={productRowActionBusy || approvingProductId === p.id}
+                            className="rounded-md border px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
+                            style={{
+                              borderColor: "rgba(34,197,94,0.3)",
+                              background: "rgba(34,197,94,0.08)",
+                              color: "var(--success, #22c55e)",
+                            }}
+                          >
+                            {approvingProductId === p.id ? "Approving..." : "Approve"}
+                          </button>
+                        )}
+                        {/* Reject - shown when PENDING, for platform staff/super admin */}
+                        {canApproveReject && onRejectProductRequest && p.approvalStatus === "PENDING" && (
+                          <button
+                            type="button"
+                            onClick={() => onRejectProductRequest(p)}
+                            disabled={productRowActionBusy || rejectingProductId === p.id}
+                            className="rounded-md border px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
+                            style={{
+                              borderColor: "rgba(239,68,68,0.25)",
+                              background: "rgba(239,68,68,0.06)",
+                              color: "#f87171",
+                            }}
+                          >
+                            {rejectingProductId === p.id ? "Rejecting..." : "Reject"}
+                          </button>
+                        )}
                       </>
                     )}
                     {showDeleted && (

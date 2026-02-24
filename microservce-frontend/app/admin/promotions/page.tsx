@@ -7,6 +7,9 @@ import toast from "react-hot-toast";
 import AppNav from "../../components/AppNav";
 import Footer from "../../components/Footer";
 import ConfirmModal from "../../components/ConfirmModal";
+import SearchableSelect from "../../components/ui/SearchableSelect";
+import MultiSearchSelect from "../../components/ui/MultiSearchSelect";
+import StatusBadge, { LIFECYCLE_COLORS, APPROVAL_COLORS, ACTIVE_INACTIVE_COLORS } from "../../components/ui/StatusBadge";
 import { useAuthSession } from "../../../lib/authSession";
 
 /* ───── enums & types ───── */
@@ -88,6 +91,34 @@ type Analytics = {
   releasedDiscountAmount: number | null;
 };
 
+type PromotionAnalytics = {
+  promotionId: string;
+  name: string;
+  vendorId: string | null;
+  scopeType: string;
+  applicationLevel: string;
+  benefitType: string;
+  lifecycleStatus: string;
+  approvalStatus: string;
+  budgetAmount: number | null;
+  burnedBudgetAmount: number | null;
+  activeReservedBudgetAmount: number | null;
+  remainingBudgetAmount: number | null;
+  couponCodeCount: number;
+  activeCouponCodeCount: number;
+  reservationCount: number;
+  activeReservedReservationCount: number;
+  committedReservationCount: number;
+  releasedReservationCount: number;
+  expiredReservationCount: number;
+  committedDiscountAmount: number | null;
+  releasedDiscountAmount: number | null;
+  startsAt: string | null;
+  endsAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 type PageResponse<T> = { content: T[]; totalElements: number; totalPages: number; number: number; size: number };
 
 type FormState = {
@@ -156,28 +187,7 @@ function getApiErrorMessage(err: unknown, fallback: string) {
   return fallback;
 }
 
-const LIFECYCLE_COLORS: Record<string, { bg: string; border: string; color: string }> = {
-  DRAFT: { bg: "var(--brand-soft)", border: "var(--line-bright)", color: "var(--brand)" },
-  ACTIVE: { bg: "var(--success-soft)", border: "rgba(34,197,94,0.3)", color: "var(--success)" },
-  PAUSED: { bg: "var(--warning-soft)", border: "var(--warning-border)", color: "var(--warning-text)" },
-  ARCHIVED: { bg: "var(--danger-soft)", border: "rgba(239,68,68,0.25)", color: "#f87171" },
-};
-
-const APPROVAL_COLORS: Record<string, { bg: string; border: string; color: string }> = {
-  NOT_REQUIRED: { bg: "rgba(255,255,255,0.03)", border: "var(--line)", color: "var(--muted)" },
-  PENDING: { bg: "var(--warning-soft)", border: "var(--warning-border)", color: "var(--warning-text)" },
-  APPROVED: { bg: "var(--success-soft)", border: "rgba(34,197,94,0.3)", color: "var(--success)" },
-  REJECTED: { bg: "var(--danger-soft)", border: "rgba(239,68,68,0.25)", color: "#f87171" },
-};
-
-function StatusBadge({ value, colorMap }: { value: string; colorMap: Record<string, { bg: string; border: string; color: string }> }) {
-  const c = colorMap[value] || { bg: "transparent", border: "var(--line)", color: "var(--muted)" };
-  return (
-    <span style={{ padding: "2px 8px", borderRadius: 999, fontSize: "0.68rem", fontWeight: 700, border: `1px solid ${c.border}`, color: c.color, background: c.bg }}>
-      {value.replace(/_/g, " ")}
-    </span>
-  );
-}
+/* LIFECYCLE_COLORS, APPROVAL_COLORS, and StatusBadge imported from components/ui/StatusBadge */
 
 const panelStyle: React.CSSProperties = {
   background: "rgba(17,17,40,0.7)", border: "1px solid var(--line)", borderRadius: 16, padding: 16,
@@ -228,6 +238,18 @@ export default function AdminPromotionsPage() {
   /* tabs for selected promo */
   const [tab, setTab] = useState<"details" | "coupons" | "analytics">("details");
 
+  /* page-level analytics view */
+  const [analyticsView, setAnalyticsView] = useState(false);
+  const [analyticsData, setAnalyticsData] = useState<PromotionAnalytics[]>([]);
+  const [analyticsPage, setAnalyticsPage] = useState(0);
+  const [analyticsTotalPages, setAnalyticsTotalPages] = useState(0);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsSearch, setAnalyticsSearch] = useState("");
+  const [analyticsFilterLifecycle, setAnalyticsFilterLifecycle] = useState("");
+  const [analyticsFilterScope, setAnalyticsFilterScope] = useState("");
+  const [analyticsFilterBenefit, setAnalyticsFilterBenefit] = useState("");
+  const [analyticsFilterVendor, setAnalyticsFilterVendor] = useState("");
+
   const setField = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((s) => ({ ...s, [key]: value }));
 
   /* ───── load list ───── */
@@ -254,6 +276,29 @@ export default function AdminPromotionsPage() {
     }
   };
 
+  /* ───── load analytics list ───── */
+  const loadAnalyticsList = async (p = 0) => {
+    if (!session.apiClient) return;
+    setAnalyticsLoading(true);
+    try {
+      const params = new URLSearchParams({ page: String(p), size: "20" });
+      if (analyticsSearch.trim()) params.set("q", analyticsSearch.trim());
+      if (analyticsFilterLifecycle) params.set("lifecycleStatus", analyticsFilterLifecycle);
+      if (analyticsFilterScope) params.set("scopeType", analyticsFilterScope);
+      if (analyticsFilterBenefit) params.set("benefitType", analyticsFilterBenefit);
+      if (analyticsFilterVendor.trim()) params.set("vendorId", analyticsFilterVendor.trim());
+      const res = await session.apiClient.get(`/admin/promotions/analytics?${params.toString()}`);
+      const data = res.data as PageResponse<PromotionAnalytics>;
+      setAnalyticsData(data.content || []);
+      setAnalyticsTotalPages(data.totalPages || 0);
+      setAnalyticsPage(data.number || 0);
+    } catch (e) {
+      toast.error(getApiErrorMessage(e, "Failed to load promotion analytics."));
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (session.status !== "ready") return;
     if (!session.isAuthenticated) { router.replace("/"); return; }
@@ -262,6 +307,10 @@ export default function AdminPromotionsPage() {
   }, [session.status, session.isAuthenticated, session.canViewAdmin, router]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { void load(0); }, [filterLifecycle, filterApproval, filterScope, filterBenefit]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (analyticsView && session.status === "ready" && session.isAuthenticated) void loadAnalyticsList(0);
+  }, [analyticsView, analyticsFilterLifecycle, analyticsFilterScope, analyticsFilterBenefit, analyticsFilterVendor]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ───── select / detail ───── */
   const selectPromo = async (p: Promotion) => {
@@ -492,6 +541,28 @@ export default function AdminPromotionsPage() {
           <span className="breadcrumb-current">Promotions</span>
         </nav>
 
+        {/* ───── Page-level View Toggle ───── */}
+        {!selected && (
+          <div className="mb-4 flex gap-1" style={{ borderBottom: "1px solid var(--line)" }}>
+            {(["Promotions", "Analytics"] as const).map((v) => {
+              const isActive = v === "Analytics" ? analyticsView : !analyticsView;
+              return (
+                <button key={v} type="button" onClick={() => { setAnalyticsView(v === "Analytics"); if (v === "Promotions") setSelected(null); }}
+                  style={{
+                    padding: "10px 20px", fontWeight: 700, fontSize: "0.85rem", borderRadius: "8px 8px 0 0",
+                    border: "1px solid transparent", borderBottom: "none", cursor: "pointer",
+                    background: isActive ? "var(--brand-soft)" : "transparent",
+                    color: isActive ? "var(--brand)" : "var(--muted)",
+                    borderColor: isActive ? "var(--line-bright)" : "transparent",
+                  }}
+                >
+                  {v}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* ───── Selected Promotion Detail ───── */}
         {selected && (
           <section className="mb-5" style={panelStyle}>
@@ -632,9 +703,7 @@ export default function AdminPromotionsPage() {
                       <div key={c.id} className="flex flex-wrap items-center justify-between gap-2" style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid var(--line)", background: "rgba(255,255,255,0.02)" }}>
                         <div className="flex items-center gap-3">
                           <code style={{ color: "var(--brand)", fontWeight: 700, fontSize: "0.9rem" }}>{c.code}</code>
-                          <span style={{ padding: "2px 8px", borderRadius: 999, fontSize: "0.68rem", fontWeight: 700, border: c.active ? "1px solid rgba(34,197,94,0.3)" : "1px solid rgba(239,68,68,0.25)", color: c.active ? "var(--success)" : "#f87171", background: c.active ? "var(--success-soft)" : "var(--danger-soft)" }}>
-                            {c.active ? "Active" : "Inactive"}
-                          </span>
+                          <StatusBadge value={c.active ? "Active" : "Inactive"} colorMap={ACTIVE_INACTIVE_COLORS} />
                         </div>
                         <div className="flex items-center gap-3" style={{ fontSize: "0.78rem", color: "var(--muted)" }}>
                           {c.maxUses != null && <span>Max: {c.maxUses}</span>}
@@ -682,7 +751,7 @@ export default function AdminPromotionsPage() {
         )}
 
         {/* ───── Create / Edit Form ───── */}
-        {!selected && (
+        {!selected && !analyticsView && (
           <>
             <div className="mb-4">
               <h1 style={{ margin: 0, color: "var(--ink)", fontFamily: "'Syne', sans-serif", fontWeight: 800 }}>
@@ -702,8 +771,17 @@ export default function AdminPromotionsPage() {
                     <input value={form.name} onChange={(e) => setField("name", e.target.value)} placeholder="Summer Sale 20% Off" className="form-input" />
                   </div>
                   <div>
-                    <label className="form-label">Vendor ID (optional)</label>
-                    <input value={form.vendorId} onChange={(e) => setField("vendorId", e.target.value)} placeholder="UUID or leave empty for platform" className="form-input" />
+                    <label className="form-label">Vendor (optional)</label>
+                    <SearchableSelect
+                      apiClient={session.apiClient}
+                      endpoint="/admin/vendors"
+                      labelField="name"
+                      valueField="id"
+                      placeholder="Search vendor by name..."
+                      value={form.vendorId}
+                      onChange={(v) => setField("vendorId", v)}
+                      disabled={submitting}
+                    />
                   </div>
                 </div>
 
@@ -791,14 +869,34 @@ export default function AdminPromotionsPage() {
                   <div className="grid gap-3 md:grid-cols-2">
                     {form.scopeType === "PRODUCT" && (
                       <div>
-                        <label className="form-label">Target Product IDs (comma-separated)</label>
-                        <input value={form.targetProductIds} onChange={(e) => setField("targetProductIds", e.target.value)} placeholder="uuid1, uuid2" className="form-input" />
+                        <label className="form-label">Target Products</label>
+                        <MultiSearchSelect
+                          apiClient={session.apiClient}
+                          endpoint="/admin/products?page=0&size=10"
+                          searchParam="q"
+                          labelField="name"
+                          valueField="id"
+                          placeholder="Search products by name..."
+                          values={form.targetProductIds ? form.targetProductIds.split(",").map(s => s.trim()).filter(Boolean) : []}
+                          onChange={(vals) => setField("targetProductIds", vals.join(","))}
+                          disabled={submitting}
+                        />
                       </div>
                     )}
                     {form.scopeType === "CATEGORY" && (
                       <div>
-                        <label className="form-label">Target Category IDs (comma-separated)</label>
-                        <input value={form.targetCategoryIds} onChange={(e) => setField("targetCategoryIds", e.target.value)} placeholder="uuid1, uuid2" className="form-input" />
+                        <label className="form-label">Target Categories</label>
+                        <MultiSearchSelect
+                          apiClient={session.apiClient}
+                          endpoint="/admin/categories"
+                          searchParam="q"
+                          labelField="name"
+                          valueField="id"
+                          placeholder="Search categories by name..."
+                          values={form.targetCategoryIds ? form.targetCategoryIds.split(",").map(s => s.trim()).filter(Boolean) : []}
+                          onChange={(vals) => setField("targetCategoryIds", vals.join(","))}
+                          disabled={submitting}
+                        />
                       </div>
                     )}
                   </div>
@@ -924,6 +1022,156 @@ export default function AdminPromotionsPage() {
               )}
             </section>
           </>
+        )}
+
+        {/* ───── Promotion Analytics View ───── */}
+        {!selected && analyticsView && (
+          <section style={panelStyle}>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h2 style={{ margin: 0, color: "var(--ink)", fontFamily: "'Syne', sans-serif" }}>Promotion Analytics</h2>
+            </div>
+
+            {/* Analytics Filters */}
+            <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+              <input value={analyticsSearch} onChange={(e) => setAnalyticsSearch(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void loadAnalyticsList(0); }} placeholder="Search name..." className="form-input" />
+              <select value={analyticsFilterLifecycle} onChange={(e) => setAnalyticsFilterLifecycle(e.target.value)} className="form-select">
+                <option value="">All Lifecycle</option>
+                {(["DRAFT", "ACTIVE", "PAUSED", "ARCHIVED"] as const).map((v) => <option key={v} value={v}>{v}</option>)}
+              </select>
+              <select value={analyticsFilterScope} onChange={(e) => setAnalyticsFilterScope(e.target.value)} className="form-select">
+                <option value="">All Scope</option>
+                {(["ORDER", "VENDOR", "PRODUCT", "CATEGORY"] as const).map((v) => <option key={v} value={v}>{v}</option>)}
+              </select>
+              <select value={analyticsFilterBenefit} onChange={(e) => setAnalyticsFilterBenefit(e.target.value)} className="form-select">
+                <option value="">All Benefits</option>
+                {(["PERCENTAGE_OFF", "FIXED_AMOUNT_OFF", "FREE_SHIPPING", "BUY_X_GET_Y", "TIERED_SPEND", "BUNDLE_DISCOUNT"] as const).map((v) => <option key={v} value={v}>{v.replace(/_/g, " ")}</option>)}
+              </select>
+              <SearchableSelect
+                apiClient={session.apiClient}
+                endpoint="/admin/vendors"
+                labelField="name"
+                valueField="id"
+                placeholder="Filter by vendor..."
+                value={analyticsFilterVendor}
+                onChange={(v) => { setAnalyticsFilterVendor(v); }}
+              />
+            </div>
+
+            {analyticsLoading && <div className="skeleton" style={{ height: 200, borderRadius: 12 }} />}
+            {!analyticsLoading && analyticsData.length === 0 && <p style={{ color: "var(--muted)" }}>No analytics data found.</p>}
+
+            {!analyticsLoading && analyticsData.length > 0 && (
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.8rem" }}>
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid var(--line)" }}>
+                      {["Name", "Status", "Budget", "Coupons", "Reservations", "Committed Discount", "Dates"].map((h) => (
+                        <th key={h} style={{ padding: "10px 8px", textAlign: "left", color: "var(--muted)", fontWeight: 700, fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {analyticsData.map((a) => {
+                      const budgetPct = a.budgetAmount && a.budgetAmount > 0 ? Math.min(100, ((a.burnedBudgetAmount || 0) / a.budgetAmount) * 100) : 0;
+                      return (
+                        <tr key={a.promotionId} style={{ borderBottom: "1px solid var(--line)" }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.03)"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                        >
+                          {/* Name */}
+                          <td style={{ padding: "10px 8px", color: "var(--ink)", fontWeight: 600, maxWidth: 200 }}>
+                            <div style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.name}</div>
+                            <div style={{ fontSize: "0.7rem", color: "var(--muted)", marginTop: 2 }}>
+                              {a.scopeType} / {a.benefitType.replace(/_/g, " ")}
+                            </div>
+                          </td>
+
+                          {/* Status */}
+                          <td style={{ padding: "10px 8px", whiteSpace: "nowrap" }}>
+                            <div className="flex flex-col gap-1">
+                              <StatusBadge value={a.lifecycleStatus} colorMap={LIFECYCLE_COLORS} />
+                              <StatusBadge value={a.approvalStatus} colorMap={APPROVAL_COLORS} />
+                            </div>
+                          </td>
+
+                          {/* Budget with progress bar */}
+                          <td style={{ padding: "10px 8px", minWidth: 160 }}>
+                            {a.budgetAmount != null ? (
+                              <div>
+                                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, fontSize: "0.75rem" }}>
+                                  <span style={{ color: "var(--ink-light)" }}>{money(a.burnedBudgetAmount)} / {money(a.budgetAmount)}</span>
+                                </div>
+                                <div style={{ width: "100%", height: 6, borderRadius: 3, background: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
+                                  <div style={{
+                                    width: `${budgetPct}%`, height: "100%", borderRadius: 3,
+                                    background: budgetPct > 90 ? "#f87171" : budgetPct > 70 ? "var(--warning-text)" : "var(--success)",
+                                    transition: "width 0.3s ease",
+                                  }} />
+                                </div>
+                                <div style={{ fontSize: "0.68rem", color: "var(--muted)", marginTop: 2 }}>
+                                  Remaining: {money(a.remainingBudgetAmount)}
+                                </div>
+                              </div>
+                            ) : (
+                              <span style={{ color: "var(--muted)" }}>--</span>
+                            )}
+                          </td>
+
+                          {/* Coupons */}
+                          <td style={{ padding: "10px 8px", whiteSpace: "nowrap" }}>
+                            <div style={{ color: "var(--ink)", fontWeight: 600 }}>{a.activeCouponCodeCount} / {a.couponCodeCount}</div>
+                            <div style={{ fontSize: "0.68rem", color: "var(--muted)" }}>active / total</div>
+                          </td>
+
+                          {/* Reservations */}
+                          <td style={{ padding: "10px 8px", minWidth: 140 }}>
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                              <span style={{ color: "var(--success)", fontWeight: 600 }} title="Committed">{a.committedReservationCount}</span>
+                              <span style={{ color: "var(--muted)" }}>/</span>
+                              <span style={{ color: "var(--warning-text)", fontWeight: 600 }} title="Released">{a.releasedReservationCount}</span>
+                              <span style={{ color: "var(--muted)" }}>/</span>
+                              <span style={{ color: "#f87171", fontWeight: 600 }} title="Expired">{a.expiredReservationCount}</span>
+                            </div>
+                            <div style={{ fontSize: "0.68rem", color: "var(--muted)" }}>committed / released / expired</div>
+                            <div style={{ fontSize: "0.68rem", color: "var(--muted)", marginTop: 1 }}>Total: {a.reservationCount} | Active: {a.activeReservedReservationCount}</div>
+                          </td>
+
+                          {/* Committed Discount */}
+                          <td style={{ padding: "10px 8px", whiteSpace: "nowrap" }}>
+                            <div style={{ color: "var(--success)", fontWeight: 700 }}>{money(a.committedDiscountAmount)}</div>
+                            <div style={{ fontSize: "0.68rem", color: "var(--muted)" }}>Released: {money(a.releasedDiscountAmount)}</div>
+                          </td>
+
+                          {/* Dates */}
+                          <td style={{ padding: "10px 8px", fontSize: "0.72rem", whiteSpace: "nowrap" }}>
+                            {a.startsAt && <div style={{ color: "var(--ink-light)" }}>From: {new Date(a.startsAt).toLocaleDateString()}</div>}
+                            {a.endsAt && <div style={{ color: "var(--ink-light)" }}>To: {new Date(a.endsAt).toLocaleDateString()}</div>}
+                            {!a.startsAt && !a.endsAt && <span style={{ color: "var(--muted)" }}>No dates</span>}
+                            <div style={{ color: "var(--muted)", marginTop: 2 }}>Created: {new Date(a.createdAt).toLocaleDateString()}</div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Analytics Pagination */}
+            {analyticsTotalPages > 1 && (
+              <div className="mt-4 flex items-center justify-center gap-2">
+                <button type="button" disabled={analyticsPage === 0} onClick={() => void loadAnalyticsList(analyticsPage - 1)}
+                  style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid var(--line-bright)", background: "var(--brand-soft)", color: "var(--brand)", fontWeight: 700, fontSize: "0.8rem", opacity: analyticsPage === 0 ? 0.4 : 1, cursor: analyticsPage === 0 ? "not-allowed" : "pointer" }}>
+                  Prev
+                </button>
+                <span style={{ fontSize: "0.82rem", color: "var(--muted)" }}>Page {analyticsPage + 1} of {analyticsTotalPages}</span>
+                <button type="button" disabled={analyticsPage >= analyticsTotalPages - 1} onClick={() => void loadAnalyticsList(analyticsPage + 1)}
+                  style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid var(--line-bright)", background: "var(--brand-soft)", color: "var(--brand)", fontWeight: 700, fontSize: "0.8rem", opacity: analyticsPage >= analyticsTotalPages - 1 ? 0.4 : 1, cursor: analyticsPage >= analyticsTotalPages - 1 ? "not-allowed" : "pointer" }}>
+                  Next
+                </button>
+              </div>
+            )}
+          </section>
         )}
       </main>
       <Footer />

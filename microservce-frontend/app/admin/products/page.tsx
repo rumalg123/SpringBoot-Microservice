@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { ChangeEvent, DragEvent, FormEvent, KeyboardEvent, WheelEvent, useCallback, useEffect, useState } from "react";
+import { ChangeEvent, DragEvent, FormEvent, KeyboardEvent, WheelEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -8,12 +8,29 @@ import toast from "react-hot-toast";
 import AppNav from "../../components/AppNav";
 import Footer from "../../components/Footer";
 import ConfirmModal from "../../components/ConfirmModal";
+import ExportButton from "../../components/ui/ExportButton";
 import CategoryOperationsPanel from "../../components/admin/products/CategoryOperationsPanel";
 import ProductCatalogPanel from "../../components/admin/products/ProductCatalogPanel";
 import ProductEditorPanel from "../../components/admin/products/ProductEditorPanel";
 import { useAuthSession } from "../../../lib/authSession";
 
+type BulkOperationResult = {
+  totalRequested: number;
+  successCount: number;
+  failureCount: number;
+  errors: string[];
+};
+
+type ImportResult = {
+  totalRows: number;
+  successCount: number;
+  failureCount: number;
+  errors: string[];
+};
+
 type ProductType = "SINGLE" | "PARENT" | "VARIATION";
+
+type ApprovalStatus = "NOT_REQUIRED" | "PENDING" | "APPROVED" | "REJECTED";
 
 type ProductSummary = {
   id: string;
@@ -27,6 +44,7 @@ type ProductSummary = {
   vendorId: string;
   categories: string[];
   active: boolean;
+  approvalStatus?: ApprovalStatus;
   variations?: Array<{ name: string; value: string }>;
 };
 
@@ -48,6 +66,7 @@ type ProductDetail = {
   productType: ProductType;
   variations: Array<{ name: string; value: string }>;
   active: boolean;
+  approvalStatus?: ApprovalStatus;
 };
 
 type Category = {
@@ -294,6 +313,28 @@ export default function AdminProductsPage() {
   const [loadingActiveList, setLoadingActiveList] = useState(false);
   const [loadingDeletedList, setLoadingDeletedList] = useState(false);
   const [loadingVendors, setLoadingVendors] = useState(false);
+
+  /* ---- Bulk operations & import/export state ---- */
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+  const [importingCsv, setImportingCsv] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkPriceUpdating, setBulkPriceUpdating] = useState(false);
+  const [bulkReassigning, setBulkReassigning] = useState(false);
+  const [showBulkPriceModal, setShowBulkPriceModal] = useState(false);
+  const [showBulkCategoryModal, setShowBulkCategoryModal] = useState(false);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [bulkRegularPrice, setBulkRegularPrice] = useState("");
+  const [bulkDiscountedPrice, setBulkDiscountedPrice] = useState("");
+  const [bulkTargetCategoryId, setBulkTargetCategoryId] = useState("");
+  const importFileRef = useRef<HTMLInputElement>(null);
+
+  /* ---- Approval workflow state ---- */
+  const [approvingProductId, setApprovingProductId] = useState<string | null>(null);
+  const [rejectingProductId, setRejectingProductId] = useState<string | null>(null);
+  const [submitForReviewProductId, setSubmitForReviewProductId] = useState<string | null>(null);
+  const [showRejectModal, setShowRejectModal] = useState<{ id: string; name: string } | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+
   const canManageCategories = session.canManageAdminCategories;
   const canSelectAnyVendor = session.isSuperAdmin || session.isPlatformStaff;
 
@@ -1186,6 +1227,225 @@ export default function AdminProductsPage() {
     }
   };
 
+  /* ---- Selection helpers ---- */
+  const toggleProductSelection = (id: string) => {
+    setSelectedProductIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAllCurrentPage = () => {
+    const currentRows = showDeleted ? deletedPage?.content || [] : activePage?.content || [];
+    const currentIds = currentRows.map((p) => p.id);
+    const allSelected = currentIds.length > 0 && currentIds.every((id) => selectedProductIds.includes(id));
+    if (allSelected) {
+      setSelectedProductIds((prev) => prev.filter((id) => !currentIds.includes(id)));
+    } else {
+      setSelectedProductIds((prev) => {
+        const set = new Set(prev);
+        currentIds.forEach((id) => set.add(id));
+        return Array.from(set);
+      });
+    }
+  };
+
+  /* ---- CSV Import handler ---- */
+  const handleCsvImport = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !session.apiClient) return;
+    setImportingCsv(true);
+    setStatus("Importing products from CSV...");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await session.apiClient.post("/admin/products/import", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const result = res.data as ImportResult;
+      const successMsg = `Import complete: ${result.successCount}/${result.totalRows} succeeded`;
+      if (result.failureCount > 0) {
+        toast.error(`${successMsg}, ${result.failureCount} failed`);
+        if (result.errors?.length) {
+          result.errors.slice(0, 5).forEach((err) => toast.error(err, { duration: 6000 }));
+        }
+      } else {
+        toast.success(successMsg);
+      }
+      setStatus(successMsg);
+      await Promise.all([loadActive(0), loadDeleted(0), loadParentProducts()]);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "CSV import failed";
+      setStatus(message);
+      toast.error(message);
+    } finally {
+      setImportingCsv(false);
+      if (importFileRef.current) importFileRef.current.value = "";
+    }
+  };
+
+  /* ---- Bulk Delete handler ---- */
+  const handleBulkDelete = async () => {
+    if (!session.apiClient || selectedProductIds.length === 0) return;
+    setBulkDeleting(true);
+    setStatus(`Bulk deleting ${selectedProductIds.length} product(s)...`);
+    try {
+      const res = await session.apiClient.post("/admin/products/bulk-delete", {
+        productIds: selectedProductIds,
+      });
+      const result = res.data as BulkOperationResult;
+      const msg = `Bulk delete: ${result.successCount}/${result.totalRequested} succeeded`;
+      if (result.failureCount > 0) {
+        toast.error(`${msg}, ${result.failureCount} failed`);
+        result.errors?.slice(0, 5).forEach((err) => toast.error(err, { duration: 6000 }));
+      } else {
+        toast.success(msg);
+      }
+      setStatus(msg);
+      setSelectedProductIds([]);
+      await Promise.all([loadActive(0), loadDeleted(0), loadParentProducts()]);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Bulk delete failed";
+      setStatus(message);
+      toast.error(message);
+    } finally {
+      setBulkDeleting(false);
+      setShowBulkDeleteConfirm(false);
+    }
+  };
+
+  /* ---- Bulk Price Update handler ---- */
+  const handleBulkPriceUpdate = async () => {
+    if (!session.apiClient || selectedProductIds.length === 0) return;
+    const regularPrice = Number(bulkRegularPrice);
+    if (!Number.isFinite(regularPrice) || regularPrice <= 0) {
+      toast.error("Regular price must be greater than 0");
+      return;
+    }
+    const discountedPrice = bulkDiscountedPrice.trim() ? Number(bulkDiscountedPrice) : undefined;
+    if (discountedPrice !== undefined && (!Number.isFinite(discountedPrice) || discountedPrice < 0)) {
+      toast.error("Discounted price must be 0 or greater");
+      return;
+    }
+    if (discountedPrice !== undefined && discountedPrice > regularPrice) {
+      toast.error("Discounted price cannot exceed regular price");
+      return;
+    }
+    setBulkPriceUpdating(true);
+    setStatus(`Updating prices for ${selectedProductIds.length} product(s)...`);
+    try {
+      const items = selectedProductIds.map((productId) => ({
+        productId,
+        regularPrice,
+        ...(discountedPrice !== undefined ? { discountedPrice } : {}),
+      }));
+      const res = await session.apiClient.post("/admin/products/bulk-price-update", { items });
+      const result = res.data as BulkOperationResult;
+      const msg = `Price update: ${result.successCount}/${result.totalRequested} succeeded`;
+      if (result.failureCount > 0) {
+        toast.error(`${msg}, ${result.failureCount} failed`);
+        result.errors?.slice(0, 5).forEach((err) => toast.error(err, { duration: 6000 }));
+      } else {
+        toast.success(msg);
+      }
+      setStatus(msg);
+      setSelectedProductIds([]);
+      setShowBulkPriceModal(false);
+      setBulkRegularPrice("");
+      setBulkDiscountedPrice("");
+      await Promise.all([loadActive(page), loadDeleted(deletedPageIndex)]);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Bulk price update failed";
+      setStatus(message);
+      toast.error(message);
+    } finally {
+      setBulkPriceUpdating(false);
+    }
+  };
+
+  /* ---- Bulk Category Reassign handler ---- */
+  const handleBulkCategoryReassign = async () => {
+    if (!session.apiClient || selectedProductIds.length === 0) return;
+    if (!bulkTargetCategoryId.trim()) {
+      toast.error("Select a target category");
+      return;
+    }
+    setBulkReassigning(true);
+    setStatus(`Reassigning ${selectedProductIds.length} product(s) to category...`);
+    try {
+      const res = await session.apiClient.post("/admin/products/bulk-category-reassign", {
+        productIds: selectedProductIds,
+        targetCategoryId: bulkTargetCategoryId.trim(),
+      });
+      const result = res.data as BulkOperationResult;
+      const msg = `Category reassign: ${result.successCount}/${result.totalRequested} succeeded`;
+      if (result.failureCount > 0) {
+        toast.error(`${msg}, ${result.failureCount} failed`);
+        result.errors?.slice(0, 5).forEach((err) => toast.error(err, { duration: 6000 }));
+      } else {
+        toast.success(msg);
+      }
+      setStatus(msg);
+      setSelectedProductIds([]);
+      setShowBulkCategoryModal(false);
+      setBulkTargetCategoryId("");
+      await Promise.all([loadActive(page), loadDeleted(deletedPageIndex)]);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Bulk category reassign failed";
+      setStatus(message);
+      toast.error(message);
+    } finally {
+      setBulkReassigning(false);
+    }
+  };
+
+  /* ---- Approval Workflow handlers ---- */
+  const submitForReview = async (productId: string) => {
+    if (!session.apiClient || submitForReviewProductId) return;
+    setSubmitForReviewProductId(productId);
+    try {
+      await session.apiClient.post(`/admin/products/${productId}/submit-for-review`);
+      toast.success("Product submitted for review");
+      await reloadCurrentView();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to submit for review";
+      toast.error(message);
+    } finally {
+      setSubmitForReviewProductId(null);
+    }
+  };
+
+  const approveProduct = async (productId: string) => {
+    if (!session.apiClient || approvingProductId) return;
+    setApprovingProductId(productId);
+    try {
+      await session.apiClient.post(`/admin/products/${productId}/approve`);
+      toast.success("Product approved");
+      await reloadCurrentView();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to approve product";
+      toast.error(message);
+    } finally {
+      setApprovingProductId(null);
+    }
+  };
+
+  const rejectProduct = async (productId: string, reason: string) => {
+    if (!session.apiClient || rejectingProductId) return;
+    setRejectingProductId(productId);
+    try {
+      await session.apiClient.post(`/admin/products/${productId}/reject`, { reason });
+      toast.success("Product rejected");
+      setShowRejectModal(null);
+      setRejectReason("");
+      await reloadCurrentView();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to reject product";
+      toast.error(message);
+    } finally {
+      setRejectingProductId(null);
+    }
+  };
+
   const uploadImages = async (e: ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files ? Array.from(e.target.files) : [];
     if (!session.apiClient || files.length === 0) return;
@@ -1289,6 +1549,7 @@ export default function AdminProductsPage() {
       ? "Discounted price cannot be greater than regular price."
       : null;
   const listLoading = showDeleted ? loadingDeletedList : loadingActiveList;
+  const bulkOperationBusy = bulkDeleting || bulkPriceUpdating || bulkReassigning || importingCsv;
   const productMutationBusy = savingProduct || creatingQueuedVariationBatch || uploadingImages;
   const productRowActionBusy = Boolean(loadingProductId) || confirmLoading || Boolean(restoringProductId) || listLoading;
   const categoryMutationBusy = savingCategory || confirmLoading || Boolean(restoringCategoryId);
@@ -1348,7 +1609,133 @@ export default function AdminProductsPage() {
           <span className="breadcrumb-current">Admin Products</span>
         </nav>
 
-        <section className="animate-rise space-y-4 rounded-xl p-5" style={{ background: "rgba(17,17,40,0.7)", border: "1px solid rgba(0,212,255,0.1)", backdropFilter: "blur(16px)" }}>          <div className="grid gap-6 lg:grid-cols-[1.1fr,0.9fr]">
+        <section className="animate-rise space-y-4 rounded-xl p-5" style={{ background: "rgba(17,17,40,0.7)", border: "1px solid rgba(0,212,255,0.1)", backdropFilter: "blur(16px)" }}>
+          {/* ---- Import / Export Toolbar ---- */}
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, marginBottom: 4 }}>
+            <ExportButton
+              apiClient={session.apiClient}
+              endpoint="/admin/products/export"
+              filename={`products-export-${new Date().toISOString().slice(0, 10)}.csv`}
+              label="Export CSV"
+              params={{ format: "csv" }}
+            />
+
+            <input
+              ref={importFileRef}
+              type="file"
+              accept=".csv,text/csv"
+              onChange={(e) => { void handleCsvImport(e); }}
+              style={{ display: "none" }}
+            />
+            <button
+              type="button"
+              onClick={() => importFileRef.current?.click()}
+              disabled={importingCsv || !session.apiClient}
+              className="btn-outline"
+              style={{ fontSize: "0.78rem", padding: "7px 14px", display: "inline-flex", alignItems: "center", gap: 6 }}
+            >
+              {importingCsv ? (
+                <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid var(--brand)", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.6s linear infinite" }} />
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              )}
+              Import CSV
+            </button>
+          </div>
+
+          {/* ---- Bulk Actions Bar (when products selected) ---- */}
+          {selectedProductIds.length > 0 && !showDeleted && (
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                gap: 10,
+                padding: "10px 14px",
+                borderRadius: 12,
+                background: "rgba(0,212,255,0.06)",
+                border: "1px solid rgba(0,212,255,0.18)",
+              }}
+            >
+              <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--brand, #00d4ff)" }}>
+                {selectedProductIds.length} selected
+              </span>
+
+              <button
+                type="button"
+                onClick={() => setShowBulkDeleteConfirm(true)}
+                disabled={bulkOperationBusy}
+                style={{
+                  fontSize: "0.78rem",
+                  padding: "6px 12px",
+                  borderRadius: 8,
+                  border: "1px solid rgba(239,68,68,0.3)",
+                  background: "rgba(239,68,68,0.08)",
+                  color: "#f87171",
+                  cursor: bulkOperationBusy ? "not-allowed" : "pointer",
+                  opacity: bulkOperationBusy ? 0.5 : 1,
+                }}
+              >
+                {bulkDeleting ? "Deleting..." : "Bulk Delete"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setBulkRegularPrice(""); setBulkDiscountedPrice(""); setShowBulkPriceModal(true); }}
+                disabled={bulkOperationBusy}
+                style={{
+                  fontSize: "0.78rem",
+                  padding: "6px 12px",
+                  borderRadius: 8,
+                  border: "1px solid rgba(0,212,255,0.2)",
+                  background: "rgba(0,212,255,0.06)",
+                  color: "var(--ink-light, #dfe7ff)",
+                  cursor: bulkOperationBusy ? "not-allowed" : "pointer",
+                  opacity: bulkOperationBusy ? 0.5 : 1,
+                }}
+              >
+                {bulkPriceUpdating ? "Updating..." : "Bulk Price Update"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setBulkTargetCategoryId(""); setShowBulkCategoryModal(true); }}
+                disabled={bulkOperationBusy}
+                style={{
+                  fontSize: "0.78rem",
+                  padding: "6px 12px",
+                  borderRadius: 8,
+                  border: "1px solid rgba(124,58,237,0.25)",
+                  background: "rgba(124,58,237,0.08)",
+                  color: "#a78bfa",
+                  cursor: bulkOperationBusy ? "not-allowed" : "pointer",
+                  opacity: bulkOperationBusy ? 0.5 : 1,
+                }}
+              >
+                {bulkReassigning ? "Reassigning..." : "Bulk Reassign Category"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedProductIds([])}
+                disabled={bulkOperationBusy}
+                style={{
+                  fontSize: "0.75rem",
+                  padding: "5px 10px",
+                  borderRadius: 8,
+                  border: "1px solid var(--line, rgba(255,255,255,0.1))",
+                  background: "transparent",
+                  color: "var(--muted)",
+                  cursor: "pointer",
+                  marginLeft: "auto",
+                }}
+              >
+                Clear selection
+              </button>
+            </div>
+          )}
+
+          <div className="grid gap-6 lg:grid-cols-[1.1fr,0.9fr]">
             <ProductCatalogPanel
               title={title}
               showDeleted={showDeleted}
@@ -1371,8 +1758,11 @@ export default function AdminProductsPage() {
               productRowActionBusy={productRowActionBusy}
               loadingProductId={loadingProductId}
               restoringProductId={restoringProductId}
-              onShowActive={() => setShowDeleted(false)}
-              onShowDeleted={() => setShowDeleted(true)}
+              selectedProductIds={selectedProductIds}
+              onToggleProductSelection={toggleProductSelection}
+              onToggleSelectAllCurrentPage={toggleSelectAllCurrentPage}
+              onShowActive={() => { setShowDeleted(false); setSelectedProductIds([]); }}
+              onShowDeleted={() => { setShowDeleted(true); setSelectedProductIds([]); }}
               onQChange={setQ}
               onSkuChange={setSku}
               onCategoryChange={setCategory}
@@ -1390,6 +1780,17 @@ export default function AdminProductsPage() {
                   return loadDeleted(nextPage);
                 }
                 return loadActive(nextPage);
+              }}
+              /* Approval workflow */
+              canApproveReject={canSelectAnyVendor}
+              approvingProductId={approvingProductId}
+              rejectingProductId={rejectingProductId}
+              submitForReviewProductId={submitForReviewProductId}
+              onSubmitForReview={(id) => submitForReview(id)}
+              onApproveProduct={(id) => approveProduct(id)}
+              onRejectProductRequest={(product) => {
+                setShowRejectModal({ id: product.id, name: product.name });
+                setRejectReason("");
               }}
             />
 
@@ -1548,6 +1949,254 @@ export default function AdminProductsPage() {
             setConfirmLoading(false);
             setConfirmAction(null);
           }
+        }}
+      />
+
+      {/* ---- Bulk Delete Confirm Modal ---- */}
+      <ConfirmModal
+        open={showBulkDeleteConfirm}
+        title="Bulk Delete Products"
+        message={`Are you sure you want to delete ${selectedProductIds.length} product(s)? This action can be reversed from the deleted items list.`}
+        confirmLabel={bulkDeleting ? "Deleting..." : "Delete All"}
+        cancelLabel="Cancel"
+        danger
+        loading={bulkDeleting}
+        onCancel={() => setShowBulkDeleteConfirm(false)}
+        onConfirm={() => { void handleBulkDelete(); }}
+      />
+
+      {/* ---- Bulk Price Update Modal ---- */}
+      {showBulkPriceModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1000,
+            display: "grid",
+            placeItems: "center",
+            background: "rgba(0,0,0,0.6)",
+            backdropFilter: "blur(4px)",
+          }}
+          onClick={() => { if (!bulkPriceUpdating) setShowBulkPriceModal(false); }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "var(--surface, #16162a)",
+              border: "1px solid var(--line, rgba(255,255,255,0.1))",
+              borderRadius: 16,
+              padding: "24px 28px",
+              width: "100%",
+              maxWidth: 420,
+              color: "var(--ink, #fff)",
+            }}
+          >
+            <h3 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: 4, color: "var(--ink, #fff)" }}>
+              Bulk Price Update
+            </h3>
+            <p style={{ fontSize: "0.8rem", color: "var(--muted)", marginBottom: 16 }}>
+              Update prices for {selectedProductIds.length} selected product(s).
+            </p>
+
+            <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "var(--ink-light, #dfe7ff)", marginBottom: 4 }}>
+              Regular Price *
+            </label>
+            <input
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={bulkRegularPrice}
+              onChange={(e) => setBulkRegularPrice(e.target.value)}
+              placeholder="e.g. 29.99"
+              style={{
+                width: "100%",
+                padding: "10px 14px",
+                borderRadius: 10,
+                border: "1px solid var(--line, rgba(255,255,255,0.12))",
+                background: "var(--surface-2, rgba(255,255,255,0.04))",
+                color: "var(--ink, #fff)",
+                fontSize: "0.9rem",
+                marginBottom: 12,
+                outline: "none",
+              }}
+            />
+
+            <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "var(--ink-light, #dfe7ff)", marginBottom: 4 }}>
+              Discounted Price (optional)
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={bulkDiscountedPrice}
+              onChange={(e) => setBulkDiscountedPrice(e.target.value)}
+              placeholder="Leave blank to keep unchanged"
+              style={{
+                width: "100%",
+                padding: "10px 14px",
+                borderRadius: 10,
+                border: "1px solid var(--line, rgba(255,255,255,0.12))",
+                background: "var(--surface-2, rgba(255,255,255,0.04))",
+                color: "var(--ink, #fff)",
+                fontSize: "0.9rem",
+                marginBottom: 20,
+                outline: "none",
+              }}
+            />
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <button
+                type="button"
+                onClick={() => setShowBulkPriceModal(false)}
+                disabled={bulkPriceUpdating}
+                className="btn-outline"
+                style={{ fontSize: "0.82rem", padding: "8px 16px" }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => { void handleBulkPriceUpdate(); }}
+                disabled={bulkPriceUpdating || !bulkRegularPrice.trim()}
+                className="btn-primary"
+                style={{ fontSize: "0.82rem", padding: "8px 16px", display: "inline-flex", alignItems: "center", gap: 6 }}
+              >
+                {bulkPriceUpdating && (
+                  <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid #fff", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.6s linear infinite" }} />
+                )}
+                {bulkPriceUpdating ? "Updating..." : "Update Prices"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---- Bulk Category Reassign Modal ---- */}
+      {showBulkCategoryModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1000,
+            display: "grid",
+            placeItems: "center",
+            background: "rgba(0,0,0,0.6)",
+            backdropFilter: "blur(4px)",
+          }}
+          onClick={() => { if (!bulkReassigning) setShowBulkCategoryModal(false); }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "var(--surface, #16162a)",
+              border: "1px solid var(--line, rgba(255,255,255,0.1))",
+              borderRadius: 16,
+              padding: "24px 28px",
+              width: "100%",
+              maxWidth: 420,
+              color: "var(--ink, #fff)",
+            }}
+          >
+            <h3 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: 4, color: "var(--ink, #fff)" }}>
+              Bulk Reassign Category
+            </h3>
+            <p style={{ fontSize: "0.8rem", color: "var(--muted)", marginBottom: 16 }}>
+              Reassign {selectedProductIds.length} selected product(s) to a new category.
+            </p>
+
+            <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "var(--ink-light, #dfe7ff)", marginBottom: 4 }}>
+              Target Category *
+            </label>
+            <select
+              value={bulkTargetCategoryId}
+              onChange={(e) => setBulkTargetCategoryId(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "10px 14px",
+                borderRadius: 10,
+                border: "1px solid var(--line, rgba(255,255,255,0.12))",
+                background: "var(--surface-2, rgba(255,255,255,0.04))",
+                color: "var(--ink, #fff)",
+                fontSize: "0.9rem",
+                marginBottom: 20,
+                outline: "none",
+              }}
+            >
+              <option value="">-- Select a category --</option>
+              {categories.filter((c) => c.type === "PARENT").length > 0 && (
+                <optgroup label="Main Categories">
+                  {categories
+                    .filter((c) => c.type === "PARENT")
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                </optgroup>
+              )}
+              {categories.filter((c) => c.type === "SUB").length > 0 && (
+                <optgroup label="Sub Categories">
+                  {categories
+                    .filter((c) => c.type === "SUB")
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                </optgroup>
+              )}
+            </select>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <button
+                type="button"
+                onClick={() => setShowBulkCategoryModal(false)}
+                disabled={bulkReassigning}
+                className="btn-outline"
+                style={{ fontSize: "0.82rem", padding: "8px 16px" }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => { void handleBulkCategoryReassign(); }}
+                disabled={bulkReassigning || !bulkTargetCategoryId.trim()}
+                className="btn-primary"
+                style={{ fontSize: "0.82rem", padding: "8px 16px", display: "inline-flex", alignItems: "center", gap: 6 }}
+              >
+                {bulkReassigning && (
+                  <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid #fff", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.6s linear infinite" }} />
+                )}
+                {bulkReassigning ? "Reassigning..." : "Reassign Category"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---- Reject Product Modal ---- */}
+      <ConfirmModal
+        open={showRejectModal !== null}
+        title="Reject Product"
+        message={`Are you sure you want to reject "${showRejectModal?.name ?? ""}"? Provide a reason below.`}
+        confirmLabel={rejectingProductId ? "Rejecting..." : "Reject"}
+        cancelLabel="Cancel"
+        danger
+        loading={Boolean(rejectingProductId)}
+        reasonEnabled
+        reasonLabel="Rejection Reason *"
+        reasonPlaceholder="Enter a reason for rejecting this product..."
+        reasonValue={rejectReason}
+        onReasonChange={setRejectReason}
+        onCancel={() => {
+          setShowRejectModal(null);
+          setRejectReason("");
+        }}
+        onConfirm={() => {
+          if (!showRejectModal) return;
+          if (!rejectReason.trim()) {
+            toast.error("Rejection reason is required");
+            return;
+          }
+          void rejectProduct(showRejectModal.id, rejectReason.trim());
         }}
       />
 

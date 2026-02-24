@@ -1,4 +1,5 @@
 export type VendorStatus = "PENDING" | "ACTIVE" | "SUSPENDED";
+export type VerificationStatus = "UNVERIFIED" | "PENDING_VERIFICATION" | "VERIFIED" | "VERIFICATION_REJECTED";
 export type VendorUserRole = "OWNER" | "MANAGER";
 export type SlugStatus = "idle" | "checking" | "available" | "taken" | "invalid";
 
@@ -14,6 +15,7 @@ export type Vendor = {
   deleted: boolean;
   deletionRequestedAt?: string | null;
   deletionRequestReason?: string | null;
+  verificationStatus?: VerificationStatus;
 };
 
 export type VendorUser = {

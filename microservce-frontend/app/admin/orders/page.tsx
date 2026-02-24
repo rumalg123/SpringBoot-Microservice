@@ -4,6 +4,7 @@ import Link from "next/link";
 import AppNav from "../../components/AppNav";
 import Footer from "../../components/Footer";
 import Pagination from "../../components/Pagination";
+import ExportButton from "../../components/ui/ExportButton";
 import OrderBulkActionsBar from "../../components/admin/orders/OrderBulkActionsBar";
 import OrderFiltersBar from "../../components/admin/orders/OrderFiltersBar";
 import OrdersTable from "../../components/admin/orders/OrdersTable";
@@ -136,9 +137,21 @@ export default function AdminOrdersPage() {
             <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: "1.75rem", fontWeight: 800, color: "#fff", margin: 0 }}>All Orders</h1>
             <p style={{ marginTop: "4px", fontSize: "0.8rem", color: "var(--muted)" }}>Manage and inspect all customer orders</p>
           </div>
-          <span style={{ background: "linear-gradient(135deg, #00d4ff, #7c3aed)", color: "#fff", padding: "3px 14px", borderRadius: "20px", fontSize: "0.75rem", fontWeight: 800 }}>
-            {totalElements} total
-          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            <ExportButton
+              apiClient={session.apiClient}
+              endpoint="/admin/orders/export"
+              filename={`orders-export-${new Date().toISOString().slice(0, 10)}.csv`}
+              label="Export CSV"
+              params={{
+                format: "csv",
+                ...(customerEmailFilter ? { customerEmail: customerEmailFilter } : {}),
+              }}
+            />
+            <span style={{ background: "linear-gradient(135deg, #00d4ff, #7c3aed)", color: "#fff", padding: "3px 14px", borderRadius: "20px", fontSize: "0.75rem", fontWeight: 800 }}>
+              {totalElements} total
+            </span>
+          </div>
         </div>
 
         <section className="animate-rise" style={{ ...glassCard, padding: "20px" }}>

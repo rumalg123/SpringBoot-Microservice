@@ -15,6 +15,7 @@ type Props = {
   canViewAdmin?: boolean;
   canManageAdminOrders?: boolean;
   canManageAdminProducts?: boolean;
+  canManageAdminCategories?: boolean;
   canManageAdminVendors?: boolean;
   canManageAdminPosters?: boolean;
   apiClient?: AxiosInstance | null;
@@ -29,6 +30,7 @@ export default function AppNav({
   canViewAdmin = false,
   canManageAdminOrders,
   canManageAdminProducts,
+  canManageAdminCategories,
   canManageAdminVendors,
   canManageAdminPosters,
   apiClient = null,
@@ -57,9 +59,14 @@ export default function AppNav({
   const showAdminProducts = canManageAdminProducts ?? canViewAdmin;
   const showAdminVendors = canManageAdminVendors ?? isSuperAdmin;
   const showAdminPosters = canManageAdminPosters ?? canViewAdmin;
+  const showAdminCategories = canManageAdminCategories ?? isSuperAdmin;
   const showAdminPromotions = canViewAdmin;
   const showVendorStaffAdmin = isSuperAdmin || isVendorAdmin;
-  const showAnyAdminLinks = showAdminOrders || showAdminProducts || showAdminVendors || showVendorStaffAdmin || showAdminPosters || showAdminPromotions;
+  const showAdminDashboard = isSuperAdmin;
+  const showAdminPermissionGroups = isSuperAdmin;
+  const showAdminAccessAudit = isSuperAdmin;
+  const showAnyAdminLinks = showAdminOrders || showAdminProducts || showAdminVendors || showVendorStaffAdmin || showAdminPosters || showAdminPromotions || showAdminDashboard || showAdminCategories;
+  const showVendorPortal = isVendorAdmin;
 
   return (
     <header
@@ -167,6 +174,7 @@ export default function AppNav({
             { href: "/wishlist", label: "Wishlist" },
             { href: "/cart", label: "Cart" },
             { href: "/orders", label: "My Orders" },
+            { href: "/promotions", label: "Promotions" },
             { href: "/profile", label: "Profile" },
           ].map(({ href, label }) => (
             <Link
@@ -183,9 +191,36 @@ export default function AppNav({
               {label}
             </Link>
           ))}
+          {showVendorPortal && (
+            <>
+              <span className="mx-1 hidden h-4 w-px bg-white/10 md:inline-block" />
+              <Link href="/vendor"
+                className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
+                style={{
+                  color: isActive("/vendor") ? "#34d399" : "rgba(52,211,153,0.6)",
+                  background: isActive("/vendor") ? "rgba(52,211,153,0.1)" : "transparent",
+                  border: isActive("/vendor") ? "1px solid rgba(52,211,153,0.25)" : "1px solid transparent",
+                }}
+              >
+                Vendor Portal
+              </Link>
+            </>
+          )}
           {showAnyAdminLinks && (
             <>
               <span className="mx-1 hidden h-4 w-px bg-white/10 md:inline-block" />
+              {showAdminDashboard && (
+                <Link href="/admin/dashboard"
+                  className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
+                  style={{
+                    color: isActive("/admin/dashboard") ? "#a78bfa" : "rgba(167,139,250,0.6)",
+                    background: isActive("/admin/dashboard") ? "var(--accent-soft)" : "transparent",
+                    border: isActive("/admin/dashboard") ? "1px solid var(--accent-glow)" : "1px solid transparent",
+                  }}
+                >
+                  Dashboard
+                </Link>
+              )}
               {showAdminOrders && (
                 <Link href="/admin/orders"
                   className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
@@ -208,6 +243,18 @@ export default function AppNav({
                   }}
                 >
                   Admin Products
+                </Link>
+              )}
+              {showAdminCategories && (
+                <Link href="/admin/categories"
+                  className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
+                  style={{
+                    color: isActive("/admin/categories") ? "#a78bfa" : "rgba(167,139,250,0.6)",
+                    background: isActive("/admin/categories") ? "var(--accent-soft)" : "transparent",
+                    border: isActive("/admin/categories") ? "1px solid var(--accent-glow)" : "1px solid transparent",
+                  }}
+                >
+                  Categories
                 </Link>
               )}
               {showAdminVendors && (
@@ -268,6 +315,30 @@ export default function AppNav({
                   }}
                 >
                   Promotions
+                </Link>
+              )}
+              {showAdminPermissionGroups && (
+                <Link href="/admin/permission-groups"
+                  className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
+                  style={{
+                    color: isActive("/admin/permission-groups") ? "#a78bfa" : "rgba(167,139,250,0.6)",
+                    background: isActive("/admin/permission-groups") ? "var(--accent-soft)" : "transparent",
+                    border: isActive("/admin/permission-groups") ? "1px solid var(--accent-glow)" : "1px solid transparent",
+                  }}
+                >
+                  Permissions
+                </Link>
+              )}
+              {showAdminAccessAudit && (
+                <Link href="/admin/access-audit"
+                  className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
+                  style={{
+                    color: isActive("/admin/access-audit") ? "#a78bfa" : "rgba(167,139,250,0.6)",
+                    background: isActive("/admin/access-audit") ? "var(--accent-soft)" : "transparent",
+                    border: isActive("/admin/access-audit") ? "1px solid var(--accent-glow)" : "1px solid transparent",
+                  }}
+                >
+                  Access Audit
                 </Link>
               )}
             </>
