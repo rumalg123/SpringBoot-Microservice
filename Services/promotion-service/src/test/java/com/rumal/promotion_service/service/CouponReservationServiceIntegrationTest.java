@@ -329,6 +329,7 @@ class CouponReservationServiceIntegrationTest {
                 )),
                 new BigDecimal("0.00"),
                 customerId,
+                null,
                 couponCode,
                 "US",
                 Instant.parse("2026-02-23T10:00:00Z")

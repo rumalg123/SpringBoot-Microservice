@@ -197,10 +197,18 @@ class AdminPromotionAccessScopeServiceTest {
                 fundingSource,
                 true,
                 false,
+                null,
+                null,
                 true,
                 10,
+                null,
+                false,
+                null,
+                null,
+                null,
                 Instant.parse("2026-02-23T00:00:00Z"),
-                Instant.parse("2026-02-28T00:00:00Z")
+                Instant.parse("2026-02-28T00:00:00Z"),
+                null
         );
     }
 }
