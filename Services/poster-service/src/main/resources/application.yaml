@@ -5,6 +5,11 @@ spring:
     url: ${POSTER_DB_URL:jdbc:postgresql://poster-db:5432/poster_db}
     username: ${POSTER_DB_USER:poster_user}
     password: ${POSTER_DB_PASS:poster_pass}
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      timeout: ${REDIS_TIMEOUT:2s}
   jpa:
     hibernate:
       ddl-auto: create-drop
