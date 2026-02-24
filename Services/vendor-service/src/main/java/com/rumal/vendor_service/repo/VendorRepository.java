@@ -2,6 +2,8 @@ package com.rumal.vendor_service.repo;
 
 import com.rumal.vendor_service.entity.Vendor;
 import com.rumal.vendor_service.entity.VendorStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -18,8 +20,20 @@ public interface VendorRepository extends JpaRepository<Vendor, UUID> {
     List<Vendor> findByDeletedTrueOrderByUpdatedAtDesc();
     List<Vendor> findByDeletedFalseAndActiveTrueAndStatusOrderByNameAsc(VendorStatus status);
 
+    Page<Vendor> findByDeletedFalseOrderByNameAsc(Pageable pageable);
+    Page<Vendor> findByDeletedTrueOrderByUpdatedAtDesc(Pageable pageable);
+    Page<Vendor> findByDeletedFalseAndActiveTrueAndStatusOrderByNameAsc(VendorStatus status, Pageable pageable);
+
     @Query("SELECT DISTINCT v FROM Vendor v LEFT JOIN v.specializations s " +
            "WHERE v.deleted = false AND v.active = true AND v.status = :status " +
            "AND (v.primaryCategory = :category OR s = :category)")
     List<Vendor> findActiveVendorsByCategory(@Param("status") VendorStatus status, @Param("category") String category);
+
+    @Query(value = "SELECT DISTINCT v FROM Vendor v LEFT JOIN v.specializations s " +
+           "WHERE v.deleted = false AND v.active = true AND v.status = :status " +
+           "AND (v.primaryCategory = :category OR s = :category)",
+           countQuery = "SELECT COUNT(DISTINCT v) FROM Vendor v LEFT JOIN v.specializations s " +
+           "WHERE v.deleted = false AND v.active = true AND v.status = :status " +
+           "AND (v.primaryCategory = :category OR s = :category)")
+    Page<Vendor> findActiveVendorsByCategory(@Param("status") VendorStatus status, @Param("category") String category, Pageable pageable);
 }

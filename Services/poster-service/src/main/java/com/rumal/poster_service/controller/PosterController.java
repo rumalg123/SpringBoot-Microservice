@@ -8,6 +8,9 @@ import com.rumal.poster_service.storage.PosterImageStorageService;
 import com.rumal.poster_service.storage.StoredImage;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -23,7 +26,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.HandlerMapping;
 
 import java.time.Duration;
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -35,10 +37,13 @@ public class PosterController {
     private final PosterImageStorageService posterImageStorageService;
 
     @GetMapping
-    public List<PosterResponse> list(
-            @RequestParam(required = false) PosterPlacement placement
+    public Page<PosterResponse> list(
+            @RequestParam(required = false) PosterPlacement placement,
+            @PageableDefault(size = 20, sort = "name") Pageable pageable
     ) {
-        return placement == null ? posterService.listAllActive() : posterService.listActiveByPlacement(placement);
+        return placement == null
+                ? posterService.listAllActive(pageable)
+                : posterService.listActiveByPlacement(placement, pageable);
     }
 
     @GetMapping("/slug-available")

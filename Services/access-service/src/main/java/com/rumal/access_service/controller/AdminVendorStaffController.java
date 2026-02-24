@@ -6,6 +6,9 @@ import com.rumal.access_service.security.InternalRequestVerifier;
 import com.rumal.access_service.service.AccessService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,7 +22,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -32,18 +34,22 @@ public class AdminVendorStaffController {
     private final AccessService accessService;
 
     @GetMapping
-    public List<VendorStaffAccessResponse> listAll(
+    public Page<VendorStaffAccessResponse> listAll(
             @RequestHeader(INTERNAL_HEADER) String internalAuth,
-            @RequestParam(required = false) UUID vendorId
+            @RequestParam(required = false) UUID vendorId,
+            @PageableDefault(size = 20, sort = "email") Pageable pageable
     ) {
         internalRequestVerifier.verify(internalAuth);
-        return accessService.listVendorStaff(vendorId);
+        return accessService.listVendorStaff(vendorId, pageable);
     }
 
     @GetMapping("/deleted")
-    public List<VendorStaffAccessResponse> listDeleted(@RequestHeader(INTERNAL_HEADER) String internalAuth) {
+    public Page<VendorStaffAccessResponse> listDeleted(
+            @RequestHeader(INTERNAL_HEADER) String internalAuth,
+            @PageableDefault(size = 20, sort = "email") Pageable pageable
+    ) {
         internalRequestVerifier.verify(internalAuth);
-        return accessService.listDeletedVendorStaff();
+        return accessService.listDeletedVendorStaff(pageable);
     }
 
     @GetMapping("/{id}")

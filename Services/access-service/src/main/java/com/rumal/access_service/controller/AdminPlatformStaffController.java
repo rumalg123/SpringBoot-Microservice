@@ -6,6 +6,9 @@ import com.rumal.access_service.security.InternalRequestVerifier;
 import com.rumal.access_service.service.AccessService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,7 +21,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -31,15 +33,21 @@ public class AdminPlatformStaffController {
     private final AccessService accessService;
 
     @GetMapping
-    public List<PlatformStaffAccessResponse> listAll(@RequestHeader(INTERNAL_HEADER) String internalAuth) {
+    public Page<PlatformStaffAccessResponse> listAll(
+            @RequestHeader(INTERNAL_HEADER) String internalAuth,
+            @PageableDefault(size = 20, sort = "email") Pageable pageable
+    ) {
         internalRequestVerifier.verify(internalAuth);
-        return accessService.listPlatformStaff();
+        return accessService.listPlatformStaff(pageable);
     }
 
     @GetMapping("/deleted")
-    public List<PlatformStaffAccessResponse> listDeleted(@RequestHeader(INTERNAL_HEADER) String internalAuth) {
+    public Page<PlatformStaffAccessResponse> listDeleted(
+            @RequestHeader(INTERNAL_HEADER) String internalAuth,
+            @PageableDefault(size = 20, sort = "email") Pageable pageable
+    ) {
         internalRequestVerifier.verify(internalAuth);
-        return accessService.listDeletedPlatformStaff();
+        return accessService.listDeletedPlatformStaff(pageable);
     }
 
     @GetMapping("/{id}")

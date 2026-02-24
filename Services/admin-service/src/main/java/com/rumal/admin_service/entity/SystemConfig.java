@@ -6,6 +6,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -34,6 +35,9 @@ public class SystemConfig {
     @Id
     @GeneratedValue
     private UUID id;
+
+    @Version
+    private Long version;
 
     @Column(name = "config_key", nullable = false, length = 200)
     private String configKey;

@@ -12,7 +12,10 @@ import com.rumal.promotion_service.repo.CouponCodeRepository;
 import com.rumal.promotion_service.repo.PromotionCampaignRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
@@ -24,21 +27,20 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
 public class CouponCodeAdminService {
 
     private final CouponCodeRepository couponCodeRepository;
     private final PromotionCampaignRepository promotionCampaignRepository;
 
-    @Transactional(readOnly = true)
-    public List<CouponCodeResponse> listByPromotion(UUID promotionId) {
+    public Page<CouponCodeResponse> listByPromotion(UUID promotionId, Pageable pageable) {
         requirePromotion(promotionId);
-        return couponCodeRepository.findByPromotionIdOrderByCreatedAtDesc(promotionId).stream()
-                .map(this::toResponse)
-                .toList();
+        return couponCodeRepository.findByPromotionId(promotionId, pageable)
+                .map(this::toResponse);
     }
 
     @CacheEvict(cacheNames = "promotionAdminList", allEntries = true)
-    @Transactional
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public CouponCodeResponse create(UUID promotionId, CreateCouponCodeRequest request, String actorUserSub) {
         PromotionCampaign promotion = requirePromotion(promotionId);
 
@@ -64,7 +66,7 @@ public class CouponCodeAdminService {
     }
 
     @CacheEvict(cacheNames = "promotionAdminList", allEntries = true)
-    @Transactional
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 30)
     public BatchCreateCouponsResponse batchCreate(UUID promotionId, BatchCreateCouponsRequest request, String actorUserSub) {
         PromotionCampaign promotion = requirePromotion(promotionId);
         String prefix = request.prefix().trim().toUpperCase(Locale.ROOT);
@@ -116,7 +118,7 @@ public class CouponCodeAdminService {
     }
 
     @CacheEvict(cacheNames = "promotionAdminList", allEntries = true)
-    @Transactional
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public CouponCodeResponse deactivate(UUID promotionId, UUID couponId, String actorUserSub) {
         CouponCode coupon = requireCoupon(promotionId, couponId);
         coupon.setActive(false);
@@ -125,7 +127,7 @@ public class CouponCodeAdminService {
     }
 
     @CacheEvict(cacheNames = "promotionAdminList", allEntries = true)
-    @Transactional
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public CouponCodeResponse activate(UUID promotionId, UUID couponId, String actorUserSub) {
         CouponCode coupon = requireCoupon(promotionId, couponId);
         coupon.setActive(true);

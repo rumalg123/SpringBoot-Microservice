@@ -15,6 +15,9 @@ import com.rumal.vendor_service.dto.VendorPayoutConfigResponse;
 import com.rumal.vendor_service.dto.VendorResponse;
 import com.rumal.vendor_service.dto.VendorUserResponse;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 import java.util.List;
 import java.util.UUID;
 
@@ -25,8 +28,11 @@ public interface VendorService {
     VendorResponse getAdminById(UUID id);
     List<VendorResponse> listPublicActive();
     List<VendorResponse> listPublicActive(String category);
+    Page<VendorResponse> listPublicActive(String category, Pageable pageable);
     List<VendorResponse> listAllNonDeleted();
+    Page<VendorResponse> listAllNonDeleted(Pageable pageable);
     List<VendorResponse> listDeleted();
+    Page<VendorResponse> listDeleted(Pageable pageable);
     List<VendorLifecycleAuditResponse> listLifecycleAudit(UUID id);
     VendorDeletionEligibilityResponse getDeletionEligibility(UUID id);
     void softDelete(UUID id);

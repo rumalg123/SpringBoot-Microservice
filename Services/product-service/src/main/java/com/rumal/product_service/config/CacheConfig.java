@@ -7,7 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.interceptor.CacheErrorHandler;
-import org.springframework.cache.annotation.CachingConfigurerSupport;
+import org.springframework.cache.annotation.CachingConfigurer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.domain.PageImpl;
@@ -25,7 +25,7 @@ import java.time.Duration;
 import java.util.Map;
 
 @Configuration
-public class CacheConfig extends CachingConfigurerSupport {
+public class CacheConfig implements CachingConfigurer {
     private static final Logger log = LoggerFactory.getLogger(CacheConfig.class);
 
     @Bean

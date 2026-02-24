@@ -2,6 +2,8 @@ package com.rumal.wishlist_service.repo;
 
 import com.rumal.wishlist_service.entity.WishlistCollection;
 import com.rumal.wishlist_service.entity.WishlistItem;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -11,6 +13,8 @@ import java.util.UUID;
 public interface WishlistItemRepository extends JpaRepository<WishlistItem, UUID> {
 
     List<WishlistItem> findByKeycloakIdOrderByCreatedAtDesc(String keycloakId);
+
+    Page<WishlistItem> findByKeycloakId(String keycloakId, Pageable pageable);
 
     List<WishlistItem> findByCollectionOrderByCreatedAtDesc(WishlistCollection collection);
 

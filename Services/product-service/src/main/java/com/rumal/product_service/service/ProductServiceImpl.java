@@ -29,8 +29,10 @@ import com.rumal.product_service.repo.CategoryRepository;
 import com.rumal.product_service.repo.ProductRepository;
 import com.rumal.product_service.repo.ProductSpecificationRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -73,6 +75,10 @@ public class ProductServiceImpl implements ProductService {
     private final ProductCatalogReadModelProjector productCatalogReadModelProjector;
     private final VendorOperationalStateClient vendorOperationalStateClient;
     private final ProductCacheVersionService productCacheVersionService;
+
+    @Lazy
+    @Autowired
+    private ProductServiceImpl self;
 
     @Value("${internal.auth.shared-secret:}")
     private String internalAuthSharedSecret;
@@ -133,12 +139,12 @@ public class ProductServiceImpl implements ProductService {
         UUID parsedId = tryParseUuid(idOrSlug);
         if (parsedId != null) {
             try {
-                return getById(parsedId);
+                return self.getById(parsedId);
             } catch (ResourceNotFoundException ignored) {
                 // Fall through to slug lookup.
             }
         }
-        return getBySlug(idOrSlug);
+        return self.getBySlug(idOrSlug);
     }
 
     @Override

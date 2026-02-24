@@ -489,6 +489,7 @@ public class CustomerServiceImpl implements CustomerService {
     // ── Loyalty ──────────────────────────────────────────────────────────────
 
     @Override
+    @CachePut(cacheNames = "customerByKeycloak", key = "#result.keycloakId()")
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public CustomerResponse addLoyaltyPoints(UUID customerId, int points) {
         Customer customer = customerRepository.findById(customerId)

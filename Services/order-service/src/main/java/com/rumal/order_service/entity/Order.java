@@ -28,6 +28,9 @@ public class Order {
     @GeneratedValue
     private UUID id;
 
+    @Version
+    private Long version;
+
     @Column(nullable = false)
     private UUID customerId;
 

@@ -17,7 +17,8 @@ import java.util.UUID;
         name = "vendor_orders",
         indexes = {
                 @Index(name = "idx_vendor_orders_vendor_id", columnList = "vendor_id"),
-                @Index(name = "idx_vendor_orders_order_id", columnList = "order_id")
+                @Index(name = "idx_vendor_orders_order_id", columnList = "order_id"),
+                @Index(name = "idx_vendor_orders_vendor_status_created", columnList = "vendor_id, status, created_at DESC")
         }
 )
 @Getter
@@ -30,6 +31,9 @@ public class VendorOrder {
     @Id
     @GeneratedValue
     private UUID id;
+
+    @Version
+    private Long version;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "order_id", nullable = false)

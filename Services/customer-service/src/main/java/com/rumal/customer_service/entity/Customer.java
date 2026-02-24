@@ -15,6 +15,10 @@ import java.util.UUID;
         uniqueConstraints = {
                 @UniqueConstraint(name = "uk_customers_email", columnNames = "email"),
                 @UniqueConstraint(name = "uk_customers_keycloak_id", columnNames = "keycloak_id")
+        },
+        indexes = {
+                @Index(name = "idx_customers_active", columnList = "is_active"),
+                @Index(name = "idx_customers_created_at", columnList = "created_at")
         }
 )
 @Getter
@@ -27,6 +31,9 @@ public class Customer {
     @Id
     @GeneratedValue
     private UUID id;
+
+    @Version
+    private Long version;
 
     @Column(nullable = false, length = 120)
     private String name;

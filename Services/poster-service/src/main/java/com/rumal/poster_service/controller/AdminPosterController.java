@@ -12,6 +12,9 @@ import com.rumal.poster_service.service.PosterService;
 import com.rumal.poster_service.storage.PosterImageStorageService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -40,19 +43,21 @@ public class AdminPosterController {
     private final InternalRequestVerifier internalRequestVerifier;
 
     @GetMapping
-    public List<PosterResponse> listAll(
-            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth
+    public Page<PosterResponse> listAll(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @PageableDefault(size = 20, sort = "name") Pageable pageable
     ) {
         internalRequestVerifier.verify(internalAuth);
-        return posterService.listAllNonDeleted();
+        return posterService.listAllNonDeleted(pageable);
     }
 
     @GetMapping("/deleted")
-    public List<PosterResponse> listDeleted(
-            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth
+    public Page<PosterResponse> listDeleted(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @PageableDefault(size = 20, sort = "name") Pageable pageable
     ) {
         internalRequestVerifier.verify(internalAuth);
-        return posterService.listDeleted();
+        return posterService.listDeleted(pageable);
     }
 
     @PostMapping

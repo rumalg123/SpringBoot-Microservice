@@ -32,7 +32,8 @@ import java.util.UUID;
         uniqueConstraints = @UniqueConstraint(name = "uk_platform_staff_keycloak", columnNames = "keycloak_user_id"),
         indexes = {
                 @Index(name = "idx_platform_staff_active", columnList = "is_active"),
-                @Index(name = "idx_platform_staff_deleted", columnList = "is_deleted")
+                @Index(name = "idx_platform_staff_deleted", columnList = "is_deleted"),
+                @Index(name = "idx_platform_staff_expiry", columnList = "is_active, is_deleted, access_expires_at")
         }
 )
 @Getter

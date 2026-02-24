@@ -46,6 +46,7 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
     private final RedisRateLimiter productsRateLimiter;
     private final RedisRateLimiter adminProductsRateLimiter;
     private final RedisRateLimiter adminProductsWriteRateLimiter;
+    private final RedisRateLimiter publicPromotionsRateLimiter;
     private final RedisRateLimiter publicCatalogAuxRateLimiter;
     private final RedisRateLimiter vendorMeRateLimiter;
     private final RedisRateLimiter vendorMeWriteRateLimiter;
@@ -80,6 +81,7 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
             @Qualifier("productsRateLimiter") RedisRateLimiter productsRateLimiter,
             @Qualifier("adminProductsRateLimiter") RedisRateLimiter adminProductsRateLimiter,
             @Qualifier("adminProductsWriteRateLimiter") RedisRateLimiter adminProductsWriteRateLimiter,
+            @Qualifier("publicPromotionsRateLimiter") RedisRateLimiter publicPromotionsRateLimiter,
             @Qualifier("publicCatalogAuxRateLimiter") RedisRateLimiter publicCatalogAuxRateLimiter,
             @Qualifier("vendorMeRateLimiter") RedisRateLimiter vendorMeRateLimiter,
             @Qualifier("vendorMeWriteRateLimiter") RedisRateLimiter vendorMeWriteRateLimiter,
@@ -113,6 +115,7 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
         this.productsRateLimiter = productsRateLimiter;
         this.adminProductsRateLimiter = adminProductsRateLimiter;
         this.adminProductsWriteRateLimiter = adminProductsWriteRateLimiter;
+        this.publicPromotionsRateLimiter = publicPromotionsRateLimiter;
         this.publicCatalogAuxRateLimiter = publicCatalogAuxRateLimiter;
         this.vendorMeRateLimiter = vendorMeRateLimiter;
         this.vendorMeWriteRateLimiter = vendorMeWriteRateLimiter;
@@ -275,6 +278,13 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
         }
         if ("/admin/vendor-orders".equals(path) || path.startsWith("/admin/vendor-orders/")) {
             return new Policy("admin-orders", adminOrdersRateLimiter, userOrIpKeyResolver);
+        }
+        if ("/promotions/me".equals(path) || path.startsWith("/promotions/me/")) {
+            return new Policy("promotions-me", publicPromotionsRateLimiter, userOrIpKeyResolver);
+        }
+        if (("/promotions".equals(path) || path.startsWith("/promotions/"))
+                && (method == HttpMethod.GET || method == HttpMethod.HEAD)) {
+            return new Policy("promotions-read", publicPromotionsRateLimiter, ipKeyResolver);
         }
         if (("/products".equals(path) || path.startsWith("/products/")
                 || "/categories".equals(path) || path.startsWith("/categories/"))

@@ -65,6 +65,7 @@ public class PublicPromotionService {
         return promotionCampaignRepository.findAll(spec, pageable).map(this::toPublicResponse);
     }
 
+    @Cacheable(cacheNames = "publicPromotionList", key = "'flashSales'")
     public Page<PublicPromotionResponse> listActiveFlashSales(Pageable pageable) {
         Instant now = Instant.now();
         Specification<PromotionCampaign> spec = activeAndApprovedSpec(now)

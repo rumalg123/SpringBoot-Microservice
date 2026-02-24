@@ -46,6 +46,7 @@ public class PromotionCampaignService {
 
     private final PromotionCampaignRepository promotionCampaignRepository;
 
+    @Cacheable(cacheNames = "promotionAdminList")
     @Transactional(readOnly = true)
     public Page<PromotionResponse> list(
             Pageable pageable,

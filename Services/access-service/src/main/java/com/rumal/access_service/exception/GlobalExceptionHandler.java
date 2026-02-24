@@ -21,32 +21,34 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<?> handleNotFound(ResourceNotFoundException ex) {
         log.warn("Access resource not found: {}", ex.getMessage());
-        return error(HttpStatus.NOT_FOUND, ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error(HttpStatus.NOT_FOUND, ex.getMessage()));
     }
 
     @ExceptionHandler(ValidationException.class)
     public ResponseEntity<?> handleValidation(ValidationException ex) {
         log.warn("Access validation error: {}", ex.getMessage());
-        return error(HttpStatus.BAD_REQUEST, ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error(HttpStatus.BAD_REQUEST, ex.getMessage()));
     }
 
     @ExceptionHandler(UnauthorizedException.class)
     public ResponseEntity<?> handleUnauthorized(UnauthorizedException ex) {
         log.warn("Access unauthorized request: {}", ex.getMessage());
-        return error(HttpStatus.UNAUTHORIZED, ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error(HttpStatus.UNAUTHORIZED, ex.getMessage()));
+    }
+
+    @ExceptionHandler(ServiceUnavailableException.class)
+    public ResponseEntity<Map<String, Object>> serviceUnavailable(ServiceUnavailableException ex) {
+        log.error("Service unavailable: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(error(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<?> handleMethodArgumentNotValid(MethodArgumentNotValidException ex) {
+        Map<String, Object> body = error(HttpStatus.BAD_REQUEST, "Validation failed");
         Map<String, String> fieldErrors = new LinkedHashMap<>();
         for (FieldError fieldError : ex.getBindingResult().getFieldErrors()) {
             fieldErrors.putIfAbsent(fieldError.getField(), fieldError.getDefaultMessage());
         }
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("timestamp", Instant.now());
-        body.put("status", HttpStatus.BAD_REQUEST.value());
-        body.put("error", "Validation failed");
-        body.put("message", "Validation failed");
         body.put("fieldErrors", fieldErrors);
         return ResponseEntity.badRequest().body(body);
     }
@@ -54,15 +56,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<?> handleOther(Exception ex) {
         log.error("Unhandled access-service exception", ex);
-        return error(HttpStatus.INTERNAL_SERVER_ERROR, "Unexpected error");
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error(HttpStatus.INTERNAL_SERVER_ERROR, "Unexpected error"));
     }
 
-    private ResponseEntity<Map<String, Object>> error(HttpStatus status, String message) {
+    private Map<String, Object> error(HttpStatus status, String message) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("timestamp", Instant.now());
         body.put("status", status.value());
         body.put("error", message);
         body.put("message", message);
-        return ResponseEntity.status(status).body(body);
+        return body;
     }
 }

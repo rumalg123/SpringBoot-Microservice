@@ -38,7 +38,11 @@ public class CustomerController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public CustomerResponse create(@Valid @RequestBody CreateCustomerRequest request) {
+    public CustomerResponse create(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @Valid @RequestBody CreateCustomerRequest request
+    ) {
+        internalRequestVerifier.verify(internalAuth);
         return customerService.create(request);
     }
 
@@ -55,18 +59,20 @@ public class CustomerController {
             @RequestHeader(value = "X-User-Email", required = false) String userEmail,
             @RequestHeader(value = "X-User-Email-Verified", required = false) String userEmailVerified,
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
-            @RequestBody(required = false) RegisterIdentityCustomerRequest request
+            @Valid @RequestBody(required = false) RegisterIdentityCustomerRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(userEmailVerified);
-        if (userSub == null || userSub.isBlank()) {
-            throw new UnauthorizedException("Missing authentication header");
-        }
-        return customerService.registerIdentity(userSub, userEmail, request);
+        String validatedSub = requireUserSub(userSub);
+        return customerService.registerIdentity(validatedSub, userEmail, request);
     }
 
     @GetMapping("/{id}")
-    public CustomerResponse getById(@PathVariable UUID id) {
+    public CustomerResponse getById(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @PathVariable UUID id
+    ) {
+        internalRequestVerifier.verify(internalAuth);
         return customerService.getById(id);
     }
 
@@ -78,10 +84,8 @@ public class CustomerController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(userEmailVerified);
-        if (userSub == null || userSub.isBlank()) {
-            throw new UnauthorizedException("Missing authentication header");
-        }
-        return customerService.getByKeycloakId(userSub);
+        String validatedSub = requireUserSub(userSub);
+        return customerService.getByKeycloakId(validatedSub);
     }
 
     @PutMapping("/me")
@@ -94,10 +98,8 @@ public class CustomerController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(userEmailVerified);
-        if (userSub == null || userSub.isBlank()) {
-            throw new UnauthorizedException("Missing authentication header");
-        }
-        return customerService.updateProfile(userSub, request, extractIpAddress(httpRequest));
+        String validatedSub = requireUserSub(userSub);
+        return customerService.updateProfile(validatedSub, request, extractIpAddress(httpRequest));
     }
 
     @PostMapping("/me/deactivate")
@@ -108,22 +110,26 @@ public class CustomerController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(userEmailVerified);
-        if (userSub == null || userSub.isBlank()) {
-            throw new UnauthorizedException("Missing authentication header");
-        }
-        return customerService.deactivateAccount(userSub);
+        String validatedSub = requireUserSub(userSub);
+        return customerService.deactivateAccount(validatedSub);
     }
 
     @GetMapping("/by-email")
-    public CustomerResponse getByEmail(@RequestParam String email) {
+    public CustomerResponse getByEmail(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestParam String email
+    ) {
+        internalRequestVerifier.verify(internalAuth);
         return customerService.getByEmail(email);
     }
 
     @GetMapping("/{customerId}/addresses/{addressId}")
     public CustomerAddressResponse getAddressByCustomerId(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @PathVariable UUID customerId,
             @PathVariable UUID addressId
     ) {
+        internalRequestVerifier.verify(internalAuth);
         return customerService.getAddressByCustomerId(customerId, addressId);
     }
 
@@ -135,10 +141,8 @@ public class CustomerController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(userEmailVerified);
-        if (userSub == null || userSub.isBlank()) {
-            throw new UnauthorizedException("Missing authentication header");
-        }
-        return customerService.listAddressesByKeycloak(userSub);
+        String validatedSub = requireUserSub(userSub);
+        return customerService.listAddressesByKeycloak(validatedSub);
     }
 
     @PostMapping("/me/addresses")
@@ -152,10 +156,8 @@ public class CustomerController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(userEmailVerified);
-        if (userSub == null || userSub.isBlank()) {
-            throw new UnauthorizedException("Missing authentication header");
-        }
-        return customerService.addAddressByKeycloak(userSub, request, extractIpAddress(httpRequest));
+        String validatedSub = requireUserSub(userSub);
+        return customerService.addAddressByKeycloak(validatedSub, request, extractIpAddress(httpRequest));
     }
 
     @PutMapping("/me/addresses/{addressId}")
@@ -169,10 +171,8 @@ public class CustomerController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(userEmailVerified);
-        if (userSub == null || userSub.isBlank()) {
-            throw new UnauthorizedException("Missing authentication header");
-        }
-        return customerService.updateAddressByKeycloak(userSub, addressId, request, extractIpAddress(httpRequest));
+        String validatedSub = requireUserSub(userSub);
+        return customerService.updateAddressByKeycloak(validatedSub, addressId, request, extractIpAddress(httpRequest));
     }
 
     @DeleteMapping("/me/addresses/{addressId}")
@@ -186,10 +186,8 @@ public class CustomerController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(userEmailVerified);
-        if (userSub == null || userSub.isBlank()) {
-            throw new UnauthorizedException("Missing authentication header");
-        }
-        customerService.softDeleteAddressByKeycloak(userSub, addressId, extractIpAddress(httpRequest));
+        String validatedSub = requireUserSub(userSub);
+        customerService.softDeleteAddressByKeycloak(validatedSub, addressId, extractIpAddress(httpRequest));
     }
 
     @PostMapping("/me/addresses/{addressId}/default-shipping")
@@ -201,10 +199,8 @@ public class CustomerController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(userEmailVerified);
-        if (userSub == null || userSub.isBlank()) {
-            throw new UnauthorizedException("Missing authentication header");
-        }
-        return customerService.setDefaultShippingByKeycloak(userSub, addressId);
+        String validatedSub = requireUserSub(userSub);
+        return customerService.setDefaultShippingByKeycloak(validatedSub, addressId);
     }
 
     @PostMapping("/me/addresses/{addressId}/default-billing")
@@ -216,10 +212,8 @@ public class CustomerController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(userEmailVerified);
-        if (userSub == null || userSub.isBlank()) {
-            throw new UnauthorizedException("Missing authentication header");
-        }
-        return customerService.setDefaultBillingByKeycloak(userSub, addressId);
+        String validatedSub = requireUserSub(userSub);
+        return customerService.setDefaultBillingByKeycloak(validatedSub, addressId);
     }
 
     // ── Loyalty (internal endpoint) ──────────────────────────────────────────
@@ -244,10 +238,8 @@ public class CustomerController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(userEmailVerified);
-        if (userSub == null || userSub.isBlank()) {
-            throw new UnauthorizedException("Missing authentication header");
-        }
-        return customerService.getCommunicationPreferences(userSub);
+        String validatedSub = requireUserSub(userSub);
+        return customerService.getCommunicationPreferences(validatedSub);
     }
 
     @PutMapping("/me/communication-preferences")
@@ -259,10 +251,8 @@ public class CustomerController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(userEmailVerified);
-        if (userSub == null || userSub.isBlank()) {
-            throw new UnauthorizedException("Missing authentication header");
-        }
-        return customerService.updateCommunicationPreferences(userSub, request);
+        String validatedSub = requireUserSub(userSub);
+        return customerService.updateCommunicationPreferences(validatedSub, request);
     }
 
     // ── Activity Log ─────────────────────────────────────────────────────────
@@ -276,10 +266,8 @@ public class CustomerController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(userEmailVerified);
-        if (userSub == null || userSub.isBlank()) {
-            throw new UnauthorizedException("Missing authentication header");
-        }
-        return customerService.getActivityLog(userSub, pageable);
+        String validatedSub = requireUserSub(userSub);
+        return customerService.getActivityLog(validatedSub, pageable);
     }
 
     // ── Social Login Linking ─────────────────────────────────────────────────
@@ -292,13 +280,18 @@ public class CustomerController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(userEmailVerified);
-        if (userSub == null || userSub.isBlank()) {
-            throw new UnauthorizedException("Missing authentication header");
-        }
-        return customerService.getLinkedAccounts(userSub);
+        String validatedSub = requireUserSub(userSub);
+        return customerService.getLinkedAccounts(validatedSub);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
+
+    private String requireUserSub(String userSub) {
+        if (userSub == null || userSub.isBlank()) {
+            throw new UnauthorizedException("Missing authentication header");
+        }
+        return userSub.trim();
+    }
 
     private void verifyEmailVerified(String emailVerified) {
         if (emailVerified == null || !"true".equalsIgnoreCase(emailVerified.trim())) {

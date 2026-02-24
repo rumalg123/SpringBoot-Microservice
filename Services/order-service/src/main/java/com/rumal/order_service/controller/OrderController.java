@@ -42,16 +42,25 @@ public class OrderController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public OrderResponse create(@Valid @RequestBody CreateOrderRequest req) {
+    public OrderResponse create(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @Valid @RequestBody CreateOrderRequest req
+    ) {
+        internalRequestVerifier.verify(internalAuth);
         return orderService.create(req);
     }
 
     @GetMapping("/{id}")
-    public OrderResponse get(@PathVariable UUID id) {
+    public OrderResponse get(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @PathVariable UUID id
+    ) {
+        internalRequestVerifier.verify(internalAuth);
         return orderService.get(id);
     }
     @GetMapping
     public Page<OrderResponse> list(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestParam(required = false) UUID customerId,
             @RequestParam(required = false) String customerEmail,
             @RequestParam(required = false) UUID vendorId,
@@ -60,6 +69,7 @@ public class OrderController {
             @RequestParam(required = false) Instant createdBefore,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
+        internalRequestVerifier.verify(internalAuth);
         return orderService.list(customerId, customerEmail, vendorId, status, createdAfter, createdBefore, pageable);
     }
 
@@ -75,10 +85,8 @@ public class OrderController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(userEmailVerified);
-        if (userSub == null || userSub.isBlank()) {
-            throw new UnauthorizedException("Missing authentication header");
-        }
-        return orderService.listForKeycloakId(userSub, status, createdAfter, createdBefore, pageable);
+        String validatedSub = requireUserSub(userSub);
+        return orderService.listForKeycloakId(validatedSub, status, createdAfter, createdBefore, pageable);
     }
 
     @PostMapping("/me")
@@ -91,10 +99,8 @@ public class OrderController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(userEmailVerified);
-        if (userSub == null || userSub.isBlank()) {
-            throw new UnauthorizedException("Missing authentication header");
-        }
-        return orderService.createForKeycloak(userSub, req);
+        String validatedSub = requireUserSub(userSub);
+        return orderService.createForKeycloak(validatedSub, req);
     }
 
     @GetMapping("/me/{id}")
@@ -106,14 +112,16 @@ public class OrderController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(userEmailVerified);
-        if (userSub == null || userSub.isBlank()) {
-            throw new UnauthorizedException("Missing authentication header");
-        }
-        return orderService.getMyDetails(userSub, id);
+        String validatedSub = requireUserSub(userSub);
+        return orderService.getMyDetails(validatedSub, id);
     }
 
     @GetMapping("/{id}/details")
-    public OrderDetailsResponse details(@PathVariable UUID id) {
+    public OrderDetailsResponse details(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @PathVariable UUID id
+    ) {
+        internalRequestVerifier.verify(internalAuth);
         return orderService.getDetails(id);
     }
 
@@ -197,10 +205,8 @@ public class OrderController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(userEmailVerified);
-        if (userSub == null || userSub.isBlank()) {
-            throw new UnauthorizedException("Missing authentication header");
-        }
-        return orderService.cancelMyOrder(userSub, id, req);
+        String validatedSub = requireUserSub(userSub);
+        return orderService.cancelMyOrder(validatedSub, id, req);
     }
 
     @PatchMapping("/vendor-orders/{vendorOrderId}/tracking")
@@ -232,10 +238,8 @@ public class OrderController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(userEmailVerified);
-        if (userSub == null || userSub.isBlank()) {
-            throw new UnauthorizedException("Missing authentication header");
-        }
-        return orderService.getMyStatusHistory(userSub, id);
+        String validatedSub = requireUserSub(userSub);
+        return orderService.getMyStatusHistory(validatedSub, id);
     }
 
     @GetMapping("/me/{id}/vendor-orders")
@@ -247,10 +251,8 @@ public class OrderController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(userEmailVerified);
-        if (userSub == null || userSub.isBlank()) {
-            throw new UnauthorizedException("Missing authentication header");
-        }
-        return orderService.getMyVendorOrders(userSub, id);
+        String validatedSub = requireUserSub(userSub);
+        return orderService.getMyVendorOrders(validatedSub, id);
     }
 
     @GetMapping("/{id}/invoice")
@@ -290,6 +292,13 @@ public class OrderController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         return orderService.updateShippingAddress(id, req);
+    }
+
+    private String requireUserSub(String userSub) {
+        if (userSub == null || userSub.isBlank()) {
+            throw new UnauthorizedException("Missing authentication header");
+        }
+        return userSub.trim();
     }
 
     private void verifyEmailVerified(String emailVerified) {

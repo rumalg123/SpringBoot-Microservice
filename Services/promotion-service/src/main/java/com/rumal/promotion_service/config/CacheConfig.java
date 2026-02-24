@@ -9,7 +9,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
-import org.springframework.cache.annotation.CachingConfigurerSupport;
+import org.springframework.cache.annotation.CachingConfigurer;
 import org.springframework.cache.interceptor.CacheErrorHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -25,7 +25,7 @@ import java.time.Duration;
 import java.util.Map;
 
 @Configuration
-public class CacheConfig extends CachingConfigurerSupport {
+public class CacheConfig implements CachingConfigurer {
 
     private static final Logger log = LoggerFactory.getLogger(CacheConfig.class);
 
@@ -36,6 +36,8 @@ public class CacheConfig extends CachingConfigurerSupport {
             @Value("${cache.promotion-by-id-ttl:120s}") Duration promotionByIdTtl,
             @Value("${cache.promotion-admin-list-ttl:45s}") Duration promotionAdminListTtl,
             @Value("${cache.quote-preview-ttl:30s}") Duration quotePreviewTtl,
+            @Value("${cache.public-promotion-list-ttl:90s}") Duration publicPromotionListTtl,
+            @Value("${cache.public-promotion-by-id-ttl:120s}") Duration publicPromotionByIdTtl,
             @Value("${cache.key-prefix:promo:v1::}") String cacheKeyPrefix
     ) {
         ObjectMapper cacheObjectMapper = objectMapper.copy();
@@ -58,7 +60,9 @@ public class CacheConfig extends CachingConfigurerSupport {
                 .withInitialCacheConfigurations(Map.of(
                         "promotionById", defaultConfig.entryTtl(promotionByIdTtl),
                         "promotionAdminList", defaultConfig.entryTtl(promotionAdminListTtl),
-                        "promotionQuotePreview", defaultConfig.entryTtl(quotePreviewTtl)
+                        "promotionQuotePreview", defaultConfig.entryTtl(quotePreviewTtl),
+                        "publicPromotionList", defaultConfig.entryTtl(publicPromotionListTtl),
+                        "publicPromotionById", defaultConfig.entryTtl(publicPromotionByIdTtl)
                 ))
                 .build();
     }

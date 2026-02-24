@@ -10,6 +10,7 @@ import java.util.UUID;
 public record CreateMyOrderRequest(
         UUID productId,
         Integer quantity,
+        @Size(max = 100, message = "Cannot exceed 100 items per order")
         List<@Valid CreateOrderItemRequest> items,
         @NotNull UUID shippingAddressId,
         @NotNull UUID billingAddressId,

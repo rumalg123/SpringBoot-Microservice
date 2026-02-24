@@ -11,6 +11,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -46,6 +47,9 @@ public class Poster {
     @Id
     @GeneratedValue
     private UUID id;
+
+    @Version
+    private Long version;
 
     @Column(nullable = false, length = 160)
     private String name;

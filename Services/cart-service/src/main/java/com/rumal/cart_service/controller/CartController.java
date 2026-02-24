@@ -43,10 +43,8 @@ public class CartController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(userEmailVerified);
-        if (userSub == null || userSub.isBlank()) {
-            throw new UnauthorizedException("Missing authentication header");
-        }
-        return cartService.getByKeycloakId(userSub);
+        String validatedSub = requireUserSub(userSub);
+        return cartService.getByKeycloakId(validatedSub);
     }
 
     @PostMapping("/me/items")
@@ -59,10 +57,8 @@ public class CartController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(userEmailVerified);
-        if (userSub == null || userSub.isBlank()) {
-            throw new UnauthorizedException("Missing authentication header");
-        }
-        return cartService.addItem(userSub, request);
+        String validatedSub = requireUserSub(userSub);
+        return cartService.addItem(validatedSub, request);
     }
 
     @PutMapping("/me/items/{itemId}")
@@ -75,10 +71,8 @@ public class CartController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(userEmailVerified);
-        if (userSub == null || userSub.isBlank()) {
-            throw new UnauthorizedException("Missing authentication header");
-        }
-        return cartService.updateItem(userSub, itemId, request);
+        String validatedSub = requireUserSub(userSub);
+        return cartService.updateItem(validatedSub, itemId, request);
     }
 
     @DeleteMapping("/me/items/{itemId}")
@@ -91,10 +85,8 @@ public class CartController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(userEmailVerified);
-        if (userSub == null || userSub.isBlank()) {
-            throw new UnauthorizedException("Missing authentication header");
-        }
-        cartService.removeItem(userSub, itemId);
+        String validatedSub = requireUserSub(userSub);
+        cartService.removeItem(validatedSub, itemId);
     }
 
     @DeleteMapping("/me")
@@ -106,10 +98,8 @@ public class CartController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(userEmailVerified);
-        if (userSub == null || userSub.isBlank()) {
-            throw new UnauthorizedException("Missing authentication header");
-        }
-        cartService.clear(userSub);
+        String validatedSub = requireUserSub(userSub);
+        cartService.clear(validatedSub);
     }
 
     @PostMapping("/me/items/{itemId}/save-for-later")
@@ -121,10 +111,8 @@ public class CartController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(userEmailVerified);
-        if (userSub == null || userSub.isBlank()) {
-            throw new UnauthorizedException("Missing authentication header");
-        }
-        return cartService.saveForLater(userSub, itemId);
+        String validatedSub = requireUserSub(userSub);
+        return cartService.saveForLater(validatedSub, itemId);
     }
 
     @PostMapping("/me/items/{itemId}/move-to-cart")
@@ -136,10 +124,8 @@ public class CartController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(userEmailVerified);
-        if (userSub == null || userSub.isBlank()) {
-            throw new UnauthorizedException("Missing authentication header");
-        }
-        return cartService.moveToCart(userSub, itemId);
+        String validatedSub = requireUserSub(userSub);
+        return cartService.moveToCart(validatedSub, itemId);
     }
 
     @PutMapping("/me/note")
@@ -151,10 +137,8 @@ public class CartController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(userEmailVerified);
-        if (userSub == null || userSub.isBlank()) {
-            throw new UnauthorizedException("Missing authentication header");
-        }
-        return cartService.updateNote(userSub, request);
+        String validatedSub = requireUserSub(userSub);
+        return cartService.updateNote(validatedSub, request);
     }
 
     @PostMapping("/me/checkout")
@@ -168,10 +152,8 @@ public class CartController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(userEmailVerified);
-        if (userSub == null || userSub.isBlank()) {
-            throw new UnauthorizedException("Missing authentication header");
-        }
-        return cartService.checkout(userSub, request, idempotencyKey);
+        String validatedSub = requireUserSub(userSub);
+        return cartService.checkout(validatedSub, request, idempotencyKey);
     }
 
     @PostMapping("/me/checkout/preview")
@@ -183,10 +165,15 @@ public class CartController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(userEmailVerified);
+        String validatedSub = requireUserSub(userSub);
+        return cartService.previewCheckout(validatedSub, request);
+    }
+
+    private String requireUserSub(String userSub) {
         if (userSub == null || userSub.isBlank()) {
             throw new UnauthorizedException("Missing authentication header");
         }
-        return cartService.previewCheckout(userSub, request);
+        return userSub.trim();
     }
 
     private void verifyEmailVerified(String emailVerified) {

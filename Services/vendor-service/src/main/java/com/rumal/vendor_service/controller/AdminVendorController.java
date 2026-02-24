@@ -13,6 +13,9 @@ import com.rumal.vendor_service.security.InternalRequestVerifier;
 import com.rumal.vendor_service.service.VendorService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -40,15 +43,21 @@ public class AdminVendorController {
     private final InternalRequestVerifier internalRequestVerifier;
 
     @GetMapping
-    public List<VendorResponse> listAll(@RequestHeader(INTERNAL_HEADER) String internalAuth) {
+    public Page<VendorResponse> listAll(
+            @RequestHeader(INTERNAL_HEADER) String internalAuth,
+            @PageableDefault(size = 20, sort = "name") Pageable pageable
+    ) {
         internalRequestVerifier.verify(internalAuth);
-        return vendorService.listAllNonDeleted();
+        return vendorService.listAllNonDeleted(pageable);
     }
 
     @GetMapping("/deleted")
-    public List<VendorResponse> listDeleted(@RequestHeader(INTERNAL_HEADER) String internalAuth) {
+    public Page<VendorResponse> listDeleted(
+            @RequestHeader(INTERNAL_HEADER) String internalAuth,
+            @PageableDefault(size = 20, sort = "name") Pageable pageable
+    ) {
         internalRequestVerifier.verify(internalAuth);
-        return vendorService.listDeleted();
+        return vendorService.listDeleted(pageable);
     }
 
     @GetMapping("/{id}/lifecycle-audit")

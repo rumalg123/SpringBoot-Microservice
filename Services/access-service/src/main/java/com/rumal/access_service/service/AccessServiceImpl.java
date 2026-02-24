@@ -39,8 +39,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -155,8 +156,18 @@ public class AccessServiceImpl implements AccessService {
     }
 
     @Override
+    public Page<PlatformStaffAccessResponse> listPlatformStaff(Pageable pageable) {
+        return platformStaffAccessRepository.findByDeletedFalse(pageable).map(this::toPlatformStaffResponse);
+    }
+
+    @Override
     public List<PlatformStaffAccessResponse> listDeletedPlatformStaff() {
         return platformStaffAccessRepository.findByDeletedTrueOrderByUpdatedAtDesc().stream().map(this::toPlatformStaffResponse).toList();
+    }
+
+    @Override
+    public Page<PlatformStaffAccessResponse> listDeletedPlatformStaff(Pageable pageable) {
+        return platformStaffAccessRepository.findByDeletedTrue(pageable).map(this::toPlatformStaffResponse);
     }
 
     @Override
@@ -272,13 +283,31 @@ public class AccessServiceImpl implements AccessService {
     }
 
     @Override
+    public Page<VendorStaffAccessResponse> listVendorStaff(UUID vendorId, Pageable pageable) {
+        if (vendorId == null) {
+            return listAllVendorStaff(pageable);
+        }
+        return vendorStaffAccessRepository.findByVendorIdAndDeletedFalse(vendorId, pageable).map(this::toVendorStaffResponse);
+    }
+
+    @Override
     public List<VendorStaffAccessResponse> listAllVendorStaff() {
         return vendorStaffAccessRepository.findByDeletedFalseOrderByVendorIdAscEmailAsc().stream().map(this::toVendorStaffResponse).toList();
     }
 
     @Override
+    public Page<VendorStaffAccessResponse> listAllVendorStaff(Pageable pageable) {
+        return vendorStaffAccessRepository.findByDeletedFalse(pageable).map(this::toVendorStaffResponse);
+    }
+
+    @Override
     public List<VendorStaffAccessResponse> listDeletedVendorStaff() {
         return vendorStaffAccessRepository.findByDeletedTrueOrderByUpdatedAtDesc().stream().map(this::toVendorStaffResponse).toList();
+    }
+
+    @Override
+    public Page<VendorStaffAccessResponse> listDeletedVendorStaff(Pageable pageable) {
+        return vendorStaffAccessRepository.findByDeletedTrue(pageable).map(this::toVendorStaffResponse);
     }
 
     @Override
@@ -681,6 +710,14 @@ public class AccessServiceImpl implements AccessService {
                 ? permissionGroupRepository.findByScopeOrderByNameAsc(scope)
                 : permissionGroupRepository.findAllByOrderByNameAsc();
         return groups.stream().map(this::toPermissionGroupResponse).toList();
+    }
+
+    @Override
+    public Page<PermissionGroupResponse> listPermissionGroups(PermissionGroupScope scope, Pageable pageable) {
+        Page<PermissionGroup> groups = scope != null
+                ? permissionGroupRepository.findByScope(scope, pageable)
+                : permissionGroupRepository.findAll(pageable);
+        return groups.map(this::toPermissionGroupResponse);
     }
 
     @Override

@@ -1,5 +1,6 @@
 package com.rumal.promotion_service.dto;
 
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -29,4 +30,9 @@ public record BatchCreateCouponsRequest(
         Instant endsAt,
         Boolean active
 ) {
+    @AssertTrue(message = "startsAt must be before endsAt")
+    public boolean isDateRangeValid() {
+        if (startsAt == null || endsAt == null) return true;
+        return startsAt.isBefore(endsAt);
+    }
 }

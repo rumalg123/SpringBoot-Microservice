@@ -94,5 +94,5 @@ public interface OrderRepository extends JpaRepository<Order, UUID>, JpaSpecific
     Instant findLatestOrderCreatedAtByVendorId(@Param("vendorId") UUID vendorId);
 
     @Query("SELECT o FROM Order o WHERE o.status IN :statuses AND o.expiresAt IS NOT NULL AND o.expiresAt < :now")
-    List<Order> findExpiredOrders(@Param("statuses") Collection<OrderStatus> statuses, @Param("now") Instant now);
+    List<Order> findExpiredOrders(@Param("statuses") Collection<OrderStatus> statuses, @Param("now") Instant now, Pageable pageable);
 }

@@ -24,7 +24,8 @@ import java.util.UUID;
         indexes = {
                 @Index(name = "idx_access_audit_target", columnList = "target_type,target_id"),
                 @Index(name = "idx_access_audit_vendor", columnList = "vendor_id"),
-                @Index(name = "idx_access_audit_keycloak", columnList = "keycloak_user_id")
+                @Index(name = "idx_access_audit_keycloak", columnList = "keycloak_user_id"),
+                @Index(name = "idx_access_audit_created_at", columnList = "created_at")
         }
 )
 @Getter

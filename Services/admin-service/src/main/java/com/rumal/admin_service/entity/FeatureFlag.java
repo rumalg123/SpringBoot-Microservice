@@ -4,8 +4,10 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -22,6 +24,9 @@ import java.util.UUID;
         name = "feature_flags",
         uniqueConstraints = {
                 @UniqueConstraint(name = "uk_feature_flag_key", columnNames = "flag_key")
+        },
+        indexes = {
+                @Index(name = "idx_feature_flag_enabled", columnList = "enabled")
         }
 )
 @Getter
@@ -34,6 +39,9 @@ public class FeatureFlag {
     @Id
     @GeneratedValue
     private UUID id;
+
+    @Version
+    private Long version;
 
     @Column(name = "flag_key", nullable = false, length = 200)
     private String flagKey;

@@ -2,6 +2,8 @@ package com.rumal.poster_service.repo;
 
 import com.rumal.poster_service.entity.Poster;
 import com.rumal.poster_service.entity.PosterPlacement;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -19,6 +21,10 @@ public interface PosterRepository extends JpaRepository<Poster, UUID> {
     List<Poster> findByDeletedFalseAndPlacementOrderBySortOrderAscCreatedAtDesc(PosterPlacement placement);
     List<Poster> findByDeletedFalseOrderByPlacementAscSortOrderAscCreatedAtDesc();
     List<Poster> findByDeletedTrueOrderByUpdatedAtDesc();
+
+    Page<Poster> findByDeletedFalseOrderByPlacementAscSortOrderAscCreatedAtDesc(Pageable pageable);
+    Page<Poster> findByDeletedTrueOrderByUpdatedAtDesc(Pageable pageable);
+    Page<Poster> findByDeletedFalseAndPlacementOrderBySortOrderAscCreatedAtDesc(PosterPlacement placement, Pageable pageable);
 
     @Modifying
     @Query("UPDATE Poster p SET p.clickCount = p.clickCount + 1, p.lastClickAt = :now WHERE p.id = :id AND p.deleted = false")

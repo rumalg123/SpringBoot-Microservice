@@ -9,6 +9,10 @@ import com.rumal.promotion_service.service.AdminPromotionAccessScopeService;
 import com.rumal.promotion_service.service.CouponCodeAdminService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -20,7 +24,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -33,15 +36,16 @@ public class AdminPromotionCouponController {
     private final InternalRequestVerifier internalRequestVerifier;
 
     @GetMapping
-    public List<CouponCodeResponse> list(
+    public Page<CouponCodeResponse> list(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
-            @PathVariable UUID promotionId
+            @PathVariable UUID promotionId,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         AdminPromotionAccessScopeService.AdminActorScope scope = resolveScope(internalAuth, userSub, userRoles);
         adminPromotionAccessScopeService.assertCanManagePromotion(scope, promotionId);
-        return couponCodeAdminService.listByPromotion(promotionId);
+        return couponCodeAdminService.listByPromotion(promotionId, pageable);
     }
 
     @PostMapping

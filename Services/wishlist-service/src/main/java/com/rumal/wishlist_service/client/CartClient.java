@@ -39,6 +39,7 @@ public class CartClient {
                     .header("X-User-Sub", keycloakId)
                     .header("X-User-Email-Verified", "true")
                     .header("X-Internal-Auth", internalAuthSecret)
+                    .header("Idempotency-Key", UUID.randomUUID().toString())
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(Map.of("productId", productId, "quantity", quantity))
                     .retrieve()

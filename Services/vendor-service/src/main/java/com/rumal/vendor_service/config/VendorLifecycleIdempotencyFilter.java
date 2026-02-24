@@ -38,6 +38,10 @@ public class VendorLifecycleIdempotencyFilter extends AbstractRedisServletIdempo
     @Override
     protected boolean isProtectedMutationPath(String path, String method) {
         if (path.startsWith("/vendors/me")) {
+            if ("PUT".equalsIgnoreCase(method)) {
+                return "/vendors/me".equals(path)
+                        || "/vendors/me/payout-config".equals(path);
+            }
             return "/vendors/me/stop-orders".equals(path)
                     || "/vendors/me/resume-orders".equals(path)
                     || "/vendors/me/request-verification".equals(path);

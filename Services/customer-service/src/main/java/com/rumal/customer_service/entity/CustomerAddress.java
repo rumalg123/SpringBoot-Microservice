@@ -22,7 +22,8 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "customer_addresses", indexes = {
-        @Index(name = "idx_customer_addresses_customer_id", columnList = "customer_id")
+        @Index(name = "idx_customer_addresses_customer_id", columnList = "customer_id"),
+        @Index(name = "idx_customer_addresses_customer_deleted", columnList = "customer_id, deleted")
 })
 @Getter
 @Setter

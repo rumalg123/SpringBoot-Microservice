@@ -41,10 +41,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Pattern;
 
 @Component
 @NullMarked
 public class IdempotencyFilter implements GlobalFilter, Ordered {
+
+    private static final Pattern IDEM_KEY_PATTERN = Pattern.compile("^[a-zA-Z0-9\\-_]{1,128}$");
 
     private static final Set<String> EXCLUDED_RESPONSE_HEADERS = Set.of(
             HttpHeaders.CONTENT_LENGTH.toLowerCase(),
@@ -100,6 +103,10 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
                 return chain.filter(exchange);
             }
             return writeJsonError(exchange, HttpStatus.BAD_REQUEST, "Idempotency-Key header is required", "MISSING_KEY");
+        }
+
+        if (!IDEM_KEY_PATTERN.matcher(idempotencyKey.trim()).matches()) {
+            return writeJsonError(exchange, HttpStatus.BAD_REQUEST, "Invalid Idempotency-Key format", "INVALID_KEY");
         }
 
         return readRequestBody(exchange)

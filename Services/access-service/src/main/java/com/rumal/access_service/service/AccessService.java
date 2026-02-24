@@ -15,6 +15,8 @@ import com.rumal.access_service.dto.UpsertVendorStaffAccessRequest;
 import com.rumal.access_service.dto.VendorStaffAccessLookupResponse;
 import com.rumal.access_service.dto.VendorStaffAccessResponse;
 import com.rumal.access_service.entity.PermissionGroupScope;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 import java.util.UUID;
@@ -34,7 +36,9 @@ public interface AccessService {
     );
 
     List<PlatformStaffAccessResponse> listPlatformStaff();
+    Page<PlatformStaffAccessResponse> listPlatformStaff(Pageable pageable);
     List<PlatformStaffAccessResponse> listDeletedPlatformStaff();
+    Page<PlatformStaffAccessResponse> listDeletedPlatformStaff(Pageable pageable);
     PlatformStaffAccessResponse getPlatformStaffById(UUID id);
     PlatformStaffAccessResponse createPlatformStaff(UpsertPlatformStaffAccessRequest request);
     PlatformStaffAccessResponse createPlatformStaff(UpsertPlatformStaffAccessRequest request, String actorSub, String actorRoles, String reason);
@@ -47,8 +51,11 @@ public interface AccessService {
     PlatformAccessLookupResponse getPlatformAccessByKeycloakUser(String keycloakUserId);
 
     List<VendorStaffAccessResponse> listVendorStaff(UUID vendorId);
+    Page<VendorStaffAccessResponse> listVendorStaff(UUID vendorId, Pageable pageable);
     List<VendorStaffAccessResponse> listAllVendorStaff();
+    Page<VendorStaffAccessResponse> listAllVendorStaff(Pageable pageable);
     List<VendorStaffAccessResponse> listDeletedVendorStaff();
+    Page<VendorStaffAccessResponse> listDeletedVendorStaff(Pageable pageable);
     VendorStaffAccessResponse getVendorStaffById(UUID id);
     VendorStaffAccessResponse createVendorStaff(UpsertVendorStaffAccessRequest request);
     VendorStaffAccessResponse createVendorStaff(UpsertVendorStaffAccessRequest request, String actorSub, String actorRoles, String reason);
@@ -62,6 +69,7 @@ public interface AccessService {
 
     // Permission groups
     List<PermissionGroupResponse> listPermissionGroups(PermissionGroupScope scope);
+    Page<PermissionGroupResponse> listPermissionGroups(PermissionGroupScope scope, Pageable pageable);
     PermissionGroupResponse getPermissionGroupById(UUID id);
     PermissionGroupResponse createPermissionGroup(UpsertPermissionGroupRequest request);
     PermissionGroupResponse updatePermissionGroup(UUID id, UpsertPermissionGroupRequest request);

@@ -15,6 +15,7 @@ import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
 import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -43,7 +44,9 @@ import java.util.UUID;
                 @Index(name = "idx_products_slug", columnList = "slug"),
                 @Index(name = "idx_products_approval_status", columnList = "approval_status"),
                 @Index(name = "idx_products_view_count", columnList = "view_count"),
-                @Index(name = "idx_products_sold_count", columnList = "sold_count")
+                @Index(name = "idx_products_sold_count", columnList = "sold_count"),
+                @Index(name = "idx_products_vendor_active_deleted", columnList = "vendor_id, is_active, is_deleted"),
+                @Index(name = "idx_products_created_at", columnList = "created_at")
         }
 )
 @Getter
@@ -56,6 +59,9 @@ public class Product {
     @Id
     @GeneratedValue
     private UUID id;
+
+    @Version
+    private Long version;
 
     @Column(nullable = false, length = 150)
     private String name;

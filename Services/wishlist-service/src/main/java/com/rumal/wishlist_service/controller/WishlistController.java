@@ -13,6 +13,9 @@ import com.rumal.wishlist_service.security.InternalRequestVerifier;
 import com.rumal.wishlist_service.service.WishlistService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -41,15 +44,16 @@ public class WishlistController {
     // ──────────────────────────────────────────────────────────────────────────
 
     @GetMapping("/me")
-    public WishlistResponse getMyWishlist(
+    public Page<WishlistItemResponse> getMyWishlist(
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Email-Verified", required = false) String userEmailVerified,
-            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @PageableDefault(size = 20) Pageable pageable
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(userEmailVerified);
         String keycloakId = requireUserSub(userSub);
-        return wishlistService.getByKeycloakId(keycloakId);
+        return wishlistService.getByKeycloakId(keycloakId, pageable);
     }
 
     @PostMapping("/me/items")

@@ -35,7 +35,9 @@ import java.util.UUID;
                 @Index(name = "idx_coupon_reservations_customer", columnList = "customer_id"),
                 @Index(name = "idx_coupon_reservations_status", columnList = "status"),
                 @Index(name = "idx_coupon_reservations_expires_at", columnList = "expires_at"),
-                @Index(name = "idx_coupon_reservations_order_id", columnList = "order_id")
+                @Index(name = "idx_coupon_reservations_order_id", columnList = "order_id"),
+                @Index(name = "idx_coupon_reservations_customer_status", columnList = "customer_id, status"),
+                @Index(name = "idx_coupon_reservations_coupon_customer_status", columnList = "coupon_code_id, customer_id, status")
         }
 )
 @Getter

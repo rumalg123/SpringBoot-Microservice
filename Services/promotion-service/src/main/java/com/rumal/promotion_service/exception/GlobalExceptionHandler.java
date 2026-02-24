@@ -57,7 +57,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<?> illegalArgument(IllegalArgumentException ex) {
         log.warn("Promotion illegal argument: {}", ex.getMessage());
-        return ResponseEntity.badRequest().body(error(HttpStatus.BAD_REQUEST, ex.getMessage()));
+        return ResponseEntity.badRequest().body(error(HttpStatus.BAD_REQUEST, "Invalid request parameter"));
     }
 
     @ExceptionHandler(Exception.class)

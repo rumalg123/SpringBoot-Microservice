@@ -31,7 +31,8 @@ import java.util.UUID;
         },
         indexes = {
                 @Index(name = "idx_wishlist_items_keycloak_id", columnList = "keycloak_id"),
-                @Index(name = "idx_wishlist_items_collection_id", columnList = "collection_id")
+                @Index(name = "idx_wishlist_items_collection_id", columnList = "collection_id"),
+                @Index(name = "idx_wishlist_items_keycloak_product", columnList = "keycloak_id, product_id")
         }
 )
 @Getter

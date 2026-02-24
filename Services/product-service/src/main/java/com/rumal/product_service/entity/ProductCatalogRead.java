@@ -32,7 +32,9 @@ import java.util.UUID;
                 @Index(name = "idx_catalog_read_approval", columnList = "approval_status"),
                 @Index(name = "idx_catalog_read_view_count", columnList = "view_count"),
                 @Index(name = "idx_catalog_read_sold_count", columnList = "sold_count"),
-                @Index(name = "idx_catalog_read_vendor_name", columnList = "vendor_name_lc")
+                @Index(name = "idx_catalog_read_vendor_name", columnList = "vendor_name_lc"),
+                @Index(name = "idx_catalog_read_selling_price", columnList = "selling_price"),
+                @Index(name = "idx_catalog_read_main_category_slug", columnList = "main_category_slug")
         }
 )
 @Getter

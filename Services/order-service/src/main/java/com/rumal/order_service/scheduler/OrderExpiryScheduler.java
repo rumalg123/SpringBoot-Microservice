@@ -12,6 +12,7 @@ import com.rumal.order_service.repo.VendorOrderStatusAuditRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -40,7 +41,7 @@ public class OrderExpiryScheduler {
 
     @Scheduled(fixedDelayString = "${order.expiry.check-interval:PT5M}")
     public void cancelExpiredOrders() {
-        List<Order> expired = orderRepository.findExpiredOrders(EXPIRABLE_STATUSES, Instant.now());
+        List<Order> expired = orderRepository.findExpiredOrders(EXPIRABLE_STATUSES, Instant.now(), PageRequest.of(0, 500));
         if (expired.isEmpty()) {
             return;
         }

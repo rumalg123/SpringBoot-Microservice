@@ -7,6 +7,9 @@ import com.rumal.access_service.security.InternalRequestVerifier;
 import com.rumal.access_service.service.AccessService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,7 +23,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -33,12 +35,13 @@ public class AdminPermissionGroupController {
     private final AccessService accessService;
 
     @GetMapping
-    public List<PermissionGroupResponse> listAll(
+    public Page<PermissionGroupResponse> listAll(
             @RequestHeader(INTERNAL_HEADER) String internalAuth,
-            @RequestParam(required = false) PermissionGroupScope scope
+            @RequestParam(required = false) PermissionGroupScope scope,
+            @PageableDefault(size = 20, sort = "name") Pageable pageable
     ) {
         internalRequestVerifier.verify(internalAuth);
-        return accessService.listPermissionGroups(scope);
+        return accessService.listPermissionGroups(scope, pageable);
     }
 
     @GetMapping("/{id}")

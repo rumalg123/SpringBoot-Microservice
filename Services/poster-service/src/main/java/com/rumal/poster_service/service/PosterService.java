@@ -6,6 +6,8 @@ import com.rumal.poster_service.dto.PosterVariantResponse;
 import com.rumal.poster_service.dto.UpsertPosterRequest;
 import com.rumal.poster_service.dto.UpsertPosterVariantRequest;
 import com.rumal.poster_service.entity.PosterPlacement;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 import java.util.UUID;
@@ -15,9 +17,13 @@ public interface PosterService {
     PosterResponse update(UUID id, UpsertPosterRequest request);
     PosterResponse getByIdOrSlug(String idOrSlug);
     List<PosterResponse> listActiveByPlacement(PosterPlacement placement);
+    Page<PosterResponse> listActiveByPlacement(PosterPlacement placement, Pageable pageable);
     List<PosterResponse> listAllActive();
+    Page<PosterResponse> listAllActive(Pageable pageable);
     List<PosterResponse> listAllNonDeleted();
+    Page<PosterResponse> listAllNonDeleted(Pageable pageable);
     List<PosterResponse> listDeleted();
+    Page<PosterResponse> listDeleted(Pageable pageable);
     void softDelete(UUID id);
     PosterResponse restore(UUID id);
     boolean isSlugAvailable(String slug, UUID excludeId);

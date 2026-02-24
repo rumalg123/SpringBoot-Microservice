@@ -34,9 +34,13 @@ import com.rumal.vendor_service.repo.VendorUserRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
@@ -70,6 +74,10 @@ public class VendorServiceImpl implements VendorService {
     private final OrderLifecycleClient orderLifecycleClient;
     private final ProductCatalogAdminClient productCatalogAdminClient;
     private final TransactionTemplate transactionTemplate;
+
+    @Lazy
+    @Autowired
+    private VendorServiceImpl self;
 
     @Value("${internal.auth.shared-secret:}")
     private String internalAuthSharedSecret;
@@ -136,13 +144,33 @@ public class VendorServiceImpl implements VendorService {
     }
 
     @Override
+    public Page<VendorResponse> listPublicActive(String category, Pageable pageable) {
+        if (StringUtils.hasText(category)) {
+            return vendorRepository.findActiveVendorsByCategory(VendorStatus.ACTIVE, category.trim(), pageable)
+                    .map(this::toVendorResponse);
+        }
+        return vendorRepository.findByDeletedFalseAndActiveTrueAndStatusOrderByNameAsc(VendorStatus.ACTIVE, pageable)
+                .map(this::toVendorResponse);
+    }
+
+    @Override
     public List<VendorResponse> listAllNonDeleted() {
         return vendorRepository.findByDeletedFalseOrderByNameAsc().stream().map(this::toVendorResponse).toList();
     }
 
     @Override
+    public Page<VendorResponse> listAllNonDeleted(Pageable pageable) {
+        return vendorRepository.findByDeletedFalseOrderByNameAsc(pageable).map(this::toVendorResponse);
+    }
+
+    @Override
     public List<VendorResponse> listDeleted() {
         return vendorRepository.findByDeletedTrueOrderByUpdatedAtDesc().stream().map(this::toVendorResponse).toList();
+    }
+
+    @Override
+    public Page<VendorResponse> listDeleted(Pageable pageable) {
+        return vendorRepository.findByDeletedTrueOrderByUpdatedAtDesc(pageable).map(this::toVendorResponse);
     }
 
     @Override
@@ -187,6 +215,7 @@ public class VendorServiceImpl implements VendorService {
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    @CacheEvict(cacheNames = "vendorOperationalState", key = "#id")
     public void softDelete(UUID id) {
         softDelete(id, null, null, null);
     }
@@ -269,6 +298,7 @@ public class VendorServiceImpl implements VendorService {
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    @CacheEvict(cacheNames = "vendorOperationalState", key = "#id")
     public VendorResponse stopReceivingOrders(UUID id) {
         return stopReceivingOrders(id, null, null, null);
     }
@@ -290,6 +320,7 @@ public class VendorServiceImpl implements VendorService {
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    @CacheEvict(cacheNames = "vendorOperationalState", key = "#id")
     public VendorResponse resumeReceivingOrders(UUID id) {
         return resumeReceivingOrders(id, null, null, null);
     }
@@ -317,6 +348,7 @@ public class VendorServiceImpl implements VendorService {
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    @CacheEvict(cacheNames = "vendorOperationalState", key = "#id")
     public VendorResponse restore(UUID id) {
         return restore(id, null, null, null);
     }
@@ -429,7 +461,7 @@ public class VendorServiceImpl implements VendorService {
         }
         return vendorIds.stream()
                 .distinct()
-                .map(this::getOperationalState)
+                .map(self::getOperationalState)
                 .toList();
     }
 

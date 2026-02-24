@@ -7,6 +7,7 @@ import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -25,4 +26,8 @@ public interface PromotionCampaignRepository extends JpaRepository<PromotionCamp
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from PromotionCampaign p where p.id = :id")
     Optional<PromotionCampaign> findByIdForUpdate(@Param("id") UUID id);
+
+    @Modifying
+    @Query("UPDATE PromotionCampaign p SET p.flashSaleRedemptionCount = p.flashSaleRedemptionCount + 1 WHERE p.id = :id AND p.flashSaleRedemptionCount < p.flashSaleMaxRedemptions")
+    int incrementFlashSaleRedemptionCount(@Param("id") UUID id);
 }

@@ -33,7 +33,8 @@ import java.util.UUID;
         indexes = {
                 @Index(name = "idx_vendor_staff_vendor", columnList = "vendor_id"),
                 @Index(name = "idx_vendor_staff_keycloak", columnList = "keycloak_user_id"),
-                @Index(name = "idx_vendor_staff_active", columnList = "is_active")
+                @Index(name = "idx_vendor_staff_active", columnList = "is_active"),
+                @Index(name = "idx_vendor_staff_expiry", columnList = "is_active, is_deleted, access_expires_at")
         }
 )
 @Getter

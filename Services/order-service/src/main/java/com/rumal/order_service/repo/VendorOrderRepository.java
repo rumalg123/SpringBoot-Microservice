@@ -2,7 +2,9 @@ package com.rumal.order_service.repo;
 
 import com.rumal.order_service.entity.OrderStatus;
 import com.rumal.order_service.entity.VendorOrder;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -16,6 +18,10 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface VendorOrderRepository extends JpaRepository<VendorOrder, UUID> {
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT vo FROM VendorOrder vo WHERE vo.id = :id")
+    Optional<VendorOrder> findByIdForUpdate(@Param("id") UUID id);
 
     List<VendorOrder> findByOrderIdOrderByCreatedAtAsc(UUID orderId);
 

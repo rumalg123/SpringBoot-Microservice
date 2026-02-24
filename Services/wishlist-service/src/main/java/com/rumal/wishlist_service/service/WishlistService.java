@@ -22,11 +22,17 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
@@ -38,6 +44,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
 public class WishlistService {
+
+    private static final Logger log = LoggerFactory.getLogger(WishlistService.class);
 
     private final WishlistItemRepository wishlistItemRepository;
     private final WishlistCollectionRepository wishlistCollectionRepository;
@@ -58,6 +66,12 @@ public class WishlistService {
         String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
         List<WishlistItem> items = wishlistItemRepository.findByKeycloakIdOrderByCreatedAtDesc(normalizedKeycloakId);
         return toResponse(normalizedKeycloakId, items);
+    }
+
+    @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
+    public Page<WishlistItemResponse> getByKeycloakId(String keycloakId, Pageable pageable) {
+        String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
+        return wishlistItemRepository.findByKeycloakId(normalizedKeycloakId, pageable).map(this::toItemResponse);
     }
 
     @Caching(evict = {
@@ -290,8 +304,20 @@ public class WishlistService {
         WishlistItem item = wishlistItemRepository.findByIdAndKeycloakId(itemId, normalizedKeycloakId)
                 .orElseThrow(() -> new ResourceNotFoundException("Wishlist item not found: " + itemId));
 
-        cartClient.addItemToCart(normalizedKeycloakId, item.getProductId(), 1);
+        UUID productId = item.getProductId();
         wishlistItemRepository.delete(item);
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                try {
+                    cartClient.addItemToCart(normalizedKeycloakId, productId, 1);
+                } catch (Exception ex) {
+                    log.error("Failed to add product {} to cart for user {} after wishlist item removal. "
+                            + "Item was already deleted from wishlist.", productId, normalizedKeycloakId, ex);
+                }
+            }
+        });
     }
 
     // ──────────────────────────────────────────────────────────────────────────

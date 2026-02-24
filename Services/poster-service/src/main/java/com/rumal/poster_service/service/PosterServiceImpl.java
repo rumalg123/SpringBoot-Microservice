@@ -17,6 +17,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -109,6 +111,18 @@ public class PosterServiceImpl implements PosterService {
     }
 
     @Override
+    public Page<PosterResponse> listActiveByPlacement(PosterPlacement placement, Pageable pageable) {
+        return posterRepository.findByDeletedFalseAndPlacementOrderBySortOrderAscCreatedAtDesc(placement, pageable)
+                .map(this::toResponse);
+    }
+
+    @Override
+    public Page<PosterResponse> listAllActive(Pageable pageable) {
+        return posterRepository.findByDeletedFalseOrderByPlacementAscSortOrderAscCreatedAtDesc(pageable)
+                .map(this::toResponse);
+    }
+
+    @Override
     public List<PosterResponse> listAllNonDeleted() {
         return posterRepository.findByDeletedFalseOrderByPlacementAscSortOrderAscCreatedAtDesc()
                 .stream()
@@ -117,8 +131,19 @@ public class PosterServiceImpl implements PosterService {
     }
 
     @Override
+    public Page<PosterResponse> listAllNonDeleted(Pageable pageable) {
+        return posterRepository.findByDeletedFalseOrderByPlacementAscSortOrderAscCreatedAtDesc(pageable)
+                .map(this::toResponse);
+    }
+
+    @Override
     public List<PosterResponse> listDeleted() {
         return posterRepository.findByDeletedTrueOrderByUpdatedAtDesc().stream().map(this::toResponse).toList();
+    }
+
+    @Override
+    public Page<PosterResponse> listDeleted(Pageable pageable) {
+        return posterRepository.findByDeletedTrueOrderByUpdatedAtDesc(pageable).map(this::toResponse);
     }
 
     @Override

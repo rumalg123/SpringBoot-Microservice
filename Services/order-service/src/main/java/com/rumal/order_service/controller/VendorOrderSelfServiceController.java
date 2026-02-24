@@ -31,30 +31,39 @@ public class VendorOrderSelfServiceController {
     @GetMapping
     public Page<VendorOrderResponse> listMyVendorOrders(
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Email-Verified", required = false) String emailVerified,
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestParam(required = false) UUID vendorId,
             @RequestParam(required = false) OrderStatus status,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
-        verifyAuth(internalAuth, userSub);
+        verifyAuth(internalAuth, emailVerified, userSub);
         return orderService.listVendorOrdersForVendorUser(userSub, vendorId, status, pageable);
     }
 
     @GetMapping("/{vendorOrderId}")
     public VendorOrderDetailResponse getMyVendorOrder(
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Email-Verified", required = false) String emailVerified,
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestParam(required = false) UUID vendorId,
             @PathVariable UUID vendorOrderId
     ) {
-        verifyAuth(internalAuth, userSub);
+        verifyAuth(internalAuth, emailVerified, userSub);
         return orderService.getVendorOrderForVendorUser(userSub, vendorId, vendorOrderId);
     }
 
-    private void verifyAuth(String internalAuth, String userSub) {
+    private void verifyAuth(String internalAuth, String emailVerified, String userSub) {
         internalRequestVerifier.verify(internalAuth);
+        verifyEmailVerified(emailVerified);
         if (userSub == null || userSub.isBlank()) {
             throw new UnauthorizedException("Missing authentication header");
+        }
+    }
+
+    private void verifyEmailVerified(String emailVerified) {
+        if (emailVerified == null || !"true".equalsIgnoreCase(emailVerified.trim())) {
+            throw new UnauthorizedException("Email is not verified");
         }
     }
 }

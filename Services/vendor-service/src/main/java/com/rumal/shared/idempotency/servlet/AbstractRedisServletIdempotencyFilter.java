@@ -28,12 +28,14 @@ import java.time.Duration;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 public abstract class AbstractRedisServletIdempotencyFilter extends OncePerRequestFilter {
     private static final String PENDING_PREFIX = "PENDING|";
     private static final String DONE_PREFIX = "DONE|";
     private static final int DEFAULT_MAX_CACHED_REQUEST_BODY_BYTES = 256 * 1024;
     private static final int DEFAULT_MAX_CACHED_RESPONSE_BODY_BYTES = 512 * 1024;
+    private static final Pattern IDEM_KEY_PATTERN = Pattern.compile("^[a-zA-Z0-9\\-_]{1,128}$");
 
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
@@ -88,6 +90,12 @@ public abstract class AbstractRedisServletIdempotencyFilter extends OncePerReque
 
         CachedBodyHttpServletRequest wrappedRequest = new CachedBodyHttpServletRequest(request);
         String idemKey = rawIdemKey.trim();
+        if (!IDEM_KEY_PATTERN.matcher(idemKey).matches()) {
+            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            response.setContentType("application/json");
+            response.getWriter().write("{\"error\":\"Invalid Idempotency-Key format\"}");
+            return;
+        }
         String reqHash = buildRequestHash(wrappedRequest);
         String redisKey = buildRedisKey(wrappedRequest, idemKey);
 

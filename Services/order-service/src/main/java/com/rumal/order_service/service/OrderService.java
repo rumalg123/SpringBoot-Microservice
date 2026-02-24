@@ -58,6 +58,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
@@ -274,7 +276,14 @@ public class OrderService {
                 "status_update",
                 auditNote
         );
-        maybeReleaseCouponReservationForFinalStatus(saved, status);
+        final Order savedOrder = saved;
+        final OrderStatus finalStatus = status;
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                maybeReleaseCouponReservationForFinalStatus(savedOrder, finalStatus);
+            }
+        });
         evictOrderCachesAfterStatusMutation();
         return toResponse(saved);
     }
@@ -292,7 +301,7 @@ public class OrderService {
         if (status == null) {
             throw new ValidationException("status is required");
         }
-        VendorOrder vendorOrder = vendorOrderRepository.findById(vendorOrderId)
+        VendorOrder vendorOrder = vendorOrderRepository.findByIdForUpdate(vendorOrderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Vendor order not found: " + vendorOrderId));
         OrderStatus current = vendorOrder.getStatus();
         validateStatusTransition(current, status);
@@ -336,7 +345,14 @@ public class OrderService {
                     "vendor_order_aggregate_sync",
                     "Order aggregate status synchronized from vendor order statuses"
             );
-            maybeReleaseCouponReservationForFinalStatus(savedOrder, nextAggregate);
+            final Order finalSavedOrder = savedOrder;
+            final OrderStatus finalNextAggregate = nextAggregate;
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    maybeReleaseCouponReservationForFinalStatus(finalSavedOrder, finalNextAggregate);
+                }
+            });
         }
         evictOrderCachesAfterStatusMutation();
         return toVendorOrderResponse(savedVendorOrder);
@@ -1268,7 +1284,13 @@ public class OrderService {
             }
         }
 
-        maybeReleaseCouponReservationForFinalStatus(saved, OrderStatus.CANCELLED);
+        final Order savedOrder = saved;
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                maybeReleaseCouponReservationForFinalStatus(savedOrder, OrderStatus.CANCELLED);
+            }
+        });
         evictOrderCachesAfterStatusMutation();
         return toResponse(saved);
     }
