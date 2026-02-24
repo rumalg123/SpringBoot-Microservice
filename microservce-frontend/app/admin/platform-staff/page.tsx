@@ -80,7 +80,8 @@ export default function AdminPlatformStaffPage() {
     setLoading(true);
     try {
       const res = await session.apiClient.get("/admin/platform-staff");
-      setRows((res.data as PlatformStaffRow[]) || []);
+      const raw = res.data as { content?: PlatformStaffRow[] };
+      setRows(raw.content || []);
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -93,7 +94,8 @@ export default function AdminPlatformStaffPage() {
     setLoadingDeleted(true);
     try {
       const res = await session.apiClient.get("/admin/platform-staff/deleted");
-      setDeletedRows((res.data as PlatformStaffRow[]) || []);
+      const raw = res.data as { content?: PlatformStaffRow[] };
+      setDeletedRows(raw.content || []);
       setDeletedLoaded(true);
     } catch (error) {
       toast.error(getErrorMessage(error));

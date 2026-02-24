@@ -326,7 +326,8 @@ export default function AdminPromotionsPage() {
     setCouponLoading(true);
     try {
       const res = await session.apiClient.get(`/admin/promotions/${promoId}/coupons`);
-      setCoupons((res.data as CouponCode[]) || []);
+      const raw = res.data as { content?: CouponCode[] };
+      setCoupons(raw.content || []);
     } catch (e) {
       toast.error(getApiErrorMessage(e, "Failed to load coupons."));
     } finally {

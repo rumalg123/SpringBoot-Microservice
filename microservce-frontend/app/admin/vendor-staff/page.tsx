@@ -129,7 +129,8 @@ export default function AdminVendorStaffPage() {
       const effectiveVendorId = (vendorIdOverride ?? vendorFilterId).trim();
       if (effectiveVendorId) params.set("vendorId", effectiveVendorId);
       const res = await session.apiClient.get(`/admin/vendor-staff${params.toString() ? `?${params.toString()}` : ""}`);
-      setRows((res.data as VendorStaffRow[]) || []);
+      const raw = res.data as { content?: VendorStaffRow[] };
+      setRows(raw.content || []);
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -145,7 +146,8 @@ export default function AdminVendorStaffPage() {
       const effectiveVendorId = (vendorIdOverride ?? vendorFilterId).trim();
       if (effectiveVendorId) params.set("vendorId", effectiveVendorId);
       const res = await session.apiClient.get(`/admin/vendor-staff/deleted${params.toString() ? `?${params.toString()}` : ""}`);
-      setDeletedRows((res.data as VendorStaffRow[]) || []);
+      const raw = res.data as { content?: VendorStaffRow[] };
+      setDeletedRows(raw.content || []);
       setDeletedLoaded(true);
     } catch (error) {
       toast.error(getErrorMessage(error));

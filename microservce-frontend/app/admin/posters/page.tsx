@@ -329,7 +329,8 @@ export default function AdminPostersPage() {
     setLoading(true);
     try {
       const a = await session.apiClient.get("/admin/posters");
-      setItems((a.data as Poster[]) || []);
+      const raw = a.data as { content?: Poster[] };
+      setItems(raw.content || []);
       setStatus("Posters loaded.");
     } catch (e) {
       setStatus(getApiErrorMessage(e, "Failed to load posters."));
@@ -343,7 +344,8 @@ export default function AdminPostersPage() {
     setLoading(true);
     try {
       const d = await session.apiClient.get("/admin/posters/deleted");
-      setDeletedItems((d.data as Poster[]) || []);
+      const raw = d.data as { content?: Poster[] };
+      setDeletedItems(raw.content || []);
       setDeletedLoaded(true);
       setStatus("Deleted posters loaded.");
     } catch (e) {

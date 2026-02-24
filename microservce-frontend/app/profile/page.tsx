@@ -41,8 +41,19 @@ type CouponUsageEntry = {
   discountAmount: number; orderId: string; committedAt: string;
 };
 
+type SpringPageRaw<T> = {
+  content: T[];
+  totalPages?: number;
+  totalElements?: number;
+  number?: number;
+  page?: { totalPages?: number; totalElements?: number; number?: number };
+};
+
 type SpringPage<T> = {
-  content: T[]; totalPages: number; totalElements: number; number: number;
+  content: T[];
+  totalPages: number;
+  totalElements: number;
+  number: number;
 };
 
 type TabKey = "account" | "preferences" | "activity" | "coupon-history";
@@ -244,7 +255,13 @@ export default function ProfilePage() {
     setActivityLogLoading(true);
     try {
       const response = await apiClient.get(`/customers/me/activity-log?page=${page}&size=20`);
-      setActivityLog(response.data as SpringPage<ActivityLogEntry>);
+      const raw = response.data as SpringPageRaw<ActivityLogEntry>;
+      setActivityLog({
+        content: raw.content || [],
+        totalPages: raw.totalPages ?? raw.page?.totalPages ?? 0,
+        totalElements: raw.totalElements ?? raw.page?.totalElements ?? 0,
+        number: raw.number ?? raw.page?.number ?? 0,
+      });
       setActivityLogLoaded(true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to load activity log");
@@ -257,7 +274,13 @@ export default function ProfilePage() {
     setCouponUsageLoading(true);
     try {
       const response = await apiClient.get(`/promotions/me/coupon-usage?page=${page}&size=20`);
-      setCouponUsage(response.data as SpringPage<CouponUsageEntry>);
+      const raw = response.data as SpringPageRaw<CouponUsageEntry>;
+      setCouponUsage({
+        content: raw.content || [],
+        totalPages: raw.totalPages ?? raw.page?.totalPages ?? 0,
+        totalElements: raw.totalElements ?? raw.page?.totalElements ?? 0,
+        number: raw.number ?? raw.page?.number ?? 0,
+      });
       setCouponUsageLoaded(true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to load coupon usage history");

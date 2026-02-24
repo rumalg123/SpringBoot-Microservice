@@ -136,6 +136,7 @@ export default function WishlistPage() {
         }))
       );
       toast.success("Removed from wishlist");
+      emitWishlistUpdate();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to remove wishlist item");
     } finally { setRemovingItemId(null); }
@@ -147,6 +148,9 @@ export default function WishlistPage() {
     try {
       await apiClient.delete("/wishlist/me");
       setWishlist(emptyWishlist);
+      setCollections([]);
+      setActiveCollectionId(null);
+      emitWishlistUpdate();
       toast.success("Wishlist cleared");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to clear wishlist");
@@ -179,6 +183,20 @@ export default function WishlistPage() {
       emitWishlistUpdate();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to move item to cart");
+    } finally { setMovingItemId(null); }
+  };
+
+  const moveToCollection = async (item: WishlistItem, collectionId: string) => {
+    if (!apiClient || busy) return;
+    setMovingItemId(item.id);
+    try {
+      await apiClient.post("/wishlist/me/items", { productId: item.productId, collectionId });
+      await apiClient.delete(`/wishlist/me/items/${item.id}`);
+      await Promise.all([loadWishlist(), loadCollections()]);
+      toast.success("Moved to collection");
+      emitWishlistUpdate();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to move item");
     } finally { setMovingItemId(null); }
   };
 
@@ -983,6 +1001,24 @@ export default function WishlistPage() {
                     >
                       {removingItemId === item.id ? "Removing..." : "Remove"}
                     </button>
+                    {!activeCollection && collections.length > 0 && (
+                      <select
+                        value=""
+                        onChange={(e) => { if (e.target.value) void moveToCollection(item, e.target.value); }}
+                        disabled={!!movingItemId || !!removingItemId}
+                        style={{
+                          padding: "8px 12px", borderRadius: "10px",
+                          border: "1px solid var(--line-bright)", background: "var(--surface-2)",
+                          color: "var(--ink-light)", fontSize: "0.72rem", fontWeight: 600,
+                          cursor: busy ? "not-allowed" : "pointer", outline: "none",
+                        }}
+                      >
+                        <option value="">Move to collection…</option>
+                        {collections.map((c) => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                 </div>
               </article>
