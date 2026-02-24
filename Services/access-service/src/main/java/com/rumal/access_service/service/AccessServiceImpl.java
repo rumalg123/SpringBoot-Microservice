@@ -379,6 +379,7 @@ public class AccessServiceImpl implements AccessService {
                             entity.getKeycloakUserId(),
                             effectiveActive,
                             effectiveActive ? entity.getPermissions().stream().map(VendorPermission::code).collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new)) : Set.of(),
+                            entity.isMfaRequired(),
                             entity.getAccessExpiresAt(),
                             entity.getAllowedIps()
                     );
@@ -429,6 +430,7 @@ public class AccessServiceImpl implements AccessService {
         entity.setActive(request.active() == null || request.active());
         entity.setDeleted(false);
         entity.setDeletedAt(null);
+        entity.setMfaRequired(request.mfaRequired() != null && request.mfaRequired());
         entity.setPermissionGroupId(request.permissionGroupId());
         entity.setAccessExpiresAt(request.accessExpiresAt());
         entity.setAllowedIps(trimToNull(request.allowedIps()));
@@ -498,6 +500,7 @@ public class AccessServiceImpl implements AccessService {
                 entity.getDisplayName(),
                 Set.copyOf(entity.getPermissions()),
                 entity.getPermissionGroupId(),
+                entity.isMfaRequired(),
                 entity.getAccessExpiresAt(),
                 entity.getAllowedIps(),
                 entity.isActive(),

@@ -14,6 +14,7 @@ public record VendorStaffAccessResponse(
         String displayName,
         Set<VendorPermission> permissions,
         UUID permissionGroupId,
+        boolean mfaRequired,
         Instant accessExpiresAt,
         String allowedIps,
         boolean active,

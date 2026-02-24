@@ -9,6 +9,7 @@ public record VendorStaffAccessLookupResponse(
         String keycloakUserId,
         boolean active,
         Set<String> permissions,
+        boolean mfaRequired,
         Instant accessExpiresAt,
         String allowedIps
 ) {

@@ -3,10 +3,11 @@ package com.rumal.admin_service.service;
 import com.rumal.admin_service.dto.FeatureFlagResponse;
 import com.rumal.admin_service.dto.UpsertFeatureFlagRequest;
 import com.rumal.admin_service.entity.FeatureFlag;
-import com.rumal.admin_service.exception.DownstreamHttpException;
 import com.rumal.admin_service.repo.FeatureFlagRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -27,7 +28,7 @@ public class FeatureFlagService {
     public FeatureFlagResponse getByKey(String key) {
         return flagRepository.findByFlagKey(key)
                 .map(this::toResponse)
-                .orElseThrow(() -> new DownstreamHttpException(404, "Feature flag not found: " + key));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Feature flag not found: " + key));
     }
 
     @Transactional(readOnly = true)

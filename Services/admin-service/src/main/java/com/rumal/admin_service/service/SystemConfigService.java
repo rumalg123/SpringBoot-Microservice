@@ -3,8 +3,9 @@ package com.rumal.admin_service.service;
 import com.rumal.admin_service.dto.SystemConfigResponse;
 import com.rumal.admin_service.dto.UpsertSystemConfigRequest;
 import com.rumal.admin_service.entity.SystemConfig;
-import com.rumal.admin_service.exception.DownstreamHttpException;
 import com.rumal.admin_service.repo.SystemConfigRepository;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,7 +28,7 @@ public class SystemConfigService {
     public SystemConfigResponse getByKey(String key) {
         return configRepository.findByConfigKey(key)
                 .map(this::toResponse)
-                .orElseThrow(() -> new DownstreamHttpException(404, "Config key not found: " + key));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Config key not found: " + key));
     }
 
     @Transactional

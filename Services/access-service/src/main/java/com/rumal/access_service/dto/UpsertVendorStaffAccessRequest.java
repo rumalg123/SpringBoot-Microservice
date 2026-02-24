@@ -18,6 +18,7 @@ public record UpsertVendorStaffAccessRequest(
         @NotNull Set<VendorPermission> permissions,
         Boolean active,
         UUID permissionGroupId,
+        Boolean mfaRequired,
         Instant accessExpiresAt,
         @Size(max = 1000) String allowedIps
 ) {

@@ -72,6 +72,10 @@ public class VendorStaffAccess {
     @Column(name = "access_expires_at")
     private Instant accessExpiresAt;
 
+    @Column(name = "mfa_required", nullable = false)
+    @Builder.Default
+    private boolean mfaRequired = false;
+
     @Column(name = "allowed_ips", length = 1000)
     private String allowedIps;
 
