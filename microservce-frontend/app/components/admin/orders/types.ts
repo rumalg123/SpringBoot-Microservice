@@ -13,13 +13,14 @@ export type AdminOrder = {
 
 export type AdminOrdersPageResponse = {
   content: AdminOrder[];
-  number: number;
-  size: number;
-  totalElements: number;
-  totalPages: number;
-  first: boolean;
-  last: boolean;
-  empty: boolean;
+  number?: number;
+  size?: number;
+  totalElements?: number;
+  totalPages?: number;
+  first?: boolean;
+  last?: boolean;
+  empty?: boolean;
+  page?: { number?: number; size?: number; totalElements?: number; totalPages?: number };
 };
 
 export type OrderStatusAudit = {

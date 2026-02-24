@@ -119,7 +119,7 @@ type PromotionAnalytics = {
   updatedAt: string;
 };
 
-type PageResponse<T> = { content: T[]; totalElements: number; totalPages: number; number: number; size: number };
+type PageResponse<T> = { content: T[]; totalElements?: number; totalPages?: number; number?: number; size?: number; page?: { number?: number; size?: number; totalElements?: number; totalPages?: number } };
 
 type FormState = {
   id?: string;
@@ -266,9 +266,9 @@ export default function AdminPromotionsPage() {
       const res = await session.apiClient.get(`/admin/promotions?${params.toString()}`);
       const data = res.data as PageResponse<Promotion>;
       setItems(data.content || []);
-      setTotalPages(data.totalPages || 0);
-      setPage(data.number || 0);
-      setStatusMsg(`${data.totalElements} promotion(s) found.`);
+      setTotalPages(data.totalPages ?? data.page?.totalPages ?? 0);
+      setPage(data.number ?? data.page?.number ?? 0);
+      setStatusMsg(`${data.totalElements ?? data.page?.totalElements ?? 0} promotion(s) found.`);
     } catch (e) {
       setStatusMsg(getApiErrorMessage(e, "Failed to load promotions."));
     } finally {
@@ -290,8 +290,8 @@ export default function AdminPromotionsPage() {
       const res = await session.apiClient.get(`/admin/promotions/analytics?${params.toString()}`);
       const data = res.data as PageResponse<PromotionAnalytics>;
       setAnalyticsData(data.content || []);
-      setAnalyticsTotalPages(data.totalPages || 0);
-      setAnalyticsPage(data.number || 0);
+      setAnalyticsTotalPages(data.totalPages ?? data.page?.totalPages ?? 0);
+      setAnalyticsPage(data.number ?? data.page?.number ?? 0);
     } catch (e) {
       toast.error(getApiErrorMessage(e, "Failed to load promotion analytics."));
     } finally {

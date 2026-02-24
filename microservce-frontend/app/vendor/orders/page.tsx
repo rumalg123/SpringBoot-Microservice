@@ -31,10 +31,11 @@ type VendorOrder = {
 
 type PageResponse = {
   content: VendorOrder[];
-  totalPages: number;
-  totalElements: number;
-  number: number;
-  size: number;
+  totalPages?: number;
+  totalElements?: number;
+  number?: number;
+  size?: number;
+  page?: { number?: number; size?: number; totalElements?: number; totalPages?: number };
 };
 
 type VendorOrderItem = {
@@ -231,9 +232,9 @@ export default function VendorOrdersPage() {
         const res = await session.apiClient.get(`/orders/vendor/me?${params.toString()}`);
         const data = res.data as PageResponse;
         setOrders(data.content || []);
-        setTotalPages(data.totalPages);
-        setTotalElements(data.totalElements);
-        setPage(data.number);
+        setTotalPages(data.totalPages ?? data.page?.totalPages ?? 0);
+        setTotalElements(data.totalElements ?? data.page?.totalElements ?? 0);
+        setPage(data.number ?? data.page?.number ?? 0);
       } catch (err) {
         toast.error(extractErrorMessage(err));
         setOrders([]);

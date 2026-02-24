@@ -87,7 +87,7 @@ public class SampleVendorDataSeeder implements ApplicationRunner {
                 "Uma Style",
                 "https://urbanstyle.example",
                 "Fashion and lifestyle seller used for vendor onboarding and admin tests.",
-                VendorStatus.PENDING,
+                VendorStatus.ACTIVE,
                 true
         );
         vendorService.addVendorUser(URBAN_STYLE_VENDOR_ID, new UpsertVendorUserRequest(

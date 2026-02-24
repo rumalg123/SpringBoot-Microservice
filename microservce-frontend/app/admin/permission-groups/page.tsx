@@ -20,10 +20,11 @@ type PermissionGroup = {
 
 type PageResponse = {
   content: PermissionGroup[];
-  totalPages: number;
-  totalElements: number;
-  number: number;
-  size: number;
+  totalPages?: number;
+  totalElements?: number;
+  number?: number;
+  size?: number;
+  page?: { number?: number; size?: number; totalElements?: number; totalPages?: number };
 };
 
 type ScopeFilter = "ALL" | "PLATFORM" | "VENDOR";
@@ -107,9 +108,9 @@ export default function AdminPermissionGroupsPage() {
         const res = await session.apiClient.get(`/admin/permission-groups?${params.toString()}`);
         const data = res.data as PageResponse;
         setGroups(data.content || []);
-        setTotalPages(data.totalPages || 0);
-        setTotalElements(data.totalElements || 0);
-        setPage(data.number || 0);
+        setTotalPages(data.totalPages ?? data.page?.totalPages ?? 0);
+        setTotalElements(data.totalElements ?? data.page?.totalElements ?? 0);
+        setPage(data.number ?? data.page?.number ?? 0);
       } catch (error) {
         toast.error(getErrorMessage(error));
       } finally {

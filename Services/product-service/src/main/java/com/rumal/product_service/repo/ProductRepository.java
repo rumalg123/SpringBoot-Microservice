@@ -37,6 +37,10 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
     int deactivateAllByVendorId(@Param("vendorId") UUID vendorId);
 
     @Modifying
+    @Query("update Product p set p.approvalStatus = com.rumal.product_service.entity.ApprovalStatus.APPROVED where p.approvalStatus = com.rumal.product_service.entity.ApprovalStatus.DRAFT")
+    int approveAllDraft();
+
+    @Modifying
     @Query("update Product p set p.viewCount = p.viewCount + 1 where p.id = :productId")
     int incrementViewCount(@Param("productId") UUID productId);
 

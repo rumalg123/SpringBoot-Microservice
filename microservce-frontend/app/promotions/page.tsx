@@ -38,9 +38,10 @@ type PublicPromotion = {
 
 type PageResponse = {
   content: PublicPromotion[];
-  number: number;
-  totalPages: number;
-  totalElements: number;
+  number?: number;
+  totalPages?: number;
+  totalElements?: number;
+  page?: { number?: number; totalPages?: number; totalElements?: number };
 };
 
 /* ───── helpers ───── */
@@ -306,8 +307,8 @@ export default function PromotionsPage() {
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
         const data = (await res.json()) as PageResponse;
         setPromotions(data.content || []);
-        setTotalPages(data.totalPages ?? 0);
-        setTotalElements(data.totalElements ?? 0);
+        setTotalPages(data.totalPages ?? data.page?.totalPages ?? 0);
+        setTotalElements(data.totalElements ?? data.page?.totalElements ?? 0);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Failed to load promotions");
         setPromotions([]);

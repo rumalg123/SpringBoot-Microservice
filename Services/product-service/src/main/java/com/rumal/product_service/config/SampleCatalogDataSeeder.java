@@ -11,6 +11,7 @@ import com.rumal.product_service.repo.CategoryRepository;
 import com.rumal.product_service.repo.ProductRepository;
 import com.rumal.product_service.service.CategoryService;
 import com.rumal.product_service.service.ProductService;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -59,6 +60,7 @@ public class SampleCatalogDataSeeder implements ApplicationRunner {
     private boolean seedEnabled;
 
     @Override
+    @Transactional
     public void run(ApplicationArguments args) {
         if (!seedEnabled) {
             log.info("Skipping sample catalog seed (sample.catalog.seed.enabled=false)");
@@ -260,7 +262,9 @@ public class SampleCatalogDataSeeder implements ApplicationRunner {
 
         seedPaginationSingles();
 
-        log.info("Sample catalog seed completed: categories={}, products={}", categoryRepository.count(), productRepository.count());
+        int approved = productRepository.approveAllDraft();
+        log.info("Sample catalog seed completed: categories={}, products={}, auto-approved={}",
+                categoryRepository.count(), productRepository.count(), approved);
     }
 
     private void seedPaginationSingles() {

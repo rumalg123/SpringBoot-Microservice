@@ -29,8 +29,9 @@ type ProductSummary = {
 
 type ProductPageResponse = {
   content: ProductSummary[];
-  number: number;
-  totalPages: number;
+  number?: number;
+  totalPages?: number;
+  page?: { number?: number; totalPages?: number; totalElements?: number };
 };
 
 type WishlistItem = {
@@ -256,7 +257,7 @@ function ProductsPageContent() {
           if (!res.ok) throw new Error("Failed to fetch products");
           const data = (await res.json()) as ProductPageResponse;
           setProducts(data.content || []);
-          setTotalPages(Math.max(data.totalPages || 1, 1));
+          setTotalPages(Math.max(data.totalPages ?? data.page?.totalPages ?? 1, 1));
           setStatus(`Showing ${data.content?.length || 0} products`);
           return;
         }
@@ -276,7 +277,7 @@ function ProductsPageContent() {
           if (!res.ok) throw new Error("Failed to fetch products");
           const data = (await res.json()) as ProductPageResponse;
           aggregated.push(...(data.content || []));
-          totalServerPages = Math.max(data.totalPages || 1, 1);
+          totalServerPages = Math.max(data.totalPages ?? data.page?.totalPages ?? 1, 1);
           currentPage += 1;
         }
 

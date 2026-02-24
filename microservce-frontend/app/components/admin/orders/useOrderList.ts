@@ -220,9 +220,9 @@ export default function useOrderList({
   };
 
   const isVendorScopedActor = session.isVendorAdmin || session.isVendorStaff;
-  const currentPage = ordersPage?.number ?? page;
-  const totalPages = ordersPage?.totalPages ?? 0;
-  const totalElements = ordersPage?.totalElements ?? 0;
+  const currentPage = ordersPage?.number ?? ordersPage?.page?.number ?? page;
+  const totalPages = ordersPage?.totalPages ?? ordersPage?.page?.totalPages ?? 0;
+  const totalElements = ordersPage?.totalElements ?? ordersPage?.page?.totalElements ?? 0;
   const filterBusy = ordersLoading || filterSubmitting;
   const allCurrentSelected = orders.length > 0 && orders.every((o) => selectedOrderIds.includes(o.id));
   const someCurrentSelected = selectedOrderIds.length > 0 && !allCurrentSelected;
