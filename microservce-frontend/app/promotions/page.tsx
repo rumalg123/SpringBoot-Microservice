@@ -565,8 +565,9 @@ export default function PromotionsPage() {
               style={selectStyle}
             >
               <option value="">All Scopes</option>
-              <option value="PLATFORM">Platform</option>
+              <option value="ORDER">Order</option>
               <option value="VENDOR">Vendor</option>
+              <option value="PRODUCT">Product</option>
               <option value="CATEGORY">Category</option>
             </select>
 
