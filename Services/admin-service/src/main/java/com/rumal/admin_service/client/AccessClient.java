@@ -50,11 +50,11 @@ public class AccessClient {
     }
 
     public List<Map<String, Object>> listPlatformStaff(String internalAuth) {
-        return getList("/admin/platform-staff", internalAuth);
+        return getPagedContentList("/admin/platform-staff", internalAuth);
     }
 
     public List<Map<String, Object>> listDeletedPlatformStaff(String internalAuth) {
-        return getList("/admin/platform-staff/deleted", internalAuth);
+        return getPagedContentList("/admin/platform-staff/deleted", internalAuth);
     }
 
     public Map<String, Object> getPlatformStaffById(UUID id, String internalAuth) {
@@ -95,11 +95,11 @@ public class AccessClient {
 
     public List<Map<String, Object>> listVendorStaff(UUID vendorId, String internalAuth) {
         String path = vendorId == null ? "/admin/vendor-staff" : "/admin/vendor-staff?vendorId=" + vendorId;
-        return getList(path, internalAuth);
+        return getPagedContentList(path, internalAuth);
     }
 
     public List<Map<String, Object>> listDeletedVendorStaff(String internalAuth) {
-        return getList("/admin/vendor-staff/deleted", internalAuth);
+        return getPagedContentList("/admin/vendor-staff/deleted", internalAuth);
     }
 
     public Map<String, Object> listAccessAudit(
@@ -193,6 +193,19 @@ public class AccessClient {
 
     public Map<String, Object> restoreVendorStaff(UUID id, String internalAuth, String userSub, String userRoles, String actionReason) {
         return postNoBody("/admin/vendor-staff/" + id + "/restore", internalAuth, userSub, userRoles, actionReason);
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> getPagedContentList(String path, String internalAuth) {
+        Map<String, Object> page = getMap(path, internalAuth);
+        Object content = page.get("content");
+        if (content instanceof List<?> list) {
+            return list.stream()
+                    .filter(Map.class::isInstance)
+                    .map(item -> (Map<String, Object>) item)
+                    .toList();
+        }
+        return List.of();
     }
 
     private List<Map<String, Object>> getList(String path, String internalAuth) {

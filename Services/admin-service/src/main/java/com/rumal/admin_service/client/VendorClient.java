@@ -43,11 +43,11 @@ public class VendorClient {
     }
 
     public List<Map<String, Object>> listAll(String internalAuth) {
-        return getList("/admin/vendors", internalAuth);
+        return getPagedContentList("/admin/vendors", internalAuth);
     }
 
     public List<Map<String, Object>> listDeleted(String internalAuth) {
-        return getList("/admin/vendors/deleted", internalAuth);
+        return getPagedContentList("/admin/vendors/deleted", internalAuth);
     }
 
     public Map<String, Object> getById(UUID id, String internalAuth) {
@@ -245,6 +245,19 @@ public class VendorClient {
                 throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
             }
         });
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> getPagedContentList(String path, String internalAuth) {
+        Map<String, Object> page = getMap(path, internalAuth);
+        Object content = page.get("content");
+        if (content instanceof List<?> list) {
+            return list.stream()
+                    .filter(Map.class::isInstance)
+                    .map(item -> (Map<String, Object>) item)
+                    .toList();
+        }
+        return List.of();
     }
 
     private List<Map<String, Object>> getList(String path, String internalAuth) {

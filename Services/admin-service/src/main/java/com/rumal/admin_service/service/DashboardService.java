@@ -31,7 +31,7 @@ public class DashboardService {
         long completedOrders = 0;
         long cancelledOrders = 0;
 
-        for (String status : List.of("PENDING_PAYMENT", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED", "REFUNDED")) {
+        for (String status : List.of("PAYMENT_PENDING", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED", "REFUNDED")) {
             try {
                 PageResponse<OrderResponse> page = orderClient.listOrders(
                         null, null, null, status, null, null, 0, 1, List.of("createdAt,DESC"), internalAuth);
@@ -39,7 +39,7 @@ public class DashboardService {
                 ordersByStatus.put(status, count);
                 totalOrders += count;
                 switch (status) {
-                    case "PENDING_PAYMENT" -> pendingOrders = count;
+                    case "PAYMENT_PENDING" -> pendingOrders = count;
                     case "PROCESSING", "SHIPPED" -> processingOrders += count;
                     case "DELIVERED" -> completedOrders = count;
                     case "CANCELLED" -> cancelledOrders = count;

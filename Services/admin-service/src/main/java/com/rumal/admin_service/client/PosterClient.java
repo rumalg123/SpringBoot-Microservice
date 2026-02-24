@@ -49,11 +49,11 @@ public class PosterClient {
     }
 
     public List<Map<String, Object>> listAll(String internalAuth) {
-        return getList("/admin/posters", internalAuth);
+        return getPagedContentList("/admin/posters", internalAuth);
     }
 
     public List<Map<String, Object>> listDeleted(String internalAuth) {
-        return getList("/admin/posters/deleted", internalAuth);
+        return getPagedContentList("/admin/posters/deleted", internalAuth);
     }
 
     public Map<String, Object> create(Map<String, Object> request, String internalAuth) {
@@ -146,6 +146,40 @@ public class PosterClient {
             } catch (RestClientResponseException ex) {
                 throw toDownstreamHttpException(ex);
             } catch (IOException | RestClientException ex) {
+                throw new ServiceUnavailableException("Poster service unavailable. Try again later.", ex);
+            }
+        });
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> getPagedContentList(String path, String internalAuth) {
+        Map<String, Object> page = getMap(path, internalAuth);
+        Object content = page.get("content");
+        if (content instanceof List<?> list) {
+            return list.stream()
+                    .filter(Map.class::isInstance)
+                    .map(item -> (Map<String, Object>) item)
+                    .toList();
+        }
+        return List.of();
+    }
+
+    private Map<String, Object> getMap(String path, String internalAuth) {
+        return runPosterCall(() -> {
+            RestClient rc = lbRestClientBuilder.build();
+            try {
+                Map<String, Object> response = rc.get()
+                        .uri(buildUri(path))
+                        .header("X-Internal-Auth", internalAuth)
+                        .retrieve()
+                        .body(MAP_TYPE);
+                if (response == null) {
+                    throw new ServiceUnavailableException("Poster service returned an empty response", null);
+                }
+                return response;
+            } catch (RestClientResponseException ex) {
+                throw toDownstreamHttpException(ex);
+            } catch (RestClientException ex) {
                 throw new ServiceUnavailableException("Poster service unavailable. Try again later.", ex);
             }
         });
