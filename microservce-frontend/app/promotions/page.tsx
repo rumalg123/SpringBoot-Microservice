@@ -344,18 +344,6 @@ export default function PromotionsPage() {
 
   /* ───── styles ───── */
 
-  const selectStyle: React.CSSProperties = {
-    padding: "10px 14px",
-    borderRadius: "10px",
-    border: "1px solid var(--line-bright)",
-    background: "rgba(255,255,255,0.03)",
-    color: "#fff",
-    fontSize: "0.82rem",
-    fontWeight: 600,
-    outline: "none",
-    cursor: "pointer",
-    minWidth: "160px",
-  };
 
   const inputStyle: React.CSSProperties = {
     flex: 1,
@@ -562,7 +550,7 @@ export default function PromotionsPage() {
             <select
               value={scopeFilter}
               onChange={(e) => setScopeFilter(e.target.value)}
-              style={selectStyle}
+              className="filter-select"
             >
               <option value="">All Scopes</option>
               <option value="ORDER">Order</option>
@@ -575,7 +563,7 @@ export default function PromotionsPage() {
             <select
               value={benefitFilter}
               onChange={(e) => setBenefitFilter(e.target.value)}
-              style={selectStyle}
+              className="filter-select"
             >
               <option value="">All Benefits</option>
               <option value="PERCENTAGE_OFF">Percentage Off</option>

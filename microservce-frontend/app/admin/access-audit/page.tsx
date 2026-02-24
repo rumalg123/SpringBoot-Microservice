@@ -237,16 +237,6 @@ export default function AccessAuditPage() {
     width: "100%",
   };
 
-  const selectStyle: React.CSSProperties = {
-    ...inputStyle,
-    cursor: "pointer",
-    appearance: "none",
-    backgroundImage:
-      "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='rgba(255,255,255,0.5)' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E\")",
-    backgroundRepeat: "no-repeat",
-    backgroundPosition: "right 10px center",
-    paddingRight: 28,
-  };
 
   const clearBtnStyle: React.CSSProperties = {
     padding: "8px 16px",
@@ -349,7 +339,8 @@ export default function AccessAuditPage() {
           <select
             value={targetTypeFilter}
             onChange={(e) => setTargetTypeFilter(e.target.value)}
-            style={selectStyle}
+            className="filter-select"
+            style={{ width: "100%" }}
           >
             <option value="ALL">All</option>
             <option value="PLATFORM_STAFF">PLATFORM_STAFF</option>
@@ -363,7 +354,8 @@ export default function AccessAuditPage() {
           <select
             value={actionFilter}
             onChange={(e) => setActionFilter(e.target.value)}
-            style={selectStyle}
+            className="filter-select"
+            style={{ width: "100%" }}
           >
             <option value="ALL">All</option>
             <option value="CREATED">CREATED</option>
@@ -644,11 +636,8 @@ export default function AccessAuditPage() {
                   setPageSize(Number(e.target.value));
                   setPage(0);
                 }}
-                style={{
-                  ...selectStyle,
-                  width: "auto",
-                  padding: "4px 28px 4px 10px",
-                }}
+                className="filter-select"
+                style={{ minWidth: "auto", padding: "4px 28px 4px 10px" }}
               >
                 <option value={10}>10</option>
                 <option value={20}>20</option>

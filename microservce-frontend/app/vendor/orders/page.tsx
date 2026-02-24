@@ -105,18 +105,6 @@ const glassCard: React.CSSProperties = {
   borderRadius: "16px",
 };
 
-const selectStyle: React.CSSProperties = {
-  background: "var(--surface-2)",
-  color: "var(--ink)",
-  border: "1px solid var(--line)",
-  borderRadius: 8,
-  padding: "6px 12px",
-  fontSize: "0.8rem",
-  fontWeight: 600,
-  outline: "none",
-  cursor: "pointer",
-  minWidth: 160,
-};
 
 const tableHeaderStyle: React.CSSProperties = {
   background: "var(--surface-2)",
@@ -391,7 +379,7 @@ export default function VendorOrdersPage() {
         <select
           value={statusFilter}
           onChange={(e) => handleStatusFilterChange(e.target.value)}
-          style={selectStyle}
+          className="filter-select"
         >
           {STATUS_OPTIONS.map((s) => (
             <option key={s} value={s}>

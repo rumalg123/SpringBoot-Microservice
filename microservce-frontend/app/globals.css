@@ -1105,6 +1105,29 @@ textarea:focus {
   padding-right: 32px;
 }
 
+.filter-select {
+  appearance: none;
+  cursor: pointer;
+  padding: 8px 32px 8px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--line-bright);
+  background: var(--brand-soft);
+  color: var(--ink-light);
+  font-size: 0.82rem;
+  font-weight: 600;
+  outline: none;
+  min-width: 160px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%236868a0' viewBox='0 0 16 16'%3E%3Cpath d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.filter-select:focus {
+  border-color: var(--brand) !important;
+  box-shadow: 0 0 0 3px var(--brand-soft), 0 0 12px var(--brand-glow);
+}
+
 .form-input:focus,
 .form-select:focus {
   border-color: var(--brand) !important;

@@ -1006,12 +1006,8 @@ export default function WishlistPage() {
                         value=""
                         onChange={(e) => { if (e.target.value) void moveToCollection(item, e.target.value); }}
                         disabled={!!movingItemId || !!removingItemId}
-                        style={{
-                          padding: "8px 12px", borderRadius: "10px",
-                          border: "1px solid var(--line-bright)", background: "var(--surface-2)",
-                          color: "var(--ink-light)", fontSize: "0.72rem", fontWeight: 600,
-                          cursor: busy ? "not-allowed" : "pointer", outline: "none",
-                        }}
+                        className="filter-select"
+                        style={{ minWidth: "auto", fontSize: "0.72rem" }}
                       >
                         <option value="">Move to collection…</option>
                         {collections.map((c) => (

@@ -31,12 +31,6 @@ function slugify(v: string) {
   return v.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").replace(/-+/g, "-");
 }
 
-const darkSelect: React.CSSProperties = {
-  width: "100%", padding: "10px 14px", borderRadius: "10px",
-  border: "1px solid var(--line-bright)", background: "var(--brand-soft)",
-  color: "var(--ink-light)", fontSize: "0.85rem", outline: "none",
-  appearance: "none", WebkitAppearance: "none",
-};
 
 export default function ProductDetailPage() {
   const params = useParams<{ id: string }>();
@@ -472,7 +466,7 @@ export default function ProductDetailPage() {
                               value={selectedAttributes[attributeName] || ""}
                               onChange={(e) => setSelectedAttributes((old) => ({ ...old, [attributeName]: e.target.value }))}
                               disabled={addingToCart || (variationOptionsByAttribute[attributeName] || []).length === 0}
-                              style={darkSelect}
+                              className="form-select"
                             >
                               <option value="">Select {attributeName}</option>
                               {(variationOptionsByAttribute[attributeName] || []).map((value) => (

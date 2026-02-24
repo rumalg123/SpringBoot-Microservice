@@ -388,10 +388,6 @@ export default function PosterLinkTargetEditor({
           background-repeat: no-repeat;
           padding-right: 34px;
         }
-        .poster-select-admin option {
-          background: #111128;
-          color: #f0f0ff;
-        }
       `}</style>
     </div>
   );

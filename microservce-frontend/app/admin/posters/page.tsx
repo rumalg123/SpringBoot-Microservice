@@ -1102,10 +1102,6 @@ export default function AdminPostersPage() {
           background-repeat: no-repeat;
           padding-right: 34px;
         }
-        .poster-select option {
-          background: #111128;
-          color: #f0f0ff;
-        }
         @media (max-width: 768px) {
           .poster-card-row {
             grid-template-columns: 1fr !important;
