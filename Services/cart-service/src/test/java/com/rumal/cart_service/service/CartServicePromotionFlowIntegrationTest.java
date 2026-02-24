@@ -115,7 +115,8 @@ class CartServicePromotionFlowIntegrationTest {
                 "CHILD",
                 true,
                 new BigDecimal("10.00"),
-                List.of("img-1")
+                List.of("img-1"),
+                List.of()
         ));
         when(vendorOperationalStateClient.getState(vendorId)).thenReturn(new VendorOperationalStateResponse(
                 vendorId,
