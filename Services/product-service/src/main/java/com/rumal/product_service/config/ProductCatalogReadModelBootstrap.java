@@ -13,6 +13,8 @@ import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
+
 @Component
 @Order(Ordered.LOWEST_PRECEDENCE)
 @RequiredArgsConstructor
@@ -27,23 +29,40 @@ public class ProductCatalogReadModelBootstrap implements ApplicationRunner {
     @Value("${catalog.read-model.rebuild-on-startup:true}")
     private boolean rebuildOnStartup;
 
+    @Value("${catalog.read-model.rebuild-delay-seconds:30}")
+    private int rebuildDelaySeconds;
+
     @Override
     public void run(ApplicationArguments args) {
         if (!rebuildOnStartup) {
             return;
         }
 
-        long productCount = productRepository.count();
-        long readCount = productCatalogReadRepository.count();
-        if (productCount == readCount) {
+        Thread.ofVirtual().name("catalog-read-model-rebuild").start(this::delayedRebuild);
+    }
+
+    private void delayedRebuild() {
+        try {
+            log.info("Catalog read model rebuild scheduled in {} seconds (waiting for dependent services)", rebuildDelaySeconds);
+            Thread.sleep(Duration.ofSeconds(rebuildDelaySeconds));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("Catalog read model rebuild interrupted during delay");
             return;
         }
 
-        log.info(
-                "Rebuilding product catalog read model on startup (products={}, readRows={})",
-                productCount,
-                readCount
-        );
-        productCatalogReadModelProjector.rebuildAll();
+        long productCount = productRepository.count();
+        long readCount = productCatalogReadRepository.count();
+        if (productCount == readCount) {
+            log.info("Catalog read model is up to date (products={}, readRows={}), skipping rebuild", productCount, readCount);
+            return;
+        }
+
+        log.info("Rebuilding product catalog read model (products={}, readRows={})", productCount, readCount);
+        try {
+            productCatalogReadModelProjector.rebuildAll();
+        } catch (Exception ex) {
+            log.error("Catalog read model rebuild failed: {}", ex.getMessage(), ex);
+        }
     }
 }
