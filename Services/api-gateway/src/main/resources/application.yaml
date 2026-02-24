@@ -220,6 +220,15 @@ spring:
                   args:
                     name: adminService
                     fallbackUri: forward:/fallback/unavailable
+            - id: admin-permission-groups
+              uri: lb://access-service
+              predicates:
+                - Path=/admin/permission-groups,/admin/permission-groups/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: adminService
+                    fallbackUri: forward:/fallback/unavailable
             - id: admin-promotions
               uri: lb://promotion-service
               predicates:

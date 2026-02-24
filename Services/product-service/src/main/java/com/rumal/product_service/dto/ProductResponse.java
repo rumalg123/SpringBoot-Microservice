@@ -28,6 +28,7 @@ public record ProductResponse(
         Set<String> subCategories,
         Set<String> subCategorySlugs,
         Set<String> categories,
+        List<UUID> categoryIds,
         ProductType productType,
         boolean digital,
         List<ProductVariationAttributeResponse> variations,

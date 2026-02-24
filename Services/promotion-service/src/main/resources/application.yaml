@@ -19,7 +19,7 @@ spring:
     show-sql: ${PROMOTION_SHOW_SQL:true}
 
 server:
-  port: 8090
+  port: 8091
 
 eureka:
   client:

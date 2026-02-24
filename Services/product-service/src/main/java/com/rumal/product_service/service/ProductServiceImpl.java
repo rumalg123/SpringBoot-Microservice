@@ -1347,6 +1347,7 @@ public class ProductServiceImpl implements ProductService {
                 resolveSubCategoryNames(p.getCategories()),
                 resolveSubCategorySlugs(p.getCategories()),
                 p.getCategories().stream().map(Category::getName).collect(java.util.stream.Collectors.toSet()),
+                p.getCategories().stream().map(Category::getId).toList(),
                 p.getProductType(),
                 p.isDigital(),
                 p.getVariations().stream()

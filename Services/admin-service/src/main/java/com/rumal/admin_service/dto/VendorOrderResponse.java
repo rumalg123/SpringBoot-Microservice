@@ -12,6 +12,22 @@ public record VendorOrderResponse(
         int itemCount,
         int quantity,
         BigDecimal orderTotal,
-        Instant createdAt
+        String currency,
+        BigDecimal discountAmount,
+        BigDecimal shippingAmount,
+        BigDecimal platformFee,
+        BigDecimal payoutAmount,
+        String trackingNumber,
+        String trackingUrl,
+        String carrierCode,
+        java.time.LocalDate estimatedDeliveryDate,
+        BigDecimal refundAmount,
+        BigDecimal refundedAmount,
+        Integer refundedQuantity,
+        String refundReason,
+        Instant refundInitiatedAt,
+        Instant refundCompletedAt,
+        Instant createdAt,
+        Instant updatedAt
 ) {
 }
