@@ -226,6 +226,7 @@ class PromotionQuoteServiceTest {
                 new BigDecimal("0.00"),
                 UUID.fromString("66666666-6666-6666-6666-666666666666"),
                 null,
+                null,
                 "US",
                 pricingAt
         ));
@@ -325,6 +326,7 @@ class PromotionQuoteServiceTest {
                 new BigDecimal("0.00"),
                 UUID.fromString("88888888-8888-8888-8888-888888888888"),
                 null,
+                null,
                 "US",
                 pricingAt
         ));
@@ -363,6 +365,7 @@ class PromotionQuoteServiceTest {
                 ),
                 new BigDecimal("0.00"),
                 UUID.fromString("99999999-9999-9999-9999-999999999999"),
+                null,
                 null,
                 "US",
                 pricingAt
@@ -440,6 +443,7 @@ class PromotionQuoteServiceTest {
                 )),
                 new BigDecimal(shippingAmount),
                 UUID.fromString("44444444-4444-4444-4444-444444444444"),
+                null,
                 null,
                 "US",
                 pricingAt
