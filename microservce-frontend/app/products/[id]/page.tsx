@@ -161,9 +161,10 @@ export default function ProductDetailPage() {
     const run = async () => {
       try {
         const res = await apiClient.get("/wishlist/me");
-        const data = (res.data as WishlistResponse) || { items: [], itemCount: 0 };
+        const raw = res.data as Record<string, unknown>;
+        const items = (Array.isArray(raw.content) ? raw.content : raw.items || []) as WishlistItem[];
         if (cancelled) return;
-        const matched = (data.items || []).find((item) => item.productId === targetProductId);
+        const matched = items.find((item) => item.productId === targetProductId);
         setWishlistItemId(matched?.id || "");
       } catch { if (!cancelled) setWishlistItemId(""); }
     };

@@ -85,8 +85,10 @@ export default function WishlistPage() {
     setLoading(true);
     try {
       const res = await apiClient.get("/wishlist/me");
-      const data = (res.data as WishlistResponse) || emptyWishlist;
-      setWishlist({ items: data.items || [], itemCount: Number(data.itemCount || 0) });
+      const raw = res.data as Record<string, unknown>;
+      const items = (Array.isArray(raw.content) ? raw.content : raw.items || []) as WishlistItem[];
+      const itemCount = Number((raw.page as Record<string, unknown> | undefined)?.totalElements ?? raw.itemCount ?? items.length);
+      setWishlist({ items, itemCount });
       setStatus("Wishlist ready.");
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Failed to load wishlist");

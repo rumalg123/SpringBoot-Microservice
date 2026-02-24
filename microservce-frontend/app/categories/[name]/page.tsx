@@ -261,10 +261,11 @@ export default function CategoryProductsPage() {
     const run = async () => {
       try {
         const res = await apiClient.get("/wishlist/me");
-        const data = (res.data as WishlistResponse) || { items: [], itemCount: 0 };
+        const raw = res.data as Record<string, unknown>;
+        const items = (Array.isArray(raw.content) ? raw.content : raw.items || []) as WishlistItem[];
         if (cancelled) return;
         const map: Record<string, string> = {};
-        for (const item of data.items || []) {
+        for (const item of items) {
           if (item.productId && item.id) {
             map[item.productId] = item.id;
           }
