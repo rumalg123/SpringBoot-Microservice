@@ -10,6 +10,7 @@ import AccessAuditPanel from "@/app/components/admin/access/AccessAuditPanel";
 import KeycloakUserLookupField from "@/app/components/admin/access/KeycloakUserLookupField";
 import PermissionChecklist from "@/app/components/admin/access/PermissionChecklist";
 import { useAuthSession } from "@/lib/authSession";
+import { getErrorMessage } from "@/lib/error";
 
 type PlatformStaffRow = {
   id: string;
@@ -48,13 +49,6 @@ const PLATFORM_PERMISSION_OPTIONS = [
   { value: "POSTERS_MANAGE", label: "Manage Posters", description: "Can create/edit/delete posters and uploads." },
 ] as const;
 
-function getErrorMessage(error: unknown): string {
-  if (typeof error === "object" && error !== null) {
-    const maybe = error as { response?: { data?: { error?: string; message?: string } }; message?: string };
-    return maybe.response?.data?.error || maybe.response?.data?.message || maybe.message || "Request failed";
-  }
-  return "Request failed";
-}
 
 export default function AdminPlatformStaffPage() {
   const router = useRouter();

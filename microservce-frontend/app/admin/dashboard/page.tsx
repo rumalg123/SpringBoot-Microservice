@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { useAuthSession } from "../../../lib/authSession";
+import { getErrorMessage } from "../../../lib/error";
 import AdminPageShell from "../../components/ui/AdminPageShell";
 
 /* ───── types ───── */
@@ -43,21 +44,6 @@ const CARDS: CardDef[] = [
 
 /* ───── helpers ───── */
 
-function getErrorMessage(error: unknown): string {
-  if (typeof error === "object" && error !== null) {
-    const maybe = error as {
-      response?: { data?: { error?: string; message?: string } };
-      message?: string;
-    };
-    return (
-      maybe.response?.data?.error ||
-      maybe.response?.data?.message ||
-      maybe.message ||
-      "Request failed"
-    );
-  }
-  return "Request failed";
-}
 
 function formatGeneratedAt(iso: string): string {
   try {

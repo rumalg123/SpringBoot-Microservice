@@ -115,6 +115,7 @@ export default function AdminOrdersPage() {
         canViewAdmin={session.canViewAdmin}
         canManageAdminOrders={session.canManageAdminOrders}
         canManageAdminProducts={session.canManageAdminProducts}
+        canManageAdminCategories={session.canManageAdminCategories}
         canManageAdminVendors={session.canManageAdminVendors}
         canManageAdminPosters={session.canManageAdminPosters}
         apiClient={session.apiClient}

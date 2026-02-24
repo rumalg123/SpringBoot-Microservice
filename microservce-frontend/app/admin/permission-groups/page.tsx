@@ -6,6 +6,7 @@ import AdminPageShell from "../../components/ui/AdminPageShell";
 import StatusBadge from "../../components/ui/StatusBadge";
 import ConfirmModal from "../../components/ConfirmModal";
 import { useAuthSession } from "../../../lib/authSession";
+import { getErrorMessage } from "../../../lib/error";
 
 /* ───── types ───── */
 
@@ -50,13 +51,6 @@ const SCOPE_COLORS: Record<string, { bg: string; border: string; color: string }
 
 /* ───── helpers ───── */
 
-function getErrorMessage(error: unknown): string {
-  if (typeof error === "object" && error !== null) {
-    const maybe = error as { response?: { data?: { error?: string; message?: string } }; message?: string };
-    return maybe.response?.data?.error || maybe.response?.data?.message || maybe.message || "Request failed";
-  }
-  return "Request failed";
-}
 
 function formatDate(iso: string): string {
   try {

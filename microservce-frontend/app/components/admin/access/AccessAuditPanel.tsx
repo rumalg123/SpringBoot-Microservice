@@ -3,6 +3,7 @@
 import type { AxiosInstance } from "axios";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
+import { getErrorMessage } from "../../../../lib/error";
 
 type AccessAuditRow = {
   id: string;
@@ -41,13 +42,6 @@ type AccessAuditPageResponse = {
   totalPages?: number;
 };
 
-function getErrorMessage(error: unknown): string {
-  if (typeof error === "object" && error !== null) {
-    const maybe = error as { response?: { data?: { error?: string; message?: string } }; message?: string };
-    return maybe.response?.data?.error || maybe.response?.data?.message || maybe.message || "Request failed";
-  }
-  return "Request failed";
-}
 
 function formatDateTime(value?: string | null): string {
   if (!value) return "-";

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { AxiosInstance } from "axios";
+import { getErrorMessage } from "../../../../lib/error";
 
 export type KeycloakUserLookupResult = {
   id: string;
@@ -22,13 +23,6 @@ type KeycloakUserLookupFieldProps = {
   onSelect: (user: KeycloakUserLookupResult) => void;
 };
 
-function getErrorMessage(error: unknown): string {
-  if (typeof error === "object" && error !== null) {
-    const maybe = error as { response?: { data?: { error?: string; message?: string } }; message?: string };
-    return maybe.response?.data?.error || maybe.response?.data?.message || maybe.message || "Search failed";
-  }
-  return "Search failed";
-}
 
 export default function KeycloakUserLookupField({
   apiClient,

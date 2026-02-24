@@ -165,9 +165,13 @@ export default function CategoriesPage() {
       {session.isAuthenticated ? (
         <AppNav
           email={(session.profile?.email as string) || ""}
+          isSuperAdmin={session.isSuperAdmin}
+          isVendorAdmin={session.isVendorAdmin}
           canViewAdmin={session.canViewAdmin}
           canManageAdminOrders={session.canManageAdminOrders}
           canManageAdminProducts={session.canManageAdminProducts}
+          canManageAdminCategories={session.canManageAdminCategories}
+          canManageAdminVendors={session.canManageAdminVendors}
           canManageAdminPosters={session.canManageAdminPosters}
           apiClient={session.apiClient}
           emailVerified={session.emailVerified}

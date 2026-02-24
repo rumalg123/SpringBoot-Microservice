@@ -13,26 +13,9 @@ import CatalogToolbar from "../components/catalog/CatalogToolbar";
 import CatalogFiltersSidebar from "../components/catalog/CatalogFiltersSidebar";
 import { useAuthSession } from "../../lib/authSession";
 import { emitWishlistUpdate } from "../../lib/navEvents";
-
-type ProductSummary = {
-  id: string;
-  slug: string;
-  name: string;
-  shortDescription: string;
-  mainImage: string | null;
-  regularPrice: number;
-  discountedPrice: number | null;
-  sellingPrice: number;
-  sku: string;
-  categories: string[];
-};
-
-type ProductPageResponse = {
-  content: ProductSummary[];
-  number?: number;
-  totalPages?: number;
-  page?: { number?: number; totalPages?: number; totalElements?: number };
-};
+import { money, calcDiscount } from "../../lib/format";
+import { resolveImageUrl } from "../../lib/image";
+import type { ProductSummary, PagedResponse } from "../../lib/types";
 
 type WishlistItem = {
   id: string;
@@ -58,28 +41,6 @@ const PAGE_SIZE = 12;
 const AGGREGATE_PAGE_SIZE = 100;
 const AGGREGATE_MAX_PAGES = 10;
 
-function money(value: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
-}
-
-function resolveImageUrl(imageName: string | null): string | null {
-  if (!imageName) return null;
-  const normalized = imageName.replace(/^\/+/, "");
-  const apiBase = (process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me").trim();
-  const encoded = normalized.split("/").map((segment) => encodeURIComponent(segment)).join("/");
-  const apiUrl = `${apiBase.replace(/\/+$/, "")}/products/images/${encoded}`;
-  const base = (process.env.NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL || "").trim();
-  if (!base) return apiUrl;
-  if (normalized.startsWith("products/")) {
-    return `${base.replace(/\/+$/, "")}/${normalized}`;
-  }
-  return apiUrl;
-}
-
-function calcDiscount(regular: number, selling: number): number | null {
-  if (regular > selling && regular > 0) return Math.round(((regular - selling) / regular) * 100);
-  return null;
-}
 
 function parsePrice(value: string): number | null {
   const normalized = value.trim();
@@ -125,9 +86,13 @@ function ProductsPageContent() {
     isAuthenticated,
     profile,
     logout,
+    isSuperAdmin,
+    isVendorAdmin,
     canViewAdmin,
     canManageAdminOrders,
     canManageAdminProducts,
+    canManageAdminCategories,
+    canManageAdminVendors,
     canManageAdminPosters,
     apiClient,
     emailVerified,
@@ -255,7 +220,7 @@ function ProductsPageContent() {
           if (selectedSubNames.length === 1) params.set("subCategory", selectedSubNames[0]);
           const res = await fetch(`${apiBase}/products?${params.toString()}`, { cache: "no-store" });
           if (!res.ok) throw new Error("Failed to fetch products");
-          const data = (await res.json()) as ProductPageResponse;
+          const data = (await res.json()) as PagedResponse<ProductSummary>;
           setProducts(data.content || []);
           setTotalPages(Math.max(data.totalPages ?? data.page?.totalPages ?? 1, 1));
           setStatus(`Showing ${data.content?.length || 0} products`);
@@ -275,7 +240,7 @@ function ProductsPageContent() {
           if (appliedMaxPrice !== null) params.set("maxSellingPrice", appliedMaxPrice.toString());
           const res = await fetch(`${apiBase}/products?${params.toString()}`, { cache: "no-store" });
           if (!res.ok) throw new Error("Failed to fetch products");
-          const data = (await res.json()) as ProductPageResponse;
+          const data = (await res.json()) as PagedResponse<ProductSummary>;
           aggregated.push(...(data.content || []));
           totalServerPages = Math.max(data.totalPages ?? data.page?.totalPages ?? 1, 1);
           currentPage += 1;
@@ -404,9 +369,13 @@ function ProductsPageContent() {
       {isAuthenticated && (
         <AppNav
           email={(profile?.email as string) || ""}
+          isSuperAdmin={isSuperAdmin}
+          isVendorAdmin={isVendorAdmin}
           canViewAdmin={canViewAdmin}
           canManageAdminOrders={canManageAdminOrders}
           canManageAdminProducts={canManageAdminProducts}
+          canManageAdminCategories={canManageAdminCategories}
+          canManageAdminVendors={canManageAdminVendors}
           canManageAdminPosters={canManageAdminPosters}
           apiClient={apiClient}
           emailVerified={emailVerified}

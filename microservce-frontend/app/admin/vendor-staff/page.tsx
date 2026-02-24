@@ -10,6 +10,7 @@ import AccessAuditPanel from "@/app/components/admin/access/AccessAuditPanel";
 import KeycloakUserLookupField from "@/app/components/admin/access/KeycloakUserLookupField";
 import PermissionChecklist from "@/app/components/admin/access/PermissionChecklist";
 import { useAuthSession } from "@/lib/authSession";
+import { getErrorMessage } from "@/lib/error";
 
 type VendorOption = {
   id: string;
@@ -58,13 +59,6 @@ const VENDOR_PERMISSION_OPTIONS = [
   { value: "ORDERS_MANAGE", label: "Manage Orders", description: "Can update/process vendor orders." },
 ] as const;
 
-function getErrorMessage(error: unknown): string {
-  if (typeof error === "object" && error !== null) {
-    const maybe = error as { response?: { data?: { error?: string; message?: string } }; message?: string };
-    return maybe.response?.data?.error || maybe.response?.data?.message || maybe.message || "Request failed";
-  }
-  return "Request failed";
-}
 
 export default function AdminVendorStaffPage() {
   const router = useRouter();

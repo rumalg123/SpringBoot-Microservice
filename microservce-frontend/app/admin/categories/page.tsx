@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { useAuthSession } from "../../../lib/authSession";
+import { getErrorMessage } from "../../../lib/error";
 import AdminPageShell from "../../components/ui/AdminPageShell";
 import ConfirmModal from "../../components/ConfirmModal";
 import CategoryOperationsPanel from "../../components/admin/products/CategoryOperationsPanel";
@@ -41,22 +42,6 @@ function normalizeSlug(value: string): string {
     .replace(/-{2,}/g, "-");
 }
 
-function extractErrorMessage(error: unknown): string {
-  if (error && typeof error === "object") {
-    const err = error as Record<string, unknown>;
-    const response = err.response as Record<string, unknown> | undefined;
-    if (response) {
-      const data = response.data as Record<string, unknown> | undefined;
-      if (data) {
-        if (typeof data.error === "string" && data.error.trim()) return data.error;
-        if (typeof data.message === "string" && data.message.trim()) return data.message;
-      }
-    }
-    if (typeof err.message === "string" && err.message.trim()) return err.message;
-  }
-  if (error instanceof Error) return error.message;
-  return "An unexpected error occurred";
-}
 
 export default function AdminCategoriesPage() {
   const session = useAuthSession();
@@ -113,7 +98,7 @@ export default function AdminCategoriesPage() {
       try {
         await Promise.all([loadCategories(), loadDeletedCategories()]);
       } catch (err) {
-        toast.error(extractErrorMessage(err));
+        toast.error(getErrorMessage(err));
       } finally {
         setInitialLoading(false);
       }
@@ -193,7 +178,7 @@ export default function AdminCategoriesPage() {
       setCategorySlugStatus("idle");
       await Promise.all([loadCategories(), loadDeletedCategories()]);
     } catch (err) {
-      toast.error(extractErrorMessage(err));
+      toast.error(getErrorMessage(err));
     } finally {
       setSavingCategory(false);
     }
@@ -208,7 +193,7 @@ export default function AdminCategoriesPage() {
       toast.success("Category deleted");
       await Promise.all([loadCategories(), loadDeletedCategories()]);
     } catch (err) {
-      toast.error(extractErrorMessage(err));
+      toast.error(getErrorMessage(err));
     } finally {
       setConfirmLoading(false);
       setDeleteTarget(null);
@@ -225,7 +210,7 @@ export default function AdminCategoriesPage() {
       toast.success("Category restored");
       await Promise.all([loadCategories(), loadDeletedCategories()]);
     } catch (err) {
-      toast.error(extractErrorMessage(err));
+      toast.error(getErrorMessage(err));
     } finally {
       setRestoringCategoryId(null);
     }

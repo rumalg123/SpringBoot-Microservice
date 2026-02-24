@@ -10,46 +10,9 @@ import WishlistNavWidget from "./components/WishlistNavWidget";
 import Footer from "./components/Footer";
 import PosterSlot from "./components/posters/PosterSlot";
 import ProductSearchBar from "./components/search/ProductSearchBar";
-
-type ProductSummary = {
-  id: string;
-  slug: string;
-  name: string;
-  shortDescription: string;
-  mainImage: string | null;
-  regularPrice: number;
-  discountedPrice: number | null;
-  sellingPrice: number;
-  sku: string;
-  categories: string[];
-};
-
-type ProductPageResponse = {
-  content: ProductSummary[];
-};
-
-function money(value: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
-}
-
-function resolveImageUrl(imageName: string | null): string | null {
-  if (!imageName) return null;
-  const normalized = imageName.replace(/^\/+/, "");
-  const apiBase = (process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me").trim();
-  const encoded = normalized.split("/").map((s) => encodeURIComponent(s)).join("/");
-  const apiUrl = `${apiBase.replace(/\/+$/, "")}/products/images/${encoded}`;
-  const base = (process.env.NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL || "").trim();
-  if (!base) return apiUrl;
-  if (normalized.startsWith("products/")) {
-    return `${base.replace(/\/+$/, "")}/${normalized}`;
-  }
-  return apiUrl;
-}
-
-function calcDiscount(regular: number, selling: number): number | null {
-  if (regular > selling && regular > 0) return Math.round(((regular - selling) / regular) * 100);
-  return null;
-}
+import { money, calcDiscount } from "../lib/format";
+import { resolveImageUrl } from "../lib/image";
+import type { ProductSummary, PagedResponse } from "../lib/types";
 
 /* --- Futuristic Trust Icon SVGs --- */
 const TrustIcons = {
@@ -93,7 +56,7 @@ export default function LandingPage() {
         const apiBase = process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me";
         const res = await fetch(`${apiBase}/products?page=0&size=8`, { cache: "no-store" });
         if (!res.ok) throw new Error("Failed to load products");
-        const data = (await res.json()) as ProductPageResponse;
+        const data = (await res.json()) as PagedResponse<ProductSummary>;
         setProducts(data.content || []);
         setStatus("ready");
       } catch {

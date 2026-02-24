@@ -9,6 +9,8 @@ import AppNav from "../../components/AppNav";
 import Footer from "../../components/Footer";
 import { useAuthSession } from "../../../lib/authSession";
 import { emitCartUpdate, emitWishlistUpdate } from "../../../lib/navEvents";
+import { money, calcDiscount } from "../../../lib/format";
+import { resolveImageUrl } from "../../../lib/image";
 
 type Variation = { name: string; value: string };
 type ProductDetail = {
@@ -23,24 +25,6 @@ type VariationSummary = { id: string; name: string; sku: string; variations: Var
 type WishlistItem = { id: string; productId: string };
 type WishlistResponse = { items: WishlistItem[]; itemCount: number };
 
-function money(value: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
-}
-function resolveImageUrl(imageName: string): string | null {
-  const normalized = imageName.replace(/^\/+/, "");
-  const apiBase = (process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me").trim();
-  const encoded = normalized.split("/").map((s) => encodeURIComponent(s)).join("/");
-  const apiUrl = `${apiBase.replace(/\/+$/, "")}/products/images/${encoded}`;
-  const base = (process.env.NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL || "").trim();
-  if (!base) return apiUrl;
-  if (normalized.startsWith("products/")) {
-    return `${base.replace(/\/+$/, "")}/${normalized}`;
-  }
-  return apiUrl;
-}
-function calcDiscount(regular: number, selling: number): number | null {
-  return regular > selling && regular > 0 ? Math.round(((regular - selling) / regular) * 100) : null;
-}
 function normalizeVariationName(v: string) { return v.trim().toLowerCase(); }
 function normalizeVariationValue(v: string) { return v.trim().toLowerCase(); }
 function slugify(v: string) {
@@ -60,9 +44,13 @@ export default function ProductDetailPage() {
     isAuthenticated,
     profile,
     logout,
+    isSuperAdmin,
+    isVendorAdmin,
     canViewAdmin,
     canManageAdminOrders,
     canManageAdminProducts,
+    canManageAdminCategories,
+    canManageAdminVendors,
     canManageAdminPosters,
     login,
     apiClient,
@@ -269,9 +257,13 @@ export default function ProductDetailPage() {
       {isAuthenticated && (
         <AppNav
           email={(profile?.email as string) || ""}
+          isSuperAdmin={isSuperAdmin}
+          isVendorAdmin={isVendorAdmin}
           canViewAdmin={canViewAdmin}
           canManageAdminOrders={canManageAdminOrders}
           canManageAdminProducts={canManageAdminProducts}
+          canManageAdminCategories={canManageAdminCategories}
+          canManageAdminVendors={canManageAdminVendors}
           canManageAdminPosters={canManageAdminPosters}
           apiClient={apiClient}
           emailVerified={emailVerified}

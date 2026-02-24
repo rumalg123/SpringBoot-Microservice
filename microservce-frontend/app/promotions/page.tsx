@@ -379,6 +379,7 @@ export default function PromotionsPage() {
         canViewAdmin={canViewAdmin}
         canManageAdminOrders={session.canManageAdminOrders}
         canManageAdminProducts={session.canManageAdminProducts}
+        canManageAdminCategories={session.canManageAdminCategories}
         canManageAdminVendors={session.canManageAdminVendors}
         canManageAdminPosters={session.canManageAdminPosters}
         apiClient={apiClient}
