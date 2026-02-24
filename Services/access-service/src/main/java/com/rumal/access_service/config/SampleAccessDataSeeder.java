@@ -70,7 +70,7 @@ public class SampleAccessDataSeeder implements ApplicationRunner {
                 "Nova Catalog Staff",
                 Set.of(VendorPermission.PRODUCTS_MANAGE),
                 true,
-                null, null, null
+                null, null, null, null
         ));
 
         accessService.createVendorStaff(new UpsertVendorStaffAccessRequest(
@@ -80,7 +80,7 @@ public class SampleAccessDataSeeder implements ApplicationRunner {
                 "Urban Order Staff",
                 Set.of(VendorPermission.ORDERS_READ, VendorPermission.ORDERS_MANAGE),
                 true,
-                null, null, null
+                null, null, null, null
         ));
 
         log.info("Sample access seed complete: platformStaff={}, vendorStaff={}",
