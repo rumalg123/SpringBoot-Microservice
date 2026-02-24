@@ -282,6 +282,10 @@ public class SamplePosterDataSeeder implements ApplicationRunner {
                 size,
                 SEED_IMAGE,
                 SEED_IMAGE,
+                null,       // tabletImage
+                null,       // srcsetDesktop
+                null,       // srcsetMobile
+                null,       // srcsetTablet
                 linkType,
                 linkTarget,
                 linkType == PosterLinkType.URL,
@@ -291,6 +295,8 @@ public class SamplePosterDataSeeder implements ApplicationRunner {
                 backgroundColor,
                 sortOrder,
                 true,
+                null,
+                null,
                 null,
                 null
         ));

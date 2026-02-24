@@ -6,12 +6,14 @@ import java.util.UUID;
 
 public record WishlistItemResponse(
         UUID id,
+        UUID collectionId,
         UUID productId,
         String productSlug,
         String productName,
         String productType,
         String mainImage,
         BigDecimal sellingPriceSnapshot,
+        String note,
         Instant createdAt,
         Instant updatedAt
 ) {

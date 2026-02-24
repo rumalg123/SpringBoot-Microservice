@@ -6,6 +6,7 @@ import java.util.UUID;
 
 public record VendorOperationalStateResponse(
         UUID vendorId,
+        String vendorName,
         boolean active,
         boolean deleted,
         String status,

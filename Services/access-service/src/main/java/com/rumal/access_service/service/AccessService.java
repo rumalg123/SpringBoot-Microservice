@@ -1,12 +1,20 @@
 package com.rumal.access_service.service;
 
 import com.rumal.access_service.dto.AccessChangeAuditPageResponse;
+import com.rumal.access_service.dto.ActiveSessionResponse;
+import com.rumal.access_service.dto.ApiKeyResponse;
+import com.rumal.access_service.dto.CreateApiKeyRequest;
+import com.rumal.access_service.dto.CreateApiKeyResponse;
+import com.rumal.access_service.dto.PermissionGroupResponse;
 import com.rumal.access_service.dto.PlatformAccessLookupResponse;
 import com.rumal.access_service.dto.PlatformStaffAccessResponse;
+import com.rumal.access_service.dto.RegisterSessionRequest;
+import com.rumal.access_service.dto.UpsertPermissionGroupRequest;
 import com.rumal.access_service.dto.UpsertPlatformStaffAccessRequest;
 import com.rumal.access_service.dto.UpsertVendorStaffAccessRequest;
 import com.rumal.access_service.dto.VendorStaffAccessLookupResponse;
 import com.rumal.access_service.dto.VendorStaffAccessResponse;
+import com.rumal.access_service.entity.PermissionGroupScope;
 
 import java.util.List;
 import java.util.UUID;
@@ -51,4 +59,25 @@ public interface AccessService {
     VendorStaffAccessResponse restoreVendorStaff(UUID id);
     VendorStaffAccessResponse restoreVendorStaff(UUID id, String actorSub, String actorRoles, String reason);
     List<VendorStaffAccessLookupResponse> listVendorStaffAccessByKeycloakUser(String keycloakUserId);
+
+    // Permission groups
+    List<PermissionGroupResponse> listPermissionGroups(PermissionGroupScope scope);
+    PermissionGroupResponse getPermissionGroupById(UUID id);
+    PermissionGroupResponse createPermissionGroup(UpsertPermissionGroupRequest request);
+    PermissionGroupResponse updatePermissionGroup(UUID id, UpsertPermissionGroupRequest request);
+    void deletePermissionGroup(UUID id);
+
+    // Session management
+    ActiveSessionResponse registerSession(RegisterSessionRequest request);
+    List<ActiveSessionResponse> listSessionsByKeycloakId(String keycloakId);
+    void revokeSession(UUID sessionId);
+    void revokeAllSessions(String keycloakId);
+
+    // API key management
+    CreateApiKeyResponse createApiKey(CreateApiKeyRequest request);
+    List<ApiKeyResponse> listApiKeys(String keycloakId);
+    void deleteApiKey(UUID id);
+
+    // Expiry processing
+    int deactivateExpiredAccess();
 }

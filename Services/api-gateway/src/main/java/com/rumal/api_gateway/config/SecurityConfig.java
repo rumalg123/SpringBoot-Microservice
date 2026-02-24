@@ -56,13 +56,18 @@ public class SecurityConfig {
                 .authorizeExchange(exchanges -> exchanges
                         .pathMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .pathMatchers(HttpMethod.GET, "/products", "/products/**").permitAll()
+                        .pathMatchers(HttpMethod.POST, "/products/*/view").permitAll()
                         .pathMatchers(HttpMethod.GET, "/categories", "/categories/**").permitAll()
                         .pathMatchers(HttpMethod.GET, "/posters", "/posters/**").permitAll()
+                        .pathMatchers("/orders/vendor/me", "/orders/vendor/me/**").access(this::hasVendorAccess)
+                        .pathMatchers("/vendors/me", "/vendors/me/**").access(this::hasVendorAccess)
                         .pathMatchers(HttpMethod.GET, "/vendors", "/vendors/**").permitAll()
-                        .pathMatchers("/actuator/health", "/actuator/info", "/customers/register").permitAll()
+                        .pathMatchers("/actuator/health", "/actuator/info", "/customers/register", "/fallback/**").permitAll()
                         .pathMatchers("/auth/logout", "/auth/resend-verification").authenticated()
-                        .pathMatchers("/customers/me", "/customers/me/**", "/customers/register-identity", "/orders/me", "/orders/me/**", "/cart/me", "/cart/me/**", "/wishlist/me", "/wishlist/me/**")
+                        .pathMatchers(HttpMethod.GET, "/wishlist/shared", "/wishlist/shared/**").permitAll()
+                        .pathMatchers("/customers/me", "/customers/me/**", "/customers/register-identity", "/orders/me", "/orders/me/**", "/cart/me", "/cart/me/**", "/wishlist/me", "/wishlist/me/**", "/promotions/me", "/promotions/me/**")
                         .access(this::hasCustomerAccess)
+                        .pathMatchers(HttpMethod.GET, "/promotions", "/promotions/**").permitAll()
                         .pathMatchers("/admin/vendors/**", "/admin/platform-staff/**").access(this::hasSuperAdminAccess)
                         .pathMatchers("/admin/vendor-staff/**", "/admin/keycloak/users/**", "/admin/access-audit/**").access(this::hasSuperAdminOrVendorAdminAccess)
                         .pathMatchers("/admin/posters/**", "/admin/categories/**").access(this::hasSuperAdminOrPlatformStaffAccess)
@@ -70,7 +75,7 @@ public class SecurityConfig {
                         .pathMatchers("/admin/me/**").access(this::hasAnyScopedAdminAccess)
                         .pathMatchers("/admin/**").access(this::hasSuperAdminAccess)
                         .pathMatchers("/customer-service/**", "/order-service/**", "/cart-service/**", "/wishlist-service/**", "/admin-service/**", "/product-service/**", "/poster-service/**", "/vendor-service/**", "/promotion-service/**", "/access-service/**", "/discovery-server/**").denyAll()
-                        .pathMatchers("/customers/**", "/orders/**", "/cart/**", "/wishlist/**").denyAll()
+                        .pathMatchers("/customers/**", "/orders/**", "/cart/**", "/wishlist/**", "/promotions/**").denyAll()
                         .anyExchange().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtDecoder(jwtDecoder())))
@@ -131,6 +136,18 @@ public class SecurityConfig {
                                 || hasRole(jwt, "platform_staff")
                                 || hasRole(jwt, "vendor_admin")
                                 || hasRole(jwt, "vendor_staff")
+                ))
+                .defaultIfEmpty(new AuthorizationDecision(false));
+    }
+
+    private Mono<AuthorizationResult> hasVendorAccess(Mono<Authentication> authentication, AuthorizationContext context) {
+        return authentication
+                .filter(Authentication::isAuthenticated)
+                .filter(auth -> auth instanceof JwtAuthenticationToken)
+                .cast(JwtAuthenticationToken.class)
+                .map(JwtAuthenticationToken::getToken)
+                .map(jwt -> (AuthorizationResult) new AuthorizationDecision(
+                        isEmailVerified(jwt) && (hasRole(jwt, "vendor_admin") || hasRole(jwt, "vendor_staff"))
                 ))
                 .defaultIfEmpty(new AuthorizationDecision(false));
     }

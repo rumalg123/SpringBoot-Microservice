@@ -3,6 +3,7 @@ package com.rumal.admin_service.client;
 import com.rumal.admin_service.dto.OrderResponse;
 import com.rumal.admin_service.dto.OrderStatusAuditResponse;
 import com.rumal.admin_service.dto.PageResponse;
+import com.rumal.admin_service.dto.UpdateOrderNoteRequest;
 import com.rumal.admin_service.dto.UpdateOrderStatusRequest;
 import com.rumal.admin_service.dto.VendorOrderResponse;
 import com.rumal.admin_service.dto.VendorOrderStatusAuditResponse;
@@ -19,6 +20,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.util.UriBuilder;
 
 import java.net.URI;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -56,12 +58,16 @@ public class OrderClient {
         this.retryRegistry = retryRegistry;
     }
 
-    public PageResponse<OrderResponse> listOrders(UUID customerId, String customerEmail, UUID vendorId, int page, int size, List<String> sort, String internalAuth) {
+    public PageResponse<OrderResponse> listOrders(
+            UUID customerId, String customerEmail, UUID vendorId,
+            String status, Instant createdAfter, Instant createdBefore,
+            int page, int size, List<String> sort, String internalAuth
+    ) {
         return runOrderCall(() -> {
             RestClient rc = lbRestClientBuilder.build();
             try {
                 Map<String, Object> rawResponse = rc.get()
-                        .uri(uriBuilder -> buildListOrdersUri(uriBuilder, customerId, customerEmail, vendorId, page, size, sort))
+                        .uri(uriBuilder -> buildListOrdersUri(uriBuilder, customerId, customerEmail, vendorId, status, createdAfter, createdBefore, page, size, sort))
                         .header("X-Internal-Auth", internalAuth)
                         .retrieve()
                         .body(MAP_TYPE);
@@ -102,6 +108,23 @@ public class OrderClient {
                 }
                 return ((RestClient.RequestBodySpec) ClientRequestUtils.applyIdempotencyHeader(req, idempotencyKey))
                         .body(new UpdateOrderStatusRequest(status))
+                        .retrieve()
+                        .body(OrderResponse.class);
+            } catch (RestClientException ex) {
+                throw new ServiceUnavailableException("Order service unavailable. Try again later.", ex);
+            }
+        });
+    }
+
+    public OrderResponse updateOrderNote(UUID orderId, UpdateOrderNoteRequest body, String internalAuth, String idempotencyKey) {
+        return runOrderCall(() -> {
+            RestClient rc = lbRestClientBuilder.build();
+            try {
+                RestClient.RequestBodySpec req = rc.patch()
+                        .uri("http://order-service/orders/{id}/note", orderId)
+                        .header("X-Internal-Auth", internalAuth);
+                return ((RestClient.RequestBodySpec) ClientRequestUtils.applyIdempotencyHeader(req, idempotencyKey))
+                        .body(body)
                         .retrieve()
                         .body(OrderResponse.class);
             } catch (RestClientException ex) {
@@ -207,6 +230,37 @@ public class OrderClient {
         });
     }
 
+    public String exportOrdersCsv(String status, String createdAfter, String createdBefore, String internalAuth) {
+        return runOrderCall(() -> {
+            RestClient rc = lbRestClientBuilder.build();
+            try {
+                return rc.get()
+                        .uri(uriBuilder -> {
+                            UriBuilder builder = uriBuilder
+                                    .scheme("http")
+                                    .host("order-service")
+                                    .path("/orders/export")
+                                    .queryParam("format", "csv");
+                            if (status != null && !status.isBlank()) {
+                                builder = builder.queryParam("status", status);
+                            }
+                            if (createdAfter != null && !createdAfter.isBlank()) {
+                                builder = builder.queryParam("createdAfter", createdAfter);
+                            }
+                            if (createdBefore != null && !createdBefore.isBlank()) {
+                                builder = builder.queryParam("createdBefore", createdBefore);
+                            }
+                            return builder.build();
+                        })
+                        .header("X-Internal-Auth", internalAuth)
+                        .retrieve()
+                        .body(String.class);
+            } catch (RestClientException ex) {
+                throw new ServiceUnavailableException("Order service unavailable. Try again later.", ex);
+            }
+        });
+    }
+
     public Set<UUID> getOrderVendorIds(UUID orderId, String internalAuth) {
         return runOrderCall(() -> {
             RestClient rc = lbRestClientBuilder.build();
@@ -282,7 +336,11 @@ public class OrderClient {
         return fallback;
     }
 
-    private URI buildListOrdersUri(UriBuilder uriBuilder, UUID customerId, String customerEmail, UUID vendorId, int page, int size, List<String> sort) {
+    private URI buildListOrdersUri(
+            UriBuilder uriBuilder, UUID customerId, String customerEmail, UUID vendorId,
+            String status, Instant createdAfter, Instant createdBefore,
+            int page, int size, List<String> sort
+    ) {
         UriBuilder builder = uriBuilder
                 .scheme("http")
                 .host("order-service")
@@ -298,6 +356,15 @@ public class OrderClient {
         }
         if (vendorId != null) {
             builder = builder.queryParam("vendorId", vendorId);
+        }
+        if (status != null && !status.isBlank()) {
+            builder = builder.queryParam("status", status);
+        }
+        if (createdAfter != null) {
+            builder = builder.queryParam("createdAfter", createdAfter.toString());
+        }
+        if (createdBefore != null) {
+            builder = builder.queryParam("createdBefore", createdBefore.toString());
         }
 
         if (sort != null && !sort.isEmpty()) {

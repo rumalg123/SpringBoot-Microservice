@@ -9,6 +9,9 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 import java.time.Instant;
 import java.math.BigDecimal;
 import java.util.Optional;
@@ -78,6 +81,13 @@ public interface CouponReservationRepository extends JpaRepository<CouponReserva
               and r.expiresAt > :now
             """)
     BigDecimal sumActiveReservedDiscountByPromotionId(@Param("promotionId") UUID promotionId, @Param("now") Instant now);
+
+    @Query("select r from CouponReservation r join fetch r.couponCode c join fetch c.promotion where r.customerId = :customerId and r.status = :status")
+    Page<CouponReservation> findByCustomerIdAndStatusWithPromotion(
+            @Param("customerId") UUID customerId,
+            @Param("status") CouponReservationStatus status,
+            Pageable pageable
+    );
 
     @Modifying
     @Query("""

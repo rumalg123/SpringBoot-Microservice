@@ -1,13 +1,18 @@
 package com.rumal.poster_service.service;
 
+import com.rumal.poster_service.dto.PosterAnalyticsResponse;
 import com.rumal.poster_service.dto.PosterResponse;
+import com.rumal.poster_service.dto.PosterVariantResponse;
 import com.rumal.poster_service.dto.UpsertPosterRequest;
+import com.rumal.poster_service.dto.UpsertPosterVariantRequest;
 import com.rumal.poster_service.entity.Poster;
 import com.rumal.poster_service.entity.PosterLinkType;
 import com.rumal.poster_service.entity.PosterPlacement;
+import com.rumal.poster_service.entity.PosterVariant;
 import com.rumal.poster_service.exception.ResourceNotFoundException;
 import com.rumal.poster_service.exception.ValidationException;
 import com.rumal.poster_service.repo.PosterRepository;
+import com.rumal.poster_service.repo.PosterVariantRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
@@ -18,9 +23,12 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.Instant;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +36,7 @@ import java.util.UUID;
 public class PosterServiceImpl implements PosterService {
 
     private final PosterRepository posterRepository;
+    private final PosterVariantRepository posterVariantRepository;
     private final CacheManager cacheManager;
 
     @Override
@@ -164,6 +173,10 @@ public class PosterServiceImpl implements PosterService {
         poster.setSize(request.size());
         poster.setDesktopImage(normalizeImageKey(request.desktopImage(), "desktopImage"));
         poster.setMobileImage(StringUtils.hasText(request.mobileImage()) ? normalizeImageKey(request.mobileImage(), "mobileImage") : null);
+        poster.setTabletImage(StringUtils.hasText(request.tabletImage()) ? normalizeImageKey(request.tabletImage(), "tabletImage") : null);
+        poster.setSrcsetDesktop(trimToNull(request.srcsetDesktop()));
+        poster.setSrcsetMobile(trimToNull(request.srcsetMobile()));
+        poster.setSrcsetTablet(trimToNull(request.srcsetTablet()));
         poster.setLinkType(request.linkType());
         poster.setLinkTarget(StringUtils.hasText(request.linkTarget()) ? request.linkTarget().trim() : null);
         poster.setOpenInNewTab(Boolean.TRUE.equals(request.openInNewTab()));
@@ -175,6 +188,8 @@ public class PosterServiceImpl implements PosterService {
         poster.setActive(request.active() == null || request.active());
         poster.setStartAt(request.startAt());
         poster.setEndAt(request.endAt());
+        poster.setTargetCountries(request.targetCountries() == null ? new LinkedHashSet<>() : new LinkedHashSet<>(request.targetCountries()));
+        poster.setTargetCustomerSegment(trimToNull(request.targetCustomerSegment()));
         poster.setDeleted(false);
         poster.setDeletedAt(null);
     }
@@ -265,14 +280,57 @@ public class PosterServiceImpl implements PosterService {
     }
 
     private PosterResponse toResponse(Poster p) {
+        List<PosterVariant> activeVariants = posterVariantRepository
+                .findByPosterIdAndActiveTrueOrderByCreatedAtAsc(p.getId());
+        PosterVariantResponse selectedVariant = selectWeightedVariant(activeVariants);
+
+        // If a variant is selected, its images override poster-level images
+        String effectiveDesktopImage = p.getDesktopImage();
+        String effectiveMobileImage = p.getMobileImage();
+        String effectiveTabletImage = p.getTabletImage();
+        String effectiveSrcsetDesktop = p.getSrcsetDesktop();
+        String effectiveSrcsetMobile = p.getSrcsetMobile();
+        String effectiveSrcsetTablet = p.getSrcsetTablet();
+
+        if (selectedVariant != null) {
+            if (StringUtils.hasText(selectedVariant.desktopImage())) {
+                effectiveDesktopImage = selectedVariant.desktopImage();
+            }
+            if (StringUtils.hasText(selectedVariant.mobileImage())) {
+                effectiveMobileImage = selectedVariant.mobileImage();
+            }
+            if (StringUtils.hasText(selectedVariant.tabletImage())) {
+                effectiveTabletImage = selectedVariant.tabletImage();
+            }
+            if (StringUtils.hasText(selectedVariant.srcsetDesktop())) {
+                effectiveSrcsetDesktop = selectedVariant.srcsetDesktop();
+            }
+            if (StringUtils.hasText(selectedVariant.srcsetMobile())) {
+                effectiveSrcsetMobile = selectedVariant.srcsetMobile();
+            }
+            if (StringUtils.hasText(selectedVariant.srcsetTablet())) {
+                effectiveSrcsetTablet = selectedVariant.srcsetTablet();
+            }
+        }
+
+        List<PosterVariantResponse> allVariants = posterVariantRepository
+                .findByPosterIdOrderByCreatedAtAsc(p.getId())
+                .stream()
+                .map(this::toVariantResponse)
+                .toList();
+
         return new PosterResponse(
                 p.getId(),
                 p.getName(),
                 p.getSlug(),
                 p.getPlacement(),
                 p.getSize(),
-                p.getDesktopImage(),
-                p.getMobileImage(),
+                effectiveDesktopImage,
+                effectiveMobileImage,
+                effectiveTabletImage,
+                effectiveSrcsetDesktop,
+                effectiveSrcsetMobile,
+                effectiveSrcsetTablet,
                 p.getLinkType(),
                 p.getLinkTarget(),
                 p.isOpenInNewTab(),
@@ -284,12 +342,183 @@ public class PosterServiceImpl implements PosterService {
                 p.isActive(),
                 p.getStartAt(),
                 p.getEndAt(),
+                p.getClickCount(),
+                p.getImpressionCount(),
+                p.getLastClickAt(),
+                p.getLastImpressionAt(),
+                p.getTargetCountries() == null ? Set.of() : Set.copyOf(p.getTargetCountries()),
+                p.getTargetCustomerSegment(),
                 p.isDeleted(),
                 p.getDeletedAt(),
                 p.getCreatedAt(),
-                p.getUpdatedAt()
+                p.getUpdatedAt(),
+                selectedVariant,
+                allVariants
         );
     }
+
+    private PosterVariantResponse selectWeightedVariant(List<PosterVariant> activeVariants) {
+        if (activeVariants == null || activeVariants.isEmpty()) {
+            return null;
+        }
+        int totalWeight = activeVariants.stream().mapToInt(PosterVariant::getWeight).sum();
+        if (totalWeight <= 0) {
+            return toVariantResponse(activeVariants.getFirst());
+        }
+        int random = ThreadLocalRandom.current().nextInt(totalWeight);
+        int cumulative = 0;
+        for (PosterVariant variant : activeVariants) {
+            cumulative += variant.getWeight();
+            if (random < cumulative) {
+                return toVariantResponse(variant);
+            }
+        }
+        return toVariantResponse(activeVariants.getLast());
+    }
+
+    private PosterVariantResponse toVariantResponse(PosterVariant v) {
+        double ctr = v.getImpressions() > 0
+                ? (double) v.getClicks() / v.getImpressions()
+                : 0.0;
+        return new PosterVariantResponse(
+                v.getId(),
+                v.getPoster().getId(),
+                v.getVariantName(),
+                v.getWeight(),
+                v.getDesktopImage(),
+                v.getMobileImage(),
+                v.getTabletImage(),
+                v.getSrcsetDesktop(),
+                v.getSrcsetMobile(),
+                v.getSrcsetTablet(),
+                v.getLinkUrl(),
+                v.getImpressions(),
+                v.getClicks(),
+                ctr,
+                v.isActive(),
+                v.getCreatedAt(),
+                v.getUpdatedAt()
+        );
+    }
+
+    @Override
+    @Transactional(readOnly = false, timeout = 5)
+    public void recordClick(UUID id) {
+        posterRepository.incrementClickCount(id, Instant.now());
+    }
+
+    @Override
+    @Transactional(readOnly = false, timeout = 5)
+    public void recordImpression(UUID id) {
+        posterRepository.incrementImpressionCount(id, Instant.now());
+    }
+
+    @Override
+    public PosterAnalyticsResponse getAnalytics(UUID id) {
+        Poster poster = posterRepository.findById(id)
+                .filter(p -> !p.isDeleted())
+                .orElseThrow(() -> new ResourceNotFoundException("Poster not found: " + id));
+        return toAnalyticsResponse(poster);
+    }
+
+    @Override
+    public List<PosterAnalyticsResponse> listAnalytics() {
+        return posterRepository.findByDeletedFalseOrderByClickCountDesc().stream()
+                .map(this::toAnalyticsResponse)
+                .toList();
+    }
+
+    private PosterAnalyticsResponse toAnalyticsResponse(Poster p) {
+        double ctr = p.getImpressionCount() > 0
+                ? (double) p.getClickCount() / p.getImpressionCount()
+                : 0.0;
+        return new PosterAnalyticsResponse(
+                p.getId(),
+                p.getName(),
+                p.getSlug(),
+                p.getPlacement(),
+                p.getClickCount(),
+                p.getImpressionCount(),
+                ctr,
+                p.getLastClickAt(),
+                p.getLastImpressionAt(),
+                p.getCreatedAt()
+        );
+    }
+
+    // ── A/B testing variant methods ──────────────────────────────────────
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    public PosterVariantResponse createVariant(UUID posterId, UpsertPosterVariantRequest request) {
+        Poster poster = getActiveEntity(posterId);
+        PosterVariant variant = new PosterVariant();
+        variant.setPoster(poster);
+        applyVariantRequest(variant, request);
+        PosterVariant saved = posterVariantRepository.save(variant);
+        evictPosterCaches(poster, poster.getPlacement(), poster.getSlug());
+        return toVariantResponse(saved);
+    }
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    public PosterVariantResponse updateVariant(UUID posterId, UUID variantId, UpsertPosterVariantRequest request) {
+        Poster poster = getActiveEntity(posterId);
+        PosterVariant variant = posterVariantRepository.findById(variantId)
+                .filter(v -> v.getPoster().getId().equals(posterId))
+                .orElseThrow(() -> new ResourceNotFoundException("Variant not found: " + variantId));
+        applyVariantRequest(variant, request);
+        PosterVariant saved = posterVariantRepository.save(variant);
+        evictPosterCaches(poster, poster.getPlacement(), poster.getSlug());
+        return toVariantResponse(saved);
+    }
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    public void deleteVariant(UUID posterId, UUID variantId) {
+        Poster poster = getActiveEntity(posterId);
+        PosterVariant variant = posterVariantRepository.findById(variantId)
+                .filter(v -> v.getPoster().getId().equals(posterId))
+                .orElseThrow(() -> new ResourceNotFoundException("Variant not found: " + variantId));
+        posterVariantRepository.delete(variant);
+        evictPosterCaches(poster, poster.getPlacement(), poster.getSlug());
+    }
+
+    @Override
+    public List<PosterVariantResponse> listVariants(UUID posterId) {
+        getActiveEntity(posterId);
+        return posterVariantRepository.findByPosterIdOrderByCreatedAtAsc(posterId)
+                .stream()
+                .map(this::toVariantResponse)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = false, timeout = 5)
+    public void recordVariantClick(UUID posterId, UUID variantId) {
+        boolean variantExists = posterVariantRepository.findById(variantId)
+                .filter(v -> v.getPoster().getId().equals(posterId))
+                .isPresent();
+        if (!variantExists) {
+            throw new ResourceNotFoundException("Variant not found: " + variantId);
+        }
+        posterVariantRepository.incrementClickCount(variantId);
+    }
+
+    private void applyVariantRequest(PosterVariant variant, UpsertPosterVariantRequest request) {
+        variant.setVariantName(request.variantName().trim());
+        variant.setWeight(request.weight() == null ? 50 : request.weight());
+        variant.setDesktopImage(trimToNull(request.desktopImage()));
+        variant.setMobileImage(trimToNull(request.mobileImage()));
+        variant.setTabletImage(trimToNull(request.tabletImage()));
+        variant.setSrcsetDesktop(trimToNull(request.srcsetDesktop()));
+        variant.setSrcsetMobile(trimToNull(request.srcsetMobile()));
+        variant.setSrcsetTablet(trimToNull(request.srcsetTablet()));
+        variant.setLinkUrl(trimToNull(request.linkUrl()));
+        variant.setActive(request.active() == null || request.active());
+    }
+
+    // ── Cache eviction ────────────────────────────────────────────────────
 
     private void evictPosterCaches(Poster poster, PosterPlacement previousPlacement, String previousSlug) {
         if (poster == null) {

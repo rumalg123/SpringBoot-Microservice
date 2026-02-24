@@ -21,8 +21,8 @@ public class VendorController {
     private final VendorService vendorService;
 
     @GetMapping
-    public List<VendorResponse> listActive() {
-        return vendorService.listPublicActive();
+    public List<VendorResponse> listActive(@RequestParam(required = false) String category) {
+        return vendorService.listPublicActive(category);
     }
 
     @GetMapping("/slug-available")

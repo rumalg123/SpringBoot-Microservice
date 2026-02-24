@@ -3,6 +3,7 @@ package com.rumal.order_service.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -42,6 +43,10 @@ public class Order {
     @Column(name = "order_total", nullable = false, precision = 19, scale = 2)
     private BigDecimal orderTotal;
 
+    @Builder.Default
+    @Column(name = "currency", nullable = false, length = 3)
+    private String currency = "USD";
+
     @Column(name = "subtotal_amount", nullable = false, precision = 19, scale = 2)
     private BigDecimal subtotal;
 
@@ -66,9 +71,42 @@ public class Order {
     @Column(name = "coupon_reservation_id")
     private UUID couponReservationId;
 
+    @Column(name = "customer_note", length = 500)
+    private String customerNote;
+
+    @Column(name = "admin_note", length = 1000)
+    private String adminNote;
+
+    @Column(name = "payment_id", length = 120)
+    private String paymentId;
+
+    @Column(name = "payment_method", length = 50)
+    private String paymentMethod;
+
+    @Column(name = "payment_gateway_ref", length = 200)
+    private String paymentGatewayRef;
+
+    @Column(name = "paid_at")
+    private Instant paidAt;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
     private OrderStatus status;
+
+    @Column(name = "expires_at")
+    private Instant expiresAt;
+
+    @Column(name = "refund_amount", precision = 19, scale = 2)
+    private BigDecimal refundAmount;
+
+    @Column(name = "refund_reason", length = 500)
+    private String refundReason;
+
+    @Column(name = "refund_initiated_at")
+    private Instant refundInitiatedAt;
+
+    @Column(name = "refund_completed_at")
+    private Instant refundCompletedAt;
 
     @Column(name = "shipping_address_id", nullable = false)
     private UUID shippingAddressId;
@@ -115,4 +153,8 @@ public class Order {
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
 }

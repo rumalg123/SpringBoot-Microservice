@@ -54,16 +54,16 @@ public class CustomerAddress {
     @Column(name = "line_2", length = 180)
     private String line2;
 
-    @Column(nullable = false, length = 80)
+    @Column(nullable = false, length = 100)
     private String city;
 
     @Column(nullable = false, length = 80)
     private String state;
 
-    @Column(name = "postal_code", nullable = false, length = 30)
+    @Column(name = "postal_code", nullable = false, length = 10)
     private String postalCode;
 
-    @Column(name = "country_code", nullable = false, length = 2)
+    @Column(name = "country_code", nullable = false, length = 3)
     private String countryCode;
 
     @Column(name = "default_shipping", nullable = false)

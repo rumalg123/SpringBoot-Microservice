@@ -4,6 +4,14 @@ server:
 spring:
   application:
     name: admin-service
+  datasource:
+    url: ${ADMIN_DB_URL:jdbc:postgresql://admin-db:5432/admin_db}
+    username: ${ADMIN_DB_USER:admin_user}
+    password: ${ADMIN_DB_PASS:admin_pass}
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
   data:
     redis:
       host: ${REDIS_HOST:redis}

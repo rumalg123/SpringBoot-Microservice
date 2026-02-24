@@ -2,6 +2,7 @@ package com.rumal.order_service.dto;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 import java.util.List;
 import java.util.UUID;
@@ -12,5 +13,6 @@ public record CreateOrderRequest(
         Integer quantity,
         List<@Valid CreateOrderItemRequest> items,
         @NotNull UUID shippingAddressId,
-        @NotNull UUID billingAddressId
+        @NotNull UUID billingAddressId,
+        @Size(max = 500) String customerNote
 ) {}

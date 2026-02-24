@@ -112,6 +112,13 @@ object-storage:
   secret-key: ${OBJECT_STORAGE_SECRET_KEY:}
   bucket: ${OBJECT_STORAGE_BUCKET:}
 
+category:
+  max-depth: ${CATEGORY_MAX_DEPTH:4}
+
+catalog:
+  rebuild:
+    page-size: ${CATALOG_REBUILD_PAGE_SIZE:100}
+
 internal:
   auth:
     shared-secret: ${INTERNAL_AUTH_SHARED_SECRET:}

@@ -8,6 +8,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 import java.time.Instant;
+import java.util.Set;
 
 public record UpsertPosterRequest(
         @NotBlank @Size(max = 160) String name,
@@ -16,6 +17,10 @@ public record UpsertPosterRequest(
         @NotNull PosterSize size,
         @NotBlank @Size(max = 260) String desktopImage,
         @Size(max = 260) String mobileImage,
+        @Size(max = 260) String tabletImage,
+        @Size(max = 1000) String srcsetDesktop,
+        @Size(max = 1000) String srcsetMobile,
+        @Size(max = 1000) String srcsetTablet,
         @NotNull PosterLinkType linkType,
         @Size(max = 500) String linkTarget,
         Boolean openInNewTab,
@@ -26,6 +31,8 @@ public record UpsertPosterRequest(
         Integer sortOrder,
         Boolean active,
         Instant startAt,
-        Instant endAt
+        Instant endAt,
+        Set<String> targetCountries,
+        @Size(max = 40) String targetCustomerSegment
 ) {
 }

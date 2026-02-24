@@ -168,6 +168,10 @@ cart:
     pending-ttl: ${CART_IDEMPOTENCY_PENDING_TTL:30s}
     response-ttl: ${CART_IDEMPOTENCY_RESPONSE_TTL:12h}
 
+  expiry:
+    ttl: ${CART_EXPIRY_TTL:30d}
+    cron: ${CART_EXPIRY_CRON:0 0 3 * * *}
+
 shipping:
   fee:
     domestic-country-code: ${SHIPPING_FEE_DOMESTIC_COUNTRY_CODE:US}

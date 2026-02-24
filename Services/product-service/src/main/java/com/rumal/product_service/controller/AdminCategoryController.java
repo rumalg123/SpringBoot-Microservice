@@ -7,6 +7,10 @@ import com.rumal.product_service.service.AdminProductAccessScopeService;
 import com.rumal.product_service.service.CategoryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -42,6 +46,18 @@ public class AdminCategoryController {
         return categoryService.listActive(null, null);
     }
 
+    @GetMapping("/paged")
+    public Page<CategoryResponse> listActivePaged(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
+            @PageableDefault(size = 20, sort = "name", direction = Sort.Direction.ASC) Pageable pageable
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        adminProductAccessScopeService.assertCanManageCategories(userSub, userRoles, internalAuth);
+        return categoryService.listActivePaged(null, null, pageable);
+    }
+
     @GetMapping("/deleted")
     public List<CategoryResponse> listDeleted(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
@@ -51,6 +67,18 @@ public class AdminCategoryController {
         internalRequestVerifier.verify(internalAuth);
         adminProductAccessScopeService.assertCanManageCategories(userSub, userRoles, internalAuth);
         return categoryService.listDeleted();
+    }
+
+    @GetMapping("/deleted/paged")
+    public Page<CategoryResponse> listDeletedPaged(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
+            @PageableDefault(size = 20, sort = "updatedAt", direction = Sort.Direction.DESC) Pageable pageable
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        adminProductAccessScopeService.assertCanManageCategories(userSub, userRoles, internalAuth);
+        return categoryService.listDeletedPaged(pageable);
     }
 
     @PostMapping

@@ -40,13 +40,18 @@ public class OrderMutationIdempotencyFilter extends AbstractRedisServletIdempote
     @Override
     protected boolean isProtectedMutationPath(String path, String method) {
         if ("POST".equalsIgnoreCase(method)) {
-            return "/orders".equals(path) || "/orders/me".equals(path);
+            return "/orders".equals(path)
+                    || "/orders/me".equals(path)
+                    || (path.startsWith("/orders/me/") && path.endsWith("/cancel"));
         }
         if (!"PATCH".equalsIgnoreCase(method)) {
             return false;
         }
         return (path.startsWith("/orders/") && path.endsWith("/status"))
-                || (path.startsWith("/orders/vendor-orders/") && path.endsWith("/status"));
+                || (path.startsWith("/orders/vendor-orders/") && path.endsWith("/status"))
+                || (path.startsWith("/orders/") && path.endsWith("/payment"))
+                || (path.startsWith("/orders/vendor-orders/") && path.endsWith("/tracking"))
+                || (path.startsWith("/orders/") && path.endsWith("/note"));
     }
 
     @Override

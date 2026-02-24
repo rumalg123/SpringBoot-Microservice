@@ -11,7 +11,10 @@ public record OrderResponse(
         int quantity,
         int itemCount,
         BigDecimal orderTotal,
+        String currency,
+        String customerNote,
         String status,
-        Instant createdAt
+        Instant createdAt,
+        Instant updatedAt
 ) {
 }

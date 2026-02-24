@@ -198,6 +198,7 @@ public class AdminProductAccessScopeService {
                 request.slug(),
                 request.shortDescription(),
                 request.description(),
+                request.brandName(),
                 request.images(),
                 request.regularPrice(),
                 request.discountedPrice(),
@@ -206,7 +207,16 @@ public class AdminProductAccessScopeService {
                 request.productType(),
                 request.variations(),
                 request.sku(),
-                request.active()
+                request.active(),
+                request.weightGrams(),
+                request.lengthCm(),
+                request.widthCm(),
+                request.heightCm(),
+                request.metaTitle(),
+                request.metaDescription(),
+                request.specifications(),
+                request.digital(),
+                request.bundledProductIds()
         );
     }
 

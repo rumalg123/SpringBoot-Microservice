@@ -26,7 +26,9 @@ import java.util.UUID;
                 @Index(name = "idx_categories_type", columnList = "category_type"),
                 @Index(name = "idx_categories_parent", columnList = "parent_category_id"),
                 @Index(name = "idx_categories_deleted", columnList = "is_deleted"),
-                @Index(name = "idx_categories_slug", columnList = "slug")
+                @Index(name = "idx_categories_slug", columnList = "slug"),
+                @Index(name = "idx_categories_depth", columnList = "depth"),
+                @Index(name = "idx_categories_path", columnList = "path")
         }
 )
 @Getter
@@ -55,6 +57,23 @@ public class Category {
 
     @Column(name = "parent_category_id")
     private UUID parentCategoryId;
+
+    @Column(length = 1000)
+    private String description;
+
+    @Column(name = "image_url", length = 500)
+    private String imageUrl;
+
+    @Column(name = "depth", nullable = false)
+    @Builder.Default
+    private Integer depth = 0;
+
+    @Column(name = "path", length = 1000)
+    private String path;
+
+    @Column(name = "display_order", nullable = false)
+    @Builder.Default
+    private Integer displayOrder = 0;
 
     @Column(name = "is_deleted", nullable = false)
     @Builder.Default

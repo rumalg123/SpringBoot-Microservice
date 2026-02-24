@@ -5,6 +5,10 @@ import com.rumal.product_service.dto.SlugAvailabilityResponse;
 import com.rumal.product_service.entity.CategoryType;
 import com.rumal.product_service.service.CategoryService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -35,5 +39,14 @@ public class CategoryController {
             @RequestParam(required = false) UUID parentCategoryId
     ) {
         return categoryService.listActive(type, parentCategoryId);
+    }
+
+    @GetMapping("/paged")
+    public Page<CategoryResponse> listPaged(
+            @RequestParam(required = false) CategoryType type,
+            @RequestParam(required = false) UUID parentCategoryId,
+            @PageableDefault(size = 20, sort = "name", direction = Sort.Direction.ASC) Pageable pageable
+    ) {
+        return categoryService.listActivePaged(type, parentCategoryId, pageable);
     }
 }

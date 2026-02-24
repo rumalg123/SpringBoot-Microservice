@@ -3,6 +3,8 @@ package com.rumal.vendor_service.repo;
 import com.rumal.vendor_service.entity.Vendor;
 import com.rumal.vendor_service.entity.VendorStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
@@ -15,4 +17,9 @@ public interface VendorRepository extends JpaRepository<Vendor, UUID> {
     List<Vendor> findByDeletedFalseOrderByNameAsc();
     List<Vendor> findByDeletedTrueOrderByUpdatedAtDesc();
     List<Vendor> findByDeletedFalseAndActiveTrueAndStatusOrderByNameAsc(VendorStatus status);
+
+    @Query("SELECT DISTINCT v FROM Vendor v LEFT JOIN v.specializations s " +
+           "WHERE v.deleted = false AND v.active = true AND v.status = :status " +
+           "AND (v.primaryCategory = :category OR s = :category)")
+    List<Vendor> findActiveVendorsByCategory(@Param("status") VendorStatus status, @Param("category") String category);
 }

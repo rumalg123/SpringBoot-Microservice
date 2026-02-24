@@ -13,6 +13,7 @@ public record ProductDetails(
         String productType,
         boolean active,
         BigDecimal sellingPrice,
-        List<String> images
+        List<String> images,
+        List<UUID> categoryIds
 ) {
 }

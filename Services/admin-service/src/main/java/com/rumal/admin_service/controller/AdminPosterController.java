@@ -2,6 +2,7 @@ package com.rumal.admin_service.controller;
 
 import com.rumal.admin_service.security.InternalRequestVerifier;
 import com.rumal.admin_service.service.AdminActorScopeService;
+import com.rumal.admin_service.service.AdminAuditService;
 import com.rumal.admin_service.service.AdminPosterService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -33,6 +34,7 @@ public class AdminPosterController {
     private final AdminPosterService adminPosterService;
     private final AdminActorScopeService adminActorScopeService;
     private final InternalRequestVerifier internalRequestVerifier;
+    private final AdminAuditService auditService;
 
     @GetMapping
     public List<Map<String, Object>> listAll(
@@ -66,7 +68,9 @@ public class AdminPosterController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         adminActorScopeService.assertCanManagePosters(userSub, userRoles, internalAuth);
-        return adminPosterService.create(request, internalAuth);
+        Map<String, Object> result = adminPosterService.create(request, internalAuth);
+        auditService.log(userSub, userRoles, "CREATE_POSTER", "POSTER", String.valueOf(result.get("id")), null, null);
+        return result;
     }
 
     @PutMapping("/{id}")
@@ -79,7 +83,9 @@ public class AdminPosterController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         adminActorScopeService.assertCanManagePosters(userSub, userRoles, internalAuth);
-        return adminPosterService.update(id, request, internalAuth);
+        Map<String, Object> result = adminPosterService.update(id, request, internalAuth);
+        auditService.log(userSub, userRoles, "UPDATE_POSTER", "POSTER", id.toString(), null, null);
+        return result;
     }
 
     @DeleteMapping("/{id}")
@@ -93,6 +99,7 @@ public class AdminPosterController {
         internalRequestVerifier.verify(internalAuth);
         adminActorScopeService.assertCanManagePosters(userSub, userRoles, internalAuth);
         adminPosterService.delete(id, internalAuth);
+        auditService.log(userSub, userRoles, "DELETE_POSTER", "POSTER", id.toString(), null, null);
     }
 
     @PostMapping("/{id}/restore")
@@ -104,7 +111,9 @@ public class AdminPosterController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         adminActorScopeService.assertCanManagePosters(userSub, userRoles, internalAuth);
-        return adminPosterService.restore(id, internalAuth);
+        Map<String, Object> result = adminPosterService.restore(id, internalAuth);
+        auditService.log(userSub, userRoles, "RESTORE_POSTER", "POSTER", id.toString(), null, null);
+        return result;
     }
 
     @PostMapping("/images/names")

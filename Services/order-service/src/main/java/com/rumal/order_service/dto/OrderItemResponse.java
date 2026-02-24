@@ -11,5 +11,8 @@ public record OrderItemResponse(
         String item,
         int quantity,
         BigDecimal unitPrice,
-        BigDecimal lineTotal
+        BigDecimal lineTotal,
+        BigDecimal discountAmount,
+        Integer fulfilledQuantity,
+        Integer cancelledQuantity
 ) {}

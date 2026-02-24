@@ -3,6 +3,7 @@ package com.rumal.admin_service.controller;
 import com.rumal.admin_service.dto.VendorAdminOnboardRequest;
 import com.rumal.admin_service.dto.VendorAdminOnboardResponse;
 import com.rumal.admin_service.security.InternalRequestVerifier;
+import com.rumal.admin_service.service.AdminAuditService;
 import com.rumal.admin_service.service.AdminVendorService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
@@ -31,6 +32,7 @@ public class AdminVendorController {
 
     private final AdminVendorService adminVendorService;
     private final InternalRequestVerifier internalRequestVerifier;
+    private final AdminAuditService auditService;
 
     @GetMapping
     public List<Map<String, Object>> listAll(
@@ -84,7 +86,9 @@ public class AdminVendorController {
             @RequestBody @NotNull Map<String, Object> request
     ) {
         internalRequestVerifier.verify(internalAuth);
-        return adminVendorService.create(request, internalAuth, userSub, userRoles);
+        Map<String, Object> result = adminVendorService.create(request, internalAuth, userSub, userRoles);
+        auditService.log(userSub, userRoles, "CREATE_VENDOR", "VENDOR", String.valueOf(result.get("id")), null, null);
+        return result;
     }
 
     @PutMapping("/{id}")
@@ -96,7 +100,9 @@ public class AdminVendorController {
             @RequestBody @NotNull Map<String, Object> request
     ) {
         internalRequestVerifier.verify(internalAuth);
-        return adminVendorService.update(id, request, internalAuth, userSub, userRoles);
+        Map<String, Object> result = adminVendorService.update(id, request, internalAuth, userSub, userRoles);
+        auditService.log(userSub, userRoles, "UPDATE_VENDOR", "VENDOR", id.toString(), null, null);
+        return result;
     }
 
     @DeleteMapping("/{id}")
@@ -124,7 +130,9 @@ public class AdminVendorController {
             @RequestBody(required = false) Map<String, Object> request
     ) {
         internalRequestVerifier.verify(internalAuth);
-        return adminVendorService.requestDelete(id, request, internalAuth, userSub, userRoles, idempotencyKey);
+        Map<String, Object> result = adminVendorService.requestDelete(id, request, internalAuth, userSub, userRoles, idempotencyKey);
+        auditService.log(userSub, userRoles, "REQUEST_DELETE_VENDOR", "VENDOR", id.toString(), null, null);
+        return result;
     }
 
     @PostMapping("/{id}/confirm-delete")
@@ -139,6 +147,7 @@ public class AdminVendorController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         adminVendorService.confirmDelete(id, request, internalAuth, userSub, userRoles, idempotencyKey);
+        auditService.log(userSub, userRoles, "CONFIRM_DELETE_VENDOR", "VENDOR", id.toString(), null, null);
     }
 
     @PostMapping("/{id}/stop-orders")
@@ -151,7 +160,9 @@ public class AdminVendorController {
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
-        return adminVendorService.stopReceivingOrders(id, request, internalAuth, userSub, userRoles, idempotencyKey);
+        Map<String, Object> result = adminVendorService.stopReceivingOrders(id, request, internalAuth, userSub, userRoles, idempotencyKey);
+        auditService.log(userSub, userRoles, "STOP_VENDOR_ORDERS", "VENDOR", id.toString(), null, null);
+        return result;
     }
 
     @PostMapping("/{id}/resume-orders")
@@ -164,7 +175,9 @@ public class AdminVendorController {
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
-        return adminVendorService.resumeReceivingOrders(id, request, internalAuth, userSub, userRoles, idempotencyKey);
+        Map<String, Object> result = adminVendorService.resumeReceivingOrders(id, request, internalAuth, userSub, userRoles, idempotencyKey);
+        auditService.log(userSub, userRoles, "RESUME_VENDOR_ORDERS", "VENDOR", id.toString(), null, null);
+        return result;
     }
 
     @PostMapping("/{id}/restore")
@@ -177,7 +190,9 @@ public class AdminVendorController {
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
-        return adminVendorService.restore(id, request, internalAuth, userSub, userRoles, idempotencyKey);
+        Map<String, Object> result = adminVendorService.restore(id, request, internalAuth, userSub, userRoles, idempotencyKey);
+        auditService.log(userSub, userRoles, "RESTORE_VENDOR", "VENDOR", id.toString(), null, null);
+        return result;
     }
 
     @GetMapping("/{vendorId}/users")

@@ -320,7 +320,7 @@ public class SampleCatalogDataSeeder implements ApplicationRunner {
     }
 
     private CategoryResponse createCategory(String name, String slug, CategoryType type, UUID parentCategoryId) {
-        return categoryService.create(new UpsertCategoryRequest(name, slug, type, parentCategoryId));
+        return categoryService.create(new UpsertCategoryRequest(name, slug, type, parentCategoryId, null, null, null, null));
     }
 
     private ProductResponse createSingle(
@@ -339,6 +339,7 @@ public class SampleCatalogDataSeeder implements ApplicationRunner {
                 slug,
                 shortDescription,
                 description,
+                null,
                 List.of(image),
                 new BigDecimal(regularPrice),
                 new BigDecimal(discountedPrice),
@@ -347,7 +348,11 @@ public class SampleCatalogDataSeeder implements ApplicationRunner {
                 ProductType.SINGLE,
                 List.of(),
                 sku,
-                true
+                true,
+                null, null, null, null,
+                null, null,
+                null,
+                null, null
         ));
     }
 
@@ -371,6 +376,7 @@ public class SampleCatalogDataSeeder implements ApplicationRunner {
                 slug,
                 shortDescription,
                 description,
+                null,
                 List.of(image),
                 new BigDecimal(regularPrice),
                 new BigDecimal(discountedPrice),
@@ -379,7 +385,11 @@ public class SampleCatalogDataSeeder implements ApplicationRunner {
                 ProductType.PARENT,
                 attributes,
                 sku,
-                true
+                true,
+                null, null, null, null,
+                null, null,
+                null,
+                null, null
         ));
     }
 
@@ -400,6 +410,7 @@ public class SampleCatalogDataSeeder implements ApplicationRunner {
                 slug,
                 shortDescription,
                 description,
+                null,
                 List.of(image),
                 new BigDecimal(regularPrice),
                 new BigDecimal(discountedPrice),
@@ -408,7 +419,11 @@ public class SampleCatalogDataSeeder implements ApplicationRunner {
                 ProductType.VARIATION,
                 attributes,
                 sku,
-                true
+                true,
+                null, null, null, null,
+                null, null,
+                null,
+                null, null
         ));
     }
 

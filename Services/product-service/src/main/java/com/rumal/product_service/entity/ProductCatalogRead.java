@@ -27,7 +27,12 @@ import java.util.UUID;
                 @Index(name = "idx_catalog_read_active", columnList = "is_active"),
                 @Index(name = "idx_catalog_read_deleted", columnList = "is_deleted"),
                 @Index(name = "idx_catalog_read_vendor", columnList = "vendor_id"),
-                @Index(name = "idx_catalog_read_created_at", columnList = "created_at")
+                @Index(name = "idx_catalog_read_created_at", columnList = "created_at"),
+                @Index(name = "idx_catalog_read_brand", columnList = "brand_name_lc"),
+                @Index(name = "idx_catalog_read_approval", columnList = "approval_status"),
+                @Index(name = "idx_catalog_read_view_count", columnList = "view_count"),
+                @Index(name = "idx_catalog_read_sold_count", columnList = "sold_count"),
+                @Index(name = "idx_catalog_read_vendor_name", columnList = "vendor_name_lc")
         }
 )
 @Getter
@@ -54,6 +59,12 @@ public class ProductCatalogRead {
 
     @Column(nullable = false, length = 4000)
     private String description;
+
+    @Column(name = "brand_name", length = 100)
+    private String brandName;
+
+    @Column(name = "brand_name_lc", length = 100)
+    private String brandNameLc;
 
     @Column(name = "main_image", length = 260)
     private String mainImage;
@@ -101,6 +112,10 @@ public class ProductCatalogRead {
     @Column(name = "is_deleted", nullable = false)
     private boolean deleted;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "approval_status", nullable = false, length = 20)
+    private ApprovalStatus approvalStatus;
+
     @Column(name = "has_active_variation_child", nullable = false)
     private boolean hasActiveVariationChild;
 
@@ -118,6 +133,18 @@ public class ProductCatalogRead {
 
     @Column(name = "main_category_lc", length = 100)
     private String mainCategoryLc;
+
+    @Column(name = "view_count", nullable = false)
+    private long viewCount;
+
+    @Column(name = "sold_count", nullable = false)
+    private long soldCount;
+
+    @Column(name = "vendor_name", length = 200)
+    private String vendorName;
+
+    @Column(name = "vendor_name_lc", length = 200)
+    private String vendorNameLc;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;

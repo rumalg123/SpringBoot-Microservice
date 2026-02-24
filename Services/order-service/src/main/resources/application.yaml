@@ -136,6 +136,9 @@ resilience4j:
 order:
   aggregation:
     customerDetailsMode: GRACEFUL   # STRICT or GRACEFUL
+  expiry:
+    ttl: ${ORDER_EXPIRY_TTL:30m}
+    check-interval: ${ORDER_EXPIRY_CHECK_INTERVAL:PT5M}
   idempotency:
     enabled: ${ORDER_IDEMPOTENCY_ENABLED:true}
     key-header-name: ${ORDER_IDEMPOTENCY_KEY_HEADER:Idempotency-Key}

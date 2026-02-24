@@ -1,5 +1,7 @@
 package com.rumal.vendor_service.controller;
 
+import com.rumal.vendor_service.dto.AdminVerificationActionRequest;
+import com.rumal.vendor_service.dto.UpdateVendorMetricsRequest;
 import com.rumal.vendor_service.dto.UpsertVendorRequest;
 import com.rumal.vendor_service.dto.UpsertVendorUserRequest;
 import com.rumal.vendor_service.dto.VendorDeletionEligibilityResponse;
@@ -13,6 +15,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -166,6 +169,42 @@ public class AdminVendorController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         vendorService.confirmDelete(id, request == null ? null : request.reason(), userSub, userRoles);
+    }
+
+    // --- Gap 49: Verification ---
+    @PostMapping("/{id}/verify")
+    public VendorResponse approveVerification(
+            @RequestHeader(INTERNAL_HEADER) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
+            @PathVariable UUID id,
+            @Valid @RequestBody(required = false) AdminVerificationActionRequest request
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        return vendorService.approveVerification(id, request, userSub, userRoles);
+    }
+
+    @PostMapping("/{id}/reject-verification")
+    public VendorResponse rejectVerification(
+            @RequestHeader(INTERNAL_HEADER) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
+            @PathVariable UUID id,
+            @Valid @RequestBody(required = false) AdminVerificationActionRequest request
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        return vendorService.rejectVerification(id, request, userSub, userRoles);
+    }
+
+    // --- Gap 50: Metrics ---
+    @PatchMapping("/{id}/metrics")
+    public VendorResponse updateMetrics(
+            @RequestHeader(INTERNAL_HEADER) String internalAuth,
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateVendorMetricsRequest request
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        return vendorService.updateMetrics(id, request);
     }
 
     @GetMapping("/{vendorId}/users")

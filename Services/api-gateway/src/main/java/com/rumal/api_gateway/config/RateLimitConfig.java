@@ -175,9 +175,33 @@ public class RateLimitConfig {
     }
 
     @Bean
+    public RedisRateLimiter publicPromotionsRateLimiter(
+            @Value("${RATE_LIMIT_PUBLIC_PROMOTIONS_REPLENISH:20}") int replenishRate,
+            @Value("${RATE_LIMIT_PUBLIC_PROMOTIONS_BURST:40}") int burstCapacity
+    ) {
+        return redisRateLimiter(replenishRate, burstCapacity);
+    }
+
+    @Bean
     public RedisRateLimiter publicCatalogAuxRateLimiter(
             @Value("${RATE_LIMIT_PUBLIC_CATALOG_AUX_REPLENISH:25}") int replenishRate,
             @Value("${RATE_LIMIT_PUBLIC_CATALOG_AUX_BURST:50}") int burstCapacity
+    ) {
+        return redisRateLimiter(replenishRate, burstCapacity);
+    }
+
+    @Bean
+    public RedisRateLimiter vendorMeRateLimiter(
+            @Value("${RATE_LIMIT_VENDOR_ME_REPLENISH:15}") int replenishRate,
+            @Value("${RATE_LIMIT_VENDOR_ME_BURST:30}") int burstCapacity
+    ) {
+        return redisRateLimiter(replenishRate, burstCapacity);
+    }
+
+    @Bean
+    public RedisRateLimiter vendorMeWriteRateLimiter(
+            @Value("${RATE_LIMIT_VENDOR_ME_WRITE_REPLENISH:8}") int replenishRate,
+            @Value("${RATE_LIMIT_VENDOR_ME_WRITE_BURST:16}") int burstCapacity
     ) {
         return redisRateLimiter(replenishRate, burstCapacity);
     }

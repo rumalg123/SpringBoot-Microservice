@@ -3,6 +3,7 @@ package com.rumal.order_service.service;
 import com.rumal.order_service.client.CustomerClient;
 import com.rumal.order_service.client.ProductClient;
 import com.rumal.order_service.client.PromotionClient;
+import com.rumal.order_service.client.VendorClient;
 import com.rumal.order_service.client.VendorOperationalStateClient;
 import com.rumal.order_service.config.CustomerDetailsMode;
 import com.rumal.order_service.config.OrderAggregationProperties;
@@ -68,21 +69,20 @@ class OrderServicePromotionFlowIntegrationTest {
     @Autowired
     private TransactionTemplate transactionTemplate;
 
+    private OrderService orderService;
     private CustomerClient customerClient;
     private ProductClient productClient;
     private PromotionClient promotionClient;
     private VendorOperationalStateClient vendorOperationalStateClient;
-    private OrderCacheVersionService orderCacheVersionService;
-
-    private OrderService orderService;
 
     @BeforeEach
     void setUp() {
         customerClient = Mockito.mock(CustomerClient.class);
         productClient = Mockito.mock(ProductClient.class);
         promotionClient = Mockito.mock(PromotionClient.class);
+        VendorClient vendorClient = Mockito.mock(VendorClient.class);
         vendorOperationalStateClient = Mockito.mock(VendorOperationalStateClient.class);
-        orderCacheVersionService = Mockito.mock(OrderCacheVersionService.class);
+        OrderCacheVersionService orderCacheVersionService = Mockito.mock(OrderCacheVersionService.class);
 
         orderService = new OrderService(
                 orderRepository,
@@ -92,6 +92,7 @@ class OrderServicePromotionFlowIntegrationTest {
                 customerClient,
                 productClient,
                 promotionClient,
+                vendorClient,
                 vendorOperationalStateClient,
                 new ShippingFeeCalculator(
                         new BigDecimal("4.99"),
@@ -126,7 +127,9 @@ class OrderServicePromotionFlowIntegrationTest {
                 new BigDecimal("10.00"),
                 true
         ));
-        when(vendorOperationalStateClient.batchGetStates(any(Set.class))).thenReturn(Map.of(
+        @SuppressWarnings("unchecked")
+        Set<UUID> anyVendorIds = any(Set.class);
+        when(vendorOperationalStateClient.batchGetStates(anyVendorIds)).thenReturn(Map.of(
                 vendorId,
                 new VendorOperationalStateResponse(vendorId, true, false, "ACTIVE", true, true)
         ));
@@ -184,7 +187,8 @@ class OrderServicePromotionFlowIntegrationTest {
                         new BigDecimal("0.00"),
                         new BigDecimal("3.00"),
                         new BigDecimal("23.59")
-                )
+                ),
+                null
         );
 
         OrderResponse created = orderService.createForKeycloak(keycloakId, createRequest);
@@ -203,7 +207,7 @@ class OrderServicePromotionFlowIntegrationTest {
         verify(promotionClient).commitCouponReservation(eq(couponReservationId), commitOrderIdCaptor.capture());
         assertEquals(created.id(), commitOrderIdCaptor.getValue());
 
-        OrderResponse cancelled = orderService.updateStatus(created.id(), OrderStatus.CANCELLED, "admin-sub", "platform_staff");
+        OrderResponse cancelled = orderService.updateStatus(created.id(), OrderStatus.CANCELLED, null, null, null, null, "admin-sub", "platform_staff");
         assertEquals("CANCELLED", cancelled.status());
         assertEquals(couponReservationId, cancelled.couponReservationId());
 

@@ -12,10 +12,13 @@ import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.AntPathMatcher;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.HandlerMapping;
 
@@ -61,5 +64,26 @@ public class PosterController {
     @GetMapping("/{idOrSlug}")
     public PosterResponse getByIdOrSlug(@PathVariable String idOrSlug) {
         return posterService.getByIdOrSlug(idOrSlug);
+    }
+
+    @PostMapping("/{id}/click")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void recordClick(@PathVariable UUID id) {
+        posterService.recordClick(id);
+    }
+
+    @PostMapping("/{id}/impression")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void recordImpression(@PathVariable UUID id) {
+        posterService.recordImpression(id);
+    }
+
+    @PostMapping("/{posterId}/variants/{variantId}/click")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void recordVariantClick(
+            @PathVariable UUID posterId,
+            @PathVariable UUID variantId
+    ) {
+        posterService.recordVariantClick(posterId, variantId);
     }
 }

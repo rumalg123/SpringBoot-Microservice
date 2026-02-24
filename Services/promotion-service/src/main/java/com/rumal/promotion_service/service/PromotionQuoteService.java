@@ -23,13 +23,17 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -78,12 +82,16 @@ public class PromotionQuoteService {
             }
         }
 
+        String customerSegment = request.customerSegment() == null ? null : request.customerSegment().trim();
+
         Map<UUID, PromotionCandidate> candidatesById = new LinkedHashMap<>();
         promotionCampaignRepository.findByLifecycleStatusAndApprovalStatusIn(
                         PromotionLifecycleStatus.ACTIVE,
                         List.of(PromotionApprovalStatus.NOT_REQUIRED, PromotionApprovalStatus.APPROVED)
                 ).stream()
                 .filter(p -> withinWindow(p, pricedAt))
+                .filter(p -> matchesSegment(p, customerSegment))
+                .filter(p -> withinFlashSaleWindow(p, pricedAt))
                 .forEach(p -> candidatesById.put(p.getId(), new PromotionCandidate(p, false, null)));
         if (couponPromotion != null && couponPromotion.getId() != null) {
             candidatesById.put(couponPromotion.getId(), new PromotionCandidate(couponPromotion, true, request.couponCode().trim()));
@@ -100,8 +108,19 @@ public class PromotionQuoteService {
 
         boolean exclusiveApplied = false;
         boolean nonStackableApplied = false;
+        int appliedCount = 0;
+        Set<String> appliedStackingGroups = new HashSet<>();
         BigDecimal cartDiscountTotal = BigDecimal.ZERO;
         BigDecimal shippingDiscountTotal = BigDecimal.ZERO;
+
+        // Determine the global max stack count (smallest maxStackCount from any candidate that defines it)
+        Integer globalMaxStack = null;
+        for (PromotionCandidate c : candidates) {
+            Integer msc = c.promotion().getMaxStackCount();
+            if (msc != null && msc > 0) {
+                globalMaxStack = (globalMaxStack == null) ? msc : Math.min(globalMaxStack, msc);
+            }
+        }
 
         for (PromotionCandidate candidate : candidates) {
             PromotionCampaign promotion = candidate.promotion();
@@ -119,6 +138,26 @@ public class PromotionQuoteService {
             }
             if (!promotion.isStackable() && !applied.isEmpty()) {
                 rejected.add(new RejectedPromotionQuoteEntry(promotion.getId(), promotion.getName(), "Promotion is not stackable with previously applied promotions"));
+                continue;
+            }
+            // Stacking group check: promotions in the same group cannot stack
+            String stackingGroup = promotion.getStackingGroup();
+            if (stackingGroup != null && !stackingGroup.isBlank()) {
+                String normalizedGroup = stackingGroup.trim().toLowerCase(Locale.ROOT);
+                if (appliedStackingGroups.contains(normalizedGroup)) {
+                    rejected.add(new RejectedPromotionQuoteEntry(promotion.getId(), promotion.getName(), "Promotion conflicts with stacking group: " + stackingGroup.trim()));
+                    continue;
+                }
+            }
+            // Max stack count check
+            if (globalMaxStack != null && appliedCount >= globalMaxStack) {
+                rejected.add(new RejectedPromotionQuoteEntry(promotion.getId(), promotion.getName(), "Maximum number of stacked promotions reached (" + globalMaxStack + ")"));
+                continue;
+            }
+            // Flash sale redemption limit check
+            if (promotion.isFlashSale() && promotion.getFlashSaleMaxRedemptions() != null
+                    && promotion.getFlashSaleRedemptionCount() >= promotion.getFlashSaleMaxRedemptions()) {
+                rejected.add(new RejectedPromotionQuoteEntry(promotion.getId(), promotion.getName(), "Flash sale redemption limit reached"));
                 continue;
             }
 
@@ -156,6 +195,10 @@ public class PromotionQuoteService {
                     result.discountAmount()
             ));
 
+            appliedCount++;
+            if (stackingGroup != null && !stackingGroup.isBlank()) {
+                appliedStackingGroups.add(stackingGroup.trim().toLowerCase(Locale.ROOT));
+            }
             if (promotion.isExclusive()) {
                 exclusiveApplied = true;
             }
@@ -569,6 +612,32 @@ public class PromotionQuoteService {
             return false;
         }
         return promotion.getEndsAt() == null || !promotion.getEndsAt().isBefore(now);
+    }
+
+    private boolean matchesSegment(PromotionCampaign promotion, String customerSegment) {
+        String segments = promotion.getTargetSegments();
+        if (segments == null || segments.isBlank()) {
+            return true; // no segment restriction
+        }
+        if (customerSegment == null || customerSegment.isBlank()) {
+            return false; // promotion requires a segment but none provided
+        }
+        String normalizedCustomerSegment = customerSegment.trim().toUpperCase(Locale.ROOT);
+        return Arrays.stream(segments.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .map(s -> s.toUpperCase(Locale.ROOT))
+                .anyMatch(s -> s.equals(normalizedCustomerSegment));
+    }
+
+    private boolean withinFlashSaleWindow(PromotionCampaign promotion, Instant now) {
+        if (!promotion.isFlashSale()) {
+            return true; // not a flash sale, no extra window check
+        }
+        if (promotion.getFlashSaleStartAt() != null && promotion.getFlashSaleStartAt().isAfter(now)) {
+            return false;
+        }
+        return promotion.getFlashSaleEndAt() == null || !promotion.getFlashSaleEndAt().isBefore(now);
     }
 
     private BigDecimal normalizeMoney(BigDecimal value) {

@@ -91,7 +91,10 @@ public class PromotionCampaignService {
         return toResponse(getEntity(id));
     }
 
-    @CacheEvict(cacheNames = "promotionAdminList", allEntries = true)
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "promotionAdminList", allEntries = true),
+            @CacheEvict(cacheNames = "publicPromotionList", allEntries = true)
+    })
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public PromotionResponse create(
             UpsertPromotionRequest request,
@@ -120,7 +123,9 @@ public class PromotionCampaignService {
 
     @Caching(evict = {
             @CacheEvict(cacheNames = "promotionById", key = "#id"),
-            @CacheEvict(cacheNames = "promotionAdminList", allEntries = true)
+            @CacheEvict(cacheNames = "promotionAdminList", allEntries = true),
+            @CacheEvict(cacheNames = "publicPromotionList", allEntries = true),
+            @CacheEvict(cacheNames = "publicPromotionById", key = "#id")
     })
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public PromotionResponse update(
@@ -147,7 +152,9 @@ public class PromotionCampaignService {
 
     @Caching(evict = {
             @CacheEvict(cacheNames = "promotionById", key = "#id"),
-            @CacheEvict(cacheNames = "promotionAdminList", allEntries = true)
+            @CacheEvict(cacheNames = "promotionAdminList", allEntries = true),
+            @CacheEvict(cacheNames = "publicPromotionList", allEntries = true),
+            @CacheEvict(cacheNames = "publicPromotionById", key = "#id")
     })
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public PromotionResponse submitForApproval(UUID id, String actorUserSub) {
@@ -168,7 +175,9 @@ public class PromotionCampaignService {
 
     @Caching(evict = {
             @CacheEvict(cacheNames = "promotionById", key = "#id"),
-            @CacheEvict(cacheNames = "promotionAdminList", allEntries = true)
+            @CacheEvict(cacheNames = "promotionAdminList", allEntries = true),
+            @CacheEvict(cacheNames = "publicPromotionList", allEntries = true),
+            @CacheEvict(cacheNames = "publicPromotionById", key = "#id")
     })
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public PromotionResponse approve(UUID id, String actorUserSub, PromotionApprovalDecisionRequest request) {
@@ -191,7 +200,9 @@ public class PromotionCampaignService {
 
     @Caching(evict = {
             @CacheEvict(cacheNames = "promotionById", key = "#id"),
-            @CacheEvict(cacheNames = "promotionAdminList", allEntries = true)
+            @CacheEvict(cacheNames = "promotionAdminList", allEntries = true),
+            @CacheEvict(cacheNames = "publicPromotionList", allEntries = true),
+            @CacheEvict(cacheNames = "publicPromotionById", key = "#id")
     })
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public PromotionResponse reject(UUID id, String actorUserSub, PromotionApprovalDecisionRequest request) {
@@ -212,7 +223,9 @@ public class PromotionCampaignService {
 
     @Caching(evict = {
             @CacheEvict(cacheNames = "promotionById", key = "#id"),
-            @CacheEvict(cacheNames = "promotionAdminList", allEntries = true)
+            @CacheEvict(cacheNames = "promotionAdminList", allEntries = true),
+            @CacheEvict(cacheNames = "publicPromotionList", allEntries = true),
+            @CacheEvict(cacheNames = "publicPromotionById", key = "#id")
     })
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public PromotionResponse activate(UUID id, String actorUserSub) {
@@ -233,7 +246,9 @@ public class PromotionCampaignService {
 
     @Caching(evict = {
             @CacheEvict(cacheNames = "promotionById", key = "#id"),
-            @CacheEvict(cacheNames = "promotionAdminList", allEntries = true)
+            @CacheEvict(cacheNames = "promotionAdminList", allEntries = true),
+            @CacheEvict(cacheNames = "publicPromotionList", allEntries = true),
+            @CacheEvict(cacheNames = "publicPromotionById", key = "#id")
     })
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public PromotionResponse pause(UUID id, String actorUserSub) {
@@ -248,7 +263,9 @@ public class PromotionCampaignService {
 
     @Caching(evict = {
             @CacheEvict(cacheNames = "promotionById", key = "#id"),
-            @CacheEvict(cacheNames = "promotionAdminList", allEntries = true)
+            @CacheEvict(cacheNames = "promotionAdminList", allEntries = true),
+            @CacheEvict(cacheNames = "publicPromotionList", allEntries = true),
+            @CacheEvict(cacheNames = "publicPromotionById", key = "#id")
     })
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public PromotionResponse archive(UUID id, String actorUserSub) {
@@ -393,10 +410,18 @@ public class PromotionCampaignService {
         campaign.setFundingSource(request.fundingSource());
         campaign.setStackable(request.stackable());
         campaign.setExclusive(request.exclusive());
+        campaign.setStackingGroup(trimToNull(request.stackingGroup()));
+        campaign.setMaxStackCount(request.maxStackCount());
         campaign.setAutoApply(request.autoApply());
         campaign.setPriority(request.priority() == null ? 100 : request.priority());
+        campaign.setTargetSegments(trimToNull(request.targetSegments()));
+        campaign.setFlashSale(request.flashSale());
+        campaign.setFlashSaleStartAt(request.flashSale() ? request.flashSaleStartAt() : null);
+        campaign.setFlashSaleEndAt(request.flashSale() ? request.flashSaleEndAt() : null);
+        campaign.setFlashSaleMaxRedemptions(request.flashSale() ? request.flashSaleMaxRedemptions() : null);
         campaign.setStartsAt(request.startsAt());
         campaign.setEndsAt(request.endsAt());
+        campaign.setTimezone(trimToNull(request.timezone()));
         campaign.setTargetProductIds(new LinkedHashSet<>(request.targetProductIdsOrEmpty()));
         campaign.setTargetCategoryIds(new LinkedHashSet<>(request.targetCategoryIdsOrEmpty()));
     }
@@ -445,13 +470,22 @@ public class PromotionCampaignService {
                 entity.getFundingSource(),
                 entity.isStackable(),
                 entity.isExclusive(),
+                entity.getStackingGroup(),
+                entity.getMaxStackCount(),
                 entity.isAutoApply(),
                 entity.getPriority(),
+                entity.getTargetSegments(),
+                entity.isFlashSale(),
+                entity.getFlashSaleStartAt(),
+                entity.getFlashSaleEndAt(),
+                entity.getFlashSaleMaxRedemptions(),
+                entity.getFlashSaleRedemptionCount(),
                 entity.getLifecycleStatus(),
                 entity.getApprovalStatus(),
                 entity.getApprovalNote(),
                 entity.getStartsAt(),
                 entity.getEndsAt(),
+                entity.getTimezone(),
                 entity.getCreatedByUserSub(),
                 entity.getUpdatedByUserSub(),
                 entity.getSubmittedByUserSub(),

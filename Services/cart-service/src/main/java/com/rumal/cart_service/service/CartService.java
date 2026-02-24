@@ -26,6 +26,7 @@ import com.rumal.cart_service.dto.PromotionQuoteRequest;
 import com.rumal.cart_service.dto.PromotionQuoteResponse;
 import com.rumal.cart_service.dto.RejectedPromotionPreviewResponse;
 import com.rumal.cart_service.dto.UpdateCartItemRequest;
+import com.rumal.cart_service.dto.UpdateCartNoteRequest;
 import com.rumal.cart_service.dto.VendorOperationalStateResponse;
 import com.rumal.cart_service.entity.Cart;
 import com.rumal.cart_service.entity.CartItem;
@@ -111,6 +112,7 @@ public class CartService {
                 existing.setLineTotal(calculateLineTotal(existing.getUnitPrice(), existing.getQuantity()));
             }
 
+            cart.setLastActivityAt(Instant.now());
             Cart saved = cartRepository.save(cart);
             return toResponse(saved);
         });
@@ -471,6 +473,7 @@ public class CartService {
                 .productName(product.name().trim())
                 .productSku(product.sku().trim())
                 .mainImage(resolveMainImage(product))
+                .categoryIds(serializeCategoryIds(product.categoryIds()))
                 .unitPrice(unitPrice)
                 .quantity(quantity)
                 .lineTotal(calculateLineTotal(unitPrice, quantity))
@@ -482,6 +485,7 @@ public class CartService {
         item.setProductName(product.name().trim());
         item.setProductSku(product.sku().trim());
         item.setMainImage(resolveMainImage(product));
+        item.setCategoryIds(serializeCategoryIds(product.categoryIds()));
         item.setUnitPrice(normalizeMoney(product.sellingPrice()));
     }
 
@@ -528,15 +532,22 @@ public class CartService {
     }
 
     private CartResponse toResponse(Cart cart) {
-        List<CartItemResponse> items = cart.getItems().stream()
+        List<CartItemResponse> activeItems = cart.getItems().stream()
+                .filter(item -> !item.isSavedForLater())
                 .sorted(Comparator.comparing(CartItem::getProductName, String.CASE_INSENSITIVE_ORDER))
                 .map(this::toItemResponse)
                 .toList();
 
-        int totalQuantity = items.stream()
+        List<CartItemResponse> savedItems = cart.getItems().stream()
+                .filter(CartItem::isSavedForLater)
+                .sorted(Comparator.comparing(CartItem::getProductName, String.CASE_INSENSITIVE_ORDER))
+                .map(this::toItemResponse)
+                .toList();
+
+        int totalQuantity = activeItems.stream()
                 .mapToInt(CartItemResponse::quantity)
                 .sum();
-        BigDecimal subtotal = items.stream()
+        BigDecimal subtotal = activeItems.stream()
                 .map(CartItemResponse::lineTotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .setScale(2, RoundingMode.HALF_UP);
@@ -544,10 +555,12 @@ public class CartService {
         return new CartResponse(
                 cart.getId(),
                 cart.getKeycloakId(),
-                items,
-                items.size(),
+                activeItems,
+                savedItems,
+                activeItems.size(),
                 totalQuantity,
                 subtotal,
+                cart.getNote(),
                 cart.getCreatedAt(),
                 cart.getUpdatedAt()
         );
@@ -561,9 +574,11 @@ public class CartService {
                 item.getProductName(),
                 item.getProductSku(),
                 item.getMainImage(),
+                deserializeCategoryIds(item.getCategoryIds()),
                 normalizeMoney(item.getUnitPrice()),
                 item.getQuantity(),
-                normalizeMoney(item.getLineTotal())
+                normalizeMoney(item.getLineTotal()),
+                item.isSavedForLater()
         );
     }
 
@@ -572,9 +587,11 @@ public class CartService {
                 null,
                 keycloakId,
                 List.of(),
+                List.of(),
                 0,
                 0,
                 BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP),
+                null,
                 null,
                 null
         );
@@ -611,11 +628,13 @@ public class CartService {
             if (latest == null) {
                 throw new ValidationException("Product is not available: " + item.getProductId());
             }
-            // Cart product snapshot currently does not include category IDs, so category promotions cannot be matched here yet.
+            Set<UUID> categoryIdSet = latest.categoryIds() != null
+                    ? new java.util.HashSet<>(latest.categoryIds())
+                    : Set.of();
             quoteLines.add(new PromotionQuoteLineRequest(
                     latest.id(),
                     latest.vendorId(),
-                    Set.of(),
+                    categoryIdSet,
                     normalizeMoney(latest.sellingPrice()),
                     item.getQuantity()
             ));
@@ -684,6 +703,79 @@ public class CartService {
             return "checkout_failed";
         }
         return normalized.length() > 500 ? normalized.substring(0, 500) : normalized;
+    }
+
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "cartByKeycloak", key = "#keycloakId == null ? '' : #keycloakId.trim()")
+    })
+    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 10)
+    public CartResponse saveForLater(String keycloakId, UUID itemId) {
+        String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
+        Cart cart = cartRepository.findWithItemsByKeycloakIdForUpdate(normalizedKeycloakId)
+                .orElseThrow(() -> new ResourceNotFoundException("Cart item not found: " + itemId));
+        CartItem item = cart.getItems().stream()
+                .filter(i -> i.getId().equals(itemId))
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Cart item not found: " + itemId));
+        item.setSavedForLater(true);
+        cart.setLastActivityAt(Instant.now());
+        return toResponse(cartRepository.save(cart));
+    }
+
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "cartByKeycloak", key = "#keycloakId == null ? '' : #keycloakId.trim()")
+    })
+    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 10)
+    public CartResponse moveToCart(String keycloakId, UUID itemId) {
+        String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
+        Cart cart = cartRepository.findWithItemsByKeycloakIdForUpdate(normalizedKeycloakId)
+                .orElseThrow(() -> new ResourceNotFoundException("Cart item not found: " + itemId));
+        CartItem item = cart.getItems().stream()
+                .filter(i -> i.getId().equals(itemId))
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Cart item not found: " + itemId));
+        item.setSavedForLater(false);
+        cart.setLastActivityAt(Instant.now());
+        return toResponse(cartRepository.save(cart));
+    }
+
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "cartByKeycloak", key = "#keycloakId == null ? '' : #keycloakId.trim()")
+    })
+    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 10)
+    public CartResponse updateNote(String keycloakId, UpdateCartNoteRequest request) {
+        String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
+        Cart cart = cartRepository.findWithItemsByKeycloakIdForUpdate(normalizedKeycloakId)
+                .orElseGet(() -> {
+                    Cart created = Cart.builder()
+                            .keycloakId(normalizedKeycloakId)
+                            .build();
+                    created.setItems(new java.util.ArrayList<>());
+                    return created;
+                });
+        cart.setNote(request.note() != null ? request.note().trim() : null);
+        cart.setLastActivityAt(Instant.now());
+        return toResponse(cartRepository.save(cart));
+    }
+
+    private String serializeCategoryIds(List<UUID> categoryIds) {
+        if (categoryIds == null || categoryIds.isEmpty()) {
+            return null;
+        }
+        return categoryIds.stream()
+                .filter(java.util.Objects::nonNull)
+                .map(UUID::toString)
+                .collect(java.util.stream.Collectors.joining(","));
+    }
+
+    private List<UUID> deserializeCategoryIds(String categoryIds) {
+        if (categoryIds == null || categoryIds.isBlank()) {
+            return List.of();
+        }
+        return java.util.Arrays.stream(categoryIds.split(","))
+                .filter(s -> !s.isBlank())
+                .map(UUID::fromString)
+                .toList();
     }
 
     private String trimToNull(String value) {

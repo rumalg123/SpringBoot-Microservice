@@ -24,7 +24,7 @@ public record CustomerAddressRequest(
         String line2,
 
         @NotBlank(message = "city is required")
-        @Size(max = 80, message = "city must be at most 80 characters")
+        @Size(min = 2, max = 100, message = "city must be between 2 and 100 characters")
         String city,
 
         @NotBlank(message = "state is required")
@@ -32,11 +32,12 @@ public record CustomerAddressRequest(
         String state,
 
         @NotBlank(message = "postalCode is required")
-        @Size(max = 30, message = "postalCode must be at most 30 characters")
+        @Pattern(regexp = "^[A-Za-z0-9\\s\\-]{3,10}$", message = "postalCode must be alphanumeric, 3-10 characters")
         String postalCode,
 
         @NotBlank(message = "countryCode is required")
-        @Pattern(regexp = "^[A-Za-z]{2}$", message = "countryCode must be a 2-letter code")
+        @Size(min = 2, max = 3, message = "countryCode must be 2-3 characters (ISO format)")
+        @Pattern(regexp = "^[A-Za-z]{2,3}$", message = "countryCode must be a 2-3 letter ISO code")
         String countryCode,
 
         Boolean defaultShipping,

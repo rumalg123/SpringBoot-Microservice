@@ -5,6 +5,8 @@ import com.rumal.poster_service.entity.PosterPlacement;
 import com.rumal.poster_service.entity.PosterSize;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 public record PosterResponse(
@@ -15,6 +17,10 @@ public record PosterResponse(
         PosterSize size,
         String desktopImage,
         String mobileImage,
+        String tabletImage,
+        String srcsetDesktop,
+        String srcsetMobile,
+        String srcsetTablet,
         PosterLinkType linkType,
         String linkTarget,
         boolean openInNewTab,
@@ -26,9 +32,17 @@ public record PosterResponse(
         boolean active,
         Instant startAt,
         Instant endAt,
+        long clickCount,
+        long impressionCount,
+        Instant lastClickAt,
+        Instant lastImpressionAt,
+        Set<String> targetCountries,
+        String targetCustomerSegment,
         boolean deleted,
         Instant deletedAt,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        PosterVariantResponse selectedVariant,
+        List<PosterVariantResponse> variants
 ) {
 }

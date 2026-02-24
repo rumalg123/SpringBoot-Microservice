@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -34,4 +35,27 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
     @Modifying
     @Query("update Product p set p.active = false where p.vendorId = :vendorId and p.active = true")
     int deactivateAllByVendorId(@Param("vendorId") UUID vendorId);
+
+    @Modifying
+    @Query("update Product p set p.viewCount = p.viewCount + 1 where p.id = :productId")
+    int incrementViewCount(@Param("productId") UUID productId);
+
+    @Query("""
+            select distinct ps.product.id
+            from ProductSpecification ps
+            where ps.attributeKey = :key and ps.attributeValue = :value
+            """)
+    Set<UUID> findProductIdsBySpecification(@Param("key") String key, @Param("value") String value);
+
+    @Query("""
+            select distinct ps.product.id
+            from ProductSpecification ps
+            where ps.attributeKey = :key and ps.attributeValue = :value
+              and ps.product.id in :productIds
+            """)
+    Set<UUID> findProductIdsBySpecificationAndProductIdIn(
+            @Param("key") String key,
+            @Param("value") String value,
+            @Param("productIds") Collection<UUID> productIds
+    );
 }

@@ -204,10 +204,18 @@ public class AdminPromotionAccessScopeService {
                 fundingSource,
                 request.stackable(),
                 request.exclusive(),
+                request.stackingGroup(),
+                request.maxStackCount(),
                 request.autoApply(),
                 request.priority(),
+                request.targetSegments(),
+                request.flashSale(),
+                request.flashSaleStartAt(),
+                request.flashSaleEndAt(),
+                request.flashSaleMaxRedemptions(),
                 request.startsAt(),
-                request.endsAt()
+                request.endsAt(),
+                request.timezone()
         );
     }
 

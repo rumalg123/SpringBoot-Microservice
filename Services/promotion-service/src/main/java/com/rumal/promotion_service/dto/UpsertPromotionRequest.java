@@ -39,10 +39,18 @@ public record UpsertPromotionRequest(
         @NotNull PromotionFundingSource fundingSource,
         boolean stackable,
         boolean exclusive,
+        @Size(max = 120) String stackingGroup,
+        @Min(value = 1, message = "maxStackCount must be at least 1") Integer maxStackCount,
         boolean autoApply,
         @NotNull @Min(value = 0, message = "priority must be 0 or greater") @Max(value = 10000, message = "priority must be 10000 or less") Integer priority,
+        @Size(max = 500) String targetSegments,
+        boolean flashSale,
+        Instant flashSaleStartAt,
+        Instant flashSaleEndAt,
+        @Min(value = 1, message = "flashSaleMaxRedemptions must be at least 1") Integer flashSaleMaxRedemptions,
         Instant startsAt,
-        Instant endsAt
+        Instant endsAt,
+        @Size(max = 60) String timezone
 ) {
     public Set<UUID> targetProductIdsOrEmpty() {
         return targetProductIds == null ? Set.of() : Set.copyOf(new LinkedHashSet<>(targetProductIds));
@@ -80,5 +88,31 @@ public record UpsertPromotionRequest(
             return spendTiersOrEmpty().stream().anyMatch(t -> t != null);
         }
         return spendTiers == null || spendTiers.isEmpty();
+    }
+
+    @AssertTrue(message = "flashSaleStartAt must be before or equal to flashSaleEndAt")
+    public boolean isFlashSaleDateRangeValid() {
+        return flashSaleStartAt == null || flashSaleEndAt == null || !flashSaleStartAt.isAfter(flashSaleEndAt);
+    }
+
+    @AssertTrue(message = "flashSale fields (flashSaleStartAt, flashSaleEndAt) are required when flashSale is true")
+    public boolean isFlashSaleFieldsValid() {
+        if (!flashSale) {
+            return true;
+        }
+        return flashSaleStartAt != null && flashSaleEndAt != null;
+    }
+
+    @AssertTrue(message = "timezone must be a valid IANA timezone identifier")
+    public boolean isTimezoneValid() {
+        if (timezone == null || timezone.isBlank()) {
+            return true;
+        }
+        try {
+            java.time.ZoneId.of(timezone.trim());
+            return true;
+        } catch (java.time.DateTimeException e) {
+            return false;
+        }
     }
 }

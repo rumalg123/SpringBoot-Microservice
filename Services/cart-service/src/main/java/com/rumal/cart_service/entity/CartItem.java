@@ -55,6 +55,9 @@ public class CartItem {
     @Column(name = "main_image", length = 300)
     private String mainImage;
 
+    @Column(name = "category_ids", length = 2000)
+    private String categoryIds;
+
     @Column(name = "unit_price", nullable = false, precision = 19, scale = 2)
     private BigDecimal unitPrice;
 
@@ -63,4 +66,8 @@ public class CartItem {
 
     @Column(name = "line_total", nullable = false, precision = 19, scale = 2)
     private BigDecimal lineTotal;
+
+    @Column(name = "saved_for_later", nullable = false)
+    @Builder.Default
+    private boolean savedForLater = false;
 }

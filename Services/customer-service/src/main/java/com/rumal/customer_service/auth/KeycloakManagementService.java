@@ -120,6 +120,7 @@ public class KeycloakManagementService {
         }
     }
 
+    @SuppressWarnings("unused")
     public void updateUserName(String userId, String fullName) {
         if (!StringUtils.hasText(userId)) {
             throw new KeycloakRequestException("Keycloak user id is required");
@@ -131,6 +132,26 @@ public class KeycloakManagementService {
         String normalizedName = fullName.trim();
         NameParts parts = splitName(normalizedName);
         updateUserNames(userId, parts.firstName(), parts.lastName());
+    }
+
+    public void setUserEnabled(String userId, boolean enabled) {
+        if (!StringUtils.hasText(userId)) {
+            throw new KeycloakRequestException("Keycloak user id is required");
+        }
+
+        try (Keycloak keycloak = newAdminClient()) {
+            var userResource = keycloak.realm(realm).users().get(userId);
+            UserRepresentation user = userResource.toRepresentation();
+            if (user == null || !StringUtils.hasText(user.getId())) {
+                throw new KeycloakRequestException("Keycloak user not found for id: " + userId);
+            }
+            user.setEnabled(enabled);
+            userResource.update(user);
+        } catch (NotFoundException ex) {
+            throw new KeycloakRequestException("Keycloak user not found for id: " + userId, ex);
+        } catch (WebApplicationException ex) {
+            throw new KeycloakRequestException("Keycloak user update failed: " + ex.getMessage(), ex);
+        }
     }
 
     public void updateUserNames(String userId, String firstName, String lastName) {

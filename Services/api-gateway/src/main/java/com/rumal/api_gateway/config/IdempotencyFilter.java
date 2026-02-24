@@ -141,11 +141,11 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
         IdempotencyEntry entry = deserializeEntry(rawEntry);
         if (entry == null) {
             return redisTemplate.delete(redisKey)
-                    .then(writeJsonError(exchange, HttpStatus.CONFLICT, "Idempotency key state was invalid. Retry with a new key."));
+                    .then(writeConflictError(exchange,"Idempotency key state was invalid. Retry with a new key."));
         }
 
         if (!requestHash.equals(entry.requestHash())) {
-            return writeJsonError(exchange, HttpStatus.CONFLICT, "Same idempotency key cannot be used with a different request payload");
+            return writeConflictError(exchange,"Same idempotency key cannot be used with a different request payload");
         }
 
         if (entry.isCompleted()) {
@@ -153,11 +153,11 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
         }
 
         if (entry.isPending()) {
-            return writeJsonError(exchange, HttpStatus.CONFLICT, "Request with the same idempotency key is still processing");
+            return writeConflictError(exchange,"Request with the same idempotency key is still processing");
         }
 
         return redisTemplate.delete(redisKey)
-                .then(writeJsonError(exchange, HttpStatus.CONFLICT, "Unknown idempotency state. Retry with a new key."));
+                .then(writeConflictError(exchange,"Unknown idempotency state. Retry with a new key."));
     }
 
     private Mono<Void> startPendingAndForward(
@@ -180,7 +180,7 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
                     return redisTemplate.opsForValue().get(redisKey)
                             .flatMap(existing -> handleExistingEntry(exchange, redisKey, existing, requestHash).thenReturn(Boolean.TRUE))
                             .switchIfEmpty(
-                                    Mono.defer(() -> writeJsonError(exchange, HttpStatus.CONFLICT, "Request is already in progress")
+                                    Mono.defer(() -> writeConflictError(exchange,"Request is already in progress")
                                             .thenReturn(Boolean.TRUE))
                             )
                             .then();
@@ -308,8 +308,8 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
         return exchange.getResponse().writeWith(Mono.just(dataBuffer));
     }
 
-    private Mono<Void> writeJsonError(ServerWebExchange exchange, HttpStatus status, String message) {
-        return writeJsonError(exchange, status, message, "CONFLICT");
+    private Mono<Void> writeConflictError(ServerWebExchange exchange, String message) {
+        return writeJsonError(exchange, HttpStatus.CONFLICT, message, "CONFLICT");
     }
 
     private Mono<Void> writeJsonError(ServerWebExchange exchange, HttpStatus status, String message, String idempotencyStatus) {
@@ -376,9 +376,6 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
 
     private boolean isProtectedMutation(ServerWebExchange exchange) {
         HttpMethod method = exchange.getRequest().getMethod();
-        if (method == null) {
-            return false;
-        }
         String path = exchange.getRequest().getPath().value();
 
         if (path.startsWith("/admin/")) {
@@ -387,11 +384,17 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
         if ("/orders/me".equals(path) && method == HttpMethod.POST) {
             return true;
         }
+        if (path.startsWith("/orders/me/") && path.endsWith("/cancel") && method == HttpMethod.POST) {
+            return true;
+        }
         if (("/customers/me/addresses".equals(path) || path.startsWith("/customers/me/addresses/"))
                 && (method == HttpMethod.POST || method == HttpMethod.PUT || method == HttpMethod.DELETE)) {
             return true;
         }
         if ("/customers/me".equals(path) && method == HttpMethod.PUT) {
+            return true;
+        }
+        if ("/customers/me/deactivate".equals(path) && method == HttpMethod.POST) {
             return true;
         }
         if ("/cart/me/checkout".equals(path) && method == HttpMethod.POST) {
@@ -405,7 +408,14 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
                 && (method == HttpMethod.POST || method == HttpMethod.PUT || method == HttpMethod.DELETE)) {
             return true;
         }
-        return false;
+        if (("/vendors/me/stop-orders".equals(path) || "/vendors/me/resume-orders".equals(path))
+                && method == HttpMethod.POST) {
+            return true;
+        }
+        if ("/vendors/me".equals(path) && method == HttpMethod.PUT) {
+            return true;
+        }
+        return "/vendors/me/payout-config".equals(path) && method == HttpMethod.PUT;
     }
 
     private String buildRedisKey(String scopeKey, String method, String path, String idempotencyKey) {

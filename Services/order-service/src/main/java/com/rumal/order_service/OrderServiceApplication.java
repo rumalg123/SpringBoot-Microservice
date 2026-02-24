@@ -7,10 +7,12 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.data.web.config.EnableSpringDataWebSupport;
 import org.springframework.data.web.config.EnableSpringDataWebSupport.PageSerializationMode;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
 @EnableConfigurationProperties(OrderAggregationProperties.class)
 @EnableCaching
+@EnableScheduling
 @EnableSpringDataWebSupport(pageSerializationMode = PageSerializationMode.VIA_DTO)
 public class OrderServiceApplication {
 

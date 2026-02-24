@@ -1,15 +1,24 @@
 package com.rumal.product_service.service;
 
 import com.rumal.product_service.client.VendorOperationalStateClient;
+import com.rumal.product_service.dto.BulkCategoryReassignRequest;
+import com.rumal.product_service.dto.BulkDeleteRequest;
+import com.rumal.product_service.dto.BulkOperationResult;
+import com.rumal.product_service.dto.BulkPriceUpdateRequest;
+import com.rumal.product_service.dto.CsvImportResult;
 import com.rumal.product_service.dto.ProductResponse;
+import com.rumal.product_service.dto.ProductSpecificationResponse;
 import com.rumal.product_service.dto.ProductSummaryResponse;
 import com.rumal.product_service.dto.VendorOperationalStateResponse;
 import com.rumal.product_service.dto.ProductVariationAttributeRequest;
 import com.rumal.product_service.dto.ProductVariationAttributeResponse;
 import com.rumal.product_service.dto.UpsertProductRequest;
+import com.rumal.product_service.dto.UpsertProductSpecificationRequest;
+import com.rumal.product_service.entity.ApprovalStatus;
 import com.rumal.product_service.entity.Category;
 import com.rumal.product_service.entity.ProductCatalogRead;
 import com.rumal.product_service.entity.Product;
+import com.rumal.product_service.entity.ProductSpecification;
 import com.rumal.product_service.entity.ProductType;
 import com.rumal.product_service.entity.ProductVariationAttribute;
 import com.rumal.product_service.exception.ResourceNotFoundException;
@@ -18,6 +27,7 @@ import com.rumal.product_service.exception.ValidationException;
 import com.rumal.product_service.repo.ProductCatalogReadRepository;
 import com.rumal.product_service.repo.CategoryRepository;
 import com.rumal.product_service.repo.ProductRepository;
+import com.rumal.product_service.repo.ProductSpecificationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
@@ -30,7 +40,12 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -54,6 +69,7 @@ public class ProductServiceImpl implements ProductService {
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
     private final ProductCatalogReadRepository productCatalogReadRepository;
+    private final ProductSpecificationRepository productSpecificationRepository;
     private final ProductCatalogReadModelProjector productCatalogReadModelProjector;
     private final VendorOperationalStateClient vendorOperationalStateClient;
     private final ProductCacheVersionService productCacheVersionService;
@@ -70,6 +86,7 @@ public class ProductServiceImpl implements ProductService {
         Product product = new Product();
         applyUpsertRequest(product, request, null, null);
         Product saved = productRepository.save(product);
+        saveSpecifications(saved, request.specifications());
         productCatalogReadModelProjector.upsert(saved);
         productCacheVersionService.bumpAllProductReadCaches();
         return toResponse(saved);
@@ -90,6 +107,7 @@ public class ProductServiceImpl implements ProductService {
         applyUpsertRequest(variation, request, parent.getId(), parent);
         validateVariationAgainstParent(parent, variation);
         Product saved = productRepository.save(variation);
+        saveSpecifications(saved, request.specifications());
         productCatalogReadModelProjector.upsert(saved);
         productCatalogReadModelProjector.refreshParentVariationFlag(parent.getId());
         productCacheVersionService.bumpAllProductReadCaches();
@@ -172,7 +190,7 @@ public class ProductServiceImpl implements ProductService {
     @Cacheable(
             cacheNames = "productsList",
             key = "@productCacheVersionService.productsListVersion() + '::' + T(com.rumal.product_service.service.ProductServiceImpl).listCacheKey(" +
-                    "#pageable,#q,#sku,#category,#mainCategory,#subCategory,#vendorId,#type,#minSellingPrice,#maxSellingPrice,#includeOrphanParents)"
+                    "#pageable,#q,#sku,#category,#mainCategory,#subCategory,#vendorId,#type,#minSellingPrice,#maxSellingPrice,#includeOrphanParents,#brand,#approvalStatus,#specs,#vendorName,#createdAfter,#createdBefore)"
     )
     public Page<ProductSummaryResponse> list(
             Pageable pageable,
@@ -185,7 +203,13 @@ public class ProductServiceImpl implements ProductService {
             ProductType type,
             BigDecimal minSellingPrice,
             BigDecimal maxSellingPrice,
-            boolean includeOrphanParents
+            boolean includeOrphanParents,
+            String brand,
+            ApprovalStatus approvalStatus,
+            Map<String, String> specs,
+            String vendorName,
+            Instant createdAfter,
+            Instant createdBefore
     ) {
         Specification<ProductCatalogRead> spec = buildReadFilterSpec(
                 q,
@@ -197,10 +221,25 @@ public class ProductServiceImpl implements ProductService {
                 type,
                 minSellingPrice,
                 maxSellingPrice,
-                includeOrphanParents
+                includeOrphanParents,
+                brand,
+                approvalStatus,
+                vendorName,
+                createdAfter,
+                createdBefore
         )
                 .and((root, query, cb) -> cb.isFalse(root.get("deleted")))
-                .and((root, query, cb) -> cb.isTrue(root.get("active")));
+                .and((root, query, cb) -> cb.isTrue(root.get("active")))
+                .and((root, query, cb) -> cb.equal(root.get("approvalStatus"), ApprovalStatus.APPROVED));
+
+        if (specs != null && !specs.isEmpty()) {
+            Set<UUID> matchingProductIds = resolveSpecFilteredProductIds(specs);
+            if (matchingProductIds.isEmpty()) {
+                return Page.empty(pageable);
+            }
+            spec = spec.and((root, query, cb) -> root.get("id").in(matchingProductIds));
+        }
+
         Page<ProductSummaryResponse> page = productCatalogReadRepository.findAll(spec, pageable).map(this::toSummaryResponse);
         return filterHiddenVendorProducts(page, pageable);
     }
@@ -209,7 +248,7 @@ public class ProductServiceImpl implements ProductService {
     @Cacheable(
             cacheNames = "deletedProductsList",
             key = "@productCacheVersionService.deletedProductsListVersion() + '::' + T(com.rumal.product_service.service.ProductServiceImpl).deletedListCacheKey(" +
-                    "#pageable,#q,#sku,#category,#mainCategory,#subCategory,#vendorId,#type,#minSellingPrice,#maxSellingPrice)"
+                    "#pageable,#q,#sku,#category,#mainCategory,#subCategory,#vendorId,#type,#minSellingPrice,#maxSellingPrice,#brand)"
     )
     public Page<ProductSummaryResponse> listDeleted(
             Pageable pageable,
@@ -221,7 +260,8 @@ public class ProductServiceImpl implements ProductService {
             UUID vendorId,
             ProductType type,
             BigDecimal minSellingPrice,
-            BigDecimal maxSellingPrice
+            BigDecimal maxSellingPrice,
+            String brand
     ) {
         Specification<ProductCatalogRead> spec = buildReadFilterSpec(
                 q,
@@ -233,7 +273,12 @@ public class ProductServiceImpl implements ProductService {
                 type,
                 minSellingPrice,
                 maxSellingPrice,
-                true
+                true,
+                brand,
+                null,
+                null,
+                null,
+                null
         )
                 .and((root, query, cb) -> cb.isTrue(root.get("deleted")));
         return productCatalogReadRepository.findAll(spec, pageable).map(this::toSummaryResponse);
@@ -259,6 +304,7 @@ public class ProductServiceImpl implements ProductService {
             validateVariationAgainstParent(parent, product);
         }
         Product saved = productRepository.save(product);
+        saveSpecifications(saved, request.specifications());
         productCatalogReadModelProjector.upsert(saved);
         if (parentId != null) {
             productCatalogReadModelProjector.refreshParentVariationFlag(parentId);
@@ -304,6 +350,13 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 10)
+    public void incrementViewCount(UUID productId) {
+        productRepository.incrementViewCount(productId);
+        productCatalogReadRepository.incrementViewCount(productId);
+    }
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 10)
     public void evictPublicCachesForVendorVisibilityChange(UUID vendorId) {
         // Vendor visibility state is checked at read time, but list/detail caches must be evicted
         // when vendor state changes so storefront hides/shows products immediately.
@@ -318,6 +371,317 @@ public class ProductServiceImpl implements ProductService {
             productCacheVersionService.bumpAllProductReadCaches();
         }
         return count;
+    }
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    public ProductResponse submitForReview(UUID productId) {
+        Product product = getActiveEntityById(productId);
+        ApprovalStatus current = product.getApprovalStatus();
+        if (current != ApprovalStatus.DRAFT && current != ApprovalStatus.REJECTED) {
+            throw new ValidationException("Only DRAFT or REJECTED products can be submitted for review");
+        }
+        product.setApprovalStatus(ApprovalStatus.PENDING_REVIEW);
+        product.setRejectionReason(null);
+        Product saved = productRepository.save(product);
+        productCatalogReadModelProjector.upsert(saved);
+        productCacheVersionService.bumpAllProductReadCaches();
+        return toResponse(saved);
+    }
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    public ProductResponse approveProduct(UUID productId) {
+        Product product = getActiveEntityById(productId);
+        if (product.getApprovalStatus() != ApprovalStatus.PENDING_REVIEW) {
+            throw new ValidationException("Only PENDING_REVIEW products can be approved");
+        }
+        product.setApprovalStatus(ApprovalStatus.APPROVED);
+        Product saved = productRepository.save(product);
+        productCatalogReadModelProjector.upsert(saved);
+        productCacheVersionService.bumpAllProductReadCaches();
+        return toResponse(saved);
+    }
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    public ProductResponse rejectProduct(UUID productId, String reason) {
+        Product product = getActiveEntityById(productId);
+        if (product.getApprovalStatus() != ApprovalStatus.PENDING_REVIEW) {
+            throw new ValidationException("Only PENDING_REVIEW products can be rejected");
+        }
+        product.setApprovalStatus(ApprovalStatus.REJECTED);
+        product.setRejectionReason(reason);
+        Product saved = productRepository.save(product);
+        productCatalogReadModelProjector.upsert(saved);
+        productCacheVersionService.bumpAllProductReadCaches();
+        return toResponse(saved);
+    }
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 30)
+    public BulkOperationResult bulkDelete(BulkDeleteRequest request) {
+        List<UUID> ids = request.productIds();
+        int success = 0;
+        List<String> errors = new ArrayList<>();
+        for (UUID id : ids) {
+            try {
+                Product product = productRepository.findById(id)
+                        .filter(p -> !p.isDeleted())
+                        .orElse(null);
+                if (product == null) {
+                    errors.add("Product not found or already deleted: " + id);
+                    continue;
+                }
+                product.setDeleted(true);
+                product.setDeletedAt(Instant.now());
+                product.setActive(false);
+                Product saved = productRepository.save(product);
+                productCatalogReadModelProjector.upsert(saved);
+                if (saved.getParentProductId() != null) {
+                    productCatalogReadModelProjector.refreshParentVariationFlag(saved.getParentProductId());
+                }
+                success++;
+            } catch (Exception ex) {
+                errors.add("Failed to delete product " + id + ": " + ex.getMessage());
+            }
+        }
+        if (success > 0) {
+            productCacheVersionService.bumpAllProductReadCaches();
+        }
+        return new BulkOperationResult(ids.size(), success, ids.size() - success, errors);
+    }
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 30)
+    public BulkOperationResult bulkPriceUpdate(BulkPriceUpdateRequest request) {
+        List<BulkPriceUpdateRequest.PriceUpdateItem> items = request.items();
+        int success = 0;
+        List<String> errors = new ArrayList<>();
+        for (BulkPriceUpdateRequest.PriceUpdateItem item : items) {
+            try {
+                Product product = productRepository.findById(item.productId())
+                        .filter(p -> !p.isDeleted())
+                        .orElse(null);
+                if (product == null) {
+                    errors.add("Product not found: " + item.productId());
+                    continue;
+                }
+                if (item.discountedPrice() != null && item.discountedPrice().compareTo(BigDecimal.ZERO) <= 0) {
+                    errors.add("discountedPrice must be greater than 0 when set for product " + item.productId());
+                    continue;
+                }
+                if (item.discountedPrice() != null && item.discountedPrice().compareTo(item.regularPrice()) > 0) {
+                    errors.add("discountedPrice cannot be greater than regularPrice for product " + item.productId());
+                    continue;
+                }
+                product.setRegularPrice(item.regularPrice());
+                product.setDiscountedPrice(item.discountedPrice());
+                Product saved = productRepository.save(product);
+                productCatalogReadModelProjector.upsert(saved);
+                success++;
+            } catch (Exception ex) {
+                errors.add("Failed to update price for product " + item.productId() + ": " + ex.getMessage());
+            }
+        }
+        if (success > 0) {
+            productCacheVersionService.bumpAllProductReadCaches();
+        }
+        return new BulkOperationResult(items.size(), success, items.size() - success, errors);
+    }
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 30)
+    public BulkOperationResult bulkCategoryReassign(BulkCategoryReassignRequest request) {
+        List<UUID> ids = request.productIds();
+        UUID targetCategoryId = request.targetCategoryId();
+        Category targetCategory = categoryRepository.findById(targetCategoryId)
+                .filter(c -> !c.isDeleted())
+                .orElse(null);
+        if (targetCategory == null) {
+            return new BulkOperationResult(ids.size(), 0, ids.size(), List.of("Target category not found or deleted: " + targetCategoryId));
+        }
+
+        int success = 0;
+        List<String> errors = new ArrayList<>();
+        for (UUID id : ids) {
+            try {
+                Product product = productRepository.findById(id)
+                        .filter(p -> !p.isDeleted())
+                        .orElse(null);
+                if (product == null) {
+                    errors.add("Product not found: " + id);
+                    continue;
+                }
+                Set<Category> updatedCategories = new java.util.LinkedHashSet<>(product.getCategories());
+                updatedCategories.add(targetCategory);
+                product.setCategories(updatedCategories);
+                Product saved = productRepository.save(product);
+                productCatalogReadModelProjector.upsert(saved);
+                success++;
+            } catch (Exception ex) {
+                errors.add("Failed to reassign category for product " + id + ": " + ex.getMessage());
+            }
+        }
+        if (success > 0) {
+            productCacheVersionService.bumpAllProductReadCaches();
+        }
+        return new BulkOperationResult(ids.size(), success, ids.size() - success, errors);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public byte[] exportProductsCsv() {
+        List<Product> products = productRepository.findAll();
+        StringBuilder sb = new StringBuilder();
+        sb.append("id,name,description,regularPrice,discountedPrice,sku,vendorId,productType,digital,images,active\n");
+        for (Product p : products) {
+            if (p.isDeleted()) {
+                continue;
+            }
+            sb.append(csvEscape(p.getId().toString())).append(',');
+            sb.append(csvEscape(p.getName())).append(',');
+            sb.append(csvEscape(p.getDescription())).append(',');
+            sb.append(p.getRegularPrice()).append(',');
+            sb.append(p.getDiscountedPrice() != null ? p.getDiscountedPrice() : "").append(',');
+            sb.append(csvEscape(p.getSku())).append(',');
+            sb.append(p.getVendorId()).append(',');
+            sb.append(p.getProductType().name()).append(',');
+            sb.append(p.isDigital()).append(',');
+            sb.append(csvEscape(String.join(";", p.getImages()))).append(',');
+            sb.append(p.isActive());
+            sb.append('\n');
+        }
+        return sb.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 60)
+    public CsvImportResult importProductsCsv(InputStream csvInputStream) {
+        List<String> errors = new ArrayList<>();
+        int totalRows = 0;
+        int successCount = 0;
+
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(csvInputStream, StandardCharsets.UTF_8))) {
+            String headerLine = reader.readLine();
+            if (headerLine == null || headerLine.isBlank()) {
+                return new CsvImportResult(0, 0, 0, List.of("CSV file is empty or missing header row"));
+            }
+
+            String line;
+            while ((line = reader.readLine()) != null) {
+                totalRows++;
+                if (line.isBlank()) {
+                    continue;
+                }
+                try {
+                    String[] fields = parseCsvLine(line);
+                    if (fields.length < 8) {
+                        errors.add("Row " + totalRows + ": insufficient columns (expected at least 8, got " + fields.length + ")");
+                        continue;
+                    }
+                    String name = fields[0].trim();
+                    String description = fields[1].trim();
+                    String regularPriceStr = fields[2].trim();
+                    String discountedPriceStr = fields[3].trim();
+                    String sku = fields[4].trim();
+                    String vendorIdStr = fields[5].trim();
+                    String productTypeStr = fields[6].trim();
+                    String digitalStr = fields.length > 7 ? fields[7].trim() : "false";
+                    String imagesStr = fields.length > 8 ? fields[8].trim() : "";
+                    String activeStr = fields.length > 9 ? fields[9].trim() : "true";
+
+                    if (name.isEmpty() || description.isEmpty() || regularPriceStr.isEmpty() || sku.isEmpty()) {
+                        errors.add("Row " + totalRows + ": name, description, regularPrice, and sku are required");
+                        continue;
+                    }
+
+                    BigDecimal regularPrice = new BigDecimal(regularPriceStr);
+                    BigDecimal discountedPrice = discountedPriceStr.isEmpty() ? null : new BigDecimal(discountedPriceStr);
+                    UUID vendorId = vendorIdStr.isEmpty() ? null : UUID.fromString(vendorIdStr);
+                    ProductType productType = ProductType.valueOf(productTypeStr.toUpperCase(Locale.ROOT));
+                    boolean digital = Boolean.parseBoolean(digitalStr);
+                    List<String> images = imagesStr.isEmpty() ? List.of() : List.of(imagesStr.split(";"));
+                    boolean active = Boolean.parseBoolean(activeStr);
+
+                    if (images.isEmpty()) {
+                        errors.add("Row " + totalRows + ": at least one image is required");
+                        continue;
+                    }
+
+                    Product product = new Product();
+                    product.setName(name);
+                    product.setSlug(resolveUniqueSlug(SlugUtils.toSlug(name), null, true));
+                    product.setShortDescription(name);
+                    product.setDescription(description);
+                    product.setRegularPrice(regularPrice);
+                    product.setDiscountedPrice(discountedPrice);
+                    product.setSku(sku);
+                    product.setVendorId(vendorId != null ? vendorId : ADMIN_VENDOR_UUID);
+                    product.setProductType(productType);
+                    product.setDigital(digital);
+                    product.setImages(new ArrayList<>(images));
+                    product.setThumbnailUrl(generateThumbnailUrl(images));
+                    product.setActive(active);
+                    product.setApprovalStatus(ApprovalStatus.DRAFT);
+
+                    Product saved = productRepository.save(product);
+                    productCatalogReadModelProjector.upsert(saved);
+                    successCount++;
+                } catch (Exception ex) {
+                    errors.add("Row " + totalRows + ": " + ex.getMessage());
+                }
+            }
+        } catch (IOException ex) {
+            errors.add("Failed to read CSV file: " + ex.getMessage());
+        }
+
+        if (successCount > 0) {
+            productCacheVersionService.bumpAllProductReadCaches();
+        }
+        return new CsvImportResult(totalRows, successCount, totalRows - successCount, errors);
+    }
+
+    private String csvEscape(String value) {
+        if (value == null) {
+            return "";
+        }
+        if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
+            return "\"" + value.replace("\"", "\"\"") + "\"";
+        }
+        return value;
+    }
+
+    private String[] parseCsvLine(String line) {
+        List<String> fields = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        boolean inQuotes = false;
+        for (int i = 0; i < line.length(); i++) {
+            char c = line.charAt(i);
+            if (inQuotes) {
+                if (c == '"') {
+                    if (i + 1 < line.length() && line.charAt(i + 1) == '"') {
+                        current.append('"');
+                        i++;
+                    } else {
+                        inQuotes = false;
+                    }
+                } else {
+                    current.append(c);
+                }
+            } else {
+                if (c == '"') {
+                    inQuotes = true;
+                } else if (c == ',') {
+                    fields.add(current.toString());
+                    current.setLength(0);
+                } else {
+                    current.append(c);
+                }
+            }
+        }
+        fields.add(current.toString());
+        return fields.toArray(new String[0]);
     }
 
     private Product getActiveEntityById(UUID id) {
@@ -358,7 +722,12 @@ public class ProductServiceImpl implements ProductService {
             ProductType type,
             BigDecimal minSellingPrice,
             BigDecimal maxSellingPrice,
-            boolean includeOrphanParents
+            boolean includeOrphanParents,
+            String brand,
+            ApprovalStatus approvalStatus,
+            String vendorName,
+            Instant createdAfter,
+            Instant createdBefore
     ) {
         Specification<ProductCatalogRead> spec = (root, query, cb) -> cb.conjunction();
 
@@ -367,7 +736,8 @@ public class ProductServiceImpl implements ProductService {
             spec = spec.and((root, query, cb) -> cb.or(
                     cb.like(root.get("nameLc"), normalized),
                     cb.like(root.get("shortDescriptionLc"), normalized),
-                    cb.like(root.get("descriptionLc"), normalized)
+                    cb.like(root.get("descriptionLc"), normalized),
+                    cb.like(root.get("brandNameLc"), normalized)
             ));
         }
         if (StringUtils.hasText(sku)) {
@@ -406,6 +776,25 @@ public class ProductServiceImpl implements ProductService {
         if (maxSellingPrice != null) {
             spec = spec.and((root, query, cb) -> cb.lessThanOrEqualTo(root.get("sellingPrice"), maxSellingPrice));
         }
+        if (StringUtils.hasText(brand)) {
+            String normalizedBrand = brand.trim().toLowerCase(Locale.ROOT);
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("brandNameLc"), normalizedBrand));
+        }
+        if (approvalStatus != null) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("approvalStatus"), approvalStatus));
+        }
+        // Gap 3: Vendor name search (ILIKE via lowercase)
+        if (StringUtils.hasText(vendorName)) {
+            String normalizedVendorName = "%" + vendorName.trim().toLowerCase(Locale.ROOT) + "%";
+            spec = spec.and((root, query, cb) -> cb.like(root.get("vendorNameLc"), normalizedVendorName));
+        }
+        // Gap 6: Date range filter on products
+        if (createdAfter != null) {
+            spec = spec.and((root, query, cb) -> cb.greaterThanOrEqualTo(root.get("createdAt"), createdAfter));
+        }
+        if (createdBefore != null) {
+            spec = spec.and((root, query, cb) -> cb.lessThanOrEqualTo(root.get("createdAt"), createdBefore));
+        }
 
         return spec;
     }
@@ -435,6 +824,7 @@ public class ProductServiceImpl implements ProductService {
         product.setSlug(resolvedSlug);
         product.setShortDescription(normalizedShortDescription);
         product.setDescription(normalizedDescription);
+        product.setBrandName(request.brandName() != null ? request.brandName().trim() : null);
         product.setImages(normalizedImages);
         product.setRegularPrice(request.regularPrice());
         product.setDiscountedPrice(request.discountedPrice());
@@ -445,8 +835,85 @@ public class ProductServiceImpl implements ProductService {
         product.setVariations(normalizedVariations);
         product.setSku(normalizedSku);
         product.setActive(request.active() == null || request.active());
+        product.setWeightGrams(request.weightGrams());
+        product.setLengthCm(request.lengthCm());
+        product.setWidthCm(request.widthCm());
+        product.setHeightCm(request.heightCm());
+        product.setMetaTitle(request.metaTitle() != null ? request.metaTitle().trim() : null);
+        product.setMetaDescription(request.metaDescription() != null ? request.metaDescription().trim() : null);
+        boolean isDigital = request.digital() != null && request.digital();
+        product.setDigital(isDigital);
+        if (isDigital) {
+            product.setWeightGrams(null);
+            product.setLengthCm(null);
+            product.setWidthCm(null);
+            product.setHeightCm(null);
+        }
+        product.setBundledProductIds(request.bundledProductIds() != null ? new ArrayList<>(request.bundledProductIds()) : new ArrayList<>());
+        product.setThumbnailUrl(generateThumbnailUrl(normalizedImages));
         product.setDeleted(false);
         product.setDeletedAt(null);
+    }
+
+    private String generateThumbnailUrl(List<String> images) {
+        if (images == null || images.isEmpty()) {
+            return null;
+        }
+        String firstImage = images.getFirst();
+        int lastDot = firstImage.lastIndexOf('.');
+        if (lastDot <= 0) {
+            return firstImage + "-thumb";
+        }
+        return firstImage.substring(0, lastDot) + "-thumb" + firstImage.substring(lastDot);
+    }
+
+    private void saveSpecifications(Product product, List<UpsertProductSpecificationRequest> specifications) {
+        productSpecificationRepository.deleteByProductId(product.getId());
+        if (specifications == null || specifications.isEmpty()) {
+            return;
+        }
+        java.util.Set<String> keys = new java.util.HashSet<>();
+        List<ProductSpecification> entities = new ArrayList<>();
+        for (int i = 0; i < specifications.size(); i++) {
+            UpsertProductSpecificationRequest spec = specifications.get(i);
+            String normalizedKey = spec.key().trim().toLowerCase(Locale.ROOT);
+            if (normalizedKey.isEmpty()) {
+                throw new ValidationException("specification key is required");
+            }
+            if (!keys.add(normalizedKey)) {
+                throw new ValidationException("duplicate specification key: " + normalizedKey);
+            }
+            String value = spec.value().trim();
+            if (value.isEmpty()) {
+                throw new ValidationException("specification value is required for key: " + normalizedKey);
+            }
+            entities.add(ProductSpecification.builder()
+                    .product(product)
+                    .attributeKey(normalizedKey)
+                    .attributeValue(value)
+                    .displayOrder(spec.displayOrder() != null ? spec.displayOrder() : i)
+                    .build());
+        }
+        productSpecificationRepository.saveAll(entities);
+    }
+
+    private Set<UUID> resolveSpecFilteredProductIds(Map<String, String> specs) {
+        Set<UUID> result = null;
+        for (Map.Entry<String, String> entry : specs.entrySet()) {
+            String key = entry.getKey().trim().toLowerCase(Locale.ROOT);
+            String value = entry.getValue().trim();
+            Set<UUID> ids;
+            if (result == null) {
+                ids = productRepository.findProductIdsBySpecification(key, value);
+            } else {
+                ids = productRepository.findProductIdsBySpecificationAndProductIdIn(key, value, result);
+            }
+            result = ids;
+            if (result.isEmpty()) {
+                return result;
+            }
+        }
+        return result != null ? result : Set.of();
     }
 
     public static String listCacheKey(
@@ -460,8 +927,18 @@ public class ProductServiceImpl implements ProductService {
             ProductType type,
             BigDecimal minSellingPrice,
             BigDecimal maxSellingPrice,
-            boolean includeOrphanParents
+            boolean includeOrphanParents,
+            String brand,
+            ApprovalStatus approvalStatus,
+            Map<String, String> specs,
+            String vendorName,
+            Instant createdAfter,
+            Instant createdBefore
     ) {
+        String specsKey = specs == null || specs.isEmpty() ? "" : specs.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(e -> e.getKey() + "=" + e.getValue())
+                .collect(java.util.stream.Collectors.joining(","));
         return pageableCacheKey(pageable)
                 + "::q=" + normalizeCacheFilter(q)
                 + "::sku=" + normalizeCacheFilter(sku)
@@ -472,7 +949,13 @@ public class ProductServiceImpl implements ProductService {
                 + "::type=" + (type == null ? "" : type.name())
                 + "::minPrice=" + decimalKey(minSellingPrice)
                 + "::maxPrice=" + decimalKey(maxSellingPrice)
-                + "::includeOrphanParents=" + includeOrphanParents;
+                + "::includeOrphanParents=" + includeOrphanParents
+                + "::brand=" + normalizeCacheFilter(brand)
+                + "::approvalStatus=" + (approvalStatus == null ? "" : approvalStatus.name())
+                + "::specs=" + specsKey
+                + "::vendorName=" + normalizeCacheFilter(vendorName)
+                + "::createdAfter=" + (createdAfter == null ? "" : createdAfter)
+                + "::createdBefore=" + (createdBefore == null ? "" : createdBefore);
     }
 
     public static String deletedListCacheKey(
@@ -485,7 +968,8 @@ public class ProductServiceImpl implements ProductService {
             UUID vendorId,
             ProductType type,
             BigDecimal minSellingPrice,
-            BigDecimal maxSellingPrice
+            BigDecimal maxSellingPrice,
+            String brand
     ) {
         return "deleted::" + listCacheKey(
                 pageable,
@@ -498,7 +982,13 @@ public class ProductServiceImpl implements ProductService {
                 type,
                 minSellingPrice,
                 maxSellingPrice,
-                true
+                true,
+                brand,
+                null,
+                null,
+                null,
+                null,
+                null
         );
     }
 
@@ -520,8 +1010,8 @@ public class ProductServiceImpl implements ProductService {
     }
 
     private List<String> normalizeImages(List<String> images) {
-        if (images.size() > 5) {
-            throw new ValidationException("A product can have at most 5 images");
+        if (images.size() > 10) {
+            throw new ValidationException("A product can have at most 10 images");
         }
         List<String> normalized = new ArrayList<>();
         for (String image : images) {
@@ -616,6 +1106,10 @@ public class ProductServiceImpl implements ProductService {
         if (discountedPrice == null) {
             return;
         }
+        // Gap 7: Zero discounted price guard
+        if (discountedPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ValidationException("discountedPrice must be greater than 0 when set");
+        }
         if (discountedPrice.compareTo(regularPrice) > 0) {
             throw new ValidationException("discountedPrice cannot be greater than regularPrice");
         }
@@ -624,6 +1118,9 @@ public class ProductServiceImpl implements ProductService {
     private void validateProductTypeAndVariations(ProductType productType, List<ProductVariationAttribute> variations) {
         if (productType == ProductType.SINGLE && !variations.isEmpty()) {
             throw new ValidationException("variations are not allowed when productType=SINGLE");
+        }
+        if (productType == ProductType.DIGITAL && !variations.isEmpty()) {
+            throw new ValidationException("variations are not allowed when productType=DIGITAL");
         }
         if (productType == ProductType.PARENT && variations.isEmpty()) {
             throw new ValidationException("variation attribute names are required when productType=PARENT");
@@ -820,6 +1317,11 @@ public class ProductServiceImpl implements ProductService {
     }
 
     private ProductResponse toResponse(Product p) {
+        List<ProductSpecificationResponse> specifications = productSpecificationRepository
+                .findByProductIdOrderByDisplayOrderAsc(p.getId())
+                .stream()
+                .map(s -> new ProductSpecificationResponse(s.getAttributeKey(), s.getAttributeValue(), s.getDisplayOrder()))
+                .toList();
         return new ProductResponse(
                 p.getId(),
                 p.getParentProductId(),
@@ -827,7 +1329,9 @@ public class ProductServiceImpl implements ProductService {
                 p.getSlug(),
                 p.getShortDescription(),
                 p.getDescription(),
+                p.getBrandName(),
                 List.copyOf(p.getImages()),
+                p.getThumbnailUrl(),
                 p.getRegularPrice(),
                 p.getDiscountedPrice(),
                 resolveSellingPrice(p),
@@ -838,10 +1342,23 @@ public class ProductServiceImpl implements ProductService {
                 resolveSubCategorySlugs(p.getCategories()),
                 p.getCategories().stream().map(Category::getName).collect(java.util.stream.Collectors.toSet()),
                 p.getProductType(),
+                p.isDigital(),
                 p.getVariations().stream()
                         .map(v -> new ProductVariationAttributeResponse(v.getName(), v.getValue()))
                         .toList(),
                 p.getSku(),
+                p.getWeightGrams(),
+                p.getLengthCm(),
+                p.getWidthCm(),
+                p.getHeightCm(),
+                p.getMetaTitle(),
+                p.getMetaDescription(),
+                p.getApprovalStatus(),
+                p.getRejectionReason(),
+                specifications,
+                p.getBundledProductIds() != null ? List.copyOf(p.getBundledProductIds()) : List.of(),
+                p.getViewCount(),
+                p.getSoldCount(),
                 p.isActive(),
                 p.isDeleted(),
                 p.getDeletedAt(),
@@ -856,6 +1373,7 @@ public class ProductServiceImpl implements ProductService {
                 row.getSlug(),
                 row.getName(),
                 row.getShortDescription(),
+                row.getBrandName(),
                 row.getMainImage(),
                 row.getRegularPrice(),
                 row.getDiscountedPrice(),
@@ -865,7 +1383,10 @@ public class ProductServiceImpl implements ProductService {
                 decodeTokenSet(row.getSubCategoryTokens()),
                 decodeTokenSet(row.getCategoryTokens()),
                 row.getProductType(),
+                row.getApprovalStatus(),
                 row.getVendorId(),
+                row.getViewCount(),
+                row.getSoldCount(),
                 row.isActive(),
                 List.of()
         );
@@ -878,6 +1399,7 @@ public class ProductServiceImpl implements ProductService {
                 p.getSlug(),
                 p.getName(),
                 p.getShortDescription(),
+                p.getBrandName(),
                 mainImage,
                 p.getRegularPrice(),
                 p.getDiscountedPrice(),
@@ -887,7 +1409,10 @@ public class ProductServiceImpl implements ProductService {
                 resolveSubCategoryNames(p.getCategories()),
                 p.getCategories().stream().map(Category::getName).collect(java.util.stream.Collectors.toSet()),
                 p.getProductType(),
+                p.getApprovalStatus(),
                 p.getVendorId(),
+                p.getViewCount(),
+                p.getSoldCount(),
                 p.isActive(),
                 p.getVariations().stream()
                         .map(v -> new ProductVariationAttributeResponse(v.getName(), v.getValue()))

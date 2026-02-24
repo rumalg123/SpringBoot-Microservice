@@ -1,10 +1,12 @@
 package com.rumal.product_service.dto;
 
 import com.rumal.product_service.entity.CategoryType;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
+import java.util.List;
 import java.util.UUID;
 
 public record UpsertCategoryRequest(
@@ -18,5 +20,16 @@ public record UpsertCategoryRequest(
         @NotNull(message = "type is required")
         CategoryType type,
 
-        UUID parentCategoryId
+        UUID parentCategoryId,
+
+        @Size(max = 1000, message = "description must be at most 1000 characters")
+        String description,
+
+        @Size(max = 500, message = "imageUrl must be at most 500 characters")
+        String imageUrl,
+
+        Integer displayOrder,
+
+        @Valid
+        List<UpsertCategoryAttributeRequest> attributes
 ) {}

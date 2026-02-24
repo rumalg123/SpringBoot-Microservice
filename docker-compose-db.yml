@@ -151,6 +151,20 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
 
+  admin-db:
+    image: postgres:16-alpine
+    environment:
+      TZ: Asia/Colombo
+      POSTGRES_DB: admin_db
+      POSTGRES_USER: admin_user
+      POSTGRES_PASSWORD: admin_pass
+    ports:
+      - "5442:5432"
+    volumes:
+      - admin-db-data:/var/lib/postgresql/data
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+
   customer-service:
     build:
       context: ./Services/customer-service
@@ -322,6 +336,7 @@ services:
       context: ./Services/admin-service
     depends_on:
       - discovery-server
+      - admin-db
       - access-service
     env_file:
       - ./env/common.env
@@ -381,3 +396,4 @@ volumes:
   vendor-db-data:
   access-db-data:
   promotion-db-data:
+  admin-db-data:

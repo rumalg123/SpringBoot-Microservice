@@ -50,7 +50,8 @@ public class SampleAccessDataSeeder implements ApplicationRunner {
                 "orders.staff@example.com",
                 "Platform Orders Staff",
                 Set.of(PlatformPermission.ORDERS_READ, PlatformPermission.ORDERS_MANAGE),
-                true
+                true,
+                null, null, null, null
         ));
 
         accessService.createPlatformStaff(new UpsertPlatformStaffAccessRequest(
@@ -58,7 +59,8 @@ public class SampleAccessDataSeeder implements ApplicationRunner {
                 "catalog.staff@example.com",
                 "Platform Catalog Staff",
                 Set.of(PlatformPermission.PRODUCTS_MANAGE, PlatformPermission.CATEGORIES_MANAGE),
-                true
+                true,
+                null, null, null, null
         ));
 
         accessService.createVendorStaff(new UpsertVendorStaffAccessRequest(
@@ -67,7 +69,8 @@ public class SampleAccessDataSeeder implements ApplicationRunner {
                 "catalog@novatech.example",
                 "Nova Catalog Staff",
                 Set.of(VendorPermission.PRODUCTS_MANAGE),
-                true
+                true,
+                null, null, null
         ));
 
         accessService.createVendorStaff(new UpsertVendorStaffAccessRequest(
@@ -76,7 +79,8 @@ public class SampleAccessDataSeeder implements ApplicationRunner {
                 "orders@urbanstyle.example",
                 "Urban Order Staff",
                 Set.of(VendorPermission.ORDERS_READ, VendorPermission.ORDERS_MANAGE),
-                true
+                true,
+                null, null, null
         ));
 
         log.info("Sample access seed complete: platformStaff={}, vendorStaff={}",

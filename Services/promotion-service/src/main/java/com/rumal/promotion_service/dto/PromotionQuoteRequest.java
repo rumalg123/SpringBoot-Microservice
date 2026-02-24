@@ -13,6 +13,7 @@ public record PromotionQuoteRequest(
         @NotEmpty List<@Valid PromotionQuoteLineRequest> lines,
         @DecimalMin(value = "0.00", message = "shippingAmount cannot be negative") BigDecimal shippingAmount,
         UUID customerId,
+        String customerSegment,
         String couponCode,
         String countryCode,
         Instant pricingAt

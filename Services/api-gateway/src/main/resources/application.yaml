@@ -31,12 +31,21 @@ spring:
                   - GET
                   - POST
                   - PUT
+                  - PATCH
                   - DELETE
                   - OPTIONS
                 allowed-headers:
                   - "*"
                 exposed-headers:
                   - Location
+                  - X-RateLimit-Remaining
+                  - X-RateLimit-Burst-Capacity
+                  - X-RateLimit-Replenish-Rate
+                  - X-RateLimit-Requested-Tokens
+                  - X-RateLimit-Policy
+                  - Retry-After
+                  - X-Request-Id
+                  - X-Idempotency-Status
                 max-age: 3600
                 allow-credentials: false
           routes:
@@ -44,86 +53,263 @@ spring:
               uri: lb://customer-service
               predicates:
                 - Path=/customers/register,/customers/register-identity
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: customerService
+                    fallbackUri: forward:/fallback/unavailable
             - id: customer-me
               uri: lb://customer-service
               predicates:
                 - Path=/customers/me,/customers/me/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: customerService
+                    fallbackUri: forward:/fallback/unavailable
+            - id: vendor-order-me
+              uri: lb://order-service
+              predicates:
+                - Path=/orders/vendor/me,/orders/vendor/me/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: orderService
+                    fallbackUri: forward:/fallback/unavailable
             - id: order-me
               uri: lb://order-service
               predicates:
                 - Path=/orders/me,/orders/me/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: orderService
+                    fallbackUri: forward:/fallback/unavailable
             - id: cart-me
               uri: lb://cart-service
               predicates:
                 - Path=/cart/me,/cart/me/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: cartService
+                    fallbackUri: forward:/fallback/unavailable
+            - id: wishlist-shared
+              uri: lb://wishlist-service
+              predicates:
+                - Path=/wishlist/shared,/wishlist/shared/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: wishlistService
+                    fallbackUri: forward:/fallback/unavailable
             - id: wishlist-me
               uri: lb://wishlist-service
               predicates:
                 - Path=/wishlist/me,/wishlist/me/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: wishlistService
+                    fallbackUri: forward:/fallback/unavailable
+            - id: admin-dashboard
+              uri: lb://admin-service
+              predicates:
+                - Path=/admin/dashboard,/admin/dashboard/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: adminService
+                    fallbackUri: forward:/fallback/unavailable
+            - id: admin-audit-log
+              uri: lb://admin-service
+              predicates:
+                - Path=/admin/audit-log,/admin/audit-log/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: adminService
+                    fallbackUri: forward:/fallback/unavailable
+            - id: admin-system
+              uri: lb://admin-service
+              predicates:
+                - Path=/admin/system,/admin/system/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: adminService
+                    fallbackUri: forward:/fallback/unavailable
             - id: admin-orders
               uri: lb://admin-service
               predicates:
                 - Path=/admin/orders,/admin/orders/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: adminService
+                    fallbackUri: forward:/fallback/unavailable
             - id: admin-vendor-orders
               uri: lb://admin-service
               predicates:
                 - Path=/admin/vendor-orders,/admin/vendor-orders/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: adminService
+                    fallbackUri: forward:/fallback/unavailable
             - id: admin-products
               uri: lb://product-service
               predicates:
                 - Path=/admin/products,/admin/products/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: productService
+                    fallbackUri: forward:/fallback/unavailable
             - id: admin-categories
               uri: lb://product-service
               predicates:
                 - Path=/admin/categories,/admin/categories/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: productService
+                    fallbackUri: forward:/fallback/unavailable
             - id: admin-posters
               uri: lb://admin-service
               predicates:
                 - Path=/admin/posters,/admin/posters/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: adminService
+                    fallbackUri: forward:/fallback/unavailable
             - id: admin-vendors
               uri: lb://admin-service
               predicates:
                 - Path=/admin/vendors,/admin/vendors/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: adminService
+                    fallbackUri: forward:/fallback/unavailable
             - id: admin-platform-staff
               uri: lb://admin-service
               predicates:
                 - Path=/admin/platform-staff,/admin/platform-staff/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: adminService
+                    fallbackUri: forward:/fallback/unavailable
             - id: admin-vendor-staff
               uri: lb://admin-service
               predicates:
                 - Path=/admin/vendor-staff,/admin/vendor-staff/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: adminService
+                    fallbackUri: forward:/fallback/unavailable
             - id: admin-access-audit
               uri: lb://admin-service
               predicates:
                 - Path=/admin/access-audit,/admin/access-audit/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: adminService
+                    fallbackUri: forward:/fallback/unavailable
             - id: admin-promotions
               uri: lb://promotion-service
               predicates:
                 - Path=/admin/promotions,/admin/promotions/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: promotionService
+                    fallbackUri: forward:/fallback/unavailable
             - id: admin-keycloak-users
               uri: lb://admin-service
               predicates:
                 - Path=/admin/keycloak/users,/admin/keycloak/users/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: adminService
+                    fallbackUri: forward:/fallback/unavailable
             - id: admin-me
               uri: lb://admin-service
               predicates:
                 - Path=/admin/me,/admin/me/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: adminService
+                    fallbackUri: forward:/fallback/unavailable
+            - id: customer-promotions
+              uri: lb://promotion-service
+              predicates:
+                - Path=/promotions/me,/promotions/me/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: promotionService
+                    fallbackUri: forward:/fallback/unavailable
+            - id: public-promotions
+              uri: lb://promotion-service
+              predicates:
+                - Path=/promotions,/promotions/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: promotionService
+                    fallbackUri: forward:/fallback/unavailable
             - id: products-catalog
               uri: lb://product-service
               predicates:
                 - Path=/products,/products/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: productService
+                    fallbackUri: forward:/fallback/unavailable
             - id: categories-catalog
               uri: lb://product-service
               predicates:
                 - Path=/categories,/categories/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: productService
+                    fallbackUri: forward:/fallback/unavailable
             - id: posters-catalog
               uri: lb://poster-service
               predicates:
                 - Path=/posters,/posters/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: posterService
+                    fallbackUri: forward:/fallback/unavailable
+            - id: vendors-me
+              uri: lb://vendor-service
+              predicates:
+                - Path=/vendors/me,/vendors/me/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: vendorService
+                    fallbackUri: forward:/fallback/unavailable
             - id: vendors-catalog
               uri: lb://vendor-service
               predicates:
                 - Path=/vendors,/vendors/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: vendorService
+                    fallbackUri: forward:/fallback/unavailable
 
           discovery:
             locator:
@@ -156,6 +342,69 @@ idempotency:
   pending-ttl: ${IDEMPOTENCY_PENDING_TTL:30s}
   key-prefix: ${IDEMPOTENCY_KEY_PREFIX:gw:idem:v1::}
 
+
+gateway:
+  max-request-body-size: ${GATEWAY_MAX_REQUEST_BODY_SIZE:2MB}
+  ip-filter:
+    blocked: ${GATEWAY_IP_BLOCKED:}
+    allowed: ${GATEWAY_IP_ALLOWED:}
+    allowlist-enabled: ${GATEWAY_IP_ALLOWLIST_ENABLED:false}
+  api-version: ${GATEWAY_API_VERSION:v1}
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        failure-rate-threshold: 50
+        slow-call-rate-threshold: 70
+        slow-call-duration-threshold: 4s
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 5
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+    instances:
+      customerService:
+        base-config: default
+      orderService:
+        base-config: default
+      cartService:
+        base-config: default
+      wishlistService:
+        base-config: default
+      adminService:
+        base-config: default
+      productService:
+        base-config: default
+      promotionService:
+        base-config: default
+      posterService:
+        base-config: default
+      vendorService:
+        base-config: default
+  timelimiter:
+    configs:
+      default:
+        timeout-duration: 8s
+    instances:
+      customerService:
+        base-config: default
+      orderService:
+        base-config: default
+      cartService:
+        base-config: default
+      wishlistService:
+        base-config: default
+      adminService:
+        base-config: default
+      productService:
+        base-config: default
+      promotionService:
+        base-config: default
+      posterService:
+        base-config: default
+      vendorService:
+        base-config: default
 
 logging:
   pattern:

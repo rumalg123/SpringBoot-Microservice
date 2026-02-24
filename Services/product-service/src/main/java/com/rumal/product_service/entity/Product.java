@@ -6,6 +6,7 @@ import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
@@ -39,7 +40,10 @@ import java.util.UUID;
                 @Index(name = "idx_products_active", columnList = "is_active"),
                 @Index(name = "idx_products_deleted", columnList = "is_deleted"),
                 @Index(name = "idx_products_sku", columnList = "sku"),
-                @Index(name = "idx_products_slug", columnList = "slug")
+                @Index(name = "idx_products_slug", columnList = "slug"),
+                @Index(name = "idx_products_approval_status", columnList = "approval_status"),
+                @Index(name = "idx_products_view_count", columnList = "view_count"),
+                @Index(name = "idx_products_sold_count", columnList = "sold_count")
         }
 )
 @Getter
@@ -64,6 +68,27 @@ public class Product {
 
     @Column(nullable = false, length = 4000)
     private String description;
+
+    @Column(name = "brand_name", length = 100)
+    private String brandName;
+
+    @Column(name = "weight_grams")
+    private Integer weightGrams;
+
+    @Column(name = "length_cm", precision = 8, scale = 2)
+    private BigDecimal lengthCm;
+
+    @Column(name = "width_cm", precision = 8, scale = 2)
+    private BigDecimal widthCm;
+
+    @Column(name = "height_cm", precision = 8, scale = 2)
+    private BigDecimal heightCm;
+
+    @Column(name = "meta_title", length = 70)
+    private String metaTitle;
+
+    @Column(name = "meta_description", length = 160)
+    private String metaDescription;
 
     @ElementCollection
     @CollectionTable(name = "product_images", joinColumns = @JoinColumn(name = "product_id"))
@@ -106,6 +131,36 @@ public class Product {
 
     @Column(length = 80, unique = true, nullable = false)
     private String sku;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "approval_status", nullable = false, length = 20)
+    @Builder.Default
+    private ApprovalStatus approvalStatus = ApprovalStatus.DRAFT;
+
+    @Column(name = "rejection_reason", length = 500)
+    private String rejectionReason;
+
+    @Column(name = "thumbnail_url", length = 500)
+    private String thumbnailUrl;
+
+    @Column(name = "is_digital", nullable = false)
+    @Builder.Default
+    private boolean digital = false;
+
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(name = "product_bundle_items", joinColumns = @JoinColumn(name = "product_id"))
+    @Column(name = "bundled_product_id")
+    @BatchSize(size = 50)
+    @Builder.Default
+    private List<UUID> bundledProductIds = new ArrayList<>();
+
+    @Column(name = "view_count", nullable = false)
+    @Builder.Default
+    private long viewCount = 0;
+
+    @Column(name = "sold_count", nullable = false)
+    @Builder.Default
+    private long soldCount = 0;
 
     @Column(name = "is_active", nullable = false)
     @Builder.Default

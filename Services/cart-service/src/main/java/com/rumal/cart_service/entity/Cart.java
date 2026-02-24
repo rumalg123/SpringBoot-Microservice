@@ -47,6 +47,9 @@ public class Cart {
     @Column(nullable = false)
     private Long version;
 
+    @Column(length = 500)
+    private String note;
+
     @OneToMany(mappedBy = "cart", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<CartItem> items = new ArrayList<>();
@@ -58,4 +61,8 @@ public class Cart {
     @UpdateTimestamp
     @Column(nullable = false)
     private Instant updatedAt;
+
+    @Column(name = "last_activity_at", nullable = false)
+    @Builder.Default
+    private Instant lastActivityAt = Instant.now();
 }

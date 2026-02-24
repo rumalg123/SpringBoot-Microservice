@@ -2,6 +2,11 @@ package com.rumal.vendor_service.service;
 
 import com.rumal.vendor_service.client.OrderLifecycleClient;
 import com.rumal.vendor_service.client.ProductCatalogAdminClient;
+import com.rumal.vendor_service.dto.AdminVerificationActionRequest;
+import com.rumal.vendor_service.dto.RequestVerificationRequest;
+import com.rumal.vendor_service.dto.UpdateVendorMetricsRequest;
+import com.rumal.vendor_service.dto.UpdateVendorSelfServiceRequest;
+import com.rumal.vendor_service.dto.UpsertVendorPayoutConfigRequest;
 import com.rumal.vendor_service.dto.UpsertVendorRequest;
 import com.rumal.vendor_service.dto.UpsertVendorUserRequest;
 import com.rumal.vendor_service.dto.VendorAccessMembershipResponse;
@@ -9,17 +14,21 @@ import com.rumal.vendor_service.dto.VendorLifecycleAuditResponse;
 import com.rumal.vendor_service.dto.VendorDeletionEligibilityResponse;
 import com.rumal.vendor_service.dto.VendorOperationalStateResponse;
 import com.rumal.vendor_service.dto.VendorOrderDeletionCheckResponse;
+import com.rumal.vendor_service.dto.VendorPayoutConfigResponse;
 import com.rumal.vendor_service.dto.VendorResponse;
 import com.rumal.vendor_service.dto.VendorUserResponse;
 import com.rumal.vendor_service.entity.Vendor;
 import com.rumal.vendor_service.entity.VendorLifecycleAction;
 import com.rumal.vendor_service.entity.VendorLifecycleAudit;
+import com.rumal.vendor_service.entity.VendorPayoutConfig;
 import com.rumal.vendor_service.entity.VendorStatus;
 import com.rumal.vendor_service.entity.VendorUser;
+import com.rumal.vendor_service.entity.VerificationStatus;
 import com.rumal.vendor_service.exception.ResourceNotFoundException;
 import com.rumal.vendor_service.exception.ServiceUnavailableException;
 import com.rumal.vendor_service.exception.ValidationException;
 import com.rumal.vendor_service.repo.VendorLifecycleAuditRepository;
+import com.rumal.vendor_service.repo.VendorPayoutConfigRepository;
 import com.rumal.vendor_service.repo.VendorRepository;
 import com.rumal.vendor_service.repo.VendorUserRepository;
 import lombok.RequiredArgsConstructor;
@@ -37,12 +46,15 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -54,6 +66,7 @@ public class VendorServiceImpl implements VendorService {
     private final VendorRepository vendorRepository;
     private final VendorLifecycleAuditRepository vendorLifecycleAuditRepository;
     private final VendorUserRepository vendorUserRepository;
+    private final VendorPayoutConfigRepository vendorPayoutConfigRepository;
     private final OrderLifecycleClient orderLifecycleClient;
     private final ProductCatalogAdminClient productCatalogAdminClient;
     private final TransactionTemplate transactionTemplate;
@@ -103,6 +116,18 @@ public class VendorServiceImpl implements VendorService {
 
     @Override
     public List<VendorResponse> listPublicActive() {
+        return listPublicActive(null);
+    }
+
+    @Override
+    public List<VendorResponse> listPublicActive(String category) {
+        if (StringUtils.hasText(category)) {
+            return vendorRepository.findActiveVendorsByCategory(VendorStatus.ACTIVE, category.trim())
+                    .stream()
+                    .filter(Vendor::isAcceptingOrders)
+                    .map(this::toVendorResponse)
+                    .toList();
+        }
         return vendorRepository.findByDeletedFalseAndActiveTrueAndStatusOrderByNameAsc(VendorStatus.ACTIVE)
                 .stream()
                 .filter(Vendor::isAcceptingOrders)
@@ -454,6 +479,7 @@ public class VendorServiceImpl implements VendorService {
         vendor.setBannerImage(trimToNull(request.bannerImage()));
         vendor.setWebsiteUrl(trimToNull(request.websiteUrl()));
         vendor.setDescription(trimToNull(request.description()));
+        vendor.setCommissionRate(request.commissionRate());
         VendorStatus status = Objects.requireNonNull(request.status(), "status");
         boolean active = request.active() == null || request.active();
         boolean acceptingOrders = request.acceptingOrders() != null
@@ -467,6 +493,27 @@ public class VendorServiceImpl implements VendorService {
         vendor.setAcceptingOrders(acceptingOrders);
         vendor.setDeleted(false);
         vendor.setDeletedAt(null);
+
+        // Gap 51: Policies
+        vendor.setReturnPolicy(trimToNull(request.returnPolicy()));
+        vendor.setShippingPolicy(trimToNull(request.shippingPolicy()));
+        if (request.processingTimeDays() != null) {
+            vendor.setProcessingTimeDays(request.processingTimeDays());
+        }
+        if (request.acceptsReturns() != null) {
+            vendor.setAcceptsReturns(request.acceptsReturns());
+        }
+        if (request.returnWindowDays() != null) {
+            vendor.setReturnWindowDays(request.returnWindowDays());
+        }
+        vendor.setFreeShippingThreshold(request.freeShippingThreshold());
+
+        // Gap 52: Categories
+        vendor.setPrimaryCategory(trimToNull(request.primaryCategory()));
+        if (request.specializations() != null) {
+            vendor.getSpecializations().clear();
+            vendor.getSpecializations().addAll(request.specializations());
+        }
     }
 
     private void applyVendorUserRequest(VendorUser user, UpsertVendorUserRequest request) {
@@ -552,12 +599,38 @@ public class VendorServiceImpl implements VendorService {
                 v.getStatus(),
                 v.isActive(),
                 v.isAcceptingOrders(),
+                // Gap 49: Verification
+                v.getVerificationStatus(),
+                v.isVerified(),
+                v.getVerifiedAt(),
+                v.getVerificationRequestedAt(),
+                v.getVerificationNotes(),
+                v.getVerificationDocumentUrl(),
+                // Gap 50: Metrics
+                v.getAverageRating(),
+                v.getTotalRatings(),
+                v.getFulfillmentRate(),
+                v.getDisputeRate(),
+                v.getResponseTimeHours(),
+                v.getTotalOrdersCompleted(),
+                // Gap 51: Policies
+                v.getReturnPolicy(),
+                v.getShippingPolicy(),
+                v.getProcessingTimeDays(),
+                v.isAcceptsReturns(),
+                v.getReturnWindowDays(),
+                v.getFreeShippingThreshold(),
+                // Gap 52: Categories
+                v.getPrimaryCategory(),
+                v.getSpecializations() != null ? Set.copyOf(v.getSpecializations()) : Set.of(),
+                // Existing
                 v.isDeleted(),
                 v.getDeletedAt(),
                 v.getDeletionRequestedAt(),
                 v.getDeletionRequestReason(),
                 v.getCreatedAt(),
-                v.getUpdatedAt()
+                v.getUpdatedAt(),
+                v.getCommissionRate()
         );
     }
 
@@ -641,6 +714,10 @@ public class VendorServiceImpl implements VendorService {
     }
 
     private void recordLifecycleAudit(Vendor vendor, VendorLifecycleAction action, String reason, String actorSub, String actorRoles) {
+        recordLifecycleAudit(vendor, action, reason, actorSub, actorRoles, "ADMIN_API");
+    }
+
+    private void recordLifecycleAudit(Vendor vendor, VendorLifecycleAction action, String reason, String actorSub, String actorRoles, String changeSource) {
         if (vendor == null || action == null) {
             return;
         }
@@ -650,9 +727,260 @@ public class VendorServiceImpl implements VendorService {
                 .actorSub(trimToNull(actorSub))
                 .actorRoles(trimToNull(actorRoles))
                 .actorType(StringUtils.hasText(actorSub) ? "USER" : "SYSTEM")
-                .changeSource("ADMIN_API")
+                .changeSource(changeSource)
                 .reason(trimToNull(reason))
                 .build();
         vendorLifecycleAuditRepository.save(audit);
+    }
+
+    private Vendor resolveVendorForKeycloakUser(String keycloakUserId, UUID vendorIdHint) {
+        String normalized = normalizeRequired(keycloakUserId, "keycloakUserId", 120);
+        List<VendorUser> memberships = vendorUserRepository
+                .findByKeycloakUserIdIgnoreCaseAndActiveTrueAndVendorDeletedFalseAndVendorActiveTrueOrderByCreatedAtAsc(normalized);
+        if (memberships.isEmpty()) {
+            throw new ResourceNotFoundException("No active vendor membership found for user");
+        }
+        if (memberships.size() == 1) {
+            return memberships.get(0).getVendor();
+        }
+        if (vendorIdHint == null) {
+            throw new ValidationException("Multiple vendor memberships found. Specify vendorId query parameter.");
+        }
+        return memberships.stream()
+                .filter(m -> vendorIdHint.equals(m.getVendor().getId()))
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("No active vendor membership found for vendorId: " + vendorIdHint))
+                .getVendor();
+    }
+
+    @Override
+    public VendorResponse getVendorForKeycloakUser(String keycloakUserId, UUID vendorIdHint) {
+        return toVendorResponse(resolveVendorForKeycloakUser(keycloakUserId, vendorIdHint));
+    }
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    @CacheEvict(cacheNames = "vendorOperationalState", key = "#result.id()")
+    public VendorResponse updateVendorSelfService(String keycloakUserId, UUID vendorIdHint, UpdateVendorSelfServiceRequest request) {
+        Vendor vendor = resolveVendorForKeycloakUser(keycloakUserId, vendorIdHint);
+        applySelfServiceRequest(vendor, request);
+        Vendor saved = vendorRepository.save(vendor);
+        recordLifecycleAudit(saved, VendorLifecycleAction.UPDATED, null, keycloakUserId, null, "VENDOR_SELF_SERVICE");
+        syncProductCatalogVisibility(saved.getId());
+        return toVendorResponse(saved);
+    }
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    @CacheEvict(cacheNames = "vendorOperationalState", key = "#result.id()")
+    public VendorResponse selfServiceStopOrders(String keycloakUserId, UUID vendorIdHint) {
+        Vendor vendor = resolveVendorForKeycloakUser(keycloakUserId, vendorIdHint);
+        if (!vendor.isAcceptingOrders()) {
+            return toVendorResponse(vendor);
+        }
+        vendor.setAcceptingOrders(false);
+        Vendor saved = vendorRepository.save(vendor);
+        recordLifecycleAudit(saved, VendorLifecycleAction.STOP_ORDERS, null, keycloakUserId, null, "VENDOR_SELF_SERVICE");
+        syncProductCatalogVisibility(saved.getId());
+        return toVendorResponse(saved);
+    }
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    @CacheEvict(cacheNames = "vendorOperationalState", key = "#result.id()")
+    public VendorResponse selfServiceResumeOrders(String keycloakUserId, UUID vendorIdHint) {
+        Vendor vendor = resolveVendorForKeycloakUser(keycloakUserId, vendorIdHint);
+        if (!vendor.isActive()) {
+            throw new ValidationException("Cannot resume orders for an inactive vendor");
+        }
+        if (vendor.getStatus() != VendorStatus.ACTIVE) {
+            throw new ValidationException("Cannot resume orders unless vendor status is ACTIVE");
+        }
+        if (vendor.isAcceptingOrders()) {
+            return toVendorResponse(vendor);
+        }
+        vendor.setAcceptingOrders(true);
+        Vendor saved = vendorRepository.save(vendor);
+        recordLifecycleAudit(saved, VendorLifecycleAction.RESUME_ORDERS, null, keycloakUserId, null, "VENDOR_SELF_SERVICE");
+        syncProductCatalogVisibility(saved.getId());
+        return toVendorResponse(saved);
+    }
+
+    @Override
+    public VendorPayoutConfigResponse getPayoutConfig(String keycloakUserId, UUID vendorIdHint) {
+        Vendor vendor = resolveVendorForKeycloakUser(keycloakUserId, vendorIdHint);
+        VendorPayoutConfig config = vendorPayoutConfigRepository.findByVendorId(vendor.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Payout config not found for vendor: " + vendor.getId()));
+        return toPayoutConfigResponse(config);
+    }
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    public VendorPayoutConfigResponse upsertPayoutConfig(String keycloakUserId, UUID vendorIdHint, UpsertVendorPayoutConfigRequest request) {
+        Vendor vendor = resolveVendorForKeycloakUser(keycloakUserId, vendorIdHint);
+        VendorPayoutConfig config = vendorPayoutConfigRepository.findByVendorId(vendor.getId())
+                .orElseGet(() -> {
+                    VendorPayoutConfig c = new VendorPayoutConfig();
+                    c.setVendor(vendor);
+                    return c;
+                });
+        applyPayoutConfigRequest(config, request);
+        VendorPayoutConfig saved = vendorPayoutConfigRepository.save(config);
+        return toPayoutConfigResponse(saved);
+    }
+
+    private void applySelfServiceRequest(Vendor vendor, UpdateVendorSelfServiceRequest request) {
+        String name = normalizeRequired(request.name(), "name", 160);
+        String requestedSlug = normalizeRequestedSlug(request.slug());
+        boolean autoSlug = !StringUtils.hasText(requestedSlug);
+        String baseSlug = autoSlug ? SlugUtils.toSlug(name) : requestedSlug;
+        String resolvedSlug = resolveUniqueSlug(baseSlug, vendor.getId(), autoSlug);
+
+        vendor.setName(name);
+        vendor.setNormalizedName(name.toLowerCase(Locale.ROOT));
+        vendor.setSlug(resolvedSlug);
+        vendor.setContactEmail(normalizeEmailRequired(request.contactEmail(), "contactEmail"));
+        vendor.setSupportEmail(normalizeEmailOptional(request.supportEmail()));
+        vendor.setContactPhone(trimToNull(request.contactPhone()));
+        vendor.setContactPersonName(trimToNull(request.contactPersonName()));
+        vendor.setLogoImage(trimToNull(request.logoImage()));
+        vendor.setBannerImage(trimToNull(request.bannerImage()));
+        vendor.setWebsiteUrl(trimToNull(request.websiteUrl()));
+        vendor.setDescription(trimToNull(request.description()));
+
+        // Gap 51: Policies
+        vendor.setReturnPolicy(trimToNull(request.returnPolicy()));
+        vendor.setShippingPolicy(trimToNull(request.shippingPolicy()));
+        if (request.processingTimeDays() != null) {
+            vendor.setProcessingTimeDays(request.processingTimeDays());
+        }
+        if (request.acceptsReturns() != null) {
+            vendor.setAcceptsReturns(request.acceptsReturns());
+        }
+        if (request.returnWindowDays() != null) {
+            vendor.setReturnWindowDays(request.returnWindowDays());
+        }
+        vendor.setFreeShippingThreshold(request.freeShippingThreshold());
+
+        // Gap 52: Categories
+        vendor.setPrimaryCategory(trimToNull(request.primaryCategory()));
+        if (request.specializations() != null) {
+            vendor.getSpecializations().clear();
+            vendor.getSpecializations().addAll(request.specializations());
+        }
+    }
+
+    private void applyPayoutConfigRequest(VendorPayoutConfig config, UpsertVendorPayoutConfigRequest request) {
+        config.setPayoutCurrency(normalizeRequired(request.payoutCurrency(), "payoutCurrency", 3).toUpperCase(Locale.ROOT));
+        config.setPayoutSchedule(Objects.requireNonNull(request.payoutSchedule(), "payoutSchedule"));
+        config.setPayoutMinimum(request.payoutMinimum());
+        config.setBankAccountHolder(trimToNull(request.bankAccountHolder()));
+        config.setBankName(trimToNull(request.bankName()));
+        config.setBankRoutingCode(trimToNull(request.bankRoutingCode()));
+        config.setBankAccountNumberMasked(trimToNull(request.bankAccountNumberMasked()));
+        config.setTaxId(trimToNull(request.taxId()));
+    }
+
+    private VendorPayoutConfigResponse toPayoutConfigResponse(VendorPayoutConfig c) {
+        return new VendorPayoutConfigResponse(
+                c.getId(),
+                c.getVendor().getId(),
+                c.getPayoutCurrency(),
+                c.getPayoutSchedule(),
+                c.getPayoutMinimum(),
+                c.getBankAccountHolder(),
+                c.getBankName(),
+                c.getBankRoutingCode(),
+                c.getBankAccountNumberMasked(),
+                c.getTaxId(),
+                c.getCreatedAt(),
+                c.getUpdatedAt()
+        );
+    }
+
+    // --- Gap 49: Verification workflow ---
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    public VendorResponse requestVerification(String keycloakUserId, UUID vendorIdHint, RequestVerificationRequest request) {
+        Vendor vendor = resolveVendorForKeycloakUser(keycloakUserId, vendorIdHint);
+        VerificationStatus current = vendor.getVerificationStatus();
+        if (current != VerificationStatus.UNVERIFIED && current != VerificationStatus.VERIFICATION_REJECTED) {
+            throw new ValidationException("Verification can only be requested when status is UNVERIFIED or VERIFICATION_REJECTED, current: " + current);
+        }
+        vendor.setVerificationStatus(VerificationStatus.PENDING_VERIFICATION);
+        vendor.setVerificationRequestedAt(Instant.now());
+        if (request != null) {
+            vendor.setVerificationDocumentUrl(trimToNull(request.verificationDocumentUrl()));
+            vendor.setVerificationNotes(trimToNull(request.notes()));
+        }
+        Vendor saved = vendorRepository.save(vendor);
+        recordLifecycleAudit(saved, VendorLifecycleAction.VERIFICATION_REQUESTED, null, keycloakUserId, null, "VENDOR_SELF_SERVICE");
+        return toVendorResponse(saved);
+    }
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    public VendorResponse approveVerification(UUID vendorId, AdminVerificationActionRequest request, String actorSub, String actorRoles) {
+        Vendor vendor = getNonDeletedVendor(vendorId);
+        if (vendor.getVerificationStatus() != VerificationStatus.PENDING_VERIFICATION) {
+            throw new ValidationException("Can only approve verification when status is PENDING_VERIFICATION, current: " + vendor.getVerificationStatus());
+        }
+        vendor.setVerificationStatus(VerificationStatus.VERIFIED);
+        vendor.setVerified(true);
+        vendor.setVerifiedAt(Instant.now());
+        if (request != null && StringUtils.hasText(request.notes())) {
+            vendor.setVerificationNotes(request.notes().trim());
+        }
+        Vendor saved = vendorRepository.save(vendor);
+        recordLifecycleAudit(saved, VendorLifecycleAction.VERIFICATION_APPROVED,
+                request != null ? request.notes() : null, actorSub, actorRoles);
+        return toVendorResponse(saved);
+    }
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    public VendorResponse rejectVerification(UUID vendorId, AdminVerificationActionRequest request, String actorSub, String actorRoles) {
+        Vendor vendor = getNonDeletedVendor(vendorId);
+        if (vendor.getVerificationStatus() != VerificationStatus.PENDING_VERIFICATION) {
+            throw new ValidationException("Can only reject verification when status is PENDING_VERIFICATION, current: " + vendor.getVerificationStatus());
+        }
+        vendor.setVerificationStatus(VerificationStatus.VERIFICATION_REJECTED);
+        vendor.setVerified(false);
+        if (request != null && StringUtils.hasText(request.notes())) {
+            vendor.setVerificationNotes(request.notes().trim());
+        }
+        Vendor saved = vendorRepository.save(vendor);
+        recordLifecycleAudit(saved, VendorLifecycleAction.VERIFICATION_REJECTED,
+                request != null ? request.notes() : null, actorSub, actorRoles);
+        return toVendorResponse(saved);
+    }
+
+    // --- Gap 50: Performance metrics ---
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    public VendorResponse updateMetrics(UUID vendorId, UpdateVendorMetricsRequest request) {
+        Vendor vendor = getNonDeletedVendor(vendorId);
+        if (request.averageRating() != null) {
+            vendor.setAverageRating(request.averageRating());
+        }
+        if (request.totalRatings() != null) {
+            vendor.setTotalRatings(request.totalRatings());
+        }
+        if (request.fulfillmentRate() != null) {
+            vendor.setFulfillmentRate(request.fulfillmentRate());
+        }
+        if (request.disputeRate() != null) {
+            vendor.setDisputeRate(request.disputeRate());
+        }
+        if (request.responseTimeHours() != null) {
+            vendor.setResponseTimeHours(request.responseTimeHours());
+        }
+        if (request.totalOrdersCompleted() != null) {
+            vendor.setTotalOrdersCompleted(request.totalOrdersCompleted());
+        }
+        Vendor saved = vendorRepository.save(vendor);
+        return toVendorResponse(saved);
     }
 }

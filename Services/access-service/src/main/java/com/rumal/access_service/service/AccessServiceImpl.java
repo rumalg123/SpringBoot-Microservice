@@ -2,24 +2,40 @@ package com.rumal.access_service.service;
 
 import com.rumal.access_service.dto.AccessChangeAuditPageResponse;
 import com.rumal.access_service.dto.AccessChangeAuditResponse;
+import com.rumal.access_service.dto.ActiveSessionResponse;
+import com.rumal.access_service.dto.ApiKeyResponse;
+import com.rumal.access_service.dto.CreateApiKeyRequest;
+import com.rumal.access_service.dto.CreateApiKeyResponse;
+import com.rumal.access_service.dto.PermissionGroupResponse;
 import com.rumal.access_service.dto.PlatformAccessLookupResponse;
 import com.rumal.access_service.dto.PlatformStaffAccessResponse;
+import com.rumal.access_service.dto.RegisterSessionRequest;
+import com.rumal.access_service.dto.UpsertPermissionGroupRequest;
 import com.rumal.access_service.dto.UpsertPlatformStaffAccessRequest;
 import com.rumal.access_service.dto.UpsertVendorStaffAccessRequest;
 import com.rumal.access_service.dto.VendorStaffAccessLookupResponse;
 import com.rumal.access_service.dto.VendorStaffAccessResponse;
 import com.rumal.access_service.entity.AccessChangeAction;
 import com.rumal.access_service.entity.AccessChangeAudit;
+import com.rumal.access_service.entity.ActiveSession;
+import com.rumal.access_service.entity.ApiKey;
+import com.rumal.access_service.entity.PermissionGroup;
+import com.rumal.access_service.entity.PermissionGroupScope;
 import com.rumal.access_service.entity.PlatformPermission;
 import com.rumal.access_service.entity.PlatformStaffAccess;
 import com.rumal.access_service.entity.VendorPermission;
 import com.rumal.access_service.entity.VendorStaffAccess;
 import com.rumal.access_service.exception.ResourceNotFoundException;
 import com.rumal.access_service.exception.ValidationException;
+import com.rumal.access_service.repo.ActiveSessionRepository;
+import com.rumal.access_service.repo.ApiKeyRepository;
+import com.rumal.access_service.repo.PermissionGroupRepository;
 import com.rumal.access_service.repo.PlatformStaffAccessRepository;
 import com.rumal.access_service.repo.VendorStaffAccessRepository;
 import com.rumal.access_service.repo.AccessChangeAuditRepository;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
@@ -32,7 +48,12 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -46,9 +67,15 @@ import java.util.UUID;
 @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
 public class AccessServiceImpl implements AccessService {
 
+    private static final Logger log = LoggerFactory.getLogger(AccessServiceImpl.class);
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
     private final PlatformStaffAccessRepository platformStaffAccessRepository;
     private final VendorStaffAccessRepository vendorStaffAccessRepository;
     private final AccessChangeAuditRepository accessChangeAuditRepository;
+    private final PermissionGroupRepository permissionGroupRepository;
+    private final ActiveSessionRepository activeSessionRepository;
+    private final ApiKeyRepository apiKeyRepository;
     private final CacheManager cacheManager;
 
     @Override
@@ -222,12 +249,18 @@ public class AccessServiceImpl implements AccessService {
     public PlatformAccessLookupResponse getPlatformAccessByKeycloakUser(String keycloakUserId) {
         String normalized = normalizeRequired(keycloakUserId, "keycloakUserId", 120);
         return platformStaffAccessRepository.findByKeycloakUserIdIgnoreCaseAndActiveTrueAndDeletedFalse(normalized)
-                .map(entity -> new PlatformAccessLookupResponse(
-                        entity.getKeycloakUserId(),
-                        entity.isActive(),
-                        entity.getPermissions().stream().map(PlatformPermission::code).collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new))
-                ))
-                .orElseGet(() -> new PlatformAccessLookupResponse(normalized, false, Set.of()));
+                .map(entity -> {
+                    boolean effectiveActive = entity.isActive() && !isExpired(entity.getAccessExpiresAt());
+                    return new PlatformAccessLookupResponse(
+                            entity.getKeycloakUserId(),
+                            effectiveActive,
+                            effectiveActive ? entity.getPermissions().stream().map(PlatformPermission::code).collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new)) : Set.of(),
+                            entity.getAccessExpiresAt(),
+                            entity.isMfaRequired(),
+                            entity.getAllowedIps()
+                    );
+                })
+                .orElseGet(() -> new PlatformAccessLookupResponse(normalized, false, Set.of(), null, false, null));
     }
 
     @Override
@@ -339,12 +372,17 @@ public class AccessServiceImpl implements AccessService {
         String normalized = normalizeRequired(keycloakUserId, "keycloakUserId", 120);
         return vendorStaffAccessRepository.findByKeycloakUserIdIgnoreCaseAndActiveTrueAndDeletedFalseOrderByVendorIdAsc(normalized)
                 .stream()
-                .map(entity -> new VendorStaffAccessLookupResponse(
-                        entity.getVendorId(),
-                        entity.getKeycloakUserId(),
-                        entity.isActive(),
-                        entity.getPermissions().stream().map(VendorPermission::code).collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new))
-                ))
+                .map(entity -> {
+                    boolean effectiveActive = entity.isActive() && !isExpired(entity.getAccessExpiresAt());
+                    return new VendorStaffAccessLookupResponse(
+                            entity.getVendorId(),
+                            entity.getKeycloakUserId(),
+                            effectiveActive,
+                            effectiveActive ? entity.getPermissions().stream().map(VendorPermission::code).collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new)) : Set.of(),
+                            entity.getAccessExpiresAt(),
+                            entity.getAllowedIps()
+                    );
+                })
                 .toList();
     }
 
@@ -364,6 +402,10 @@ public class AccessServiceImpl implements AccessService {
         entity.setActive(request.active() == null || request.active());
         entity.setDeleted(false);
         entity.setDeletedAt(null);
+        entity.setPermissionGroupId(request.permissionGroupId());
+        entity.setAccessExpiresAt(request.accessExpiresAt());
+        entity.setMfaRequired(request.mfaRequired() != null && request.mfaRequired());
+        entity.setAllowedIps(trimToNull(request.allowedIps()));
     }
 
     private void applyVendorStaff(VendorStaffAccess entity, UpsertVendorStaffAccessRequest request) {
@@ -387,6 +429,9 @@ public class AccessServiceImpl implements AccessService {
         entity.setActive(request.active() == null || request.active());
         entity.setDeleted(false);
         entity.setDeletedAt(null);
+        entity.setPermissionGroupId(request.permissionGroupId());
+        entity.setAccessExpiresAt(request.accessExpiresAt());
+        entity.setAllowedIps(trimToNull(request.allowedIps()));
     }
 
     private Set<PlatformPermission> normalizePlatformPermissions(Set<PlatformPermission> permissions) {
@@ -432,6 +477,10 @@ public class AccessServiceImpl implements AccessService {
                 entity.getEmail(),
                 entity.getDisplayName(),
                 Set.copyOf(entity.getPermissions()),
+                entity.getPermissionGroupId(),
+                entity.getAccessExpiresAt(),
+                entity.isMfaRequired(),
+                entity.getAllowedIps(),
                 entity.isActive(),
                 entity.isDeleted(),
                 entity.getDeletedAt(),
@@ -448,6 +497,9 @@ public class AccessServiceImpl implements AccessService {
                 entity.getEmail(),
                 entity.getDisplayName(),
                 Set.copyOf(entity.getPermissions()),
+                entity.getPermissionGroupId(),
+                entity.getAccessExpiresAt(),
+                entity.getAllowedIps(),
                 entity.isActive(),
                 entity.isDeleted(),
                 entity.getDeletedAt(),
@@ -612,5 +664,259 @@ public class AccessServiceImpl implements AccessService {
     private String normalizedLookupKey(String keycloakUserId) {
         String trimmed = trimToNull(keycloakUserId);
         return trimmed == null ? null : trimmed.toLowerCase(Locale.ROOT);
+    }
+
+    private boolean isExpired(Instant accessExpiresAt) {
+        return accessExpiresAt != null && Instant.now().isAfter(accessExpiresAt);
+    }
+
+    // ── Permission Groups ──────────────────────────────────────────────
+
+    @Override
+    public List<PermissionGroupResponse> listPermissionGroups(PermissionGroupScope scope) {
+        List<PermissionGroup> groups = scope != null
+                ? permissionGroupRepository.findByScopeOrderByNameAsc(scope)
+                : permissionGroupRepository.findAllByOrderByNameAsc();
+        return groups.stream().map(this::toPermissionGroupResponse).toList();
+    }
+
+    @Override
+    public PermissionGroupResponse getPermissionGroupById(UUID id) {
+        return permissionGroupRepository.findById(id)
+                .map(this::toPermissionGroupResponse)
+                .orElseThrow(() -> new ResourceNotFoundException("Permission group not found: " + id));
+    }
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    public PermissionGroupResponse createPermissionGroup(UpsertPermissionGroupRequest request) {
+        String name = normalizeRequired(request.name(), "name", 120);
+        if (permissionGroupRepository.existsByNameIgnoreCaseAndScope(name, request.scope())) {
+            throw new ValidationException("Permission group with this name and scope already exists");
+        }
+        PermissionGroup entity = PermissionGroup.builder()
+                .name(name)
+                .description(trimToNull(request.description()))
+                .permissions(joinStringSet(request.permissions()))
+                .scope(request.scope())
+                .build();
+        return toPermissionGroupResponse(permissionGroupRepository.save(entity));
+    }
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    public PermissionGroupResponse updatePermissionGroup(UUID id, UpsertPermissionGroupRequest request) {
+        PermissionGroup entity = permissionGroupRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Permission group not found: " + id));
+        String name = normalizeRequired(request.name(), "name", 120);
+        if (permissionGroupRepository.existsByNameIgnoreCaseAndScopeAndIdNot(name, request.scope(), id)) {
+            throw new ValidationException("Another permission group with this name and scope already exists");
+        }
+        entity.setName(name);
+        entity.setDescription(trimToNull(request.description()));
+        entity.setPermissions(joinStringSet(request.permissions()));
+        entity.setScope(request.scope());
+        return toPermissionGroupResponse(permissionGroupRepository.save(entity));
+    }
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    public void deletePermissionGroup(UUID id) {
+        if (!permissionGroupRepository.existsById(id)) {
+            throw new ResourceNotFoundException("Permission group not found: " + id);
+        }
+        permissionGroupRepository.deleteById(id);
+    }
+
+    private PermissionGroupResponse toPermissionGroupResponse(PermissionGroup entity) {
+        return new PermissionGroupResponse(
+                entity.getId(),
+                entity.getName(),
+                entity.getDescription(),
+                splitPermissions(entity.getPermissions()),
+                entity.getScope(),
+                entity.getCreatedAt()
+        );
+    }
+
+    private String joinStringSet(Set<String> values) {
+        if (values == null || values.isEmpty()) {
+            return "";
+        }
+        return values.stream()
+                .filter(StringUtils::hasText)
+                .map(String::trim)
+                .sorted()
+                .collect(Collectors.joining(","));
+    }
+
+    // ── Session Management ─────────────────────────────────────────────
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    public ActiveSessionResponse registerSession(RegisterSessionRequest request) {
+        String keycloakId = normalizeRequired(request.keycloakId(), "keycloakId", 120);
+        ActiveSession session = ActiveSession.builder()
+                .keycloakId(keycloakId)
+                .ipAddress(trimToNull(request.ipAddress()))
+                .userAgent(trimToNull(request.userAgent()))
+                .lastActivityAt(Instant.now())
+                .build();
+        return toActiveSessionResponse(activeSessionRepository.save(session));
+    }
+
+    @Override
+    public List<ActiveSessionResponse> listSessionsByKeycloakId(String keycloakId) {
+        String normalized = normalizeRequired(keycloakId, "keycloakId", 120);
+        return activeSessionRepository.findByKeycloakIdOrderByLastActivityAtDesc(normalized)
+                .stream().map(this::toActiveSessionResponse).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    public void revokeSession(UUID sessionId) {
+        if (!activeSessionRepository.existsById(sessionId)) {
+            throw new ResourceNotFoundException("Session not found: " + sessionId);
+        }
+        activeSessionRepository.deleteById(sessionId);
+    }
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    public void revokeAllSessions(String keycloakId) {
+        String normalized = normalizeRequired(keycloakId, "keycloakId", 120);
+        activeSessionRepository.deleteByKeycloakId(normalized);
+    }
+
+    private ActiveSessionResponse toActiveSessionResponse(ActiveSession entity) {
+        return new ActiveSessionResponse(
+                entity.getId(),
+                entity.getKeycloakId(),
+                entity.getIpAddress(),
+                entity.getUserAgent(),
+                entity.getLastActivityAt(),
+                entity.getCreatedAt()
+        );
+    }
+
+    // ── API Key Management ─────────────────────────────────────────────
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    public CreateApiKeyResponse createApiKey(CreateApiKeyRequest request) {
+        String keycloakId = normalizeRequired(request.keycloakId(), "keycloakId", 120);
+        String name = normalizeRequired(request.name(), "name", 120);
+        String rawKey = generateRawApiKey();
+        String keyHash = hashApiKey(rawKey);
+
+        ApiKey entity = ApiKey.builder()
+                .keycloakId(keycloakId)
+                .keyHash(keyHash)
+                .name(name)
+                .scope(request.scope())
+                .permissions(joinStringSet(request.permissions()))
+                .active(true)
+                .expiresAt(request.expiresAt())
+                .build();
+        ApiKey saved = apiKeyRepository.save(entity);
+        return new CreateApiKeyResponse(
+                saved.getId(),
+                saved.getKeycloakId(),
+                saved.getName(),
+                saved.getScope(),
+                splitPermissions(saved.getPermissions()),
+                saved.isActive(),
+                saved.getExpiresAt(),
+                saved.getCreatedAt(),
+                rawKey
+        );
+    }
+
+    @Override
+    public List<ApiKeyResponse> listApiKeys(String keycloakId) {
+        String normalized = normalizeRequired(keycloakId, "keycloakId", 120);
+        return apiKeyRepository.findByKeycloakIdOrderByCreatedAtDesc(normalized)
+                .stream().map(this::toApiKeyResponse).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    public void deleteApiKey(UUID id) {
+        ApiKey entity = apiKeyRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("API key not found: " + id));
+        entity.setActive(false);
+        apiKeyRepository.save(entity);
+    }
+
+    private ApiKeyResponse toApiKeyResponse(ApiKey entity) {
+        return new ApiKeyResponse(
+                entity.getId(),
+                entity.getKeycloakId(),
+                entity.getName(),
+                entity.getScope(),
+                splitPermissions(entity.getPermissions()),
+                entity.isActive(),
+                entity.getExpiresAt(),
+                entity.getCreatedAt()
+        );
+    }
+
+    private String generateRawApiKey() {
+        byte[] bytes = new byte[32];
+        SECURE_RANDOM.nextBytes(bytes);
+        return "ak_" + Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    private String hashApiKey(String rawKey) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(rawKey.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder(hash.length * 2);
+            for (byte b : hash) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 not available", e);
+        }
+    }
+
+    // ── Expiry Processing ──────────────────────────────────────────────
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 30)
+    public int deactivateExpiredAccess() {
+        Instant now = Instant.now();
+        int count = 0;
+
+        List<PlatformStaffAccess> expiredPlatform = platformStaffAccessRepository
+                .findByActiveTrueAndDeletedFalseAndAccessExpiresAtBefore(now);
+        for (PlatformStaffAccess staff : expiredPlatform) {
+            staff.setActive(false);
+            platformStaffAccessRepository.save(staff);
+            evictPlatformAccessLookup(staff.getKeycloakUserId());
+            count++;
+        }
+
+        List<VendorStaffAccess> expiredVendor = vendorStaffAccessRepository
+                .findByActiveTrueAndDeletedFalseAndAccessExpiresAtBefore(now);
+        for (VendorStaffAccess staff : expiredVendor) {
+            staff.setActive(false);
+            vendorStaffAccessRepository.save(staff);
+            evictVendorAccessLookup(staff.getKeycloakUserId());
+            count++;
+        }
+
+        List<ApiKey> expiredKeys = apiKeyRepository.findByActiveTrueAndExpiresAtBefore(now);
+        for (ApiKey key : expiredKeys) {
+            key.setActive(false);
+            apiKeyRepository.save(key);
+            count++;
+        }
+
+        if (count > 0) {
+            log.info("Deactivated {} expired access records", count);
+        }
+        return count;
     }
 }

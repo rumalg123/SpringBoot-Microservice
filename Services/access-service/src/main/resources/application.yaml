@@ -30,3 +30,7 @@ sample:
 cache:
   platform-access-lookup-ttl: ${CACHE_PLATFORM_ACCESS_LOOKUP_TTL:20s}
   vendor-access-lookup-ttl: ${CACHE_VENDOR_ACCESS_LOOKUP_TTL:20s}
+
+access:
+  expiry:
+    check-interval-ms: ${ACCESS_EXPIRY_CHECK_INTERVAL_MS:60000}

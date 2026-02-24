@@ -12,7 +12,9 @@ import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import javax.imageio.ImageIO;
+import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -28,7 +30,8 @@ public class ProductImageStorageServiceImpl implements ProductImageStorageServic
 
     private static final long MAX_FILE_SIZE_BYTES = 1_048_576;
     private static final int MAX_DIMENSION = 1200;
-    private static final int MAX_IMAGES_PER_REQUEST = 5;
+    private static final int THUMBNAIL_MAX_DIMENSION = 300;
+    private static final int MAX_IMAGES_PER_REQUEST = 10;
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of("jpg", "jpeg", "png", "webp");
     private static final Pattern KEY_PATTERN = Pattern.compile("^(products/)?[A-Za-z0-9-]+\\.(jpg|jpeg|png|webp)$");
 
@@ -41,7 +44,7 @@ public class ProductImageStorageServiceImpl implements ProductImageStorageServic
             throw new ValidationException("At least one file name is required");
         }
         if (fileNames.size() > MAX_IMAGES_PER_REQUEST) {
-            throw new ValidationException("You can prepare at most 5 image names at once");
+            throw new ValidationException("You can prepare at most 10 image names at once");
         }
         List<String> names = new ArrayList<>();
         for (String fileName : fileNames) {
@@ -64,7 +67,7 @@ public class ProductImageStorageServiceImpl implements ProductImageStorageServic
             throw new ValidationException("At least one image file is required");
         }
         if (files.size() > MAX_IMAGES_PER_REQUEST) {
-            throw new ValidationException("You can upload at most 5 images at once");
+            throw new ValidationException("You can upload at most 10 images at once");
         }
         if (keys != null && !keys.isEmpty()) {
             if (keys.size() != files.size()) {
@@ -126,18 +129,67 @@ public class ProductImageStorageServiceImpl implements ProductImageStorageServic
                 ? buildObjectKey(extension)
                 : validateAndNormalizeProvidedKey(preferredKey, extension);
         try {
+            String contentType = resolveContentType(file, extension);
+            byte[] originalBytes = file.getBytes();
+
             PutObjectRequest request = PutObjectRequest.builder()
                     .bucket(properties.bucket())
                     .key(key)
                     .cacheControl("public, max-age=31536000, immutable")
-                    .contentType(resolveContentType(file, extension))
+                    .contentType(contentType)
                     .build();
+            s3Client.putObject(request, RequestBody.fromBytes(originalBytes));
 
-            s3Client.putObject(request, RequestBody.fromBytes(file.getBytes()));
+            generateAndUploadThumbnail(s3Client, file, key, extension, contentType);
+
             return key;
         } catch (IOException ex) {
             throw new ValidationException("Failed to upload image");
         }
+    }
+
+    private void generateAndUploadThumbnail(S3Client s3Client, MultipartFile file, String originalKey, String extension, String contentType) {
+        try {
+            BufferedImage original = ImageIO.read(file.getInputStream());
+            if (original == null) {
+                return;
+            }
+            int w = original.getWidth();
+            int h = original.getHeight();
+            if (w <= THUMBNAIL_MAX_DIMENSION && h <= THUMBNAIL_MAX_DIMENSION) {
+                return;
+            }
+
+            double scale = Math.min((double) THUMBNAIL_MAX_DIMENSION / w, (double) THUMBNAIL_MAX_DIMENSION / h);
+            int newW = (int) (w * scale);
+            int newH = (int) (h * scale);
+
+            BufferedImage thumbnail = new BufferedImage(newW, newH, original.getType() == 0 ? BufferedImage.TYPE_INT_ARGB : original.getType());
+            Graphics2D g = thumbnail.createGraphics();
+            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            g.drawImage(original, 0, 0, newW, newH, null);
+            g.dispose();
+
+            String format = "png".equals(extension) ? "png" : "jpg";
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ImageIO.write(thumbnail, format, baos);
+
+            String thumbKey = buildThumbnailKey(originalKey);
+            PutObjectRequest thumbRequest = PutObjectRequest.builder()
+                    .bucket(properties.bucket())
+                    .key(thumbKey)
+                    .cacheControl("public, max-age=31536000, immutable")
+                    .contentType(contentType)
+                    .build();
+            s3Client.putObject(thumbRequest, RequestBody.fromBytes(baos.toByteArray()));
+        } catch (IOException ignored) {
+            // Thumbnail generation is best-effort; don't fail the upload
+        }
+    }
+
+    private String buildThumbnailKey(String originalKey) {
+        int dotIdx = originalKey.lastIndexOf('.');
+        return originalKey.substring(0, dotIdx) + "-thumb" + originalKey.substring(dotIdx);
     }
 
     private String buildObjectKey(String extension) {

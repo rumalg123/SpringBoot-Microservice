@@ -1,9 +1,12 @@
 package com.rumal.poster_service.controller;
 
+import com.rumal.poster_service.dto.PosterAnalyticsResponse;
 import com.rumal.poster_service.dto.PosterImageNameRequest;
 import com.rumal.poster_service.dto.PosterImageUploadResponse;
 import com.rumal.poster_service.dto.PosterResponse;
+import com.rumal.poster_service.dto.PosterVariantResponse;
 import com.rumal.poster_service.dto.UpsertPosterRequest;
+import com.rumal.poster_service.dto.UpsertPosterVariantRequest;
 import com.rumal.poster_service.security.InternalRequestVerifier;
 import com.rumal.poster_service.service.PosterService;
 import com.rumal.poster_service.storage.PosterImageStorageService;
@@ -91,6 +94,23 @@ public class AdminPosterController {
         return posterService.restore(id);
     }
 
+    @GetMapping("/analytics")
+    public List<PosterAnalyticsResponse> listAnalytics(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        return posterService.listAnalytics();
+    }
+
+    @GetMapping("/{id}/analytics")
+    public PosterAnalyticsResponse getAnalytics(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @PathVariable UUID id
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        return posterService.getAnalytics(id);
+    }
+
     @PostMapping(value = "/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
     public PosterImageUploadResponse uploadImages(
@@ -110,5 +130,49 @@ public class AdminPosterController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         return new PosterImageUploadResponse(posterImageStorageService.generateImageNames(request.fileNames()));
+    }
+
+    // ── A/B testing variant endpoints ─────────────────────────────────────
+
+    @GetMapping("/{posterId}/variants")
+    public List<PosterVariantResponse> listVariants(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @PathVariable UUID posterId
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        return posterService.listVariants(posterId);
+    }
+
+    @PostMapping("/{posterId}/variants")
+    @ResponseStatus(HttpStatus.CREATED)
+    public PosterVariantResponse createVariant(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @PathVariable UUID posterId,
+            @Valid @RequestBody UpsertPosterVariantRequest request
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        return posterService.createVariant(posterId, request);
+    }
+
+    @PutMapping("/{posterId}/variants/{variantId}")
+    public PosterVariantResponse updateVariant(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @PathVariable UUID posterId,
+            @PathVariable UUID variantId,
+            @Valid @RequestBody UpsertPosterVariantRequest request
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        return posterService.updateVariant(posterId, variantId, request);
+    }
+
+    @DeleteMapping("/{posterId}/variants/{variantId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteVariant(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @PathVariable UUID posterId,
+            @PathVariable UUID variantId
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        posterService.deleteVariant(posterId, variantId);
     }
 }

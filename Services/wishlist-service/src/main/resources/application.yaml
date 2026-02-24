@@ -46,6 +46,19 @@ resilience4j:
           - com.rumal.wishlist_service.exception.ResourceNotFoundException
           - com.rumal.wishlist_service.exception.ValidationException
           - com.rumal.wishlist_service.exception.UnauthorizedException
+      cartService:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 20
+        minimumNumberOfCalls: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 3
+        slowCallRateThreshold: 70
+        slowCallDurationThreshold: 3000
+        ignoreExceptions:
+          - com.rumal.wishlist_service.exception.ResourceNotFoundException
+          - com.rumal.wishlist_service.exception.ValidationException
+          - com.rumal.wishlist_service.exception.UnauthorizedException
 
   retry:
     instances:
@@ -58,10 +71,22 @@ resilience4j:
           - java.io.IOException
           - org.springframework.web.client.ResourceAccessException
           - org.springframework.web.client.HttpServerErrorException
+      cartService:
+        maxAttempts: 3
+        waitDuration: 300ms
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - java.io.IOException
+          - org.springframework.web.client.ResourceAccessException
+          - org.springframework.web.client.HttpServerErrorException
 
 internal:
   auth:
     shared-secret: ${INTERNAL_AUTH_SHARED_SECRET:}
+
+wishlist:
+  max-items-per-collection: ${WISHLIST_MAX_ITEMS_PER_COLLECTION:200}
 
 cache:
   wishlist-by-keycloak-ttl: ${CACHE_WISHLIST_BY_KEYCLOAK_TTL:45s}

@@ -2,23 +2,34 @@ package com.rumal.customer_service.service;
 
 import com.rumal.customer_service.auth.KeycloakManagementService;
 import com.rumal.customer_service.auth.KeycloakUserExistsException;
+import com.rumal.customer_service.dto.CommunicationPreferencesResponse;
 import com.rumal.customer_service.dto.CreateCustomerRequest;
+import com.rumal.customer_service.dto.CustomerActivityLogResponse;
 import com.rumal.customer_service.dto.CustomerAddressRequest;
 import com.rumal.customer_service.dto.CustomerAddressResponse;
 import com.rumal.customer_service.dto.CustomerResponse;
+import com.rumal.customer_service.dto.LinkedAccountsResponse;
 import com.rumal.customer_service.dto.RegisterIdentityCustomerRequest;
 import com.rumal.customer_service.dto.RegisterCustomerRequest;
+import com.rumal.customer_service.dto.UpdateCommunicationPreferencesRequest;
 import com.rumal.customer_service.dto.UpdateCustomerProfileRequest;
+import com.rumal.customer_service.entity.CommunicationPreferences;
 import com.rumal.customer_service.entity.Customer;
+import com.rumal.customer_service.entity.CustomerActivityLog;
 import com.rumal.customer_service.entity.CustomerAddress;
+import com.rumal.customer_service.entity.CustomerLoyaltyTier;
 import com.rumal.customer_service.exception.DuplicateResourceException;
 import com.rumal.customer_service.exception.ResourceNotFoundException;
 import com.rumal.customer_service.exception.ValidationException;
+import com.rumal.customer_service.repo.CommunicationPreferencesRepository;
+import com.rumal.customer_service.repo.CustomerActivityLogRepository;
 import com.rumal.customer_service.repo.CustomerAddressRepository;
 import com.rumal.customer_service.repo.CustomerRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
@@ -26,6 +37,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
+import java.time.Instant;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -37,6 +51,8 @@ public class CustomerServiceImpl implements CustomerService {
 
     private final CustomerRepository customerRepository;
     private final CustomerAddressRepository customerAddressRepository;
+    private final CommunicationPreferencesRepository communicationPreferencesRepository;
+    private final CustomerActivityLogRepository customerActivityLogRepository;
     private final KeycloakManagementService keycloakManagementService;
     private final TransactionTemplate transactionTemplate;
 
@@ -160,11 +176,10 @@ public class CustomerServiceImpl implements CustomerService {
     @Override
     @CachePut(cacheNames = "customerByKeycloak", key = "#keycloakId == null ? '' : #keycloakId.trim()")
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public CustomerResponse updateProfile(String keycloakId, UpdateCustomerProfileRequest request) {
+    public CustomerResponse updateProfile(String keycloakId, UpdateCustomerProfileRequest request, String ipAddress) {
         String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
 
-        Customer customer = customerRepository.findByKeycloakId(normalizedKeycloakId)
-                .orElseThrow(() -> new ResourceNotFoundException("Customer not found for keycloak id"));
+        Customer customer = findActiveCustomerByKeycloakId(normalizedKeycloakId);
 
         String firstName = request.firstName().trim();
         String lastName = request.lastName().trim();
@@ -179,6 +194,36 @@ public class CustomerServiceImpl implements CustomerService {
             Customer managed = customerRepository.findByKeycloakId(normalizedKeycloakId)
                     .orElseThrow(() -> new ResourceNotFoundException("Customer not found for keycloak id"));
             managed.setName(fullName);
+            managed.setPhone(trimToNull(request.phone()));
+            managed.setAvatarUrl(trimToNull(request.avatarUrl()));
+            managed.setDateOfBirth(request.dateOfBirth());
+            managed.setGender(request.gender());
+            Customer saved = customerRepository.save(managed);
+            logActivity(saved.getId(), "PROFILE_UPDATE", "Profile updated", ipAddress);
+            return toResponse(saved);
+        });
+    }
+
+    @Override
+    @CachePut(cacheNames = "customerByKeycloak", key = "#keycloakId == null ? '' : #keycloakId.trim()")
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public CustomerResponse deactivateAccount(String keycloakId) {
+        String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
+
+        Customer customer = customerRepository.findByKeycloakId(normalizedKeycloakId)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found for keycloak id"));
+
+        if (!customer.isActive()) {
+            return toResponse(customer);
+        }
+
+        keycloakManagementService.setUserEnabled(normalizedKeycloakId, false);
+
+        return transactionTemplate.execute(status -> {
+            Customer managed = customerRepository.findByKeycloakId(normalizedKeycloakId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Customer not found for keycloak id"));
+            managed.setActive(false);
+            managed.setDeactivatedAt(Instant.now());
             Customer saved = customerRepository.save(managed);
             return toResponse(saved);
         });
@@ -194,7 +239,7 @@ public class CustomerServiceImpl implements CustomerService {
     @Override
     @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
     public List<CustomerAddressResponse> listAddressesByKeycloak(String keycloakId) {
-        Customer customer = findCustomerByKeycloakId(keycloakId);
+        Customer customer = findActiveCustomerByKeycloakId(keycloakId);
         return customerAddressRepository.findByCustomerIdAndDeletedFalseOrderByUpdatedAtDesc(customer.getId()).stream()
                 .map(this::toAddressResponse)
                 .toList();
@@ -202,8 +247,8 @@ public class CustomerServiceImpl implements CustomerService {
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
-    public CustomerAddressResponse addAddressByKeycloak(String keycloakId, CustomerAddressRequest request) {
-        Customer customer = findCustomerByKeycloakId(keycloakId);
+    public CustomerAddressResponse addAddressByKeycloak(String keycloakId, CustomerAddressRequest request, String ipAddress) {
+        Customer customer = findActiveCustomerByKeycloakId(keycloakId);
         long addressCount = customerAddressRepository.countByCustomerIdAndDeletedFalse(customer.getId());
         if (addressCount >= MAX_ADDRESSES_PER_CUSTOMER) {
             throw new ValidationException("Cannot add more than " + MAX_ADDRESSES_PER_CUSTOMER + " addresses");
@@ -223,13 +268,14 @@ public class CustomerServiceImpl implements CustomerService {
                 Boolean.TRUE.equals(request.defaultBilling()) ? saved.getId() : null
         );
 
+        logActivity(customer.getId(), "ADDRESS_ADD", "Address added: " + saved.getId(), ipAddress);
         return toAddressResponse(findActiveAddress(customer.getId(), saved.getId()));
     }
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
-    public CustomerAddressResponse updateAddressByKeycloak(String keycloakId, UUID addressId, CustomerAddressRequest request) {
-        Customer customer = findCustomerByKeycloakId(keycloakId);
+    public CustomerAddressResponse updateAddressByKeycloak(String keycloakId, UUID addressId, CustomerAddressRequest request, String ipAddress) {
+        Customer customer = findActiveCustomerByKeycloakId(keycloakId);
         CustomerAddress address = findActiveAddress(customer.getId(), addressId);
 
         applyAddressFields(address, request);
@@ -247,25 +293,27 @@ public class CustomerServiceImpl implements CustomerService {
                 Boolean.TRUE.equals(request.defaultBilling()) ? address.getId() : null
         );
 
+        logActivity(customer.getId(), "ADDRESS_UPDATE", "Address updated: " + addressId, ipAddress);
         return toAddressResponse(findActiveAddress(customer.getId(), address.getId()));
     }
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
-    public void softDeleteAddressByKeycloak(String keycloakId, UUID addressId) {
-        Customer customer = findCustomerByKeycloakId(keycloakId);
+    public void softDeleteAddressByKeycloak(String keycloakId, UUID addressId, String ipAddress) {
+        Customer customer = findActiveCustomerByKeycloakId(keycloakId);
         CustomerAddress address = findActiveAddress(customer.getId(), addressId);
         address.setDeleted(true);
         address.setDefaultShipping(false);
         address.setDefaultBilling(false);
         customerAddressRepository.save(address);
         rebalanceDefaults(customer.getId(), null, null);
+        logActivity(customer.getId(), "ADDRESS_DELETE", "Address deleted: " + addressId, ipAddress);
     }
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public CustomerAddressResponse setDefaultShippingByKeycloak(String keycloakId, UUID addressId) {
-        Customer customer = findCustomerByKeycloakId(keycloakId);
+        Customer customer = findActiveCustomerByKeycloakId(keycloakId);
         findActiveAddress(customer.getId(), addressId);
         rebalanceDefaults(customer.getId(), addressId, null);
         return toAddressResponse(findActiveAddress(customer.getId(), addressId));
@@ -274,7 +322,7 @@ public class CustomerServiceImpl implements CustomerService {
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public CustomerAddressResponse setDefaultBillingByKeycloak(String keycloakId, UUID addressId) {
-        Customer customer = findCustomerByKeycloakId(keycloakId);
+        Customer customer = findActiveCustomerByKeycloakId(keycloakId);
         findActiveAddress(customer.getId(), addressId);
         rebalanceDefaults(customer.getId(), null, addressId);
         return toAddressResponse(findActiveAddress(customer.getId(), addressId));
@@ -286,7 +334,22 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     private CustomerResponse toResponse(Customer c) {
-        return new CustomerResponse(c.getId(), c.getName(), c.getEmail(), c.getCreatedAt());
+        return new CustomerResponse(
+                c.getId(),
+                c.getName(),
+                c.getEmail(),
+                c.getPhone(),
+                c.getAvatarUrl(),
+                c.getDateOfBirth(),
+                c.getGender(),
+                c.getLoyaltyTier(),
+                c.getLoyaltyPoints(),
+                parseSocialProviders(c.getSocialProviders()),
+                c.isActive(),
+                c.getDeactivatedAt(),
+                c.getCreatedAt(),
+                c.getUpdatedAt()
+        );
     }
 
     private CustomerAddressResponse toAddressResponse(CustomerAddress address) {
@@ -313,6 +376,22 @@ public class CustomerServiceImpl implements CustomerService {
     private Customer findCustomerByKeycloakId(String keycloakId) {
         return customerRepository.findByKeycloakId(normalizeKeycloakId(keycloakId))
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found for keycloak id"));
+    }
+
+    private Customer findActiveCustomerByKeycloakId(String keycloakId) {
+        Customer customer = findCustomerByKeycloakId(keycloakId);
+        if (!customer.isActive()) {
+            throw new ValidationException("Account is deactivated");
+        }
+        return customer;
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private String normalizeKeycloakId(String keycloakId) {
@@ -405,5 +484,146 @@ public class CustomerServiceImpl implements CustomerService {
         }
 
         return active.getFirst().getId();
+    }
+
+    // ── Loyalty ──────────────────────────────────────────────────────────────
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    public CustomerResponse addLoyaltyPoints(UUID customerId, int points) {
+        Customer customer = customerRepository.findById(customerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found: " + customerId));
+
+        customer.setLoyaltyPoints(customer.getLoyaltyPoints() + points);
+        customer.setLoyaltyTier(calculateTier(customer.getLoyaltyPoints()));
+        Customer saved = customerRepository.save(customer);
+        return toResponse(saved);
+    }
+
+    private CustomerLoyaltyTier calculateTier(int totalPoints) {
+        if (totalPoints >= 10000) {
+            return CustomerLoyaltyTier.PLATINUM;
+        } else if (totalPoints >= 5000) {
+            return CustomerLoyaltyTier.GOLD;
+        } else if (totalPoints >= 1000) {
+            return CustomerLoyaltyTier.SILVER;
+        }
+        return CustomerLoyaltyTier.BRONZE;
+    }
+
+    // ── Communication Preferences ────────────────────────────────────────────
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 10)
+    public CommunicationPreferencesResponse getCommunicationPreferences(String keycloakId) {
+        Customer customer = findActiveCustomerByKeycloakId(keycloakId);
+        CommunicationPreferences prefs = communicationPreferencesRepository.findByCustomerId(customer.getId())
+                .orElseGet(() -> getDefaultCommunicationPreferences(customer));
+        return toCommPrefsResponse(prefs);
+    }
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    public CommunicationPreferencesResponse updateCommunicationPreferences(String keycloakId, UpdateCommunicationPreferencesRequest request) {
+        Customer customer = findActiveCustomerByKeycloakId(keycloakId);
+        CommunicationPreferences prefs = communicationPreferencesRepository.findByCustomerId(customer.getId())
+                .orElseGet(() -> {
+                    CommunicationPreferences newPrefs = CommunicationPreferences.builder()
+                            .customer(customer)
+                            .build();
+                    return communicationPreferencesRepository.save(newPrefs);
+                });
+
+        if (request.emailMarketing() != null) {
+            prefs.setEmailMarketing(request.emailMarketing());
+        }
+        if (request.smsMarketing() != null) {
+            prefs.setSmsMarketing(request.smsMarketing());
+        }
+        if (request.pushNotifications() != null) {
+            prefs.setPushNotifications(request.pushNotifications());
+        }
+        if (request.orderUpdates() != null) {
+            prefs.setOrderUpdates(request.orderUpdates());
+        }
+        if (request.promotionalAlerts() != null) {
+            prefs.setPromotionalAlerts(request.promotionalAlerts());
+        }
+
+        CommunicationPreferences saved = communicationPreferencesRepository.save(prefs);
+        return toCommPrefsResponse(saved);
+    }
+
+    private CommunicationPreferences getDefaultCommunicationPreferences(Customer customer) {
+        CommunicationPreferences prefs = CommunicationPreferences.builder()
+                .customer(customer)
+                .build();
+        return communicationPreferencesRepository.save(prefs);
+    }
+
+    private CommunicationPreferencesResponse toCommPrefsResponse(CommunicationPreferences prefs) {
+        return new CommunicationPreferencesResponse(
+                prefs.getId(),
+                prefs.getCustomer().getId(),
+                prefs.isEmailMarketing(),
+                prefs.isSmsMarketing(),
+                prefs.isPushNotifications(),
+                prefs.isOrderUpdates(),
+                prefs.isPromotionalAlerts(),
+                prefs.getCreatedAt(),
+                prefs.getUpdatedAt()
+        );
+    }
+
+    // ── Activity Log ─────────────────────────────────────────────────────────
+
+    @Override
+    public Page<CustomerActivityLogResponse> getActivityLog(String keycloakId, Pageable pageable) {
+        Customer customer = findActiveCustomerByKeycloakId(keycloakId);
+        return customerActivityLogRepository.findByCustomerIdOrderByCreatedAtDesc(customer.getId(), pageable)
+                .map(this::toActivityLogResponse);
+    }
+
+    private void logActivity(UUID customerId, String action, String details, String ipAddress) {
+        customerActivityLogRepository.save(
+                CustomerActivityLog.builder()
+                        .customerId(customerId)
+                        .action(action)
+                        .details(details)
+                        .ipAddress(ipAddress)
+                        .build()
+        );
+    }
+
+    private CustomerActivityLogResponse toActivityLogResponse(CustomerActivityLog log) {
+        return new CustomerActivityLogResponse(
+                log.getId(),
+                log.getCustomerId(),
+                log.getAction(),
+                log.getDetails(),
+                log.getIpAddress(),
+                log.getCreatedAt()
+        );
+    }
+
+    // ── Social Login Linking ─────────────────────────────────────────────────
+
+    @Override
+    public LinkedAccountsResponse getLinkedAccounts(String keycloakId) {
+        Customer customer = findActiveCustomerByKeycloakId(keycloakId);
+        return new LinkedAccountsResponse(
+                customer.getId(),
+                parseSocialProviders(customer.getSocialProviders())
+        );
+    }
+
+    private List<String> parseSocialProviders(String socialProviders) {
+        if (socialProviders == null || socialProviders.isBlank()) {
+            return Collections.emptyList();
+        }
+        return Arrays.stream(socialProviders.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
     }
 }

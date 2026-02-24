@@ -37,7 +37,8 @@ public class CacheConfig implements CachingConfigurer {
         return RedisCacheManager.builder(redisConnectionFactory)
                 .cacheDefaults(defaultConfig.entryTtl(Duration.ofSeconds(60)))
                 .withInitialCacheConfigurations(Map.of(
-                        "adminOrders", defaultConfig.entryTtl(adminOrdersTtl)
+                        "adminOrders", defaultConfig.entryTtl(adminOrdersTtl),
+                        "dashboardSummary", defaultConfig.entryTtl(Duration.ofMinutes(5))
                 ))
                 .build();
     }

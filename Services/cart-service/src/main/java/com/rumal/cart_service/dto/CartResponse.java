@@ -9,9 +9,11 @@ public record CartResponse(
         UUID id,
         String keycloakId,
         List<CartItemResponse> items,
+        List<CartItemResponse> savedForLaterItems,
         int itemCount,
         int totalQuantity,
         BigDecimal subtotal,
+        String note,
         Instant createdAt,
         Instant updatedAt
 ) {

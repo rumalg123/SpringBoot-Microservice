@@ -1,24 +1,36 @@
 package com.rumal.product_service.service;
 
+import com.rumal.product_service.dto.CategoryAttributeResponse;
 import com.rumal.product_service.dto.CategoryResponse;
+import com.rumal.product_service.dto.UpsertCategoryAttributeRequest;
 import com.rumal.product_service.dto.UpsertCategoryRequest;
+import com.rumal.product_service.entity.AttributeType;
 import com.rumal.product_service.entity.Category;
+import com.rumal.product_service.entity.CategoryAttribute;
 import com.rumal.product_service.entity.CategoryType;
 import com.rumal.product_service.exception.ResourceNotFoundException;
 import com.rumal.product_service.exception.ValidationException;
+import com.rumal.product_service.repo.CategoryAttributeRepository;
 import com.rumal.product_service.repo.CategoryRepository;
 import com.rumal.product_service.repo.ProductRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -27,9 +39,13 @@ import java.util.UUID;
 public class CategoryServiceImpl implements CategoryService {
 
     private final CategoryRepository categoryRepository;
+    private final CategoryAttributeRepository categoryAttributeRepository;
     private final ProductRepository productRepository;
     private final ProductCatalogReadModelProjector productCatalogReadModelProjector;
     private final ProductCacheVersionService productCacheVersionService;
+
+    @Value("${category.max-depth:4}")
+    private int maxCategoryDepth;
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
@@ -52,6 +68,7 @@ public class CategoryServiceImpl implements CategoryService {
         Category category = Category.builder().build();
         applyRequest(category, request, baseSlug, autoSlug);
         Category saved = categoryRepository.save(category);
+        saveCategoryAttributes(saved, request.attributes());
         productCacheVersionService.bumpAllProductReadCaches();
         return toResponse(saved);
     }
@@ -77,6 +94,7 @@ public class CategoryServiceImpl implements CategoryService {
 
         applyRequest(category, request, baseSlug, autoSlug);
         Category saved = categoryRepository.save(category);
+        saveCategoryAttributes(saved, request.attributes());
         productCatalogReadModelProjector.rebuildAll();
         productCacheVersionService.bumpAllProductReadCaches();
         return toResponse(saved);
@@ -120,11 +138,8 @@ public class CategoryServiceImpl implements CategoryService {
             throw new ValidationException("Category is not soft deleted: " + id);
         }
 
-        if (category.getType() == CategoryType.SUB && category.getParentCategoryId() != null) {
-            Category parent = getActiveById(category.getParentCategoryId());
-            if (parent.getType() != CategoryType.PARENT) {
-                throw new ValidationException("Sub category parent must be a parent category");
-            }
+        if (category.getParentCategoryId() != null) {
+            getActiveById(category.getParentCategoryId());
         }
 
         category.setDeleted(false);
@@ -153,6 +168,25 @@ public class CategoryServiceImpl implements CategoryService {
     }
 
     @Override
+    public Page<CategoryResponse> listActivePaged(CategoryType type, UUID parentCategoryId, Pageable pageable) {
+        Page<Category> categories;
+        if (parentCategoryId != null) {
+            categories = categoryRepository.findByDeletedFalseAndParentCategoryIdOrderByNameAsc(parentCategoryId, pageable);
+        } else if (type != null) {
+            categories = categoryRepository.findByDeletedFalseAndTypeOrderByNameAsc(type, pageable);
+        } else {
+            categories = categoryRepository.findByDeletedFalseOrderByNameAsc(pageable);
+        }
+        return categories.map(this::toResponse);
+    }
+
+    @Override
+    public Page<CategoryResponse> listDeletedPaged(Pageable pageable) {
+        return categoryRepository.findByDeletedTrueOrderByUpdatedAtDesc(pageable)
+                .map(this::toResponse);
+    }
+
+    @Override
     @Cacheable(cacheNames = "deletedCategoriesList", key = "'deleted'")
     public List<CategoryResponse> listDeleted() {
         return categoryRepository.findByDeletedTrueOrderByUpdatedAtDesc()
@@ -178,21 +212,35 @@ public class CategoryServiceImpl implements CategoryService {
         UUID parentId = request.parentCategoryId();
         String resolvedSlug = resolveUniqueSlug(baseSlug, category.getId(), autoSlug);
 
-        if (request.type() == CategoryType.PARENT) {
-            if (parentId != null) {
-                throw new ValidationException("Parent category cannot have parentCategoryId");
+        // Gap 5: PARENT -> SUB type change guard
+        if (category.getId() != null && category.getType() == CategoryType.PARENT && request.type() == CategoryType.SUB) {
+            if (categoryRepository.existsByDeletedFalseAndParentCategoryId(category.getId())) {
+                throw new ValidationException("Cannot change category type from PARENT to SUB while it has active child categories");
             }
+        }
+
+        int depth = 0;
+        String path = "/";
+
+        if (request.type() == CategoryType.PARENT && parentId == null) {
+            // Root-level parent category: depth 0
+            depth = 0;
+            path = "/";
+        } else if (parentId == null) {
+            throw new ValidationException("Sub category must have parentCategoryId");
         } else {
-            if (parentId == null) {
-                throw new ValidationException("Sub category must have parentCategoryId");
-            }
             Category parent = getActiveById(parentId);
-            if (parent.getType() != CategoryType.PARENT) {
-                throw new ValidationException("Sub category parent must be a parent category");
-            }
             if (parent.getId().equals(category.getId())) {
                 throw new ValidationException("Category cannot be parent of itself");
             }
+            depth = parent.getDepth() + 1;
+            if (depth >= maxCategoryDepth) {
+                throw new ValidationException("Category nesting depth cannot exceed " + maxCategoryDepth + " levels");
+            }
+            String parentPath = parent.getPath() != null ? parent.getPath() : "/";
+            path = parentPath.endsWith("/")
+                    ? parentPath + parent.getSlug() + "/"
+                    : parentPath + "/" + parent.getSlug() + "/";
         }
 
         category.setName(request.name().trim());
@@ -200,8 +248,50 @@ public class CategoryServiceImpl implements CategoryService {
         category.setNormalizedName(normalizedName);
         category.setType(request.type());
         category.setParentCategoryId(parentId);
+        category.setDepth(depth);
+        category.setPath(path);
+        category.setDescription(request.description() != null ? request.description().trim() : null);
+        category.setImageUrl(request.imageUrl() != null ? request.imageUrl().trim() : null);
+        category.setDisplayOrder(request.displayOrder() != null ? request.displayOrder() : 0);
         category.setDeleted(false);
         category.setDeletedAt(null);
+    }
+
+    private void saveCategoryAttributes(Category category, List<UpsertCategoryAttributeRequest> attributes) {
+        categoryAttributeRepository.deleteByCategoryId(category.getId());
+        if (attributes == null || attributes.isEmpty()) {
+            return;
+        }
+        Set<String> keys = new HashSet<>();
+        List<CategoryAttribute> entities = new ArrayList<>();
+        for (int i = 0; i < attributes.size(); i++) {
+            UpsertCategoryAttributeRequest attr = attributes.get(i);
+            String normalizedKey = attr.attributeKey().trim().toLowerCase(Locale.ROOT);
+            if (normalizedKey.isEmpty()) {
+                throw new ValidationException("attributeKey is required");
+            }
+            if (!keys.add(normalizedKey)) {
+                throw new ValidationException("duplicate category attribute key: " + normalizedKey);
+            }
+            if (attr.attributeType() == AttributeType.SELECT) {
+                if (attr.allowedValues() == null || attr.allowedValues().isEmpty()) {
+                    throw new ValidationException("allowedValues is required for SELECT attribute type: " + normalizedKey);
+                }
+            }
+            String allowedValuesCsv = attr.allowedValues() != null && !attr.allowedValues().isEmpty()
+                    ? String.join(",", attr.allowedValues())
+                    : null;
+            entities.add(CategoryAttribute.builder()
+                    .category(category)
+                    .attributeKey(normalizedKey)
+                    .attributeLabel(attr.attributeLabel().trim())
+                    .required(attr.required())
+                    .displayOrder(attr.displayOrder() != null ? attr.displayOrder() : i)
+                    .attributeType(attr.attributeType())
+                    .allowedValues(allowedValuesCsv)
+                    .build());
+        }
+        categoryAttributeRepository.saveAll(entities);
     }
 
     private Category getActiveById(UUID id) {
@@ -247,16 +337,42 @@ public class CategoryServiceImpl implements CategoryService {
     }
 
     private CategoryResponse toResponse(Category category) {
+        List<CategoryAttributeResponse> attributes = categoryAttributeRepository
+                .findByCategoryIdOrderByDisplayOrderAsc(category.getId())
+                .stream()
+                .map(this::toCategoryAttributeResponse)
+                .toList();
         return new CategoryResponse(
                 category.getId(),
                 category.getName(),
                 category.getSlug(),
                 category.getType(),
                 category.getParentCategoryId(),
+                category.getDescription(),
+                category.getImageUrl(),
+                category.getDepth(),
+                category.getPath(),
+                category.getDisplayOrder(),
+                attributes,
                 category.isDeleted(),
                 category.getDeletedAt(),
                 category.getCreatedAt(),
                 category.getUpdatedAt()
+        );
+    }
+
+    private CategoryAttributeResponse toCategoryAttributeResponse(CategoryAttribute attr) {
+        List<String> allowedValues = attr.getAllowedValues() != null && !attr.getAllowedValues().isBlank()
+                ? Arrays.asList(attr.getAllowedValues().split(","))
+                : List.of();
+        return new CategoryAttributeResponse(
+                attr.getId(),
+                attr.getAttributeKey(),
+                attr.getAttributeLabel(),
+                attr.isRequired(),
+                attr.getDisplayOrder(),
+                attr.getAttributeType(),
+                allowedValues
         );
     }
 }

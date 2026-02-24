@@ -38,7 +38,8 @@ import java.util.UUID;
                 @Index(name = "idx_promo_campaign_approval", columnList = "approval_status"),
                 @Index(name = "idx_promo_campaign_scope", columnList = "scope_type"),
                 @Index(name = "idx_promo_campaign_starts_at", columnList = "starts_at"),
-                @Index(name = "idx_promo_campaign_ends_at", columnList = "ends_at")
+                @Index(name = "idx_promo_campaign_ends_at", columnList = "ends_at"),
+                @Index(name = "idx_promo_campaign_flash_sale", columnList = "is_flash_sale")
         }
 )
 @Getter
@@ -114,6 +115,12 @@ public class PromotionCampaign {
     @Builder.Default
     private boolean exclusive = false;
 
+    @Column(name = "stacking_group", length = 120)
+    private String stackingGroup;
+
+    @Column(name = "max_stack_count")
+    private Integer maxStackCount;
+
     @Column(name = "is_auto_apply", nullable = false)
     @Builder.Default
     private boolean autoApply = true;
@@ -147,11 +154,34 @@ public class PromotionCampaign {
     @Column(name = "approval_note", length = 1000)
     private String approvalNote;
 
+    @Column(name = "target_segments", length = 500)
+    private String targetSegments;
+
+    @Column(name = "is_flash_sale", nullable = false)
+    @Builder.Default
+    private boolean flashSale = false;
+
+    @Column(name = "flash_sale_start_at")
+    private Instant flashSaleStartAt;
+
+    @Column(name = "flash_sale_end_at")
+    private Instant flashSaleEndAt;
+
+    @Column(name = "flash_sale_max_redemptions")
+    private Integer flashSaleMaxRedemptions;
+
+    @Column(name = "flash_sale_redemption_count", nullable = false)
+    @Builder.Default
+    private int flashSaleRedemptionCount = 0;
+
     @Column(name = "starts_at")
     private Instant startsAt;
 
     @Column(name = "ends_at")
     private Instant endsAt;
+
+    @Column(name = "timezone", length = 60)
+    private String timezone;
 
     @Column(name = "created_by_user_sub", length = 120)
     private String createdByUserSub;

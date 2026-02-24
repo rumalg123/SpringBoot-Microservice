@@ -7,6 +7,7 @@ import com.rumal.cart_service.dto.CheckoutPreviewRequest;
 import com.rumal.cart_service.dto.CheckoutPreviewResponse;
 import com.rumal.cart_service.dto.CheckoutResponse;
 import com.rumal.cart_service.dto.UpdateCartItemRequest;
+import com.rumal.cart_service.dto.UpdateCartNoteRequest;
 import com.rumal.cart_service.exception.UnauthorizedException;
 import com.rumal.cart_service.security.InternalRequestVerifier;
 import com.rumal.cart_service.service.CartService;
@@ -109,6 +110,51 @@ public class CartController {
             throw new UnauthorizedException("Missing authentication header");
         }
         cartService.clear(userSub);
+    }
+
+    @PostMapping("/me/items/{itemId}/save-for-later")
+    public CartResponse saveForLater(
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Email-Verified", required = false) String userEmailVerified,
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @PathVariable UUID itemId
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        verifyEmailVerified(userEmailVerified);
+        if (userSub == null || userSub.isBlank()) {
+            throw new UnauthorizedException("Missing authentication header");
+        }
+        return cartService.saveForLater(userSub, itemId);
+    }
+
+    @PostMapping("/me/items/{itemId}/move-to-cart")
+    public CartResponse moveToCart(
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Email-Verified", required = false) String userEmailVerified,
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @PathVariable UUID itemId
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        verifyEmailVerified(userEmailVerified);
+        if (userSub == null || userSub.isBlank()) {
+            throw new UnauthorizedException("Missing authentication header");
+        }
+        return cartService.moveToCart(userSub, itemId);
+    }
+
+    @PutMapping("/me/note")
+    public CartResponse updateNote(
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Email-Verified", required = false) String userEmailVerified,
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @Valid @RequestBody UpdateCartNoteRequest request
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        verifyEmailVerified(userEmailVerified);
+        if (userSub == null || userSub.isBlank()) {
+            throw new UnauthorizedException("Missing authentication header");
+        }
+        return cartService.updateNote(userSub, request);
     }
 
     @PostMapping("/me/checkout")

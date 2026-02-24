@@ -1,5 +1,6 @@
 package com.rumal.product_service.dto;
 
+import com.rumal.product_service.entity.ApprovalStatus;
 import com.rumal.product_service.entity.ProductType;
 
 import java.math.BigDecimal;
@@ -15,7 +16,9 @@ public record ProductResponse(
         String slug,
         String shortDescription,
         String description,
+        String brandName,
         List<String> images,
+        String thumbnailUrl,
         BigDecimal regularPrice,
         BigDecimal discountedPrice,
         BigDecimal sellingPrice,
@@ -26,8 +29,21 @@ public record ProductResponse(
         Set<String> subCategorySlugs,
         Set<String> categories,
         ProductType productType,
+        boolean digital,
         List<ProductVariationAttributeResponse> variations,
         String sku,
+        Integer weightGrams,
+        BigDecimal lengthCm,
+        BigDecimal widthCm,
+        BigDecimal heightCm,
+        String metaTitle,
+        String metaDescription,
+        ApprovalStatus approvalStatus,
+        String rejectionReason,
+        List<ProductSpecificationResponse> specifications,
+        List<UUID> bundledProductIds,
+        long viewCount,
+        long soldCount,
         boolean active,
         boolean deleted,
         Instant deletedAt,

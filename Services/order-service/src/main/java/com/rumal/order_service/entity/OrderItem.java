@@ -53,4 +53,13 @@ public class OrderItem {
 
     @Column(name = "line_total", nullable = false, precision = 19, scale = 2)
     private BigDecimal lineTotal;
+
+    @Column(name = "discount_amount", precision = 19, scale = 2)
+    private BigDecimal discountAmount;
+
+    @Column(name = "fulfilled_quantity")
+    private Integer fulfilledQuantity;
+
+    @Column(name = "cancelled_quantity")
+    private Integer cancelledQuantity;
 }

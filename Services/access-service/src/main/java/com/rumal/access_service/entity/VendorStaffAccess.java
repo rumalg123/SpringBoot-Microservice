@@ -66,6 +66,15 @@ public class VendorStaffAccess {
     @Builder.Default
     private Set<VendorPermission> permissions = new LinkedHashSet<>();
 
+    @Column(name = "permission_group_id")
+    private UUID permissionGroupId;
+
+    @Column(name = "access_expires_at")
+    private Instant accessExpiresAt;
+
+    @Column(name = "allowed_ips", length = 1000)
+    private String allowedIps;
+
     @Column(name = "is_active", nullable = false)
     @Builder.Default
     private boolean active = true;

@@ -101,6 +101,16 @@ public class AdminActorScopeService {
         return parseRoles(userRolesHeader).contains(role == null ? "" : role.trim().toLowerCase(Locale.ROOT));
     }
 
+    public void assertHasRole(String userSub, String userRolesHeader, String... requiredRoles) {
+        Set<String> roles = parseRoles(userRolesHeader);
+        for (String required : requiredRoles) {
+            if (roles.contains(required.trim().toLowerCase(Locale.ROOT))) {
+                return;
+            }
+        }
+        throw new UnauthorizedException("Caller does not have required role(s)");
+    }
+
     public void assertCanManageOrders(String userSub, String userRolesHeader, String internalAuth) {
         Set<String> roles = parseRoles(userRolesHeader);
         if (roles.contains("super_admin")) {

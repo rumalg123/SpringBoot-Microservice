@@ -1,5 +1,6 @@
 package com.rumal.wishlist_service.repo;
 
+import com.rumal.wishlist_service.entity.WishlistCollection;
 import com.rumal.wishlist_service.entity.WishlistItem;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -11,9 +12,17 @@ public interface WishlistItemRepository extends JpaRepository<WishlistItem, UUID
 
     List<WishlistItem> findByKeycloakIdOrderByCreatedAtDesc(String keycloakId);
 
+    List<WishlistItem> findByCollectionOrderByCreatedAtDesc(WishlistCollection collection);
+
     Optional<WishlistItem> findByIdAndKeycloakId(UUID id, String keycloakId);
 
     Optional<WishlistItem> findByKeycloakIdAndProductId(String keycloakId, UUID productId);
 
+    Optional<WishlistItem> findByCollectionAndProductId(WishlistCollection collection, UUID productId);
+
+    long countByCollection(WishlistCollection collection);
+
     long deleteByKeycloakId(String keycloakId);
+
+    long deleteByCollection(WishlistCollection collection);
 }

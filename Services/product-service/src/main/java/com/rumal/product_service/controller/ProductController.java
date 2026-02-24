@@ -13,20 +13,27 @@ import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.util.AntPathMatcher;
 import org.springframework.web.servlet.HandlerMapping;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -56,6 +63,12 @@ public class ProductController {
         return productService.listVariationsByIdOrSlug(idOrSlug);
     }
 
+    @PostMapping("/{id}/view")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void recordView(@PathVariable UUID id) {
+        productService.incrementViewCount(id);
+    }
+
     @GetMapping("/images/**")
     public ResponseEntity<byte[]> getImage(HttpServletRequest request) {
         String path = (String) request.getAttribute(HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE);
@@ -80,10 +93,18 @@ public class ProductController {
             @RequestParam(required = false) BigDecimal minSellingPrice,
             @RequestParam(required = false) BigDecimal maxSellingPrice,
             @RequestParam(defaultValue = "false") boolean includeOrphanParents,
+            @RequestParam(required = false) String brand,
+            @RequestParam(required = false) String specs,
+            @RequestParam(required = false) String vendorName,
+            @RequestParam(required = false) Instant createdAfter,
+            @RequestParam(required = false) Instant createdBefore,
+            @RequestParam(required = false) String sortBy,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
+        Pageable effectivePageable = applySortByPreset(sortBy, pageable);
+        Map<String, String> specFilter = parseSpecsParam(specs);
         return productService.list(
-                pageable,
+                effectivePageable,
                 q,
                 sku,
                 category,
@@ -93,7 +114,53 @@ public class ProductController {
                 type,
                 minSellingPrice,
                 maxSellingPrice,
-                includeOrphanParents
+                includeOrphanParents,
+                brand,
+                null,
+                specFilter,
+                vendorName,
+                createdAfter,
+                createdBefore
         );
+    }
+
+    private Pageable applySortByPreset(String sortBy, Pageable pageable) {
+        if (sortBy == null || sortBy.isBlank()) {
+            return pageable;
+        }
+        Sort sort = switch (sortBy.trim().toLowerCase()) {
+            case "popularity" -> Sort.by(Sort.Direction.DESC, "soldCount")
+                    .and(Sort.by(Sort.Direction.DESC, "viewCount"));
+            case "best-selling" -> Sort.by(Sort.Direction.DESC, "soldCount");
+            case "most-viewed" -> Sort.by(Sort.Direction.DESC, "viewCount");
+            case "newest" -> Sort.by(Sort.Direction.DESC, "createdAt");
+            case "price-low" -> Sort.by(Sort.Direction.ASC, "sellingPrice");
+            case "price-high" -> Sort.by(Sort.Direction.DESC, "sellingPrice");
+            default -> null;
+        };
+        if (sort == null) {
+            return pageable;
+        }
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort);
+    }
+
+    private Map<String, String> parseSpecsParam(String specs) {
+        if (specs == null || specs.isBlank()) {
+            return null;
+        }
+        Map<String, String> result = new LinkedHashMap<>();
+        String[] pairs = specs.split(",");
+        for (String pair : pairs) {
+            int colonIndex = pair.indexOf(':');
+            if (colonIndex <= 0 || colonIndex >= pair.length() - 1) {
+                continue;
+            }
+            String key = pair.substring(0, colonIndex).trim();
+            String value = pair.substring(colonIndex + 1).trim();
+            if (!key.isEmpty() && !value.isEmpty()) {
+                result.put(key.toLowerCase(), value);
+            }
+        }
+        return result.isEmpty() ? null : result;
     }
 }

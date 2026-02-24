@@ -47,6 +47,8 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
     private final RedisRateLimiter adminProductsRateLimiter;
     private final RedisRateLimiter adminProductsWriteRateLimiter;
     private final RedisRateLimiter publicCatalogAuxRateLimiter;
+    private final RedisRateLimiter vendorMeRateLimiter;
+    private final RedisRateLimiter vendorMeWriteRateLimiter;
     private final RedisRateLimiter adminVendorsRateLimiter;
     private final RedisRateLimiter adminVendorsWriteRateLimiter;
     private final RedisRateLimiter adminPostersRateLimiter;
@@ -79,6 +81,8 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
             @Qualifier("adminProductsRateLimiter") RedisRateLimiter adminProductsRateLimiter,
             @Qualifier("adminProductsWriteRateLimiter") RedisRateLimiter adminProductsWriteRateLimiter,
             @Qualifier("publicCatalogAuxRateLimiter") RedisRateLimiter publicCatalogAuxRateLimiter,
+            @Qualifier("vendorMeRateLimiter") RedisRateLimiter vendorMeRateLimiter,
+            @Qualifier("vendorMeWriteRateLimiter") RedisRateLimiter vendorMeWriteRateLimiter,
             @Qualifier("adminVendorsRateLimiter") RedisRateLimiter adminVendorsRateLimiter,
             @Qualifier("adminVendorsWriteRateLimiter") RedisRateLimiter adminVendorsWriteRateLimiter,
             @Qualifier("adminPostersRateLimiter") RedisRateLimiter adminPostersRateLimiter,
@@ -110,6 +114,8 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
         this.adminProductsRateLimiter = adminProductsRateLimiter;
         this.adminProductsWriteRateLimiter = adminProductsWriteRateLimiter;
         this.publicCatalogAuxRateLimiter = publicCatalogAuxRateLimiter;
+        this.vendorMeRateLimiter = vendorMeRateLimiter;
+        this.vendorMeWriteRateLimiter = vendorMeWriteRateLimiter;
         this.adminVendorsRateLimiter = adminVendorsRateLimiter;
         this.adminVendorsWriteRateLimiter = adminVendorsWriteRateLimiter;
         this.adminPostersRateLimiter = adminPostersRateLimiter;
@@ -239,6 +245,9 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
         if ("/orders/me".equals(path) && method == HttpMethod.POST) {
             return new Policy("orders-me-write", ordersMeWriteRateLimiter, userOrIpKeyResolver);
         }
+        if (path.startsWith("/orders/me/") && path.endsWith("/cancel") && method == HttpMethod.POST) {
+            return new Policy("orders-me-write", ordersMeWriteRateLimiter, userOrIpKeyResolver);
+        }
         if (("/orders/me".equals(path) || path.startsWith("/orders/me/")) && method == HttpMethod.GET) {
             return new Policy("orders-me-read", ordersMeRateLimiter, userOrIpKeyResolver);
         }
@@ -271,6 +280,12 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
                 || "/categories".equals(path) || path.startsWith("/categories/"))
                 && (method == HttpMethod.GET || method == HttpMethod.HEAD)) {
             return new Policy("products-read", productsRateLimiter, ipKeyResolver);
+        }
+        if ("/vendors/me".equals(path) || path.startsWith("/vendors/me/")) {
+            if (method == HttpMethod.GET || method == HttpMethod.HEAD) {
+                return new Policy("vendor-me-read", vendorMeRateLimiter, userOrIpKeyResolver);
+            }
+            return new Policy("vendor-me-write", vendorMeWriteRateLimiter, userOrIpKeyResolver);
         }
         if (("/posters".equals(path) || path.startsWith("/posters/")
                 || "/vendors".equals(path) || path.startsWith("/vendors/"))

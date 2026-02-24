@@ -1,5 +1,7 @@
 package com.rumal.promotion_service.service;
 
+import com.rumal.promotion_service.dto.BatchCreateCouponsRequest;
+import com.rumal.promotion_service.dto.BatchCreateCouponsResponse;
 import com.rumal.promotion_service.dto.CouponCodeResponse;
 import com.rumal.promotion_service.dto.CreateCouponCodeRequest;
 import com.rumal.promotion_service.entity.CouponCode;
@@ -14,6 +16,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.security.SecureRandom;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -57,6 +61,81 @@ public class CouponCodeAdminService {
                 .build();
 
         return toResponse(couponCodeRepository.save(coupon));
+    }
+
+    @CacheEvict(cacheNames = "promotionAdminList", allEntries = true)
+    @Transactional
+    public BatchCreateCouponsResponse batchCreate(UUID promotionId, BatchCreateCouponsRequest request, String actorUserSub) {
+        PromotionCampaign promotion = requirePromotion(promotionId);
+        String prefix = request.prefix().trim().toUpperCase(Locale.ROOT);
+        boolean active = request.active() == null || request.active();
+
+        List<CouponCode> coupons = new ArrayList<>();
+        for (int i = 0; i < request.count(); i++) {
+            String code = generateUniqueCode(prefix);
+            CouponCode coupon = CouponCode.builder()
+                    .promotion(promotion)
+                    .code(code)
+                    .active(active)
+                    .maxUses(request.maxUses())
+                    .maxUsesPerCustomer(request.maxUsesPerCustomer())
+                    .reservationTtlSeconds(request.reservationTtlSeconds())
+                    .startsAt(request.startsAt())
+                    .endsAt(request.endsAt())
+                    .createdByUserSub(trimToNull(actorUserSub))
+                    .updatedByUserSub(trimToNull(actorUserSub))
+                    .build();
+            coupons.add(coupon);
+        }
+
+        List<CouponCode> saved = couponCodeRepository.saveAll(coupons);
+        List<CouponCodeResponse> responses = saved.stream().map(this::toResponse).toList();
+        return new BatchCreateCouponsResponse(request.count(), saved.size(), responses);
+    }
+
+    private String generateUniqueCode(String prefix) {
+        int maxRetries = 3;
+        for (int attempt = 0; attempt < maxRetries; attempt++) {
+            String code = prefix + "-" + randomAlphanumeric(8);
+            if (!couponCodeRepository.existsByCodeIgnoreCase(code)) {
+                return code;
+            }
+        }
+        throw new ValidationException("Failed to generate unique coupon code after retries");
+    }
+
+    private static final String ALPHANUMERIC = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    private static final SecureRandom RANDOM = new SecureRandom();
+
+    private String randomAlphanumeric(int length) {
+        StringBuilder sb = new StringBuilder(length);
+        for (int i = 0; i < length; i++) {
+            sb.append(ALPHANUMERIC.charAt(RANDOM.nextInt(ALPHANUMERIC.length())));
+        }
+        return sb.toString();
+    }
+
+    @CacheEvict(cacheNames = "promotionAdminList", allEntries = true)
+    @Transactional
+    public CouponCodeResponse deactivate(UUID promotionId, UUID couponId, String actorUserSub) {
+        CouponCode coupon = requireCoupon(promotionId, couponId);
+        coupon.setActive(false);
+        coupon.setUpdatedByUserSub(trimToNull(actorUserSub));
+        return toResponse(couponCodeRepository.save(coupon));
+    }
+
+    @CacheEvict(cacheNames = "promotionAdminList", allEntries = true)
+    @Transactional
+    public CouponCodeResponse activate(UUID promotionId, UUID couponId, String actorUserSub) {
+        CouponCode coupon = requireCoupon(promotionId, couponId);
+        coupon.setActive(true);
+        coupon.setUpdatedByUserSub(trimToNull(actorUserSub));
+        return toResponse(couponCodeRepository.save(coupon));
+    }
+
+    private CouponCode requireCoupon(UUID promotionId, UUID couponId) {
+        return couponCodeRepository.findByIdAndPromotion_Id(couponId, promotionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Coupon not found: " + couponId + " in promotion: " + promotionId));
     }
 
     private PromotionCampaign requirePromotion(UUID promotionId) {

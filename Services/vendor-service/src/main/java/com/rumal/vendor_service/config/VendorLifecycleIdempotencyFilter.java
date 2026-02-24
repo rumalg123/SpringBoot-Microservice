@@ -32,11 +32,16 @@ public class VendorLifecycleIdempotencyFilter extends AbstractRedisServletIdempo
 
     @Override
     protected boolean supportsMethod(String method) {
-        return "POST".equalsIgnoreCase(method);
+        return "POST".equalsIgnoreCase(method) || "PUT".equalsIgnoreCase(method) || "PATCH".equalsIgnoreCase(method);
     }
 
     @Override
     protected boolean isProtectedMutationPath(String path, String method) {
+        if (path.startsWith("/vendors/me")) {
+            return "/vendors/me/stop-orders".equals(path)
+                    || "/vendors/me/resume-orders".equals(path)
+                    || "/vendors/me/request-verification".equals(path);
+        }
         if (!path.startsWith("/admin/vendors/")) {
             return false;
         }
@@ -44,7 +49,10 @@ public class VendorLifecycleIdempotencyFilter extends AbstractRedisServletIdempo
                 || path.endsWith("/confirm-delete")
                 || path.endsWith("/stop-orders")
                 || path.endsWith("/resume-orders")
-                || path.endsWith("/restore");
+                || path.endsWith("/restore")
+                || path.endsWith("/verify")
+                || path.endsWith("/reject-verification")
+                || path.endsWith("/metrics");
     }
 
     @Override

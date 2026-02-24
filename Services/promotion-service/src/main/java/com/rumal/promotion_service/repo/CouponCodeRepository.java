@@ -28,4 +28,6 @@ public interface CouponCodeRepository extends JpaRepository<CouponCode, UUID> {
     long countByPromotion_IdAndActiveTrue(UUID promotionId);
 
     boolean existsByCodeIgnoreCase(String code);
+
+    Optional<CouponCode> findByIdAndPromotion_Id(UUID id, UUID promotionId);
 }

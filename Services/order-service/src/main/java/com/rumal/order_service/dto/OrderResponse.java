@@ -11,6 +11,7 @@ public record OrderResponse(
         int quantity,
         int itemCount,
         BigDecimal orderTotal,
+        String currency,
         BigDecimal subtotal,
         BigDecimal lineDiscountTotal,
         BigDecimal cartDiscountTotal,
@@ -19,6 +20,17 @@ public record OrderResponse(
         BigDecimal totalDiscount,
         String couponCode,
         UUID couponReservationId,
+        String paymentId,
+        String paymentMethod,
+        String paymentGatewayRef,
+        Instant paidAt,
+        String customerNote,
         String status,
-        Instant createdAt
+        Instant expiresAt,
+        BigDecimal refundAmount,
+        String refundReason,
+        Instant refundInitiatedAt,
+        Instant refundCompletedAt,
+        Instant createdAt,
+        Instant updatedAt
 ) {}

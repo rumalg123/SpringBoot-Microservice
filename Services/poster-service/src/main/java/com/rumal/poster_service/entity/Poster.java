@@ -1,22 +1,28 @@
 package com.rumal.poster_service.entity;
 
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.Instant;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.UUID;
 
 @Entity
@@ -61,6 +67,18 @@ public class Poster {
     @Column(name = "mobile_image", length = 260)
     private String mobileImage;
 
+    @Column(name = "tablet_image", length = 260)
+    private String tabletImage;
+
+    @Column(name = "srcset_desktop", length = 1000)
+    private String srcsetDesktop;
+
+    @Column(name = "srcset_mobile", length = 1000)
+    private String srcsetMobile;
+
+    @Column(name = "srcset_tablet", length = 1000)
+    private String srcsetTablet;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "link_type", nullable = false, length = 20)
     private PosterLinkType linkType;
@@ -97,6 +115,30 @@ public class Poster {
 
     @Column(name = "end_at")
     private Instant endAt;
+
+    @Column(name = "click_count", nullable = false)
+    @Builder.Default
+    private long clickCount = 0;
+
+    @Column(name = "impression_count", nullable = false)
+    @Builder.Default
+    private long impressionCount = 0;
+
+    @Column(name = "last_click_at")
+    private Instant lastClickAt;
+
+    @Column(name = "last_impression_at")
+    private Instant lastImpressionAt;
+
+    @ElementCollection
+    @CollectionTable(name = "poster_target_countries", joinColumns = @JoinColumn(name = "poster_id"))
+    @Column(name = "country_code", length = 3)
+    @BatchSize(size = 20)
+    @Builder.Default
+    private Set<String> targetCountries = new LinkedHashSet<>();
+
+    @Column(name = "target_customer_segment", length = 40)
+    private String targetCustomerSegment;
 
     @Column(name = "is_deleted", nullable = false)
     @Builder.Default

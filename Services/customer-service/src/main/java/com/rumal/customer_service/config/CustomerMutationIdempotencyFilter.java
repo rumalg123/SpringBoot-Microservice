@@ -43,12 +43,15 @@ public class CustomerMutationIdempotencyFilter extends AbstractRedisServletIdemp
             return "/customers/register".equals(path)
                     || "/customers/register-identity".equals(path)
                     || "/customers/me/addresses".equals(path)
+                    || "/customers/me/deactivate".equals(path)
                     || path.matches("/customers/me/addresses/[^/]+/default-shipping")
-                    || path.matches("/customers/me/addresses/[^/]+/default-billing");
+                    || path.matches("/customers/me/addresses/[^/]+/default-billing")
+                    || path.matches("/customers/internal/[^/]+/add-loyalty-points");
         }
         if ("PUT".equalsIgnoreCase(method)) {
             return "/customers/me".equals(path)
-                    || path.matches("/customers/me/addresses/[^/]+");
+                    || path.matches("/customers/me/addresses/[^/]+")
+                    || "/customers/me/communication-preferences".equals(path);
         }
         if ("DELETE".equalsIgnoreCase(method)) {
             return path.matches("/customers/me/addresses/[^/]+");

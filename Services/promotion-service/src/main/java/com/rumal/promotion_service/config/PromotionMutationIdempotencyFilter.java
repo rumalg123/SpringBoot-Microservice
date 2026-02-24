@@ -64,7 +64,8 @@ public class PromotionMutationIdempotencyFilter extends AbstractRedisServletIdem
                 return true;
             }
             // POST /admin/promotions/{id}/coupons (create coupon)
-            if (path.startsWith("/admin/promotions/") && path.endsWith("/coupons")) {
+            // POST /admin/promotions/{id}/coupons/batch (batch create coupons)
+            if (path.startsWith("/admin/promotions/") && (path.endsWith("/coupons") || path.endsWith("/coupons/batch"))) {
                 return true;
             }
             // POST /internal/promotions/reservations (reserve)
@@ -83,6 +84,14 @@ public class PromotionMutationIdempotencyFilter extends AbstractRedisServletIdem
         if ("PUT".equalsIgnoreCase(method)) {
             // PUT /admin/promotions/{id} (update)
             return path.startsWith("/admin/promotions/") && !path.substring("/admin/promotions/".length()).contains("/");
+        }
+        if ("PATCH".equalsIgnoreCase(method)) {
+            // PATCH /admin/promotions/{id}/coupons/{couponId}/deactivate
+            // PATCH /admin/promotions/{id}/coupons/{couponId}/activate
+            if (path.startsWith("/admin/promotions/") && path.contains("/coupons/")
+                    && (path.endsWith("/deactivate") || path.endsWith("/activate"))) {
+                return true;
+            }
         }
         return false;
     }

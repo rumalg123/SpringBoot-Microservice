@@ -1,11 +1,17 @@
 package com.rumal.vendor_service.service;
 
+import com.rumal.vendor_service.dto.AdminVerificationActionRequest;
+import com.rumal.vendor_service.dto.RequestVerificationRequest;
+import com.rumal.vendor_service.dto.UpdateVendorMetricsRequest;
+import com.rumal.vendor_service.dto.UpdateVendorSelfServiceRequest;
+import com.rumal.vendor_service.dto.UpsertVendorPayoutConfigRequest;
 import com.rumal.vendor_service.dto.UpsertVendorRequest;
 import com.rumal.vendor_service.dto.UpsertVendorUserRequest;
 import com.rumal.vendor_service.dto.VendorAccessMembershipResponse;
 import com.rumal.vendor_service.dto.VendorLifecycleAuditResponse;
 import com.rumal.vendor_service.dto.VendorDeletionEligibilityResponse;
 import com.rumal.vendor_service.dto.VendorOperationalStateResponse;
+import com.rumal.vendor_service.dto.VendorPayoutConfigResponse;
 import com.rumal.vendor_service.dto.VendorResponse;
 import com.rumal.vendor_service.dto.VendorUserResponse;
 
@@ -18,6 +24,7 @@ public interface VendorService {
     VendorResponse getByIdOrSlug(String idOrSlug);
     VendorResponse getAdminById(UUID id);
     List<VendorResponse> listPublicActive();
+    List<VendorResponse> listPublicActive(String category);
     List<VendorResponse> listAllNonDeleted();
     List<VendorResponse> listDeleted();
     List<VendorLifecycleAuditResponse> listLifecycleAudit(UUID id);
@@ -41,4 +48,19 @@ public interface VendorService {
     List<VendorAccessMembershipResponse> listAccessibleVendorMembershipsByKeycloakUser(String keycloakUserId);
     VendorOperationalStateResponse getOperationalState(UUID vendorId);
     List<VendorOperationalStateResponse> getOperationalStates(List<UUID> vendorIds);
+
+    VendorResponse getVendorForKeycloakUser(String keycloakUserId, UUID vendorIdHint);
+    VendorResponse updateVendorSelfService(String keycloakUserId, UUID vendorIdHint, UpdateVendorSelfServiceRequest request);
+    VendorResponse selfServiceStopOrders(String keycloakUserId, UUID vendorIdHint);
+    VendorResponse selfServiceResumeOrders(String keycloakUserId, UUID vendorIdHint);
+    VendorPayoutConfigResponse getPayoutConfig(String keycloakUserId, UUID vendorIdHint);
+    VendorPayoutConfigResponse upsertPayoutConfig(String keycloakUserId, UUID vendorIdHint, UpsertVendorPayoutConfigRequest request);
+
+    // Gap 49: Verification
+    VendorResponse requestVerification(String keycloakUserId, UUID vendorIdHint, RequestVerificationRequest request);
+    VendorResponse approveVerification(UUID vendorId, AdminVerificationActionRequest request, String actorSub, String actorRoles);
+    VendorResponse rejectVerification(UUID vendorId, AdminVerificationActionRequest request, String actorSub, String actorRoles);
+
+    // Gap 50: Performance metrics
+    VendorResponse updateMetrics(UUID vendorId, UpdateVendorMetricsRequest request);
 }
