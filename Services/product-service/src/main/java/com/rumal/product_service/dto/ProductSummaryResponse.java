@@ -4,6 +4,7 @@ import com.rumal.product_service.entity.ApprovalStatus;
 import com.rumal.product_service.entity.ProductType;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -29,6 +30,8 @@ public record ProductSummaryResponse(
         long soldCount,
         boolean active,
         List<ProductVariationAttributeResponse> variations,
+        Instant createdAt,
+        Instant updatedAt,
         Integer stockAvailable,
         String stockStatus,
         Boolean backorderable
@@ -39,6 +42,7 @@ public record ProductSummaryResponse(
                 regularPrice, discountedPrice, sellingPrice, sku, mainCategory,
                 subCategories, categories, productType, approvalStatus, vendorId,
                 viewCount, soldCount, active, variations,
+                createdAt, updatedAt,
                 stockAvailable, stockStatus, backorderable
         );
     }
