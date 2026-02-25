@@ -1,6 +1,7 @@
 package com.rumal.cart_service.client;
 
 import com.rumal.cart_service.dto.VendorOperationalStateResponse;
+import com.rumal.cart_service.exception.ResourceNotFoundException;
 import com.rumal.cart_service.exception.ServiceUnavailableException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
@@ -9,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
@@ -40,6 +42,10 @@ public class VendorOperationalStateClient {
                     .header("X-Internal-Auth", internalAuthSharedSecret)
                     .retrieve()
                     .body(VendorOperationalStateResponse.class);
+        } catch (HttpClientErrorException.NotFound ex) {
+            throw new ResourceNotFoundException("Vendor not found: " + vendorId);
+        } catch (HttpClientErrorException ex) {
+            throw ex;
         } catch (RestClientException ex) {
             throw new ServiceUnavailableException("Vendor service unavailable while validating vendor state.", ex);
         }

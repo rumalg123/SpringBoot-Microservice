@@ -67,7 +67,6 @@ import java.util.regex.Pattern;
 @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
 public class ProductServiceImpl implements ProductService {
 
-    private static final UUID ADMIN_VENDOR_UUID = UUID.fromString("00000000-0000-0000-0000-000000000000");
     private static final Pattern IMAGE_FILE_PATTERN = Pattern.compile("^[A-Za-z0-9._/-]+\\.[A-Za-z0-9]{2,8}$");
 
     private final ProductRepository productRepository;
@@ -252,6 +251,43 @@ public class ProductServiceImpl implements ProductService {
 
         Page<ProductSummaryResponse> page = productCatalogReadRepository.findAll(spec, pageable).map(this::toSummaryResponse);
         page = filterHiddenVendorProducts(page, pageable);
+        return enrichPageWithStock(page, pageable);
+    }
+
+    @Override
+    @Cacheable(
+            cacheNames = "adminProductsList",
+            key = "@productCacheVersionService.productsListVersion() + '::' + T(com.rumal.product_service.service.ProductServiceImpl).adminListCacheKey(" +
+                    "#pageable,#q,#sku,#category,#mainCategory,#subCategory,#vendorId,#type,#minSellingPrice,#maxSellingPrice,#includeOrphanParents,#brand,#approvalStatus,#active)"
+    )
+    public Page<ProductSummaryResponse> adminList(
+            Pageable pageable,
+            String q,
+            String sku,
+            String category,
+            String mainCategory,
+            String subCategory,
+            UUID vendorId,
+            ProductType type,
+            BigDecimal minSellingPrice,
+            BigDecimal maxSellingPrice,
+            boolean includeOrphanParents,
+            String brand,
+            ApprovalStatus approvalStatus,
+            Boolean active
+    ) {
+        Specification<ProductCatalogRead> spec = buildReadFilterSpec(
+                q, sku, category, mainCategory, subCategory, vendorId, type,
+                minSellingPrice, maxSellingPrice, includeOrphanParents, brand,
+                approvalStatus, null, null, null
+        )
+                .and((root, query, cb) -> cb.isFalse(root.get("deleted")));
+
+        if (active != null) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("active"), active));
+        }
+
+        Page<ProductSummaryResponse> page = productCatalogReadRepository.findAll(spec, pageable).map(this::toSummaryResponse);
         return enrichPageWithStock(page, pageable);
     }
 
@@ -628,7 +664,11 @@ public class ProductServiceImpl implements ProductService {
                     product.setRegularPrice(regularPrice);
                     product.setDiscountedPrice(discountedPrice);
                     product.setSku(sku);
-                    product.setVendorId(vendorId != null ? vendorId : ADMIN_VENDOR_UUID);
+                    if (vendorId == null) {
+                        errors.add("Row " + totalRows + ": vendorId is required");
+                        continue;
+                    }
+                    product.setVendorId(vendorId);
                     product.setProductType(productType);
                     product.setDigital(digital);
                     product.setImages(new ArrayList<>(images));
@@ -969,6 +1009,38 @@ public class ProductServiceImpl implements ProductService {
                 + "::createdBefore=" + (createdBefore == null ? "" : createdBefore);
     }
 
+    public static String adminListCacheKey(
+            Pageable pageable,
+            String q,
+            String sku,
+            String category,
+            String mainCategory,
+            String subCategory,
+            UUID vendorId,
+            ProductType type,
+            BigDecimal minSellingPrice,
+            BigDecimal maxSellingPrice,
+            boolean includeOrphanParents,
+            String brand,
+            ApprovalStatus approvalStatus,
+            Boolean active
+    ) {
+        return "admin::" + pageableCacheKey(pageable)
+                + "::q=" + normalizeCacheFilter(q)
+                + "::sku=" + normalizeCacheFilter(sku)
+                + "::category=" + normalizeCacheFilter(category)
+                + "::mainCategory=" + normalizeCacheFilter(mainCategory)
+                + "::subCategory=" + normalizeCacheFilter(subCategory)
+                + "::vendorId=" + (vendorId == null ? "" : vendorId)
+                + "::type=" + (type == null ? "" : type.name())
+                + "::minPrice=" + decimalKey(minSellingPrice)
+                + "::maxPrice=" + decimalKey(maxSellingPrice)
+                + "::includeOrphanParents=" + includeOrphanParents
+                + "::brand=" + normalizeCacheFilter(brand)
+                + "::approvalStatus=" + (approvalStatus == null ? "" : approvalStatus.name())
+                + "::active=" + (active == null ? "" : active);
+    }
+
     public static String deletedListCacheKey(
             Pageable pageable,
             String q,
@@ -1017,7 +1089,10 @@ public class ProductServiceImpl implements ProductService {
             }
             return inheritedVendorId;
         }
-        return requestedVendorId != null ? requestedVendorId : ADMIN_VENDOR_UUID;
+        if (requestedVendorId == null) {
+            throw new ValidationException("vendorId is required");
+        }
+        return requestedVendorId;
     }
 
     private List<String> normalizeImages(List<String> images) {
@@ -1290,7 +1365,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
     private void assertVendorStorefrontVisible(UUID vendorId, UUID productId) {
-        if (vendorId == null || ADMIN_VENDOR_UUID.equals(vendorId)) {
+        if (vendorId == null) {
             return;
         }
         VendorOperationalStateResponse state = vendorOperationalStateClient.getState(vendorId, requireInternalAuth());
@@ -1302,7 +1377,6 @@ public class ProductServiceImpl implements ProductService {
     private Map<UUID, VendorOperationalStateResponse> resolveVendorStates(Collection<UUID> vendorIds) {
         List<UUID> ids = vendorIds == null ? List.of() : vendorIds.stream()
                 .filter(Objects::nonNull)
-                .filter(id -> !ADMIN_VENDOR_UUID.equals(id))
                 .distinct()
                 .toList();
         if (ids.isEmpty()) {
@@ -1312,7 +1386,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
     private boolean isVendorVisibleForStorefront(UUID vendorId, Map<UUID, VendorOperationalStateResponse> states) {
-        if (vendorId == null || ADMIN_VENDOR_UUID.equals(vendorId)) {
+        if (vendorId == null) {
             return true;
         }
         if (states.isEmpty()) {

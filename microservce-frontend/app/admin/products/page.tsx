@@ -31,7 +31,7 @@ type ImportResult = {
 
 type ProductType = "SINGLE" | "PARENT" | "VARIATION";
 
-type ApprovalStatus = "NOT_REQUIRED" | "PENDING" | "APPROVED" | "REJECTED";
+type ApprovalStatus = "NOT_REQUIRED" | "DRAFT" | "PENDING" | "PENDING_REVIEW" | "APPROVED" | "REJECTED";
 
 type ProductSummary = {
   id: string;
@@ -259,6 +259,8 @@ export default function AdminProductsPage() {
   const [deletedCategories, setDeletedCategories] = useState<Category[]>([]);
   const [vendors, setVendors] = useState<VendorSummary[]>([]);
   const [type, setType] = useState<ProductType | "">("");
+  const [approvalStatusFilter, setApprovalStatusFilter] = useState<ApprovalStatus | "">("");
+  const [activeFilter, setActiveFilter] = useState<"" | "true" | "false">("");
   const [status, setStatus] = useState("Loading admin products...");
   const [showDeleted, setShowDeleted] = useState(false);
   const [form, setForm] = useState<ProductFormState>(emptyForm);
@@ -375,6 +377,11 @@ export default function AdminProductsPage() {
         if (category.trim()) params.set("category", category.trim());
         if (type) params.set("type", type);
         if (vendorFilterId.trim()) params.set("vendorId", vendorFilterId.trim());
+        if (approvalStatusFilter) {
+          const backendStatus = approvalStatusFilter === "PENDING" ? "PENDING_REVIEW" : approvalStatusFilter === "NOT_REQUIRED" ? "DRAFT" : approvalStatusFilter;
+          params.set("approvalStatus", backendStatus);
+        }
+        if (activeFilter) params.set("active", activeFilter);
 
         const res = await session.apiClient.get(`/admin/products?${params.toString()}`);
         setActivePage(res.data as PagedResponse<ProductSummary>);
@@ -383,7 +390,7 @@ export default function AdminProductsPage() {
         setLoadingActiveList(false);
       }
     },
-    [session.apiClient, q, sku, category, type, vendorFilterId]
+    [session.apiClient, q, sku, category, type, vendorFilterId, approvalStatusFilter, activeFilter]
   );
 
   const loadDeleted = useCallback(
@@ -1754,6 +1761,10 @@ export default function AdminProductsPage() {
               onVendorIdChange={setVendorFilterId}
               onVendorSearchChange={setVendorFilterSearch}
               onTypeChange={setType}
+              approvalStatus={approvalStatusFilter}
+              onApprovalStatusChange={setApprovalStatusFilter}
+              activeFilter={activeFilter}
+              onActiveFilterChange={setActiveFilter}
               onApplyFilters={applyFilters}
               onEditProduct={(id) => loadToEdit(id)}
               onDeleteProductRequest={(product) => {

@@ -73,12 +73,13 @@ public class AdminProductController {
             @RequestParam(defaultValue = "false") boolean includeOrphanParents,
             @RequestParam(required = false) String brand,
             @RequestParam(required = false) ApprovalStatus approvalStatus,
+            @RequestParam(required = false) Boolean active,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         internalRequestVerifier.verify(internalAuth);
         adminProductAccessScopeService.assertCanManageProductOperations(userSub, userRoles, internalAuth);
         UUID scopedVendorId = adminProductAccessScopeService.resolveScopedVendorFilter(userSub, userRoles, vendorId, internalAuth);
-        return productService.list(pageable, q, sku, category, mainCategory, subCategory, scopedVendorId, type, minSellingPrice, maxSellingPrice, includeOrphanParents, brand, approvalStatus, null, null, null, null);
+        return productService.adminList(pageable, q, sku, category, mainCategory, subCategory, scopedVendorId, type, minSellingPrice, maxSellingPrice, includeOrphanParents, brand, approvalStatus, active);
     }
 
     @GetMapping("/deleted")

@@ -4,7 +4,7 @@ import Pagination from "../../Pagination";
 import StatusBadge, { APPROVAL_COLORS } from "../../ui/StatusBadge";
 
 type ProductType = "SINGLE" | "PARENT" | "VARIATION";
-type ApprovalStatus = "NOT_REQUIRED" | "PENDING" | "APPROVED" | "REJECTED";
+type ApprovalStatus = "NOT_REQUIRED" | "DRAFT" | "PENDING" | "PENDING_REVIEW" | "APPROVED" | "REJECTED";
 
 type ProductSummary = {
   id: string;
@@ -81,6 +81,10 @@ type Props = {
   onVendorIdChange: (value: string) => void;
   onVendorSearchChange: (value: string) => void;
   onTypeChange: (value: ProductType | "") => void;
+  approvalStatus?: ApprovalStatus | "";
+  onApprovalStatusChange?: (value: ApprovalStatus | "") => void;
+  activeFilter?: "" | "true" | "false";
+  onActiveFilterChange?: (value: "" | "true" | "false") => void;
   onApplyFilters: (e: React.FormEvent) => void | Promise<void>;
   onEditProduct: (id: string) => void | Promise<void>;
   onDeleteProductRequest: (product: ProductSummary) => void;
@@ -133,6 +137,10 @@ export default function ProductCatalogPanel({
   onVendorIdChange,
   onVendorSearchChange,
   onTypeChange,
+  approvalStatus = "",
+  onApprovalStatusChange,
+  activeFilter = "",
+  onActiveFilterChange,
   onApplyFilters,
   onEditProduct,
   onDeleteProductRequest,
@@ -198,7 +206,7 @@ export default function ProductCatalogPanel({
         </div>
       </div>
 
-      <form onSubmit={onApplyFilters} className={`mb-5 grid gap-3 md:grid-cols-2 ${showVendorFilter ? "xl:grid-cols-7" : "xl:grid-cols-5"}`}>
+      <form onSubmit={onApplyFilters} className="mb-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
         <input
           value={q}
           onChange={(e) => onQChange(e.target.value)}
@@ -256,6 +264,32 @@ export default function ProductCatalogPanel({
           <option value="PARENT">PARENT</option>
           <option value="VARIATION">VARIATION</option>
         </select>
+        {onApprovalStatusChange && (
+          <select
+            value={approvalStatus}
+            onChange={(e) => onApprovalStatusChange(e.target.value as ApprovalStatus | "")}
+            className="rounded-xl border border-[var(--line)] px-3 py-2 text-sm"
+            style={{ background: "var(--surface-2)", color: "var(--ink)" }}
+          >
+            <option value="">All Approval</option>
+            <option value="NOT_REQUIRED">DRAFT</option>
+            <option value="PENDING">PENDING</option>
+            <option value="APPROVED">APPROVED</option>
+            <option value="REJECTED">REJECTED</option>
+          </select>
+        )}
+        {onActiveFilterChange && (
+          <select
+            value={activeFilter}
+            onChange={(e) => onActiveFilterChange(e.target.value as "" | "true" | "false")}
+            className="rounded-xl border border-[var(--line)] px-3 py-2 text-sm"
+            style={{ background: "var(--surface-2)", color: "var(--ink)" }}
+          >
+            <option value="">All Status</option>
+            <option value="true">Active</option>
+            <option value="false">Inactive</option>
+          </select>
+        )}
         {showVendorFilter && (
           <>
             <input
@@ -382,8 +416,8 @@ export default function ProductCatalogPanel({
                         >
                           Delete
                         </button>
-                        {/* Submit for Review - shown when NOT_REQUIRED or REJECTED */}
-                        {onSubmitForReview && (p.approvalStatus === "NOT_REQUIRED" || p.approvalStatus === "REJECTED") && (
+                        {/* Submit for Review - shown when DRAFT/NOT_REQUIRED or REJECTED */}
+                        {onSubmitForReview && (p.approvalStatus === "NOT_REQUIRED" || p.approvalStatus === "DRAFT" || p.approvalStatus === "REJECTED") && (
                           <button
                             type="button"
                             onClick={() => { void onSubmitForReview(p.id); }}
@@ -398,8 +432,8 @@ export default function ProductCatalogPanel({
                             {submitForReviewProductId === p.id ? "Submitting..." : "Submit for Review"}
                           </button>
                         )}
-                        {/* Approve - shown when PENDING, for platform staff/super admin */}
-                        {canApproveReject && onApproveProduct && p.approvalStatus === "PENDING" && (
+                        {/* Approve - shown when PENDING/PENDING_REVIEW, for platform staff/super admin */}
+                        {canApproveReject && onApproveProduct && (p.approvalStatus === "PENDING" || p.approvalStatus === "PENDING_REVIEW") && (
                           <button
                             type="button"
                             onClick={() => { void onApproveProduct(p.id); }}
@@ -414,8 +448,8 @@ export default function ProductCatalogPanel({
                             {approvingProductId === p.id ? "Approving..." : "Approve"}
                           </button>
                         )}
-                        {/* Reject - shown when PENDING, for platform staff/super admin */}
-                        {canApproveReject && onRejectProductRequest && p.approvalStatus === "PENDING" && (
+                        {/* Reject - shown when PENDING/PENDING_REVIEW, for platform staff/super admin */}
+                        {canApproveReject && onRejectProductRequest && (p.approvalStatus === "PENDING" || p.approvalStatus === "PENDING_REVIEW") && (
                           <button
                             type="button"
                             onClick={() => onRejectProductRequest(p)}

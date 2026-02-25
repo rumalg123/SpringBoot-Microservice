@@ -61,6 +61,7 @@ public class CacheConfig implements CachingConfigurer {
                 .withInitialCacheConfigurations(Map.of(
                         "productById", defaultConfig.entryTtl(productByIdTtl),
                         "productsList", defaultConfig.entryTtl(productListTtl),
+                        "adminProductsList", defaultConfig.entryTtl(productListTtl),
                         "deletedProductsList", defaultConfig.entryTtl(productDeletedListTtl),
                         "categoriesList", defaultConfig.entryTtl(categoryListTtl),
                         "deletedCategoriesList", defaultConfig.entryTtl(deletedCategoryListTtl)

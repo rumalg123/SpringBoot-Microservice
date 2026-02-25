@@ -11,7 +11,9 @@ export const LIFECYCLE_COLORS: Record<string, ColorDef> = {
 
 export const APPROVAL_COLORS: Record<string, ColorDef> = {
   NOT_REQUIRED: { bg: "rgba(255,255,255,0.03)", border: "var(--line)", color: "var(--muted)" },
+  DRAFT: { bg: "rgba(255,255,255,0.03)", border: "var(--line)", color: "var(--muted)" },
   PENDING: { bg: "var(--warning-soft)", border: "var(--warning-border)", color: "var(--warning-text)" },
+  PENDING_REVIEW: { bg: "var(--warning-soft)", border: "var(--warning-border)", color: "var(--warning-text)" },
   APPROVED: { bg: "var(--success-soft)", border: "rgba(34,197,94,0.3)", color: "var(--success)" },
   REJECTED: { bg: "var(--danger-soft)", border: "rgba(239,68,68,0.25)", color: "#f87171" },
 };

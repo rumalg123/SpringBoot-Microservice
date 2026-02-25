@@ -30,6 +30,7 @@ public interface ProductService {
     List<ProductSummaryResponse> listVariations(UUID parentId);
     List<ProductSummaryResponse> listVariationsByIdOrSlug(String parentIdOrSlug);
     Page<ProductSummaryResponse> list(Pageable pageable, String q, String sku, String category, String mainCategory, String subCategory, UUID vendorId, ProductType type, BigDecimal minSellingPrice, BigDecimal maxSellingPrice, boolean includeOrphanParents, String brand, ApprovalStatus approvalStatus, Map<String, String> specs, String vendorName, Instant createdAfter, Instant createdBefore);
+    Page<ProductSummaryResponse> adminList(Pageable pageable, String q, String sku, String category, String mainCategory, String subCategory, UUID vendorId, ProductType type, BigDecimal minSellingPrice, BigDecimal maxSellingPrice, boolean includeOrphanParents, String brand, ApprovalStatus approvalStatus, Boolean active);
     Page<ProductSummaryResponse> listDeleted(Pageable pageable, String q, String sku, String category, String mainCategory, String subCategory, UUID vendorId, ProductType type, BigDecimal minSellingPrice, BigDecimal maxSellingPrice, String brand);
     void incrementViewCount(UUID productId);
     ProductResponse update(UUID id, UpsertProductRequest request);
