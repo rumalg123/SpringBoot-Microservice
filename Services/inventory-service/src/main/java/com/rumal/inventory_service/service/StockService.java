@@ -209,6 +209,7 @@ public class StockService {
 
     @Transactional(readOnly = true)
     public List<StockAvailabilitySummary> getBatchStockSummary(List<UUID> productIds) {
+        if (productIds == null || productIds.isEmpty()) return List.of();
         List<StockItem> allItems = stockItemRepository.findByProductIdIn(productIds);
         Map<UUID, List<StockItem>> grouped = allItems.stream()
                 .collect(Collectors.groupingBy(StockItem::getProductId));

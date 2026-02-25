@@ -109,21 +109,25 @@ public class InventoryClient {
 
     @SuppressWarnings("unused")
     public List<StockCheckResult> fallbackCheckAvailability(List<StockCheckRequest> requests, Throwable ex) {
+        if (ex instanceof ValidationException ve) throw ve;
         throw new ServiceUnavailableException("Inventory service unavailable for stock check. Try again later.", ex);
     }
 
     @SuppressWarnings("unused")
     public StockReservationResponse fallbackReserveStock(UUID orderId, List<StockCheckRequest> items, Instant expiresAt, Throwable ex) {
+        if (ex instanceof ValidationException ve) throw ve;
         throw new ServiceUnavailableException("Inventory service unavailable for stock reservation. Try again later.", ex);
     }
 
     @SuppressWarnings("unused")
     public void fallbackConfirmReservation(UUID orderId, Throwable ex) {
+        if (ex instanceof ValidationException ve) throw ve;
         throw new ServiceUnavailableException("Inventory service unavailable for reservation confirmation. Try again later.", ex);
     }
 
     @SuppressWarnings("unused")
     public void fallbackReleaseReservation(UUID orderId, String reason, Throwable ex) {
+        if (ex instanceof ValidationException ve) throw ve;
         throw new ServiceUnavailableException("Inventory service unavailable for reservation release. Try again later.", ex);
     }
 
