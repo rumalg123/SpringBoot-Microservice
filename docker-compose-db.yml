@@ -179,6 +179,20 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
 
+  inventory-db:
+    image: postgres:16-alpine
+    environment:
+      TZ: Asia/Colombo
+      POSTGRES_DB: inventory_db
+      POSTGRES_USER: inventory_user
+      POSTGRES_PASSWORD: inventory_pass
+    ports:
+      - "5444:5432"
+    volumes:
+      - inventory-db-data:/var/lib/postgresql/data
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+
   customer-service:
     build:
       context: ./Services/customer-service
@@ -363,6 +377,24 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
 
+  inventory-service:
+    build:
+      context: ./Services/inventory-service
+    depends_on:
+      - discovery-server
+      - inventory-db
+      - redis
+    env_file:
+      - ./env/common.env
+      - ./env/inventory-service.env
+    environment:
+      TZ: Asia/Colombo
+      LOGGING_FILE_NAME: /logs/inventory-service.log
+    volumes:
+      - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+
   admin-service:
     build:
       context: ./Services/admin-service
@@ -430,3 +462,4 @@ volumes:
   promotion-db-data:
   admin-db-data:
   payment-db-data:
+  inventory-db-data:

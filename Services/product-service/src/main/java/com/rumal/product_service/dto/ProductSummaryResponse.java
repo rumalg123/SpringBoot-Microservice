@@ -28,5 +28,18 @@ public record ProductSummaryResponse(
         long viewCount,
         long soldCount,
         boolean active,
-        List<ProductVariationAttributeResponse> variations
-) {}
+        List<ProductVariationAttributeResponse> variations,
+        Integer stockAvailable,
+        String stockStatus,
+        Boolean backorderable
+) {
+    public ProductSummaryResponse withStock(Integer stockAvailable, String stockStatus, Boolean backorderable) {
+        return new ProductSummaryResponse(
+                id, slug, name, shortDescription, brandName, mainImage,
+                regularPrice, discountedPrice, sellingPrice, sku, mainCategory,
+                subCategories, categories, productType, approvalStatus, vendorId,
+                viewCount, soldCount, active, variations,
+                stockAvailable, stockStatus, backorderable
+        );
+    }
+}

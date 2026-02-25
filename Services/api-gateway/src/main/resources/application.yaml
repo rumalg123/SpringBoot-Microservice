@@ -337,6 +337,24 @@ spring:
                   args:
                     name: paymentService
                     fallbackUri: forward:/fallback/unavailable
+            - id: admin-inventory
+              uri: lb://inventory-service
+              predicates:
+                - Path=/admin/inventory,/admin/inventory/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: inventoryService
+                    fallbackUri: forward:/fallback/unavailable
+            - id: vendor-inventory-me
+              uri: lb://inventory-service
+              predicates:
+                - Path=/inventory/vendor/me,/inventory/vendor/me/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: inventoryService
+                    fallbackUri: forward:/fallback/unavailable
             - id: vendors-me
               uri: lb://vendor-service
               predicates:
@@ -429,6 +447,8 @@ resilience4j:
         base-config: default
       paymentService:
         base-config: default
+      inventoryService:
+        base-config: default
   timelimiter:
     configs:
       default:
@@ -453,6 +473,8 @@ resilience4j:
       vendorService:
         base-config: default
       paymentService:
+        base-config: default
+      inventoryService:
         base-config: default
 
 logging:

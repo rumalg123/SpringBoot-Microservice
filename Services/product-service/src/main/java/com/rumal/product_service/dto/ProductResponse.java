@@ -49,5 +49,22 @@ public record ProductResponse(
         boolean deleted,
         Instant deletedAt,
         Instant createdAt,
-        Instant updatedAt
-) {}
+        Instant updatedAt,
+        Integer stockAvailable,
+        String stockStatus,
+        Boolean backorderable
+) {
+    public ProductResponse withStock(Integer stockAvailable, String stockStatus, Boolean backorderable) {
+        return new ProductResponse(
+                id, parentProductId, name, slug, shortDescription, description,
+                brandName, images, thumbnailUrl, regularPrice, discountedPrice,
+                sellingPrice, vendorId, mainCategory, mainCategorySlug, subCategories,
+                subCategorySlugs, categories, categoryIds, productType, digital,
+                variations, sku, weightGrams, lengthCm, widthCm, heightCm,
+                metaTitle, metaDescription, approvalStatus, rejectionReason,
+                specifications, bundledProductIds, viewCount, soldCount, active,
+                deleted, deletedAt, createdAt, updatedAt,
+                stockAvailable, stockStatus, backorderable
+        );
+    }
+}

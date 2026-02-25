@@ -2,10 +2,12 @@ package com.rumal.order_service.service;
 
 
 import com.rumal.order_service.client.CustomerClient;
+import com.rumal.order_service.client.InventoryClient;
 import com.rumal.order_service.client.ProductClient;
 import com.rumal.order_service.client.PromotionClient;
 import com.rumal.order_service.client.VendorClient;
 import com.rumal.order_service.client.VendorOperationalStateClient;
+import com.rumal.order_service.dto.StockCheckRequest;
 import com.rumal.order_service.dto.CreateOrderItemRequest;
 import com.rumal.order_service.dto.InvoiceResponse;
 import com.rumal.order_service.dto.UpdateShippingAddressRequest;
@@ -109,6 +111,7 @@ public class OrderService {
     private final CustomerClient customerClient;
     private final ProductClient productClient;
     private final PromotionClient promotionClient;
+    private final InventoryClient inventoryClient;
     private final VendorClient vendorClient;
     private final VendorOperationalStateClient vendorOperationalStateClient;
     private final ShippingFeeCalculator shippingFeeCalculator;
@@ -160,6 +163,13 @@ public class OrderService {
                     saved.getId(),
                     pricingSnapshot == null ? null : pricingSnapshot.couponReservationId(),
                     ex);
+        }
+        try {
+            maybeReserveInventory(saved, lines);
+        } catch (RuntimeException ex) {
+            log.warn("Inventory reservation failed after order {} was persisted. " +
+                    "Order exists in PENDING, expiry scheduler will clean up.",
+                    saved.getId(), ex);
         }
         return toResponse(saved);
     }
@@ -282,6 +292,7 @@ public class OrderService {
             @Override
             public void afterCommit() {
                 maybeReleaseCouponReservationForFinalStatus(savedOrder, finalStatus);
+                maybeHandleInventoryForStatusTransition(savedOrder, finalStatus);
             }
         });
         evictOrderCachesAfterStatusMutation();
@@ -351,6 +362,7 @@ public class OrderService {
                 @Override
                 public void afterCommit() {
                     maybeReleaseCouponReservationForFinalStatus(finalSavedOrder, finalNextAggregate);
+                    maybeHandleInventoryForStatusTransition(finalSavedOrder, finalNextAggregate);
                 }
             });
         }
@@ -932,6 +944,36 @@ public class OrderService {
         }
     }
 
+    private void maybeReserveInventory(Order order, List<ResolvedOrderLine> lines) {
+        if (order == null || lines == null || lines.isEmpty()) return;
+        List<StockCheckRequest> stockItems = lines.stream()
+                .map(line -> new StockCheckRequest(line.product().id(), line.quantity()))
+                .toList();
+        Instant expiresAt = order.getExpiresAt() != null
+                ? order.getExpiresAt()
+                : Instant.now().plus(orderExpiryTtl);
+        inventoryClient.reserveStock(order.getId(), stockItems, expiresAt);
+    }
+
+    private void maybeHandleInventoryForStatusTransition(Order order, OrderStatus nextStatus) {
+        if (order == null || nextStatus == null) return;
+        if (nextStatus == OrderStatus.CONFIRMED) {
+            try {
+                inventoryClient.confirmReservation(order.getId());
+            } catch (RuntimeException ex) {
+                log.warn("Inventory reservation confirmation failed for order {}. May need manual reconciliation.",
+                        order.getId(), ex);
+            }
+        } else if (nextStatus == OrderStatus.CANCELLED || nextStatus == OrderStatus.PAYMENT_FAILED) {
+            try {
+                inventoryClient.releaseReservation(order.getId(), "order_" + nextStatus.name().toLowerCase(Locale.ROOT));
+            } catch (RuntimeException ex) {
+                log.warn("Inventory reservation release failed for order {} (status: {}). May need manual reconciliation.",
+                        order.getId(), nextStatus, ex);
+            }
+        }
+    }
+
     private String safePromotionReleaseReason(String reason) {
         String normalized = trimToNull(reason);
         if (normalized == null) {
@@ -1289,6 +1331,7 @@ public class OrderService {
             @Override
             public void afterCommit() {
                 maybeReleaseCouponReservationForFinalStatus(savedOrder, OrderStatus.CANCELLED);
+                maybeHandleInventoryForStatusTransition(savedOrder, OrderStatus.CANCELLED);
             }
         });
         evictOrderCachesAfterStatusMutation();

@@ -88,6 +88,8 @@ public class OrderClient {
             String idempotencyKey,
             Throwable ex
     ) {
+        if (ex instanceof ValidationException ve) throw ve;
+        if (ex instanceof ResourceNotFoundException rnfe) throw rnfe;
         throw new ServiceUnavailableException(
                 "Order service unavailable for checkout. Try again later.",
                 ex

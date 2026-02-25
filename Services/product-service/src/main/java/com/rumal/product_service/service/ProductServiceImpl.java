@@ -1,6 +1,8 @@
 package com.rumal.product_service.service;
 
+import com.rumal.product_service.client.InventoryClient;
 import com.rumal.product_service.client.VendorOperationalStateClient;
+import com.rumal.product_service.dto.StockAvailabilitySummary;
 import com.rumal.product_service.dto.BulkCategoryReassignRequest;
 import com.rumal.product_service.dto.BulkDeleteRequest;
 import com.rumal.product_service.dto.BulkOperationResult;
@@ -74,6 +76,7 @@ public class ProductServiceImpl implements ProductService {
     private final ProductSpecificationRepository productSpecificationRepository;
     private final ProductCatalogReadModelProjector productCatalogReadModelProjector;
     private final VendorOperationalStateClient vendorOperationalStateClient;
+    private final InventoryClient inventoryClient;
     private final ProductCacheVersionService productCacheVersionService;
 
     @Lazy
@@ -185,11 +188,12 @@ public class ProductServiceImpl implements ProductService {
         Map<UUID, VendorOperationalStateResponse> states = resolveVendorStates(
                 variations.stream().map(Product::getVendorId).toList()
         );
-        return variations.stream()
+        List<ProductSummaryResponse> result = variations.stream()
                 .filter(product -> product.getProductType() == ProductType.VARIATION)
                 .filter(product -> isVendorVisibleForStorefront(product.getVendorId(), states))
                 .map(this::toSummaryResponse)
                 .toList();
+        return enrichListWithStock(result);
     }
 
     @Override
@@ -247,7 +251,8 @@ public class ProductServiceImpl implements ProductService {
         }
 
         Page<ProductSummaryResponse> page = productCatalogReadRepository.findAll(spec, pageable).map(this::toSummaryResponse);
-        return filterHiddenVendorProducts(page, pageable);
+        page = filterHiddenVendorProducts(page, pageable);
+        return enrichPageWithStock(page, pageable);
     }
 
     @Override
@@ -1222,7 +1227,49 @@ public class ProductServiceImpl implements ProductService {
             }
             assertVendorStorefrontVisible(parent.getVendorId(), product.getId());
         }
-        return toResponse(product);
+        ProductResponse response = toResponse(product);
+        return enrichWithStock(response);
+    }
+
+    private ProductResponse enrichWithStock(ProductResponse response) {
+        StockAvailabilitySummary stock = inventoryClient.getStockSummary(response.id());
+        if (stock == null) return response;
+        return response.withStock(stock.totalAvailable(), stock.stockStatus(), stock.backorderable());
+    }
+
+    private Page<ProductSummaryResponse> enrichPageWithStock(Page<ProductSummaryResponse> page, Pageable pageable) {
+        if (page == null || page.isEmpty()) return page;
+        List<UUID> productIds = page.getContent().stream().map(ProductSummaryResponse::id).toList();
+        Map<UUID, StockAvailabilitySummary> stockMap = fetchBatchStockMap(productIds);
+        if (stockMap.isEmpty()) return page;
+        List<ProductSummaryResponse> enriched = page.getContent().stream()
+                .map(p -> {
+                    StockAvailabilitySummary s = stockMap.get(p.id());
+                    return s != null ? p.withStock(s.totalAvailable(), s.stockStatus(), s.backorderable()) : p;
+                })
+                .toList();
+        return new PageImpl<>(enriched, pageable, page.getTotalElements());
+    }
+
+    private List<ProductSummaryResponse> enrichListWithStock(List<ProductSummaryResponse> items) {
+        if (items == null || items.isEmpty()) return items;
+        List<UUID> productIds = items.stream().map(ProductSummaryResponse::id).toList();
+        Map<UUID, StockAvailabilitySummary> stockMap = fetchBatchStockMap(productIds);
+        if (stockMap.isEmpty()) return items;
+        return items.stream()
+                .map(p -> {
+                    StockAvailabilitySummary s = stockMap.get(p.id());
+                    return s != null ? p.withStock(s.totalAvailable(), s.stockStatus(), s.backorderable()) : p;
+                })
+                .toList();
+    }
+
+    private Map<UUID, StockAvailabilitySummary> fetchBatchStockMap(List<UUID> productIds) {
+        List<StockAvailabilitySummary> summaries = inventoryClient.getBatchStockSummary(productIds);
+        if (summaries == null || summaries.isEmpty()) return Map.of();
+        return summaries.stream()
+                .filter(s -> s.productId() != null)
+                .collect(java.util.stream.Collectors.toMap(StockAvailabilitySummary::productId, s -> s, (a, b) -> a));
     }
 
     private Page<ProductSummaryResponse> filterHiddenVendorProducts(Page<ProductSummaryResponse> page, Pageable pageable) {
@@ -1370,7 +1417,10 @@ public class ProductServiceImpl implements ProductService {
                 p.isDeleted(),
                 p.getDeletedAt(),
                 p.getCreatedAt(),
-                p.getUpdatedAt()
+                p.getUpdatedAt(),
+                null,
+                null,
+                null
         );
     }
 
@@ -1395,7 +1445,10 @@ public class ProductServiceImpl implements ProductService {
                 row.getViewCount(),
                 row.getSoldCount(),
                 row.isActive(),
-                List.of()
+                List.of(),
+                null,
+                null,
+                null
         );
     }
 
@@ -1423,7 +1476,10 @@ public class ProductServiceImpl implements ProductService {
                 p.isActive(),
                 p.getVariations().stream()
                         .map(v -> new ProductVariationAttributeResponse(v.getName(), v.getValue()))
-                        .toList()
+                        .toList(),
+                null,
+                null,
+                null
         );
     }
 
