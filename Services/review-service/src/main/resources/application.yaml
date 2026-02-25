@@ -115,4 +115,4 @@ review.idempotency:
   pending-ttl: 30s
   response-ttl: 6h
   key-header-name: Idempotency-Key
-  key-prefix: rs:idem:v1::
+  key-prefix: rs:idem:v1
