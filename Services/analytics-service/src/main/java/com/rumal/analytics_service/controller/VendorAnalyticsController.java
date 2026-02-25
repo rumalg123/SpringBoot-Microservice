@@ -24,26 +24,46 @@ public class VendorAnalyticsController {
     public VendorDashboardAnalytics vendorDashboard(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
+            @RequestHeader(value = "X-Vendor-Id", required = false) String vendorIdHeader,
             @PathVariable UUID vendorId) {
-        verifyVendorAccess(internalAuth, userRoles);
+        verifyVendorAccess(internalAuth, userRoles, vendorIdHeader, vendorId);
         return vendorAnalyticsService.getVendorDashboard(vendorId);
     }
 
-    private void verifyVendorAccess(String internalAuth, String userRoles) {
+    private void verifyVendorAccess(String internalAuth, String userRoles, String vendorIdHeader, UUID requestedVendorId) {
         internalRequestVerifier.verify(internalAuth);
         if (userRoles == null || userRoles.isBlank()) {
             throw new UnauthorizedException("Vendor role required");
         }
+        boolean isAdmin = false;
         boolean hasVendorRole = false;
         for (String role : userRoles.split(",")) {
             String trimmed = role.trim().toLowerCase();
-            if (VENDOR_ROLES.contains(trimmed) || trimmed.equals("super_admin") || trimmed.equals("platform_staff")) {
+            if (trimmed.equals("super_admin") || trimmed.equals("platform_staff")) {
+                isAdmin = true;
                 hasVendorRole = true;
                 break;
+            }
+            if (VENDOR_ROLES.contains(trimmed)) {
+                hasVendorRole = true;
             }
         }
         if (!hasVendorRole) {
             throw new UnauthorizedException("Vendor role required");
+        }
+        // Non-admin vendors can only view their own analytics
+        if (!isAdmin) {
+            if (vendorIdHeader == null || vendorIdHeader.isBlank()) {
+                throw new UnauthorizedException("Vendor identification required");
+            }
+            try {
+                UUID authenticatedVendorId = UUID.fromString(vendorIdHeader.trim());
+                if (!authenticatedVendorId.equals(requestedVendorId)) {
+                    throw new UnauthorizedException("You can only view your own analytics");
+                }
+            } catch (IllegalArgumentException e) {
+                throw new UnauthorizedException("Invalid vendor identification");
+            }
         }
     }
 }

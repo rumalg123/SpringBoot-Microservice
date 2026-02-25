@@ -40,6 +40,7 @@ public class AutocompleteService {
                     .withSourceFilter(new FetchSourceFilter(
                             new String[]{"id", "slug", "name", "mainImage"}, null))
                     .withPageable(PageRequest.of(0, limit))
+                    .withTimeout(java.time.Duration.ofSeconds(5))
                     .build();
 
             SearchHits<ProductDocument> hits = elasticsearchOperations.search(query, ProductDocument.class);

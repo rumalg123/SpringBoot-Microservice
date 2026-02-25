@@ -39,7 +39,7 @@ public class CircuitBreakerConfig {
                     .waitDurationInOpenState(Duration.ofMillis(Math.max(1000, waitOpenMs)))
                     .permittedNumberOfCallsInHalfOpenState(Math.max(1, permittedHalfOpenCalls))
                     .recordExceptions(Exception.class)
-                    .ignoreExceptions(DownstreamHttpException.class, IllegalArgumentException.class)
+                    .ignoreExceptions(IllegalArgumentException.class)
                     .build();
 
             var tlConfig = TimeLimiterConfig.custom()

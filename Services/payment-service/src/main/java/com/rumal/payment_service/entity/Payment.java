@@ -98,6 +98,10 @@ public class Payment {
     @Column(name = "expires_at")
     private Instant expiresAt;
 
+    @Builder.Default
+    @Column(name = "order_sync_pending", nullable = false)
+    private boolean orderSyncPending = false;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private Instant createdAt;

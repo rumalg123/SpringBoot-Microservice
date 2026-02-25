@@ -22,8 +22,11 @@ public class ImageUploadRateLimiter {
     }
 
     public void checkRateLimit(String userSub, int imageCount) {
-        if (userSub == null || userSub.isBlank() || maxUploadsPerHour <= 0) {
+        if (maxUploadsPerHour <= 0) {
             return;
+        }
+        if (userSub == null || userSub.isBlank()) {
+            throw new ValidationException("User identification required for image upload");
         }
         String key = "ps:img-upload-rate:" + userSub;
         try {

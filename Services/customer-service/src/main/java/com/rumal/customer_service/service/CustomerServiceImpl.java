@@ -483,7 +483,7 @@ public class CustomerServiceImpl implements CustomerService {
             }
         }
 
-        return active.getFirst().getId();
+        return active.isEmpty() ? null : active.getFirst().getId();
     }
 
     // ── Loyalty ──────────────────────────────────────────────────────────────
@@ -501,7 +501,7 @@ public class CustomerServiceImpl implements CustomerService {
         return toResponse(saved);
     }
 
-    private CustomerLoyaltyTier calculateTier(int totalPoints) {
+    private CustomerLoyaltyTier calculateTier(long totalPoints) {
         if (totalPoints >= 10000) {
             return CustomerLoyaltyTier.PLATINUM;
         } else if (totalPoints >= 5000) {

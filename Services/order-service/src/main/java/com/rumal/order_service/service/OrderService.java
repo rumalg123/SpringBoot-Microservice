@@ -56,6 +56,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -1505,32 +1506,38 @@ public class OrderService {
     // ── CSV export ──────────────────────────────────────────────
 
     public String exportOrdersCsv(OrderStatus status, Instant createdAfter, Instant createdBefore) {
-        List<Order> orders = orderRepository.findAll(
-                OrderSpecifications.withFilters(null, null, status, createdAfter, createdBefore)
-        );
-
         StringBuilder csv = new StringBuilder();
         csv.append("orderId,customerKeycloakId,customerEmail,status,grandTotal,currency,createdAt,updatedAt,itemCount\n");
 
-        for (Order order : orders) {
-            CustomerSummary customer = null;
-            try {
-                customer = customerClient.getCustomer(order.getCustomerId());
-            } catch (Exception ex) {
-                log.warn("Failed to fetch customer for CSV export, orderId={}", order.getId(), ex);
-            }
+        int page = 0;
+        int pageSize = 500;
+        Page<Order> orderPage;
+        do {
+            orderPage = orderRepository.findAll(
+                    OrderSpecifications.withFilters(null, null, status, createdAfter, createdBefore),
+                    PageRequest.of(page, pageSize)
+            );
+            for (Order order : orderPage.getContent()) {
+                CustomerSummary customer = null;
+                try {
+                    customer = customerClient.getCustomer(order.getCustomerId());
+                } catch (Exception ex) {
+                    log.warn("Failed to fetch customer for CSV export, orderId={}", order.getId(), ex);
+                }
 
-            csv.append(escapeCsvField(order.getId().toString())).append(',');
-            csv.append(escapeCsvField(order.getCustomerId().toString())).append(',');
-            csv.append(escapeCsvField(customer != null ? customer.email() : "")).append(',');
-            csv.append(escapeCsvField(order.getStatus() != null ? order.getStatus().name() : "")).append(',');
-            csv.append(normalizeMoney(order.getOrderTotal()).toPlainString()).append(',');
-            csv.append(escapeCsvField(order.getCurrency())).append(',');
-            csv.append(escapeCsvField(order.getCreatedAt() != null ? order.getCreatedAt().toString() : "")).append(',');
-            csv.append(escapeCsvField(order.getUpdatedAt() != null ? order.getUpdatedAt().toString() : "")).append(',');
-            csv.append(order.getItemCount());
-            csv.append('\n');
-        }
+                csv.append(escapeCsvField(order.getId().toString())).append(',');
+                csv.append(escapeCsvField(order.getCustomerId().toString())).append(',');
+                csv.append(escapeCsvField(customer != null ? customer.email() : "")).append(',');
+                csv.append(escapeCsvField(order.getStatus() != null ? order.getStatus().name() : "")).append(',');
+                csv.append(normalizeMoney(order.getOrderTotal()).toPlainString()).append(',');
+                csv.append(escapeCsvField(order.getCurrency())).append(',');
+                csv.append(escapeCsvField(order.getCreatedAt() != null ? order.getCreatedAt().toString() : "")).append(',');
+                csv.append(escapeCsvField(order.getUpdatedAt() != null ? order.getUpdatedAt().toString() : "")).append(',');
+                csv.append(order.getItemCount());
+                csv.append('\n');
+            }
+            page++;
+        } while (orderPage.hasNext());
 
         return csv.toString();
     }

@@ -42,7 +42,6 @@ public class ComputationJobService {
 
     @Scheduled(cron = "${personalization.computation.co-purchase-cron:0 0 */6 * * *}")
     @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 300)
-    @CacheEvict(cacheNames = "boughtTogether", allEntries = true)
     public void computeCoPurchases() {
         log.info("Starting co-purchase computation");
         Instant since = Instant.now().minus(90, ChronoUnit.DAYS);
@@ -121,7 +120,6 @@ public class ComputationJobService {
 
     @Scheduled(cron = "${personalization.computation.similarity-cron:0 30 */6 * * *}")
     @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 300)
-    @CacheEvict(cacheNames = "similarProducts", allEntries = true)
     public void computeProductSimilarity() {
         log.info("Starting product similarity computation");
         Instant since = Instant.now().minus(30, ChronoUnit.DAYS);
@@ -242,7 +240,6 @@ public class ComputationJobService {
 
     @Scheduled(cron = "${personalization.computation.affinity-cron:0 0 * * * *}")
     @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 300)
-    @CacheEvict(cacheNames = "recommendations", allEntries = true)
     public void computeUserAffinities() {
         log.info("Starting user affinity computation");
         Instant since = Instant.now().minus(30, ChronoUnit.DAYS);

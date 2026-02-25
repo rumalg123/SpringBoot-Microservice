@@ -4,6 +4,7 @@ import com.rumal.customer_service.auth.dto.KeycloakUser;
 import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
+import org.jboss.resteasy.client.jaxrs.ResteasyClientBuilder;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.KeycloakBuilder;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class KeycloakManagementService {
@@ -191,6 +193,13 @@ public class KeycloakManagementService {
                 .clientId(clientId)
                 .clientSecret(clientSecret)
                 .grantType(OAuth2Constants.CLIENT_CREDENTIALS)
+                .resteasyClient(
+                        ((ResteasyClientBuilder) ResteasyClientBuilder.newBuilder())
+                                .connectTimeout(5, TimeUnit.SECONDS)
+                                .readTimeout(10, TimeUnit.SECONDS)
+                                .connectionPoolSize(5)
+                                .build()
+                )
                 .build();
     }
 

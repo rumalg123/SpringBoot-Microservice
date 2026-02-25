@@ -19,6 +19,7 @@ public class CartAnalyticsClient {
     private static final String BASE_URL = "http://cart-service/internal/cart/analytics";
 
     private final RestClient.Builder lbRestClientBuilder;
+    private final RestClient restClient;
     private final CircuitBreakerFactory<?, ?> circuitBreakerFactory;
     private final RetryRegistry retryRegistry;
     private final String internalAuth;
@@ -30,6 +31,7 @@ public class CartAnalyticsClient {
             @Value("${internal.auth.shared-secret:}") String internalAuth
     ) {
         this.lbRestClientBuilder = lbRestClientBuilder;
+        this.restClient = lbRestClientBuilder.build();
         this.circuitBreakerFactory = circuitBreakerFactory;
         this.retryRegistry = retryRegistry;
         this.internalAuth = internalAuth;
@@ -41,7 +43,7 @@ public class CartAnalyticsClient {
 
     private <T> T get(String url, Class<T> type) {
         try {
-            return lbRestClientBuilder.build().get()
+            return restClient.get()
                     .uri(url)
                     .header("X-Internal-Auth", internalAuth)
                     .retrieve()

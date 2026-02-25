@@ -3,6 +3,7 @@ package com.rumal.review_service.repository;
 import com.rumal.review_service.entity.Review;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -57,4 +58,14 @@ public interface ReviewRepository extends JpaRepository<Review, UUID>, JpaSpecif
 
     @Query("SELECT COUNT(r) FROM Review r WHERE r.vendorId = :vendorId AND r.deleted = false AND r.active = true AND r.verifiedPurchase = true")
     long countVerifiedPurchaseByVendorId(@Param("vendorId") java.util.UUID vendorId);
+
+    // --- Atomic update queries to avoid race conditions on denormalized counts ---
+
+    @Modifying
+    @Query("UPDATE Review r SET r.helpfulCount = (SELECT COUNT(v) FROM ReviewVote v WHERE v.reviewId = :reviewId AND v.helpful = true), r.notHelpfulCount = (SELECT COUNT(v) FROM ReviewVote v WHERE v.reviewId = :reviewId AND v.helpful = false) WHERE r.id = :reviewId")
+    void recalculateVoteCounts(@Param("reviewId") UUID reviewId);
+
+    @Modifying
+    @Query("UPDATE Review r SET r.reportCount = r.reportCount + 1 WHERE r.id = :reviewId")
+    void incrementReportCount(@Param("reviewId") UUID reviewId);
 }

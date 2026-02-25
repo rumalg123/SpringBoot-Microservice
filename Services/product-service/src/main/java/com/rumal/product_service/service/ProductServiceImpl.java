@@ -37,6 +37,7 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -601,26 +602,34 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional(readOnly = true)
     public byte[] exportProductsCsv() {
-        List<Product> products = productRepository.findAll();
         StringBuilder sb = new StringBuilder();
         sb.append("id,name,description,regularPrice,discountedPrice,sku,vendorId,productType,digital,images,active\n");
-        for (Product p : products) {
-            if (p.isDeleted()) {
-                continue;
+
+        int page = 0;
+        int pageSize = 500;
+        Page<Product> productPage;
+        do {
+            productPage = productRepository.findAll(PageRequest.of(page, pageSize));
+            for (Product p : productPage.getContent()) {
+                if (p.isDeleted()) {
+                    continue;
+                }
+                sb.append(csvEscape(p.getId().toString())).append(',');
+                sb.append(csvEscape(p.getName())).append(',');
+                sb.append(csvEscape(p.getDescription())).append(',');
+                sb.append(p.getRegularPrice()).append(',');
+                sb.append(p.getDiscountedPrice() != null ? p.getDiscountedPrice() : "").append(',');
+                sb.append(csvEscape(p.getSku())).append(',');
+                sb.append(p.getVendorId()).append(',');
+                sb.append(p.getProductType().name()).append(',');
+                sb.append(p.isDigital()).append(',');
+                sb.append(csvEscape(String.join(";", p.getImages()))).append(',');
+                sb.append(p.isActive());
+                sb.append('\n');
             }
-            sb.append(csvEscape(p.getId().toString())).append(',');
-            sb.append(csvEscape(p.getName())).append(',');
-            sb.append(csvEscape(p.getDescription())).append(',');
-            sb.append(p.getRegularPrice()).append(',');
-            sb.append(p.getDiscountedPrice() != null ? p.getDiscountedPrice() : "").append(',');
-            sb.append(csvEscape(p.getSku())).append(',');
-            sb.append(p.getVendorId()).append(',');
-            sb.append(p.getProductType().name()).append(',');
-            sb.append(p.isDigital()).append(',');
-            sb.append(csvEscape(String.join(";", p.getImages()))).append(',');
-            sb.append(p.isActive());
-            sb.append('\n');
-        }
+            page++;
+        } while (productPage.hasNext());
+
         return sb.toString().getBytes(StandardCharsets.UTF_8);
     }
 

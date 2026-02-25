@@ -53,7 +53,7 @@ public class VendorOperationalStateClient {
 
     @SuppressWarnings("unused")
     public VendorOperationalStateResponse fallbackGetState(UUID vendorId, Throwable ex) {
-        log.warn("Vendor service unavailable for vendor {}. Falling back to allow cart operation.", vendorId, ex);
-        return new VendorOperationalStateResponse(vendorId, true, false, "ACTIVE", true, true, true);
+        log.error("Vendor service unavailable for vendor {}. Rejecting cart operation.", vendorId, ex);
+        throw new ServiceUnavailableException("Vendor service unavailable. Please try again later.", ex);
     }
 }

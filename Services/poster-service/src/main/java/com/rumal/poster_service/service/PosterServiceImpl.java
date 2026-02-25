@@ -305,8 +305,12 @@ public class PosterServiceImpl implements PosterService {
     }
 
     private PosterResponse toResponse(Poster p) {
-        List<PosterVariant> activeVariants = posterVariantRepository
-                .findByPosterIdAndActiveTrueOrderByCreatedAtAsc(p.getId());
+        // Single query for all variants instead of two separate queries (N+1 fix)
+        List<PosterVariant> allVariantEntities = posterVariantRepository
+                .findByPosterIdOrderByCreatedAtAsc(p.getId());
+        List<PosterVariant> activeVariants = allVariantEntities.stream()
+                .filter(PosterVariant::isActive)
+                .toList();
         PosterVariantResponse selectedVariant = selectWeightedVariant(activeVariants);
 
         // If a variant is selected, its images override poster-level images
@@ -338,9 +342,7 @@ public class PosterServiceImpl implements PosterService {
             }
         }
 
-        List<PosterVariantResponse> allVariants = posterVariantRepository
-                .findByPosterIdOrderByCreatedAtAsc(p.getId())
-                .stream()
+        List<PosterVariantResponse> allVariants = allVariantEntities.stream()
                 .map(this::toVariantResponse)
                 .toList();
 

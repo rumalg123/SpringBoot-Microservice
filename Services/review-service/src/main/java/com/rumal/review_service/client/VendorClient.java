@@ -31,8 +31,8 @@ public class VendorClient {
         this.internalSharedSecret = internalSharedSecret;
     }
 
-    @Retry(name = "customerService")
-    @CircuitBreaker(name = "customerService", fallbackMethod = "fallbackGetVendorIdByKeycloakSub")
+    @Retry(name = "vendorService")
+    @CircuitBreaker(name = "vendorService", fallbackMethod = "fallbackGetVendorIdByKeycloakSub")
     @SuppressWarnings("unchecked")
     public UUID getVendorIdByKeycloakSub(String keycloakSub) {
         RestClient rc = lbRestClientBuilder.build();

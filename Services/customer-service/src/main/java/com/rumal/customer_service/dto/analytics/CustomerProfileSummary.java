@@ -8,7 +8,7 @@ public record CustomerProfileSummary(
     String name,
     String email,
     String loyaltyTier,
-    int loyaltyPoints,
+    long loyaltyPoints,
     Instant memberSince,
     boolean active
 ) {}

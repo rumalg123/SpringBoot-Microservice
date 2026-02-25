@@ -26,7 +26,8 @@ import java.util.UUID;
         },
         indexes = {
                 @Index(name = "idx_collections_keycloak_id", columnList = "keycloak_id"),
-                @Index(name = "idx_collections_share_token", columnList = "share_token")
+                @Index(name = "idx_collections_share_token", columnList = "share_token"),
+                @Index(name = "idx_collections_keycloak_default", columnList = "keycloak_id, is_default")
         }
 )
 @Getter

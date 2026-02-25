@@ -64,7 +64,7 @@ public class Customer {
 
     @Column(name = "loyalty_points", nullable = false)
     @Builder.Default
-    private int loyaltyPoints = 0;
+    private long loyaltyPoints = 0;
 
     @Column(name = "social_providers", length = 500)
     private String socialProviders;

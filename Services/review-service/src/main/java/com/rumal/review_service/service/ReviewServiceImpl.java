@@ -39,9 +39,7 @@ public class ReviewServiceImpl implements ReviewService {
     private final OrderPurchaseVerificationClient orderPurchaseVerificationClient;
     private final ReviewCacheVersionService reviewCacheVersionService;
 
-    @Lazy
-    @Autowired
-    private ReviewServiceImpl self;
+    // self-invocation field removed (unused)
 
     // ─── Create ─────────────────────────────────────────────
     @Override
@@ -274,10 +272,8 @@ public class ReviewServiceImpl implements ReviewService {
             reviewVoteRepository.save(vote);
         }
 
-        // Recalculate denormalized counts
-        review.setHelpfulCount(reviewVoteRepository.countHelpfulByReviewId(reviewId));
-        review.setNotHelpfulCount(reviewVoteRepository.countNotHelpfulByReviewId(reviewId));
-        reviewRepository.save(review);
+        // Recalculate denormalized counts atomically
+        reviewRepository.recalculateVoteCounts(reviewId);
         reviewCacheVersionService.bumpAllReviewCaches();
     }
 
@@ -299,10 +295,8 @@ public class ReviewServiceImpl implements ReviewService {
                 .build();
         reviewReportRepository.save(report);
 
-        // Increment denormalized report count
-        Review review = reviewRepository.findById(reviewId).orElseThrow();
-        review.setReportCount(review.getReportCount() + 1);
-        reviewRepository.save(review);
+        // Increment denormalized report count atomically
+        reviewRepository.incrementReportCount(reviewId);
         reviewCacheVersionService.bumpAllReviewCaches();
     }
 

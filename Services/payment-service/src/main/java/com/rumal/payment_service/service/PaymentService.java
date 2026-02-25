@@ -65,8 +65,8 @@ public class PaymentService {
             throw new ValidationException("Order has no customer assigned");
         }
 
-        // 4. Check for existing payment
-        Optional<Payment> existing = paymentRepository.findByOrderIdAndStatusIn(
+        // 4. Check for existing payment (with lock to prevent duplicate creation)
+        Optional<Payment> existing = paymentRepository.findByOrderIdAndStatusInForUpdate(
                 orderId, List.of(INITIATED, PENDING));
 
         Payment payment;
@@ -236,8 +236,12 @@ public class PaymentService {
         }
         Payment payment = opt.get();
 
-        // 5. Store old status
+        // 5. Store old status – skip if already terminal (idempotency)
         PaymentStatus oldStatus = payment.getStatus();
+        if (oldStatus == SUCCESS || oldStatus == FAILED || oldStatus == CANCELLED || oldStatus == CHARGEBACKED) {
+            log.info("Webhook for payment {} already in terminal state {}. Skipping.", paymentUuid, oldStatus);
+            return;
+        }
 
         // 6. Set webhook fields
         payment.setPayherePaymentId(paymentId);
@@ -260,42 +264,48 @@ public class PaymentService {
         // 8. Update status
         payment.setStatus(newStatus);
 
-        // 9. Handle SUCCESS
+        // 9. Mark order sync pending for statuses that require order updates
+        if (newStatus == SUCCESS || newStatus == FAILED || newStatus == CANCELLED) {
+            payment.setOrderSyncPending(true);
+        }
+
         if (newStatus == SUCCESS) {
             payment.setPaidAt(Instant.now());
+        }
+
+        // 10. Save payment first to persist the status change
+        paymentRepository.save(payment);
+
+        // 11. Sync order status (best-effort, flag stays true on failure for scheduler retry)
+        if (newStatus == SUCCESS) {
             try {
                 orderClient.setPaymentInfo(
                         payment.getOrderId(),
                         payment.getId().toString(),
                         method,
                         paymentId);
-            } catch (Exception ex) {
-                log.error("Failed to set payment info on order {} after successful payment: {}",
-                        payment.getOrderId(), ex.getMessage());
-            }
-            try {
                 orderClient.updateOrderStatus(
                         payment.getOrderId(), "CONFIRMED", "Payment confirmed via PayHere");
+                payment.setOrderSyncPending(false);
+                paymentRepository.save(payment);
             } catch (Exception ex) {
-                log.error("Failed to update order {} status to CONFIRMED: {}",
-                        payment.getOrderId(), ex.getMessage());
+                log.error("Failed to sync order {} after successful payment. Will retry via scheduler.",
+                        payment.getOrderId(), ex);
             }
         }
 
-        // 10. Handle FAILED or CANCELLED
         if (newStatus == FAILED || newStatus == CANCELLED) {
             try {
                 orderClient.updateOrderStatus(
                         payment.getOrderId(), "PAYMENT_FAILED",
                         "Payment " + newStatus.name().toLowerCase());
+                payment.setOrderSyncPending(false);
+                paymentRepository.save(payment);
             } catch (Exception ex) {
-                log.error("Failed to update order {} status to PAYMENT_FAILED: {}",
-                        payment.getOrderId(), ex.getMessage());
+                log.error("Failed to sync order {} after payment {}. Will retry via scheduler.",
+                        payment.getOrderId(), newStatus, ex);
             }
         }
-
-        // 11. Save payment
-        paymentRepository.save(payment);
 
         // 12. Audit
         writeAudit(paymentUuid, null, null,

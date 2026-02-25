@@ -22,6 +22,10 @@ public interface RefundRequestRepository extends JpaRepository<RefundRequest, UU
 
     Optional<RefundRequest> findByVendorOrderIdAndStatusNotIn(UUID vendorOrderId, List<RefundStatus> terminalStatuses);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT r FROM RefundRequest r WHERE r.vendorOrderId = :vendorOrderId AND r.status NOT IN :terminalStatuses")
+    Optional<RefundRequest> findByVendorOrderIdAndStatusNotInForUpdate(@Param("vendorOrderId") UUID vendorOrderId, @Param("terminalStatuses") List<RefundStatus> terminalStatuses);
+
     Page<RefundRequest> findByCustomerKeycloakId(String customerKeycloakId, Pageable pageable);
 
     @Query("SELECT r FROM RefundRequest r WHERE r.vendorId = :vendorId " +

@@ -4,7 +4,9 @@ import com.rumal.vendor_service.entity.Vendor;
 import com.rumal.vendor_service.entity.VendorStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -13,6 +15,10 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface VendorRepository extends JpaRepository<Vendor, UUID> {
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT v FROM Vendor v WHERE v.id = :id")
+    Optional<Vendor> findByIdForUpdate(@Param("id") UUID id);
+
     Optional<Vendor> findBySlug(String slug);
     boolean existsBySlug(String slug);
     boolean existsBySlugAndIdNot(String slug, UUID id);

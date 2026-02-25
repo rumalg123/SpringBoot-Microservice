@@ -45,8 +45,11 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
 import java.nio.charset.StandardCharsets;
@@ -188,9 +191,20 @@ public class AccessServiceImpl implements AccessService {
     public PlatformStaffAccessResponse createPlatformStaff(UpsertPlatformStaffAccessRequest request, String actorSub, String actorRoles, String reason) {
         PlatformStaffAccess entity = new PlatformStaffAccess();
         applyPlatformStaff(entity, request);
-        PlatformStaffAccess saved = platformStaffAccessRepository.save(entity);
+        PlatformStaffAccess saved;
+        try {
+            saved = platformStaffAccessRepository.save(entity);
+        } catch (DataIntegrityViolationException ex) {
+            throw new ValidationException("Platform staff already exists for this keycloakUserId (concurrent insert detected)");
+        }
         recordPlatformAudit(saved, AccessChangeAction.CREATED, actorSub, actorRoles, reason);
-        evictPlatformAccessLookup(saved.getKeycloakUserId());
+        String keycloakUserId = saved.getKeycloakUserId();
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                evictPlatformAccessLookup(keycloakUserId);
+            }
+        });
         return toPlatformStaffResponse(saved);
     }
 
@@ -209,8 +223,14 @@ public class AccessServiceImpl implements AccessService {
         applyPlatformStaff(entity, request);
         PlatformStaffAccess saved = platformStaffAccessRepository.save(entity);
         recordPlatformAudit(saved, AccessChangeAction.UPDATED, actorSub, actorRoles, reason);
-        evictPlatformAccessLookup(previousKeycloakUserId);
-        evictPlatformAccessLookup(saved.getKeycloakUserId());
+        String newKeycloakUserId = saved.getKeycloakUserId();
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                evictPlatformAccessLookup(previousKeycloakUserId);
+                evictPlatformAccessLookup(newKeycloakUserId);
+            }
+        });
         return toPlatformStaffResponse(saved);
     }
 
@@ -230,7 +250,13 @@ public class AccessServiceImpl implements AccessService {
         entity.setActive(false);
         PlatformStaffAccess saved = platformStaffAccessRepository.save(entity);
         recordPlatformAudit(saved, AccessChangeAction.SOFT_DELETED, actorSub, actorRoles, reason);
-        evictPlatformAccessLookup(saved.getKeycloakUserId());
+        String keycloakUserId = saved.getKeycloakUserId();
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                evictPlatformAccessLookup(keycloakUserId);
+            }
+        });
     }
 
     @Override
@@ -251,7 +277,13 @@ public class AccessServiceImpl implements AccessService {
         entity.setDeletedAt(null);
         PlatformStaffAccess saved = platformStaffAccessRepository.save(entity);
         recordPlatformAudit(saved, AccessChangeAction.RESTORED, actorSub, actorRoles, reason);
-        evictPlatformAccessLookup(saved.getKeycloakUserId());
+        String keycloakUserId = saved.getKeycloakUserId();
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                evictPlatformAccessLookup(keycloakUserId);
+            }
+        });
         return toPlatformStaffResponse(saved);
     }
 
@@ -328,9 +360,20 @@ public class AccessServiceImpl implements AccessService {
     public VendorStaffAccessResponse createVendorStaff(UpsertVendorStaffAccessRequest request, String actorSub, String actorRoles, String reason) {
         VendorStaffAccess entity = new VendorStaffAccess();
         applyVendorStaff(entity, request);
-        VendorStaffAccess saved = vendorStaffAccessRepository.save(entity);
+        VendorStaffAccess saved;
+        try {
+            saved = vendorStaffAccessRepository.save(entity);
+        } catch (DataIntegrityViolationException ex) {
+            throw new ValidationException("Vendor staff already exists for this vendor and keycloakUserId (concurrent insert detected)");
+        }
         recordVendorAudit(saved, AccessChangeAction.CREATED, actorSub, actorRoles, reason);
-        evictVendorAccessLookup(saved.getKeycloakUserId());
+        String keycloakUserId = saved.getKeycloakUserId();
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                evictVendorAccessLookup(keycloakUserId);
+            }
+        });
         return toVendorStaffResponse(saved);
     }
 
@@ -349,8 +392,14 @@ public class AccessServiceImpl implements AccessService {
         applyVendorStaff(entity, request);
         VendorStaffAccess saved = vendorStaffAccessRepository.save(entity);
         recordVendorAudit(saved, AccessChangeAction.UPDATED, actorSub, actorRoles, reason);
-        evictVendorAccessLookup(previousKeycloakUserId);
-        evictVendorAccessLookup(saved.getKeycloakUserId());
+        String newKeycloakUserId = saved.getKeycloakUserId();
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                evictVendorAccessLookup(previousKeycloakUserId);
+                evictVendorAccessLookup(newKeycloakUserId);
+            }
+        });
         return toVendorStaffResponse(saved);
     }
 
@@ -370,7 +419,13 @@ public class AccessServiceImpl implements AccessService {
         entity.setActive(false);
         VendorStaffAccess saved = vendorStaffAccessRepository.save(entity);
         recordVendorAudit(saved, AccessChangeAction.SOFT_DELETED, actorSub, actorRoles, reason);
-        evictVendorAccessLookup(saved.getKeycloakUserId());
+        String keycloakUserId = saved.getKeycloakUserId();
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                evictVendorAccessLookup(keycloakUserId);
+            }
+        });
     }
 
     @Override
@@ -391,7 +446,13 @@ public class AccessServiceImpl implements AccessService {
         entity.setDeletedAt(null);
         VendorStaffAccess saved = vendorStaffAccessRepository.save(entity);
         recordVendorAudit(saved, AccessChangeAction.RESTORED, actorSub, actorRoles, reason);
-        evictVendorAccessLookup(saved.getKeycloakUserId());
+        String keycloakUserId = saved.getKeycloakUserId();
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                evictVendorAccessLookup(keycloakUserId);
+            }
+        });
         return toVendorStaffResponse(saved);
     }
 
@@ -931,32 +992,31 @@ public class AccessServiceImpl implements AccessService {
 
         List<PlatformStaffAccess> expiredPlatform = platformStaffAccessRepository
                 .findByActiveTrueAndDeletedFalseAndAccessExpiresAtBefore(now);
-        for (PlatformStaffAccess staff : expiredPlatform) {
-            staff.setActive(false);
-            platformStaffAccessRepository.save(staff);
-            evictPlatformAccessLookup(staff.getKeycloakUserId());
-            count++;
-        }
+        expiredPlatform.forEach(staff -> staff.setActive(false));
+        platformStaffAccessRepository.saveAll(expiredPlatform);
+        count += expiredPlatform.size();
 
         List<VendorStaffAccess> expiredVendor = vendorStaffAccessRepository
                 .findByActiveTrueAndDeletedFalseAndAccessExpiresAtBefore(now);
-        for (VendorStaffAccess staff : expiredVendor) {
-            staff.setActive(false);
-            vendorStaffAccessRepository.save(staff);
-            evictVendorAccessLookup(staff.getKeycloakUserId());
-            count++;
-        }
+        expiredVendor.forEach(staff -> staff.setActive(false));
+        vendorStaffAccessRepository.saveAll(expiredVendor);
+        count += expiredVendor.size();
 
         List<ApiKey> expiredKeys = apiKeyRepository.findByActiveTrueAndExpiresAtBefore(now);
-        for (ApiKey key : expiredKeys) {
-            key.setActive(false);
-            apiKeyRepository.save(key);
-            count++;
-        }
+        expiredKeys.forEach(key -> key.setActive(false));
+        apiKeyRepository.saveAll(expiredKeys);
+        count += expiredKeys.size();
 
         if (count > 0) {
             log.info("Deactivated {} expired access records", count);
         }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                expiredPlatform.forEach(staff -> evictPlatformAccessLookup(staff.getKeycloakUserId()));
+                expiredVendor.forEach(staff -> evictVendorAccessLookup(staff.getKeycloakUserId()));
+            }
+        });
         return count;
     }
 }

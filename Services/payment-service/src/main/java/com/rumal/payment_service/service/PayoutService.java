@@ -60,8 +60,8 @@ public class PayoutService {
         // 3. Build VendorPayout entity
         VendorPayout payout = VendorPayout.builder()
                 .vendorId(req.vendorId())
-                .payoutAmount(BigDecimal.ZERO)
-                .platformFee(BigDecimal.ZERO)
+                .payoutAmount(req.payoutAmount())
+                .platformFee(req.platformFee())
                 .currency("USD")
                 .vendorOrderIds(vendorOrderIdsStr)
                 .bankAccount(bankAccount)

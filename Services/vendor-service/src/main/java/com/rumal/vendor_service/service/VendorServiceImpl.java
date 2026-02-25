@@ -264,9 +264,9 @@ public class VendorServiceImpl implements VendorService {
             throw new ValidationException("Vendor cannot be deleted: " + blocker);
         }
 
-        // DB mutation inside a short transaction
+        // DB mutation inside a short transaction with pessimistic lock to prevent race conditions
         transactionTemplate.executeWithoutResult(status -> {
-            Vendor vendor = vendorRepository.findById(id)
+            Vendor vendor = vendorRepository.findByIdForUpdate(id)
                     .orElseThrow(() -> new ResourceNotFoundException("Vendor not found: " + id));
             if (vendor.isDeleted()) {
                 return;

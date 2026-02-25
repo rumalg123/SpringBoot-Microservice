@@ -22,6 +22,7 @@ public class ProductAnalyticsClient {
     private static final String BASE_URL = "http://product-service/internal/products/analytics";
 
     private final RestClient.Builder lbRestClientBuilder;
+    private final RestClient restClient;
     private final CircuitBreakerFactory<?, ?> circuitBreakerFactory;
     private final RetryRegistry retryRegistry;
     private final String internalAuth;
@@ -33,6 +34,7 @@ public class ProductAnalyticsClient {
             @Value("${internal.auth.shared-secret:}") String internalAuth
     ) {
         this.lbRestClientBuilder = lbRestClientBuilder;
+        this.restClient = lbRestClientBuilder.build();
         this.circuitBreakerFactory = circuitBreakerFactory;
         this.retryRegistry = retryRegistry;
         this.internalAuth = internalAuth;
@@ -56,7 +58,7 @@ public class ProductAnalyticsClient {
 
     private <T> T get(String url, Class<T> type) {
         try {
-            return lbRestClientBuilder.build().get()
+            return restClient.get()
                     .uri(url)
                     .header("X-Internal-Auth", internalAuth)
                     .retrieve()
@@ -68,7 +70,7 @@ public class ProductAnalyticsClient {
 
     private <T> List<T> getList(String url, ParameterizedTypeReference<List<T>> type) {
         try {
-            List<T> result = lbRestClientBuilder.build().get()
+            List<T> result = restClient.get()
                     .uri(url)
                     .header("X-Internal-Auth", internalAuth)
                     .retrieve()

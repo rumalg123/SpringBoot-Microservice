@@ -19,6 +19,7 @@ import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
 import org.springframework.data.elasticsearch.core.SearchHits;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.util.*;
 
 @Slf4j
@@ -29,7 +30,7 @@ public class ProductSearchService {
     private final ElasticsearchOperations elasticsearchOperations;
     private final PopularSearchService popularSearchService;
 
-    @Cacheable(value = "searchResults", key = "#request.toString()")
+    @Cacheable(value = "searchResults", key = "#request.q() + '-' + #request.page() + '-' + #request.size() + '-' + #request.sortBy() + '-' + #request.category() + '-' + #request.mainCategory() + '-' + #request.subCategory() + '-' + #request.brand() + '-' + #request.vendorId() + '-' + #request.minPrice() + '-' + #request.maxPrice()")
     public SearchResponse search(SearchRequest request) {
         long start = System.currentTimeMillis();
 
@@ -84,6 +85,7 @@ public class ProductSearchService {
         // Pagination
         queryBuilder.withPageable(PageRequest.of(request.page(), request.size()));
 
+        queryBuilder.withTimeout(Duration.ofSeconds(10));
         NativeQuery query = queryBuilder.build();
         SearchHits<ProductDocument> searchHits = elasticsearchOperations.search(query, ProductDocument.class);
 

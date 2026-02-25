@@ -55,8 +55,8 @@ public class RefundService {
             throw new ValidationException("Payment must be successful to request refund");
         }
 
-        // 2. Check no existing active refund for this vendor order
-        refundRequestRepository.findByVendorOrderIdAndStatusNotIn(
+        // 2. Check no existing active refund for this vendor order (with lock to prevent duplicates)
+        refundRequestRepository.findByVendorOrderIdAndStatusNotInForUpdate(
                 req.vendorOrderId(),
                 List.of(ADMIN_REJECTED, REFUND_COMPLETED, REFUND_FAILED)
         ).ifPresent(existing -> {

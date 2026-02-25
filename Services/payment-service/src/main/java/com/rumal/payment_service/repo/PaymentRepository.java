@@ -25,6 +25,10 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
 
     Optional<Payment> findByOrderIdAndStatusIn(UUID orderId, List<PaymentStatus> statuses);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM Payment p WHERE p.orderId = :orderId AND p.status IN :statuses")
+    Optional<Payment> findByOrderIdAndStatusInForUpdate(@Param("orderId") UUID orderId, @Param("statuses") List<PaymentStatus> statuses);
+
     Optional<Payment> findTopByOrderIdOrderByCreatedAtDesc(UUID orderId);
 
     Page<Payment> findByCustomerKeycloakId(String customerKeycloakId, Pageable pageable);
@@ -36,6 +40,9 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     Page<Payment> findFiltered(UUID customerId, PaymentStatus status, Pageable pageable);
 
     List<Payment> findByStatusAndExpiresAtBefore(PaymentStatus status, Instant now);
+
+    @Query("SELECT p FROM Payment p WHERE p.orderSyncPending = true AND p.status IN :statuses")
+    List<Payment> findOrderSyncPending(@Param("statuses") List<PaymentStatus> statuses);
 
     // --- Analytics queries ---
 

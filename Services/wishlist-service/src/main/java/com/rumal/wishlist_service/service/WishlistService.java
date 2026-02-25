@@ -298,26 +298,19 @@ public class WishlistService {
     @Caching(evict = {
             @CacheEvict(cacheNames = "wishlistByKeycloak", key = "#keycloakId == null ? '' : #keycloakId.trim()")
     })
-    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 15)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void moveItemToCart(String keycloakId, UUID itemId) {
         String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
         WishlistItem item = wishlistItemRepository.findByIdAndKeycloakId(itemId, normalizedKeycloakId)
                 .orElseThrow(() -> new ResourceNotFoundException("Wishlist item not found: " + itemId));
 
         UUID productId = item.getProductId();
-        wishlistItemRepository.delete(item);
 
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                try {
-                    cartClient.addItemToCart(normalizedKeycloakId, productId, 1);
-                } catch (Exception ex) {
-                    log.error("Failed to add product {} to cart for user {} after wishlist item removal. "
-                            + "Item was already deleted from wishlist.", productId, normalizedKeycloakId, ex);
-                }
-            }
-        });
+        // Add to cart first — if this fails, item stays in wishlist (no data loss)
+        cartClient.addItemToCart(normalizedKeycloakId, productId, 1);
+
+        // Only delete from wishlist after cart add succeeds
+        wishlistItemRepository.delete(item);
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -354,12 +347,19 @@ public class WishlistService {
     private WishlistCollection getOrCreateDefaultCollection(String keycloakId) {
         return wishlistCollectionRepository.findByKeycloakIdAndIsDefaultTrue(keycloakId)
                 .orElseGet(() -> {
-                    WishlistCollection defaultCollection = WishlistCollection.builder()
-                            .keycloakId(keycloakId)
-                            .name("My Wishlist")
-                            .isDefault(true)
-                            .build();
-                    return wishlistCollectionRepository.save(defaultCollection);
+                    try {
+                        WishlistCollection defaultCollection = WishlistCollection.builder()
+                                .keycloakId(keycloakId)
+                                .name("My Wishlist")
+                                .isDefault(true)
+                                .build();
+                        return wishlistCollectionRepository.save(defaultCollection);
+                    } catch (org.springframework.dao.DataIntegrityViolationException e) {
+                        // Concurrent creation race — re-fetch the one that won
+                        return wishlistCollectionRepository.findByKeycloakIdAndIsDefaultTrue(keycloakId)
+                                .orElseThrow(() -> new IllegalStateException(
+                                        "Default collection not found after concurrent creation", e));
+                    }
                 });
     }
 

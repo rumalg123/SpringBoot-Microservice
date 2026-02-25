@@ -17,7 +17,7 @@ public record CustomerResponse(
         LocalDate dateOfBirth,
         Gender gender,
         CustomerLoyaltyTier loyaltyTier,
-        int loyaltyPoints,
+        long loyaltyPoints,
         List<String> socialProviders,
         boolean active,
         Instant deactivatedAt,

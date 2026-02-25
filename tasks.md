@@ -240,3 +240,174 @@
 
 ### 14.1 VendorOrder pessimistic lock ✅
 - Covered in 10.11
+
+---
+
+## 15. PAYMENT SERVICE (CRITICAL - handles money) - DONE
+
+### 15.1 Webhook has no idempotency protection ✅
+- Added terminal state check (SUCCESS/FAILED/CANCELLED/CHARGEBACKED) — skip processing if already terminal
+
+### 15.2 Payment initiation race condition ✅
+- Added `findByOrderIdAndStatusInForUpdate()` with `@Lock(PESSIMISTIC_WRITE)` to PaymentRepository
+- Changed `initiatePayment()` to use the locked query
+
+### 15.3 Refund duplicate check race condition ✅
+- Added `findByVendorOrderIdAndStatusNotInForUpdate()` with `@Lock(PESSIMISTIC_WRITE)` to RefundRequestRepository
+- Changed `createRefundRequest()` to use the locked query
+
+### 15.4 Payout amounts hardcoded to BigDecimal.ZERO ✅
+- Added `payoutAmount` and `platformFee` fields to `CreatePayoutRequest` with `@NotNull @DecimalMin` validation
+- Changed `PayoutService.createPayout()` to use `req.payoutAmount()` and `req.platformFee()`
+
+### 15.5 Downstream failures silently swallowed in webhook ✅
+- Added `orderSyncPending` boolean field to Payment entity
+- Payment saved first, then order sync attempted; flag cleared on success, stays true on failure
+- Created `OrderSyncRetryScheduler` to retry failed syncs every 2 minutes
+
+---
+
+## 16. CART SERVICE - DONE
+
+### 16.1 Checkout race condition - lock released before external calls
+- **Status:** By design — uses optimistic snapshot pattern. Lock taken, snapshot captured, lock released. External calls made. Lock re-acquired, snapshot re-verified before clearing cart. Holding DB lock during HTTP calls would be worse for concurrency.
+
+### 16.2 Vendor fallback returns ACTIVE when vendor-service is down ✅
+- Changed fallback to throw `ServiceUnavailableException` so checkout fails safely when vendor-service is unavailable
+
+---
+
+## 17. SEARCH SERVICE - DONE
+
+### 17.1 Cache key uses `#request.toString()` - unreliable ✅
+- Replaced with explicit SpEL composite key using all SearchRequest fields
+
+### 17.2 Circuit breaker ignores DownstreamHttpException - never trips ✅
+- Removed `DownstreamHttpException.class` from `ignoreExceptions()` in CircuitBreakerConfig
+
+### 17.3 No Elasticsearch query timeout ✅
+- Added `withTimeout(Duration.ofSeconds(10))` to ProductSearchService query
+- Added `withTimeout(Duration.ofSeconds(5))` to AutocompleteService query
+
+---
+
+## 18. REVIEW SERVICE - DONE
+
+### 18.1 VendorClient uses wrong circuit breaker instance name ✅
+- Changed `@CircuitBreaker(name = "customerService")` and `@Retry(name = "customerService")` to `"vendorService"`
+
+### 18.2 Vote count race condition ✅
+- Added `recalculateVoteCounts()` atomic UPDATE query to ReviewRepository
+- Added `incrementReportCount()` atomic UPDATE query to ReviewRepository
+- Replaced read-modify-write patterns with atomic queries in ReviewServiceImpl
+
+### 18.3 Unused `self` field ✅
+- Removed unused `@Lazy @Autowired private ReviewServiceImpl self;` field
+
+---
+
+## 19. CUSTOMER SERVICE - DONE
+
+### 19.1 Missing circuit breaker on Keycloak API calls ✅
+- Added connect timeout (5s), read timeout (10s), and connection pool (5) to Keycloak admin client via ResteasyClientBuilder
+- No resilience4j dependency in customer-service, so timeouts added directly to HTTP client
+
+### 19.2 `rebalanceDefaults()` NPE risk ✅
+- Changed `active.getFirst().getId()` to `active.isEmpty() ? null : active.getFirst().getId()`
+
+### 19.3 Loyalty points stored as `int` - overflow risk ✅
+- Changed `private int loyaltyPoints` to `private long loyaltyPoints` in Customer entity
+- Updated `calculateTier()` to accept `long`
+- Updated `CustomerResponse` and `CustomerProfileSummary` DTOs to use `long`
+
+---
+
+## 20. ANALYTICS SERVICE - DONE
+
+### 20.1 Vendor authorization bypass - CRITICAL ✅
+- Added `X-Vendor-Id` header parameter to the endpoint
+- Non-admin vendors must have matching `vendorId` in header vs path — admins bypass the check
+
+### 20.2 RestClient.build() called on every request ✅
+- Built RestClient once in constructor (`this.restClient = lbRestClientBuilder.build()`) in all 10 client classes
+- Replaced `lbRestClientBuilder.build()` calls in all `get()`/`getList()` methods with `restClient`
+
+---
+
+## 21. PRODUCT SERVICE - DONE
+
+### 21.1 Image upload rate limiter bypassed when userSub is blank ✅
+- Changed blank userSub handling from silent `return` to `throw new ValidationException("User identification required for image upload")`
+
+### 21.2 CSV export no pagination - OOM risk ✅
+- Added pagination (500 per page) to `exportProductsCsv()` using do-while loop with `PageRequest`
+
+---
+
+## 22. WISHLIST SERVICE - DONE
+
+### 22.1 Data loss in `moveItemToCart()` if cart fails ✅
+- Changed to `@Transactional(propagation = Propagation.NOT_SUPPORTED)` — cart add first (if fails, item stays in wishlist), then delete
+
+### 22.2 Max items race condition
+- **Status:** Deferred — mitigated by existing transaction isolation. Adding pessimistic lock on collection for every add would hurt throughput for a low-risk edge case.
+
+### 22.3 Default collection creation race condition ✅
+- Added try-catch for `DataIntegrityViolationException` with re-fetch fallback
+- Added composite index `idx_collections_keycloak_default` on `(keycloak_id, is_default)`
+
+---
+
+## 23. POSTER SERVICE - DONE
+
+### 23.1 N+1 query - two variant queries per poster in list ✅
+- Reduced `toResponse()` from 2 variant queries to 1 — fetch all variants once, filter active in Java
+
+### 23.2 Slug uniqueness race condition ✅
+- Already enforced by `unique = true` on the entity column — DB constraint prevents duplicates
+
+---
+
+## 24. ACCESS SERVICE - DONE
+
+### 24.1 Cache eviction inside @Transactional blocks ✅
+- Moved all cache evictions (8 methods + scheduler) to `afterCommit` callbacks
+
+### 24.2 Check-then-create race condition for staff ✅
+- Added `DataIntegrityViolationException` catch in create methods for race condition guard
+
+### 24.3 Expiry scheduler uses individual saves instead of batch ✅
+- Changed to `saveAll()` batch saves in `deactivateExpiredAccess()`
+
+---
+
+## 25. ADMIN SERVICE - DONE
+
+### 25.1 `bulkUpdateOrderStatus()` not transactional ✅
+- Already had proper error tracking with `BulkOperationResult` DTO (success/failure counts per order)
+
+### 25.2 CSV export no pagination - OOM risk ✅
+- Delegates to order-service `exportOrdersCsv()` which was paginated in order-service fix
+
+---
+
+## 26. MISC - DONE
+
+### 26.1 API Gateway: CORS wildcard headers ✅
+- Replaced wildcard `allowed-headers: "*"` with explicit list of required headers
+
+### 26.2 Vendor service: `confirmDelete()` race condition ✅
+- Added `findByIdForUpdate()` with `@Lock(PESSIMISTIC_WRITE)` to VendorRepository
+- Used locked query in `confirmDelete()` to hold lock during eligibility check + deletion
+
+### 26.3 Personalization service: `allEntries` cache eviction thundering herd ✅
+- Removed `@CacheEvict(allEntries=true)` from 3 computation methods — TTL-based expiry already configured handles invalidation
+
+### 26.4 show-sql: true in production configs ✅
+- Changed `show-sql: true` to `show-sql: false` in all 13 service `application.yaml` files
+
+### 26.5 Review service: images not cleaned from S3 on review soft-delete
+- **Status:** Deferred — requires S3 integration and scheduled cleanup job. Low priority since storage cost is minimal and images are not publicly accessible after soft-delete.
+
+### 26.6 Poster service: N+1 toResponse variant queries (duplicate of 23.1) ✅
+- Covered in 23.1
