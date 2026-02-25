@@ -63,7 +63,7 @@ export default function ReviewCard({ review, onVote, onReport, votingDisabled }:
               onClick={() => setExpandedImage(img)}
               style={{ width: "64px", height: "64px", borderRadius: "8px", overflow: "hidden", border: "1px solid var(--line)", cursor: "pointer" }}
             >
-              <img src={resolveImageUrl(img.replace(/(\.\w+)$/, "-thumb$1"))} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              <img src={resolveImageUrl(img.replace(/(\.\w+)$/, "-thumb$1")) ?? undefined} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             </div>
           ))}
         </div>
@@ -75,7 +75,7 @@ export default function ReviewCard({ review, onVote, onReport, votingDisabled }:
           onClick={() => setExpandedImage(null)}
           style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
         >
-          <img src={resolveImageUrl(expandedImage)} alt="" style={{ maxWidth: "90vw", maxHeight: "90vh", borderRadius: "12px" }} />
+          <img src={resolveImageUrl(expandedImage) ?? undefined} alt="" style={{ maxWidth: "90vw", maxHeight: "90vh", borderRadius: "12px" }} />
         </div>
       )}
 

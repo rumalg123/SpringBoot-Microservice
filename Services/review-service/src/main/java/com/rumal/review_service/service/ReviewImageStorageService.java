@@ -6,4 +6,5 @@ import java.util.List;
 public interface ReviewImageStorageService {
     List<String> uploadImages(List<MultipartFile> files);
     void deleteImages(List<String> keys);
+    StoredImage getImage(String key);
 }

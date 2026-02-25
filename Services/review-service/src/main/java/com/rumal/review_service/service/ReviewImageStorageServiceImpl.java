@@ -10,6 +10,7 @@ import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import javax.imageio.ImageIO;
@@ -20,6 +21,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.*;
 import java.util.List;
+import java.util.Locale;
+import java.util.regex.Pattern;
 
 @Service
 public class ReviewImageStorageServiceImpl implements ReviewImageStorageService {
@@ -29,6 +32,7 @@ public class ReviewImageStorageServiceImpl implements ReviewImageStorageService 
     private static final long MAX_FILE_SIZE = 1_048_576; // 1MB
     private static final int MAX_FILES = 5;
     private static final int THUMBNAIL_MAX_DIM = 300;
+    private static final Pattern KEY_PATTERN = Pattern.compile("^(reviews/)?[A-Za-z0-9-]+(-thumb)?\\.(jpg|jpeg|png|webp)$");
 
     private final ObjectProvider<S3Client> s3ClientProvider;
     private final ObjectStorageProperties properties;
@@ -110,6 +114,46 @@ public class ReviewImageStorageServiceImpl implements ReviewImageStorageService 
             } catch (Exception ex) {
                 log.warn("Failed to delete image {}", key, ex);
             }
+        }
+    }
+
+    @Override
+    public StoredImage getImage(String key) {
+        S3Client s3 = s3ClientProvider.getIfAvailable();
+        if (s3 == null) {
+            throw new ValidationException("Image storage is not configured");
+        }
+        if (key == null || key.isBlank()) {
+            throw new ValidationException("Image key is required");
+        }
+        String normalized = key.trim().toLowerCase(Locale.ROOT);
+        if (!KEY_PATTERN.matcher(normalized).matches()) {
+            throw new ValidationException("Invalid image key format");
+        }
+
+        StoredImage direct = fetchImage(s3, normalized);
+        if (direct != null) return direct;
+
+        // Try with/without prefix
+        String alternate = normalized.startsWith("reviews/")
+                ? normalized.substring("reviews/".length())
+                : "reviews/" + normalized;
+        StoredImage alt = fetchImage(s3, alternate);
+        if (alt != null) return alt;
+
+        throw new ValidationException("Image not found");
+    }
+
+    private StoredImage fetchImage(S3Client s3, String key) {
+        try {
+            var responseBytes = s3.getObjectAsBytes(GetObjectRequest.builder()
+                    .bucket(properties.bucket())
+                    .key(key)
+                    .build());
+            String contentType = responseBytes.response().contentType();
+            return new StoredImage(responseBytes.asByteArray(), contentType != null ? contentType : "image/jpeg");
+        } catch (RuntimeException ignored) {
+            return null;
         }
     }
 
