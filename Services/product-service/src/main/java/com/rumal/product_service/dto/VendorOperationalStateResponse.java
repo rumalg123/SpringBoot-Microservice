@@ -11,6 +11,7 @@ public record VendorOperationalStateResponse(
         boolean deleted,
         String status,
         boolean acceptingOrders,
-        boolean storefrontVisible
+        boolean storefrontVisible,
+        boolean verified
 ) {
 }

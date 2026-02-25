@@ -116,6 +116,14 @@ public class AdminVendorService {
         return vendorClient.resumeReceivingOrders(id, request, internalAuth, userSub, userRoles, idempotencyKey);
     }
 
+    public Map<String, Object> approveVerification(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles, String idempotencyKey) {
+        return vendorClient.approveVerification(id, request, internalAuth, userSub, userRoles, idempotencyKey);
+    }
+
+    public Map<String, Object> rejectVerification(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles, String idempotencyKey) {
+        return vendorClient.rejectVerification(id, request, internalAuth, userSub, userRoles, idempotencyKey);
+    }
+
     public Map<String, Object> restore(UUID id, String internalAuth) {
         return vendorClient.restore(id, internalAuth);
     }

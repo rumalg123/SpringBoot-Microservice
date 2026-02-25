@@ -95,4 +95,12 @@ public interface OrderRepository extends JpaRepository<Order, UUID>, JpaSpecific
 
     @Query("SELECT o FROM Order o WHERE o.status IN :statuses AND o.expiresAt IS NOT NULL AND o.expiresAt < :now")
     List<Order> findExpiredOrders(@Param("statuses") Collection<OrderStatus> statuses, @Param("now") Instant now, Pageable pageable);
+
+    @Query("""
+            SELECT o.id FROM Order o JOIN o.orderItems oi
+            WHERE o.customerId = :customerId AND oi.productId = :productId
+            AND o.status IN (com.rumal.order_service.entity.OrderStatus.DELIVERED, com.rumal.order_service.entity.OrderStatus.CLOSED)
+            ORDER BY o.updatedAt DESC
+            """)
+    List<UUID> findDeliveredOrderIdsByCustomerAndProduct(@Param("customerId") UUID customerId, @Param("productId") UUID productId);
 }

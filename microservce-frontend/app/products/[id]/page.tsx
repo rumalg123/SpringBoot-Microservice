@@ -11,6 +11,7 @@ import { useAuthSession } from "../../../lib/authSession";
 import { emitCartUpdate, emitWishlistUpdate } from "../../../lib/navEvents";
 import { money, calcDiscount } from "../../../lib/format";
 import { resolveImageUrl } from "../../../lib/image";
+import ReviewSection from "../../components/reviews/ReviewSection";
 
 type Variation = { name: string; value: string };
 type ProductDetail = {
@@ -627,6 +628,15 @@ export default function ProductDetailPage() {
             </div>
           </div>
         </section>
+
+        {product && (
+          <ReviewSection
+            productId={product.id}
+            vendorId={product.vendorId}
+            isAuthenticated={isAuthenticated}
+            apiClient={apiClient}
+          />
+        )}
       </main>
 
       <Footer />

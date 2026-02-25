@@ -180,6 +180,36 @@ public class AdminVendorController {
         return result;
     }
 
+    @PostMapping("/{id}/verify")
+    public Map<String, Object> approveVerification(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @RequestBody(required = false) Map<String, Object> request,
+            @PathVariable UUID id
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        Map<String, Object> result = adminVendorService.approveVerification(id, request, internalAuth, userSub, userRoles, idempotencyKey);
+        auditService.log(userSub, userRoles, "APPROVE_VENDOR_VERIFICATION", "VENDOR", id.toString(), null, null);
+        return result;
+    }
+
+    @PostMapping("/{id}/reject-verification")
+    public Map<String, Object> rejectVerification(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @RequestBody(required = false) Map<String, Object> request,
+            @PathVariable UUID id
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        Map<String, Object> result = adminVendorService.rejectVerification(id, request, internalAuth, userSub, userRoles, idempotencyKey);
+        auditService.log(userSub, userRoles, "REJECT_VENDOR_VERIFICATION", "VENDOR", id.toString(), null, null);
+        return result;
+    }
+
     @PostMapping("/{id}/restore")
     public Map<String, Object> restore(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,

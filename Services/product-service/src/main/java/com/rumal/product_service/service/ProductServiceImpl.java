@@ -91,6 +91,7 @@ public class ProductServiceImpl implements ProductService {
         if (request.productType() == ProductType.VARIATION) {
             throw new ValidationException("Use /admin/products/{parentId}/variations to create variation products");
         }
+        assertVendorVerified(request.vendorId());
         Product product = new Product();
         applyUpsertRequest(product, request, null, null);
         Product saved = productRepository.save(product);
@@ -110,6 +111,7 @@ public class ProductServiceImpl implements ProductService {
         if (request.productType() != ProductType.VARIATION) {
             throw new ValidationException("Variation endpoint requires productType=VARIATION");
         }
+        assertVendorVerified(parent.getVendorId());
 
         Product variation = new Product();
         applyUpsertRequest(variation, request, parent.getId(), parent);
@@ -335,6 +337,7 @@ public class ProductServiceImpl implements ProductService {
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public ProductResponse update(UUID id, UpsertProductRequest request) {
         Product product = getActiveEntityById(id);
+        assertVendorVerified(product.getVendorId());
         UUID parentId = product.getParentProductId();
         Product parent = null;
         if (parentId != null && request.productType() != ProductType.VARIATION) {
@@ -1362,6 +1365,16 @@ public class ProductServiceImpl implements ProductService {
         }
         long adjustedTotal = Math.min(page.getTotalElements(), pageable.getOffset() + filtered.size());
         return new PageImpl<>(filtered, pageable, adjustedTotal);
+    }
+
+    private void assertVendorVerified(UUID vendorId) {
+        if (vendorId == null) {
+            return;
+        }
+        VendorOperationalStateResponse state = vendorOperationalStateClient.getState(vendorId, requireInternalAuth());
+        if (state == null || !state.verified()) {
+            throw new ValidationException("Vendor is not verified. Products cannot be created or updated until the vendor is verified by platform admin.");
+        }
     }
 
     private void assertVendorStorefrontVisible(UUID vendorId, UUID productId) {

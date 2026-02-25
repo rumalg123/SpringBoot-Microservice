@@ -124,6 +124,7 @@ class CartServicePromotionFlowIntegrationTest {
                 false,
                 "ACTIVE",
                 true,
+                true,
                 true
         ));
         when(customerClient.getCustomerByKeycloakId(keycloakId)).thenReturn(new CustomerSummary(customerId, "Customer", "c@example.com"));

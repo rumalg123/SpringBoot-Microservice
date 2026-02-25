@@ -125,6 +125,18 @@ public class VendorClient {
                 : jsonPost("/admin/vendors/" + id + "/resume-orders", request, internalAuth, userSub, userRoles, idempotencyKey);
     }
 
+    public Map<String, Object> approveVerification(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles, String idempotencyKey) {
+        return request == null
+                ? postNoBody("/admin/vendors/" + id + "/verify", internalAuth, userSub, userRoles, idempotencyKey)
+                : jsonPost("/admin/vendors/" + id + "/verify", request, internalAuth, userSub, userRoles, idempotencyKey);
+    }
+
+    public Map<String, Object> rejectVerification(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles, String idempotencyKey) {
+        return request == null
+                ? postNoBody("/admin/vendors/" + id + "/reject-verification", internalAuth, userSub, userRoles, idempotencyKey)
+                : jsonPost("/admin/vendors/" + id + "/reject-verification", request, internalAuth, userSub, userRoles, idempotencyKey);
+    }
+
     public Map<String, Object> restore(UUID id, String internalAuth) {
         return restore(id, null, internalAuth, null, null);
     }

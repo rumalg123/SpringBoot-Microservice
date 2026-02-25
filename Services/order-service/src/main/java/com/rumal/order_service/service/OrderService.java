@@ -15,6 +15,7 @@ import com.rumal.order_service.dto.VendorOrderDetailResponse;
 import com.rumal.order_service.dto.VendorSummaryForOrder;
 import com.rumal.order_service.config.CustomerDetailsMode;
 import com.rumal.order_service.config.OrderAggregationProperties;
+import com.rumal.order_service.dto.CustomerProductPurchaseCheckResponse;
 import com.rumal.order_service.dto.CouponReservationResponse;
 import com.rumal.order_service.dto.CancelOrderRequest;
 import com.rumal.order_service.dto.CreateMyOrderRequest;
@@ -1374,6 +1375,15 @@ public class OrderService {
                 pendingOrders,
                 vendorOrderRepository.findLatestParentOrderCreatedAtByVendorId(vendorId)
         );
+    }
+
+    @Transactional(readOnly = true)
+    public CustomerProductPurchaseCheckResponse checkCustomerPurchasedProduct(UUID customerId, UUID productId) {
+        List<UUID> orderIds = orderRepository.findDeliveredOrderIdsByCustomerAndProduct(customerId, productId);
+        if (orderIds.isEmpty()) {
+            return new CustomerProductPurchaseCheckResponse(false, null);
+        }
+        return new CustomerProductPurchaseCheckResponse(true, orderIds.getFirst());
     }
 
     // ── Vendor self-service ─────────────────────────────────────

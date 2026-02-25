@@ -1,5 +1,6 @@
 package com.rumal.order_service.controller;
 
+import com.rumal.order_service.dto.CustomerProductPurchaseCheckResponse;
 import com.rumal.order_service.dto.VendorOrderDeletionCheckResponse;
 import com.rumal.order_service.security.InternalRequestVerifier;
 import com.rumal.order_service.service.OrderService;
@@ -29,5 +30,15 @@ public class InternalOrderController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         return orderService.getVendorDeletionCheck(vendorId);
+    }
+
+    @GetMapping("/customers/{customerId}/products/{productId}/purchased")
+    public CustomerProductPurchaseCheckResponse checkCustomerPurchasedProduct(
+            @RequestHeader(INTERNAL_HEADER) String internalAuth,
+            @PathVariable UUID customerId,
+            @PathVariable UUID productId
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        return orderService.checkCustomerPurchasedProduct(customerId, productId);
     }
 }

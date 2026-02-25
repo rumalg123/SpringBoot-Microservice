@@ -701,7 +701,8 @@ public class VendorServiceImpl implements VendorService {
                 vendor.isDeleted(),
                 vendor.getStatus(),
                 vendor.isAcceptingOrders(),
-                isStorefrontVisible(vendor)
+                isStorefrontVisible(vendor),
+                vendor.isVerified()
         );
     }
 
@@ -710,7 +711,8 @@ public class VendorServiceImpl implements VendorService {
                 && !vendor.isDeleted()
                 && vendor.isActive()
                 && vendor.getStatus() == VendorStatus.ACTIVE
-                && vendor.isAcceptingOrders();
+                && vendor.isAcceptingOrders()
+                && vendor.isVerified();
     }
 
     private String requireInternalAuth() {

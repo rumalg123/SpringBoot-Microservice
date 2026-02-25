@@ -10,6 +10,7 @@ public record VendorOperationalStateResponse(
         boolean deleted,
         VendorStatus status,
         boolean acceptingOrders,
-        boolean storefrontVisible
+        boolean storefrontVisible,
+        boolean verified
 ) {
 }

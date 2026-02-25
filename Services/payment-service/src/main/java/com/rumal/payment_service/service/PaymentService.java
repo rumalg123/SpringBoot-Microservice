@@ -53,9 +53,11 @@ public class PaymentService {
         // 1. Fetch order
         OrderSummary order = orderClient.getOrder(orderId);
 
-        // 2. Validate order status
-        if (!"PAYMENT_PENDING".equals(order.status())) {
-            throw new ValidationException("Order is not in PAYMENT_PENDING status");
+        // 2. Validate order status and transition PENDING → PAYMENT_PENDING
+        if ("PENDING".equals(order.status())) {
+            orderClient.updateOrderStatus(orderId, "PAYMENT_PENDING", "Payment initiated by customer");
+        } else if (!"PAYMENT_PENDING".equals(order.status())) {
+            throw new ValidationException("Order is not eligible for payment (status: " + order.status() + ")");
         }
 
         // 3. Verify customer is set

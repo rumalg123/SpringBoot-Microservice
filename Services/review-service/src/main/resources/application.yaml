@@ -1,0 +1,118 @@
+spring:
+  application:
+    name: review-service
+
+  datasource:
+    url: ${REVIEW_DB_URL:jdbc:postgresql://review-db:5432/review_db}
+    username: ${REVIEW_DB_USER:review_user}
+    password: ${REVIEW_DB_PASS:review_pass}
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      timeout: ${REDIS_TIMEOUT:2s}
+
+server:
+  port: 8086
+  servlet:
+    multipart:
+      max-file-size: ${REVIEW_IMAGE_MAX_FILE_SIZE:1MB}
+      max-request-size: ${REVIEW_IMAGE_MAX_REQUEST_SIZE:5MB}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://discovery-server:8761/eureka/}
+
+logging:
+  pattern:
+    level: "%5p [${spring.application.name},traceId=%X{traceId},spanId=%X{spanId}]"
+
+http:
+  client:
+    connect-timeout-seconds: ${HTTP_CLIENT_CONNECT_TIMEOUT_SECONDS:2}
+    response-timeout-seconds: ${HTTP_CLIENT_RESPONSE_TIMEOUT_SECONDS:5}
+    idle-evict-seconds: ${HTTP_CLIENT_IDLE_EVICT_SECONDS:30}
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      orderService:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 20
+        minimumNumberOfCalls: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 3
+        slowCallRateThreshold: 70
+        slowCallDurationThreshold: 3000
+        ignoreExceptions:
+          - com.rumal.review_service.exception.ResourceNotFoundException
+          - com.rumal.review_service.exception.ValidationException
+          - com.rumal.review_service.exception.UnauthorizedException
+      customerService:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 20
+        minimumNumberOfCalls: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 3
+        slowCallRateThreshold: 70
+        slowCallDurationThreshold: 3000
+        ignoreExceptions:
+          - com.rumal.review_service.exception.ResourceNotFoundException
+          - com.rumal.review_service.exception.ValidationException
+          - com.rumal.review_service.exception.UnauthorizedException
+  retry:
+    instances:
+      orderService:
+        maxAttempts: 3
+        waitDuration: 300ms
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - java.io.IOException
+          - org.springframework.web.client.ResourceAccessException
+          - org.springframework.web.client.HttpServerErrorException
+      customerService:
+        maxAttempts: 3
+        waitDuration: 300ms
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - java.io.IOException
+          - org.springframework.web.client.ResourceAccessException
+          - org.springframework.web.client.HttpServerErrorException
+
+cache:
+  clear-on-startup: ${CACHE_CLEAR_ON_STARTUP:true}
+  key-prefix: ${CACHE_KEY_PREFIX:rs:v1::}
+  review-by-id-ttl: ${CACHE_REVIEW_BY_ID_TTL:120s}
+  reviews-by-product-ttl: ${CACHE_REVIEWS_BY_PRODUCT_TTL:60s}
+  review-summary-ttl: ${CACHE_REVIEW_SUMMARY_TTL:300s}
+  admin-reviews-list-ttl: ${CACHE_ADMIN_REVIEWS_LIST_TTL:45s}
+
+object-storage:
+  enabled: ${OBJECT_STORAGE_ENABLED:false}
+  endpoint: ${OBJECT_STORAGE_ENDPOINT:https://objectstorage.us-ashburn-1.oraclecloud.com}
+  region: ${OBJECT_STORAGE_REGION:us-ashburn-1}
+  access-key: ${OBJECT_STORAGE_ACCESS_KEY:}
+  secret-key: ${OBJECT_STORAGE_SECRET_KEY:}
+  bucket: ${OBJECT_STORAGE_BUCKET:}
+
+internal:
+  auth:
+    shared-secret: ${INTERNAL_AUTH_SHARED_SECRET:}
+
+review.idempotency:
+  enabled: true
+  pending-ttl: 30s
+  response-ttl: 6h
+  key-header-name: Idempotency-Key
+  key-prefix: rs:idem:v1::

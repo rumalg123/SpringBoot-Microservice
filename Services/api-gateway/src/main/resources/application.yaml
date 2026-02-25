@@ -274,6 +274,24 @@ spring:
                   args:
                     name: promotionService
                     fallbackUri: forward:/fallback/unavailable
+            - id: reviews-public
+              uri: lb://review-service
+              predicates:
+                - Path=/reviews,/reviews/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: reviewService
+                    fallbackUri: forward:/fallback/unavailable
+            - id: admin-reviews
+              uri: lb://review-service
+              predicates:
+                - Path=/admin/reviews,/admin/reviews/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: reviewService
+                    fallbackUri: forward:/fallback/unavailable
             - id: products-catalog
               uri: lb://product-service
               predicates:
@@ -449,6 +467,8 @@ resilience4j:
         base-config: default
       inventoryService:
         base-config: default
+      reviewService:
+        base-config: default
   timelimiter:
     configs:
       default:
@@ -475,6 +495,8 @@ resilience4j:
       paymentService:
         base-config: default
       inventoryService:
+        base-config: default
+      reviewService:
         base-config: default
 
 logging:

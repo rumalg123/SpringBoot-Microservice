@@ -289,25 +289,28 @@ export default function ProfilePage() {
 
   /* ── Tab-triggered data loading ── */
   useEffect(() => {
+    if (canViewAdmin) return;
     if (activeTab === "preferences" && !commPrefsLoaded && !commPrefsLoading && apiClient) {
       void loadCommPrefs();
       if (!linkedAccountsLoaded && !linkedAccountsLoading) {
         void loadLinkedAccounts();
       }
     }
-  }, [activeTab, commPrefsLoaded, commPrefsLoading, linkedAccountsLoaded, linkedAccountsLoading, apiClient, loadCommPrefs, loadLinkedAccounts]);
+  }, [activeTab, canViewAdmin, commPrefsLoaded, commPrefsLoading, linkedAccountsLoaded, linkedAccountsLoading, apiClient, loadCommPrefs, loadLinkedAccounts]);
 
   useEffect(() => {
+    if (canViewAdmin) return;
     if (activeTab === "activity" && !activityLogLoaded && !activityLogLoading && apiClient) {
       void loadActivityLog(0);
     }
-  }, [activeTab, activityLogLoaded, activityLogLoading, apiClient, loadActivityLog]);
+  }, [activeTab, canViewAdmin, activityLogLoaded, activityLogLoading, apiClient, loadActivityLog]);
 
   useEffect(() => {
+    if (canViewAdmin) return;
     if (activeTab === "coupon-history" && !couponUsageLoaded && !couponUsageLoading && apiClient) {
       void loadCouponUsage(0);
     }
-  }, [activeTab, couponUsageLoaded, couponUsageLoading, apiClient, loadCouponUsage]);
+  }, [activeTab, canViewAdmin, couponUsageLoaded, couponUsageLoading, apiClient, loadCouponUsage]);
 
   /* ── Pagination handlers ── */
   const handleActivityPageChange = (page: number) => {
@@ -408,12 +411,14 @@ export default function ProfilePage() {
   if (!isAuthenticated) return null;
 
   /* ── Tab definitions ── */
-  const tabs: { key: TabKey; label: string }[] = [
-    { key: "account", label: "Account" },
-    { key: "preferences", label: "Preferences" },
-    { key: "activity", label: "Activity" },
-    { key: "coupon-history", label: "Coupon History" },
-  ];
+  const tabs: { key: TabKey; label: string }[] = canViewAdmin
+    ? [{ key: "account", label: "Account" }]
+    : [
+        { key: "account", label: "Account" },
+        { key: "preferences", label: "Preferences" },
+        { key: "activity", label: "Activity" },
+        { key: "coupon-history", label: "Coupon History" },
+      ];
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
