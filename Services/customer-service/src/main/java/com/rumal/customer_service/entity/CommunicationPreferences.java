@@ -23,7 +23,6 @@ import java.util.UUID;
 public class CommunicationPreferences {
 
     @Id
-    @GeneratedValue
     private UUID id;
 
     @OneToOne(fetch = FetchType.LAZY, optional = false)
@@ -57,4 +56,9 @@ public class CommunicationPreferences {
     @UpdateTimestamp
     @Column(nullable = false)
     private Instant updatedAt;
+
+    @PrePersist
+    void ensureId() {
+        if (id == null) id = UUID.randomUUID();
+    }
 }

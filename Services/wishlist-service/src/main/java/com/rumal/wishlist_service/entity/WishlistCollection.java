@@ -2,8 +2,8 @@ package com.rumal.wishlist_service.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
@@ -37,7 +37,6 @@ import java.util.UUID;
 public class WishlistCollection {
 
     @Id
-    @GeneratedValue
     private UUID id;
 
     @Column(name = "keycloak_id", nullable = false, length = 120)
@@ -67,4 +66,9 @@ public class WishlistCollection {
     @UpdateTimestamp
     @Column(nullable = false)
     private Instant updatedAt;
+
+    @PrePersist
+    void ensureId() {
+        if (id == null) id = UUID.randomUUID();
+    }
 }

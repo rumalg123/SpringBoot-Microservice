@@ -25,7 +25,6 @@ import java.util.UUID;
 public class Order {
 
     @Id
-    @GeneratedValue
     private UUID id;
 
     @Version
@@ -160,4 +159,9 @@ public class Order {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    @PrePersist
+    void ensureId() {
+        if (id == null) id = UUID.randomUUID();
+    }
 }

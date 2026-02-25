@@ -29,7 +29,6 @@ import java.util.UUID;
 public class Customer {
 
     @Id
-    @GeneratedValue
     private UUID id;
 
     @Version
@@ -83,4 +82,9 @@ public class Customer {
     @UpdateTimestamp
     @Column(nullable = false)
     private Instant updatedAt;
+
+    @PrePersist
+    void ensureId() {
+        if (id == null) id = UUID.randomUUID();
+    }
 }
