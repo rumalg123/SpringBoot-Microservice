@@ -1315,6 +1315,9 @@ public class ProductServiceImpl implements ProductService {
         if (vendorId == null || ADMIN_VENDOR_UUID.equals(vendorId)) {
             return true;
         }
+        if (states.isEmpty()) {
+            return true;
+        }
         VendorOperationalStateResponse state = states.get(vendorId);
         return state != null && state.storefrontVisible();
     }

@@ -11,6 +11,9 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.net.URI;
 import java.util.Collection;
 import java.util.List;
@@ -21,6 +24,8 @@ import java.util.stream.Collectors;
 
 @Component
 public class VendorOperationalStateClient {
+
+    private static final Logger log = LoggerFactory.getLogger(VendorOperationalStateClient.class);
 
     private static final ParameterizedTypeReference<List<VendorOperationalStateResponse>> LIST_TYPE =
             new ParameterizedTypeReference<>() {};
@@ -77,12 +82,14 @@ public class VendorOperationalStateClient {
 
     @SuppressWarnings("unused")
     public VendorOperationalStateResponse fallbackGetState(UUID vendorId, String internalAuth, Throwable ex) {
-        throw new ServiceUnavailableException("Vendor service unavailable for operational-state lookup. Try again later.", ex);
+        log.warn("Vendor service unavailable for operational-state lookup (vendorId={}). Falling back to visible default.", vendorId, ex);
+        return new VendorOperationalStateResponse(vendorId, null, true, false, "APPROVED", true, true);
     }
 
     @SuppressWarnings("unused")
     public Map<UUID, VendorOperationalStateResponse> fallbackGetStates(Collection<UUID> vendorIds, String internalAuth, Throwable ex) {
-        throw new ServiceUnavailableException("Vendor service unavailable for operational-state batch lookup. Try again later.", ex);
+        log.warn("Vendor service unavailable for operational-state batch lookup. Falling back to empty map (all vendors treated as visible).", ex);
+        return Map.of();
     }
 
     private URI buildUri(String path) {
