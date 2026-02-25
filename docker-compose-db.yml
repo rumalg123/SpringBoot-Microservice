@@ -193,6 +193,48 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
 
+  review-db:
+    image: postgres:16-alpine
+    environment:
+      TZ: Asia/Colombo
+      POSTGRES_DB: review_db
+      POSTGRES_USER: review_user
+      POSTGRES_PASSWORD: review_pass
+    ports:
+      - "5445:5432"
+    volumes:
+      - review-db-data:/var/lib/postgresql/data
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+
+  personalization-db:
+    image: postgres:16-alpine
+    environment:
+      TZ: Asia/Colombo
+      POSTGRES_DB: personalization_db
+      POSTGRES_USER: personalization_user
+      POSTGRES_PASSWORD: personalization_pass
+    ports:
+      - "5446:5432"
+    volumes:
+      - personalization-db-data:/var/lib/postgresql/data
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
+    environment:
+      TZ: Asia/Colombo
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+
   customer-service:
     build:
       context: ./Services/customer-service
@@ -413,6 +455,77 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
 
+  review-service:
+    build:
+      context: ./Services/review-service
+    depends_on:
+      - discovery-server
+      - review-db
+      - redis
+    env_file:
+      - ./env/common.env
+      - ./env/review-service.env
+    environment:
+      TZ: Asia/Colombo
+      LOGGING_FILE_NAME: /logs/review-service.log
+    volumes:
+      - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+
+  personalization-service:
+    build:
+      context: ./Services/personalization-service
+    depends_on:
+      - discovery-server
+      - personalization-db
+      - redis
+    env_file:
+      - ./env/common.env
+      - ./env/personalization-service.env
+    environment:
+      TZ: Asia/Colombo
+      LOGGING_FILE_NAME: /logs/personalization-service.log
+    volumes:
+      - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+
+  analytics-service:
+    build:
+      context: ./Services/analytics-service
+    depends_on:
+      - discovery-server
+      - redis
+    env_file:
+      - ./env/common.env
+      - ./env/analytics-service.env
+    environment:
+      TZ: Asia/Colombo
+      LOGGING_FILE_NAME: /logs/analytics-service.log
+    volumes:
+      - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+
+  search-service:
+    build:
+      context: ./Services/search-service
+    depends_on:
+      - discovery-server
+      - redis
+      - elasticsearch
+    env_file:
+      - ./env/common.env
+      - ./env/search-service.env
+    environment:
+      TZ: Asia/Colombo
+      LOGGING_FILE_NAME: /logs/search-service.log
+    volumes:
+      - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+
   api-gateway:
     build:
       context: ./Services/api-gateway
@@ -463,3 +576,6 @@ volumes:
   admin-db-data:
   payment-db-data:
   inventory-db-data:
+  review-db-data:
+  personalization-db-data:
+  elasticsearch-data:

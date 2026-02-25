@@ -12,6 +12,7 @@ import { emitCartUpdate, emitWishlistUpdate } from "../../../lib/navEvents";
 import { money, calcDiscount } from "../../../lib/format";
 import { resolveImageUrl } from "../../../lib/image";
 import ReviewSection from "../../components/reviews/ReviewSection";
+import { trackProductView, trackAddToCart, trackWishlistAdd, fetchSimilarProducts, fetchBoughtTogether, type PersonalizationProduct } from "../../../lib/personalization";
 
 type Variation = { name: string; value: string };
 type ProductDetail = {
@@ -51,6 +52,7 @@ export default function ProductDetailPage() {
     login,
     apiClient,
     emailVerified,
+    token,
   } = useAuthSession();
   const [product, setProduct] = useState<ProductDetail | null>(null);
   const [variations, setVariations] = useState<VariationSummary[]>([]);
@@ -65,6 +67,8 @@ export default function ProductDetailPage() {
   const [signingInToBuy, setSigningInToBuy] = useState(false);
   const [wishlistItemId, setWishlistItemId] = useState("");
   const [wishlistPending, setWishlistPending] = useState(false);
+  const [similarProducts, setSimilarProducts] = useState<PersonalizationProduct[]>([]);
+  const [boughtTogether, setBoughtTogether] = useState<PersonalizationProduct[]>([]);
 
   useEffect(() => {
     const run = async () => {
@@ -84,6 +88,20 @@ export default function ProductDetailPage() {
     };
     void run();
   }, [params.id]);
+
+  // Track product view and fetch personalization data
+  useEffect(() => {
+    if (!product) return;
+    trackProductView({
+      id: product.id,
+      categories: product.categories,
+      vendorId: product.vendorId,
+      brandName: null,
+      sellingPrice: product.sellingPrice,
+    }, token);
+    fetchBoughtTogether(product.id, 4).then(setBoughtTogether).catch(() => {});
+    fetchSimilarProducts(product.id, 8).then(setSimilarProducts).catch(() => {});
+  }, [product?.id]);
 
   const parentAttributeNames = useMemo(() => {
     if (!product || product.productType !== "PARENT") return [];
@@ -184,6 +202,7 @@ export default function ProductDetailPage() {
       await apiClient.post("/cart/me/items", { productId: targetProductId, quantity });
       toast.success("Added to cart");
       emitCartUpdate();
+      if (product) trackAddToCart({ id: targetProductId, categories: product.categories, vendorId: product.vendorId, sellingPrice: displayProduct?.sellingPrice }, token);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to add product to cart");
     } finally { setAddingToCart(false); }
@@ -228,6 +247,7 @@ export default function ProductDetailPage() {
         setWishlistItemId(matched?.id || "");
         toast.success("Added to wishlist");
         emitWishlistUpdate();
+        if (product) trackWishlistAdd({ id: targetProductId, categories: product.categories, vendorId: product.vendorId, sellingPrice: displayProduct?.sellingPrice }, token);
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Wishlist update failed");
@@ -629,6 +649,29 @@ export default function ProductDetailPage() {
           </div>
         </section>
 
+        {/* Frequently Bought Together */}
+        {boughtTogether.length > 0 && (
+          <section className="mx-auto max-w-7xl px-4 py-8">
+            <h2 style={{ fontFamily: "'Syne', sans-serif", fontSize: "1.3rem", fontWeight: 800, color: "#fff", marginBottom: "16px" }}>Frequently Bought Together</h2>
+            <div style={{ display: "flex", gap: "16px", overflowX: "auto", paddingBottom: "8px" }}>
+              {boughtTogether.map((p) => {
+                const imgUrl = resolveImageUrl(p.mainImage);
+                return (
+                  <Link href={`/products/${encodeURIComponent((p.slug || p.id).trim())}`} key={p.id} className="product-card no-underline" style={{ minWidth: "180px", maxWidth: "200px", flexShrink: 0 }}>
+                    <div style={{ position: "relative", aspectRatio: "1/1", overflow: "hidden", background: "var(--surface-2)" }}>
+                      {imgUrl ? (<Image src={imgUrl} alt={p.name} width={300} height={300} className="product-card-img" unoptimized />) : (<div style={{ display: "grid", placeItems: "center", width: "100%", height: "100%", background: "linear-gradient(135deg, var(--surface), #1c1c38)", color: "var(--muted-2)", fontSize: "0.75rem" }}>No Image</div>)}
+                    </div>
+                    <div className="product-card-body">
+                      <p style={{ margin: "0 0 4px", fontSize: "0.8rem", fontWeight: 600, color: "var(--ink)", display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{p.name}</p>
+                      <span className="price-current" style={{ fontSize: "0.85rem" }}>{money(p.sellingPrice)}</span>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
         {product && (
           <ReviewSection
             productId={product.id}
@@ -636,6 +679,37 @@ export default function ProductDetailPage() {
             isAuthenticated={isAuthenticated}
             apiClient={apiClient}
           />
+        )}
+
+        {/* You May Also Like */}
+        {similarProducts.length > 0 && (
+          <section className="mx-auto max-w-7xl px-4 py-8">
+            <h2 style={{ fontFamily: "'Syne', sans-serif", fontSize: "1.3rem", fontWeight: 800, color: "#fff", marginBottom: "16px" }}>You May Also Like</h2>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {similarProducts.map((p, idx) => {
+                const discount = calcDiscount(p.regularPrice, p.sellingPrice);
+                const imgUrl = resolveImageUrl(p.mainImage);
+                return (
+                  <Link href={`/products/${encodeURIComponent((p.slug || p.id).trim())}`} key={p.id} className="product-card animate-rise no-underline" style={{ animationDelay: `${idx * 50}ms` }}>
+                    {discount && <span className="badge-sale">-{discount}%</span>}
+                    <div style={{ position: "relative", aspectRatio: "1/1", overflow: "hidden", background: "var(--surface-2)" }}>
+                      {imgUrl ? (<Image src={imgUrl} alt={p.name} width={400} height={400} className="product-card-img" unoptimized />) : (<div style={{ display: "grid", placeItems: "center", width: "100%", height: "100%", background: "linear-gradient(135deg, var(--surface), #1c1c38)", color: "var(--muted-2)", fontSize: "0.8rem", fontWeight: 600 }}>No Image</div>)}
+                      <div className="product-card-overlay">
+                        <span style={{ background: "var(--gradient-brand)", color: "#fff", padding: "8px 18px", borderRadius: "20px", fontSize: "0.78rem", fontWeight: 800 }}>View Product {"->"}</span>
+                      </div>
+                    </div>
+                    <div className="product-card-body">
+                      <p style={{ margin: "0 0 4px", fontSize: "0.875rem", fontWeight: 600, color: "var(--ink)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{p.name}</p>
+                      <div style={{ display: "flex", alignItems: "center", gap: "4px", marginBottom: "6px" }}>
+                        <span className="price-current">{money(p.sellingPrice)}</span>
+                        {p.discountedPrice !== null && <span className="price-original">{money(p.regularPrice)}</span>}
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
         )}
       </main>
 

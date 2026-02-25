@@ -1,0 +1,39 @@
+{
+  "index": {
+    "number_of_shards": 1,
+    "number_of_replicas": 0,
+    "analysis": {
+      "filter": {
+        "autocomplete_filter": {
+          "type": "edge_ngram",
+          "min_gram": 2,
+          "max_gram": 20
+        },
+        "synonym_filter": {
+          "type": "synonym",
+          "synonyms": [
+            "phone, mobile, cellphone, smartphone",
+            "laptop, notebook",
+            "tv, television",
+            "headphone, earphone, earbuds",
+            "shirt, tee, t-shirt",
+            "pants, trousers",
+            "sneakers, trainers, shoes"
+          ]
+        }
+      },
+      "analyzer": {
+        "product_analyzer": {
+          "type": "custom",
+          "tokenizer": "standard",
+          "filter": ["lowercase", "synonym_filter", "asciifolding"]
+        },
+        "autocomplete_analyzer": {
+          "type": "custom",
+          "tokenizer": "standard",
+          "filter": ["lowercase", "autocomplete_filter", "asciifolding"]
+        }
+      }
+    }
+  }
+}

@@ -15,7 +15,7 @@ import { useAuthSession } from "../../lib/authSession";
 import { emitWishlistUpdate } from "../../lib/navEvents";
 import { money, calcDiscount } from "../../lib/format";
 import { resolveImageUrl } from "../../lib/image";
-import type { ProductSummary, PagedResponse } from "../../lib/types";
+import type { ProductSummary, PagedResponse, SearchResponse } from "../../lib/types";
 
 type WishlistItem = {
   id: string;
@@ -207,6 +207,46 @@ function ProductsPageContent() {
       try {
         const apiBase = process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me";
         const sort = sortParams(sortBy);
+
+        // Use search-service when a text query is present
+        if (search.trim()) {
+          const searchSortMap: Record<SortKey, string> = {
+            newest: "newest",
+            priceAsc: "price-low",
+            priceDesc: "price-high",
+            nameAsc: "relevance",
+          };
+          const params = new URLSearchParams();
+          params.set("q", search.trim());
+          params.set("page", String(page));
+          params.set("size", String(PAGE_SIZE));
+          params.set("sortBy", searchSortMap[sortBy] || "relevance");
+          if (appliedMinPrice !== null) params.set("minPrice", appliedMinPrice.toString());
+          if (appliedMaxPrice !== null) params.set("maxPrice", appliedMaxPrice.toString());
+          if (selectedParentNames.length === 1) params.set("mainCategory", selectedParentNames[0]);
+          if (selectedSubNames.length === 1) params.set("subCategory", selectedSubNames[0]);
+          const res = await fetch(`${apiBase}/search/products?${params.toString()}`, { cache: "no-store" });
+          if (!res.ok) throw new Error("Failed to fetch search results");
+          const data = (await res.json()) as SearchResponse;
+          const mapped: ProductSummary[] = (data.content || []).map((hit) => ({
+            id: hit.id,
+            slug: hit.slug,
+            name: hit.name,
+            shortDescription: hit.shortDescription,
+            mainImage: hit.mainImage,
+            regularPrice: hit.regularPrice,
+            discountedPrice: hit.discountedPrice,
+            sellingPrice: hit.sellingPrice,
+            sku: hit.sku,
+            categories: hit.categories,
+          }));
+          setProducts(mapped);
+          setTotalPages(Math.max(data.totalPages || 1, 1));
+          setStatus(`Showing ${mapped.length} of ${data.totalElements} results for "${search.trim()}"${data.tookMs ? ` (${data.tookMs}ms)` : ""}`);
+          return;
+        }
+
+        // No text query: use product-service directly
         const canUseDirectCategoryQuery = selectedParentNames.length <= 1 && selectedSubNames.length <= 1;
 
         if (canUseDirectCategoryQuery) {
@@ -214,7 +254,6 @@ function ProductsPageContent() {
           params.set("page", String(page));
           params.set("size", String(PAGE_SIZE));
           params.set("sort", `${sort.field},${sort.direction}`);
-          if (search.trim()) params.set("q", search.trim());
           if (appliedMinPrice !== null) params.set("minSellingPrice", appliedMinPrice.toString());
           if (appliedMaxPrice !== null) params.set("maxSellingPrice", appliedMaxPrice.toString());
           if (selectedParentNames.length === 1) params.set("mainCategory", selectedParentNames[0]);
@@ -236,7 +275,6 @@ function ProductsPageContent() {
           params.set("page", String(currentPage));
           params.set("size", String(AGGREGATE_PAGE_SIZE));
           params.set("sort", `${sort.field},${sort.direction}`);
-          if (search.trim()) params.set("q", search.trim());
           if (appliedMinPrice !== null) params.set("minSellingPrice", appliedMinPrice.toString());
           if (appliedMaxPrice !== null) params.set("maxSellingPrice", appliedMaxPrice.toString());
           const res = await fetch(`${apiBase}/products?${params.toString()}`, { cache: "no-store" });

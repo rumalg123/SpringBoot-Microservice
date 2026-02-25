@@ -164,6 +164,25 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    public List<ProductSummaryResponse> getByIds(List<UUID> ids) {
+        if (ids == null || ids.isEmpty()) return List.of();
+        List<Product> products = productRepository.findByIdInAndDeletedFalseAndActiveTrue(ids);
+        List<ProductSummaryResponse> summaries = products.stream().map(this::toSummaryResponse).toList();
+        return enrichListWithStock(summaries);
+    }
+
+    @Override
+    public Page<ProductSummaryResponse> listUpdatedSince(Instant since, Pageable pageable) {
+        Specification<ProductCatalogRead> spec = (root, query, cb) -> cb.and(
+                cb.isFalse(root.get("deleted")),
+                cb.isTrue(root.get("active")),
+                cb.equal(root.get("approvalStatus"), ApprovalStatus.APPROVED),
+                cb.greaterThanOrEqualTo(root.get("updatedAt"), since)
+        );
+        return productCatalogReadRepository.findAll(spec, pageable).map(this::toSummaryResponse);
+    }
+
+    @Override
     @Cacheable(cacheNames = "productsList", key = "@productCacheVersionService.productsListVersion() + '::variations::' + #parentId")
     public List<ProductSummaryResponse> listVariations(UUID parentId) {
         Product parent = getActiveEntityById(parentId);
@@ -1536,6 +1555,8 @@ public class ProductServiceImpl implements ProductService {
                 row.getSoldCount(),
                 row.isActive(),
                 List.of(),
+                row.getCreatedAt(),
+                row.getUpdatedAt(),
                 null,
                 null,
                 null
@@ -1567,6 +1588,8 @@ public class ProductServiceImpl implements ProductService {
                 p.getVariations().stream()
                         .map(v -> new ProductVariationAttributeResponse(v.getName(), v.getValue()))
                         .toList(),
+                p.getCreatedAt(),
+                p.getUpdatedAt(),
                 null,
                 null,
                 null

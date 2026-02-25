@@ -13,6 +13,7 @@ import ProductSearchBar from "./components/search/ProductSearchBar";
 import { money, calcDiscount } from "../lib/format";
 import { resolveImageUrl } from "../lib/image";
 import type { ProductSummary, PagedResponse } from "../lib/types";
+import { fetchRecommended, fetchRecentlyViewed, getOrCreateSessionId, type PersonalizationProduct } from "../lib/personalization";
 
 /* --- Futuristic Trust Icon SVGs --- */
 const TrustIcons = {
@@ -49,6 +50,8 @@ export default function LandingPage() {
   const [status, setStatus] = useState("loading");
   const [authActionPending, setAuthActionPending] = useState<"login" | "signup" | "forgot" | null>(null);
   const [logoutPending, setLogoutPending] = useState(false);
+  const [recommended, setRecommended] = useState<PersonalizationProduct[]>([]);
+  const [recentlyViewed, setRecentlyViewed] = useState<PersonalizationProduct[]>([]);
 
   useEffect(() => {
     const run = async () => {
@@ -65,6 +68,14 @@ export default function LandingPage() {
     };
     void run();
   }, []);
+
+  useEffect(() => {
+    if (session.status !== "ready" && session.status !== "error") return;
+    const token = session.isAuthenticated ? session.token : null;
+    getOrCreateSessionId();
+    fetchRecommended(8, token).then(setRecommended).catch(() => {});
+    fetchRecentlyViewed(8, token).then(setRecentlyViewed).catch(() => {});
+  }, [session.status, session.isAuthenticated]);
 
   useEffect(() => {
     const resetAuthPending = () => setAuthActionPending(null);
@@ -576,6 +587,87 @@ export default function LandingPage() {
             })}
           </div>
         </section>
+
+        {/* --- RECOMMENDED FOR YOU --- */}
+        {recommended.length > 0 && (
+          <section className="animate-rise mx-auto max-w-7xl px-4 pb-12" style={{ animationDelay: "350ms" }}>
+            <div className="section-header">
+              <h2>Recommended For You</h2>
+              <Link href="/products" className="no-underline" style={{ color: "var(--brand)", fontWeight: 700, fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "4px" }}>
+                View All {"->"}
+              </Link>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {recommended.map((product, idx) => {
+                const discount = calcDiscount(product.regularPrice, product.sellingPrice);
+                const imgUrl = resolveImageUrl(product.mainImage);
+                return (
+                  <Link
+                    href={`/products/${encodeURIComponent((product.slug || product.id).trim())}`}
+                    key={product.id}
+                    className="product-card animate-rise no-underline"
+                    style={{ animationDelay: `${idx * 60}ms` }}
+                  >
+                    {discount && <span className="badge-sale">-{discount}%</span>}
+                    <div style={{ position: "relative", aspectRatio: "1/1", overflow: "hidden", background: "var(--surface-2)" }}>
+                      {imgUrl ? (
+                        <Image src={imgUrl} alt={product.name} width={400} height={400} className="product-card-img" unoptimized />
+                      ) : (
+                        <div style={{ display: "grid", placeItems: "center", width: "100%", height: "100%", background: "linear-gradient(135deg, var(--surface), #1c1c38)", color: "var(--muted-2)", fontSize: "0.8rem", fontWeight: 600 }}>No Image</div>
+                      )}
+                      <div className="product-card-overlay">
+                        <span style={{ background: "var(--gradient-brand)", color: "#fff", padding: "8px 18px", borderRadius: "20px", fontSize: "0.78rem", fontWeight: 800 }}>View Product {"->"}</span>
+                      </div>
+                    </div>
+                    <div className="product-card-body">
+                      <p style={{ margin: "0 0 4px", fontSize: "0.875rem", fontWeight: 600, color: "var(--ink)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{product.name}</p>
+                      <div style={{ display: "flex", alignItems: "center", gap: "4px", marginBottom: "6px" }}>
+                        <span className="price-current">{money(product.sellingPrice)}</span>
+                        {product.discountedPrice !== null && <span className="price-original">{money(product.regularPrice)}</span>}
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* --- RECENTLY VIEWED --- */}
+        {recentlyViewed.length > 0 && (
+          <section className="animate-rise mx-auto max-w-7xl px-4 pb-12" style={{ animationDelay: "380ms" }}>
+            <div className="section-header">
+              <h2>Recently Viewed</h2>
+            </div>
+            <div style={{ display: "flex", gap: "16px", overflowX: "auto", paddingBottom: "8px" }}>
+              {recentlyViewed.map((product, idx) => {
+                const discount = calcDiscount(product.regularPrice, product.sellingPrice);
+                const imgUrl = resolveImageUrl(product.mainImage);
+                return (
+                  <Link
+                    href={`/products/${encodeURIComponent((product.slug || product.id).trim())}`}
+                    key={product.id}
+                    className="product-card animate-rise no-underline"
+                    style={{ animationDelay: `${idx * 40}ms`, minWidth: "200px", maxWidth: "220px", flexShrink: 0 }}
+                  >
+                    {discount && <span className="badge-sale">-{discount}%</span>}
+                    <div style={{ position: "relative", aspectRatio: "1/1", overflow: "hidden", background: "var(--surface-2)" }}>
+                      {imgUrl ? (
+                        <Image src={imgUrl} alt={product.name} width={300} height={300} className="product-card-img" unoptimized />
+                      ) : (
+                        <div style={{ display: "grid", placeItems: "center", width: "100%", height: "100%", background: "linear-gradient(135deg, var(--surface), #1c1c38)", color: "var(--muted-2)", fontSize: "0.75rem", fontWeight: 600 }}>No Image</div>
+                      )}
+                    </div>
+                    <div className="product-card-body">
+                      <p style={{ margin: "0 0 4px", fontSize: "0.8rem", fontWeight: 600, color: "var(--ink)", display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{product.name}</p>
+                      <span className="price-current" style={{ fontSize: "0.85rem" }}>{money(product.sellingPrice)}</span>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         {/* --- CTA BANNER --- */}
         <section

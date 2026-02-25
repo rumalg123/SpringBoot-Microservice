@@ -1,18 +1,8 @@
-﻿"use client";
+"use client";
 
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-
-type ProductSummary = {
-  id: string;
-  slug: string;
-  name: string;
-  sku: string;
-};
-
-type ProductPageResponse = {
-  content?: ProductSummary[];
-};
+import type { AutocompleteSuggestion, AutocompleteResponse } from "../../../lib/types";
 
 type ProductSearchBarProps = {
   className?: string;
@@ -30,8 +20,9 @@ export default function ProductSearchBar({
   const router = useRouter();
   const pathname = usePathname();
   const [searchText, setSearchText] = useState("");
-  const [searchSuggestions, setSearchSuggestions] = useState<ProductSummary[]>([]);
-  const [searchSuggestionsLoading, setSearchSuggestionsLoading] = useState(false);
+  const [suggestions, setSuggestions] = useState<AutocompleteSuggestion[]>([]);
+  const [popularSearches, setPopularSearches] = useState<string[]>([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [searchDropdownOpen, setSearchDropdownOpen] = useState(false);
   const [searchSubmitPending, setSearchSubmitPending] = useState(false);
   const searchBoxRef = useRef<HTMLDivElement | null>(null);
@@ -53,30 +44,32 @@ export default function ProductSearchBar({
 
   useEffect(() => {
     const term = searchText.trim();
-    if (term.length < 2) {
-      setSearchSuggestions([]);
-      setSearchSuggestionsLoading(false);
+    if (term.length < 1) {
+      setSuggestions([]);
+      setSuggestionsLoading(false);
       return;
     }
 
     let active = true;
     const timer = window.setTimeout(async () => {
-      setSearchSuggestionsLoading(true);
+      setSuggestionsLoading(true);
       try {
         const apiBase = (process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me").trim();
-        const params = new URLSearchParams({ page: "0", size: "6", q: term });
-        const res = await fetch(`${apiBase}/products?${params.toString()}`, { cache: "no-store" });
+        const params = new URLSearchParams({ prefix: term, limit: "8" });
+        const res = await fetch(`${apiBase}/search/autocomplete?${params.toString()}`, { cache: "no-store" });
         if (!res.ok) throw new Error("Failed");
-        const data = (await res.json()) as ProductPageResponse;
+        const data = (await res.json()) as AutocompleteResponse;
         if (!active) return;
-        setSearchSuggestions((data.content || []).slice(0, 6));
+        setSuggestions(data.suggestions || []);
+        setPopularSearches(data.popularSearches || []);
       } catch {
         if (!active) return;
-        setSearchSuggestions([]);
+        setSuggestions([]);
+        setPopularSearches([]);
       } finally {
-        if (active) setSearchSuggestionsLoading(false);
+        if (active) setSuggestionsLoading(false);
       }
-    }, 250);
+    }, 200);
 
     return () => {
       active = false;
@@ -92,10 +85,17 @@ export default function ProductSearchBar({
     router.push(`/products?q=${encodeURIComponent(normalized)}`);
   };
 
-  const openSuggestedProduct = (product: ProductSummary) => {
+  const openSuggestion = (suggestion: AutocompleteSuggestion) => {
     setSearchDropdownOpen(false);
-    router.push(`/products/${encodeURIComponent((product.slug || product.id).trim())}`);
+    if (suggestion.type === "product" && suggestion.slug) {
+      router.push(`/products/${encodeURIComponent(suggestion.slug.trim())}`);
+    } else {
+      openSearchResults(suggestion.text);
+    }
   };
+
+  const productSuggestions = suggestions.filter((s) => s.type === "product");
+  const querySuggestions = suggestions.filter((s) => s.type === "query");
 
   return (
     <div ref={searchBoxRef} className={className} style={{ position: "relative", maxWidth, ...style }}>
@@ -144,7 +144,7 @@ export default function ProductSearchBar({
             type="button"
             onClick={() => {
               setSearchText("");
-              setSearchSuggestions([]);
+              setSuggestions([]);
               setSearchDropdownOpen(true);
             }}
             style={{
@@ -202,12 +202,42 @@ export default function ProductSearchBar({
             overflow: "hidden",
           }}
         >
-          {searchText.trim().length < 2 && (
+          {/* Empty state: show popular searches */}
+          {searchText.trim().length < 1 && popularSearches.length > 0 && (
+            <div style={{ padding: "12px 16px" }}>
+              <p style={{ margin: "0 0 8px", fontSize: "0.7rem", color: "#6868a0", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                Popular Searches
+              </p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                {popularSearches.slice(0, 8).map((term) => (
+                  <button
+                    key={term}
+                    type="button"
+                    onClick={() => openSearchResults(term)}
+                    style={{
+                      padding: "5px 12px",
+                      borderRadius: "16px",
+                      border: "1px solid rgba(0,212,255,0.12)",
+                      background: "rgba(0,212,255,0.06)",
+                      color: "#c0c0e0",
+                      fontSize: "0.78rem",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {term}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {searchText.trim().length < 1 && popularSearches.length === 0 && (
             <p style={{ padding: "14px 16px", fontSize: "0.8rem", color: "#6868a0", margin: 0 }}>
-              Type at least 2 characters to search.
+              Type to search products...
             </p>
           )}
-          {searchText.trim().length >= 2 && (
+
+          {searchText.trim().length >= 1 && (
             <>
               <button
                 type="button"
@@ -231,51 +261,94 @@ export default function ProductSearchBar({
                 <span>Search for &quot;{searchText.trim()}&quot;</span>
                 <span style={{ fontSize: "0.7rem", color: "#6868a0" }}>Enter ↵</span>
               </button>
-              {searchSuggestionsLoading && (
+
+              {suggestionsLoading && (
                 <p style={{ padding: "12px 16px", fontSize: "0.8rem", color: "#6868a0", margin: 0 }}>
                   Loading suggestions...
                 </p>
               )}
-              {!searchSuggestionsLoading && searchSuggestions.length === 0 && (
+
+              {!suggestionsLoading && suggestions.length === 0 && searchText.trim().length >= 2 && (
                 <p style={{ padding: "12px 16px", fontSize: "0.8rem", color: "#6868a0", margin: 0 }}>
                   No matching products.
                 </p>
               )}
-              {!searchSuggestionsLoading && searchSuggestions.length > 0 && (
-                <div style={{ maxHeight: "280px", overflowY: "auto" }}>
-                  {searchSuggestions.map((product) => (
-                    <button
-                      key={product.id}
-                      type="button"
-                      onClick={() => openSuggestedProduct(product)}
-                      style={{
-                        display: "block",
-                        width: "100%",
-                        borderTop: "1px solid rgba(0,212,255,0.06)",
-                        padding: "10px 16px",
-                        textAlign: "left",
-                        background: "transparent",
-                        borderLeft: "none",
-                        borderRight: "none",
-                        borderBottom: "none",
-                        cursor: "pointer",
-                        transition: "background 0.12s",
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = "rgba(0,212,255,0.05)";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = "transparent";
-                      }}
-                    >
-                      <p style={{ margin: 0, fontSize: "0.875rem", fontWeight: 600, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {product.name}
-                      </p>
-                      <p style={{ margin: 0, fontSize: "0.72rem", color: "#6868a0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        SKU: {product.sku}
-                      </p>
-                    </button>
-                  ))}
+
+              {!suggestionsLoading && (
+                <div style={{ maxHeight: "320px", overflowY: "auto" }}>
+                  {/* Query suggestions */}
+                  {querySuggestions.length > 0 && (
+                    <>
+                      {querySuggestions.map((s) => (
+                        <button
+                          key={`q-${s.text}`}
+                          type="button"
+                          onClick={() => openSearchResults(s.text)}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "10px",
+                            width: "100%",
+                            borderTop: "1px solid rgba(0,212,255,0.06)",
+                            padding: "10px 16px",
+                            textAlign: "left",
+                            background: "transparent",
+                            borderLeft: "none",
+                            borderRight: "none",
+                            borderBottom: "none",
+                            cursor: "pointer",
+                            transition: "background 0.12s",
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(0,212,255,0.05)"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6868a0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
+                          </svg>
+                          <span style={{ fontSize: "0.84rem", color: "#d0d0e8" }}>{s.text}</span>
+                        </button>
+                      ))}
+                    </>
+                  )}
+
+                  {/* Product suggestions */}
+                  {productSuggestions.length > 0 && (
+                    <>
+                      {querySuggestions.length > 0 && (
+                        <div style={{ borderTop: "1px solid rgba(0,212,255,0.08)", padding: "6px 16px 2px" }}>
+                          <p style={{ margin: 0, fontSize: "0.65rem", color: "#6868a0", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                            Products
+                          </p>
+                        </div>
+                      )}
+                      {productSuggestions.map((s) => (
+                        <button
+                          key={`p-${s.id}`}
+                          type="button"
+                          onClick={() => openSuggestion(s)}
+                          style={{
+                            display: "block",
+                            width: "100%",
+                            borderTop: "1px solid rgba(0,212,255,0.06)",
+                            padding: "10px 16px",
+                            textAlign: "left",
+                            background: "transparent",
+                            borderLeft: "none",
+                            borderRight: "none",
+                            borderBottom: "none",
+                            cursor: "pointer",
+                            transition: "background 0.12s",
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(0,212,255,0.05)"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                        >
+                          <p style={{ margin: 0, fontSize: "0.875rem", fontWeight: 600, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {s.text}
+                          </p>
+                        </button>
+                      ))}
+                    </>
+                  )}
                 </div>
               )}
             </>

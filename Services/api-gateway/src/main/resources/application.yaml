@@ -400,6 +400,60 @@ spring:
                   args:
                     name: inventoryService
                     fallbackUri: forward:/fallback/unavailable
+            - id: personalization-events
+              uri: lb://personalization-service
+              predicates:
+                - Path=/personalization/events,/personalization/events/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: personalizationService
+                    fallbackUri: forward:/fallback/unavailable
+            - id: personalization-me
+              uri: lb://personalization-service
+              predicates:
+                - Path=/personalization/me,/personalization/me/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: personalizationService
+                    fallbackUri: forward:/fallback/unavailable
+            - id: personalization-products
+              uri: lb://personalization-service
+              predicates:
+                - Path=/personalization/products,/personalization/products/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: personalizationService
+                    fallbackUri: forward:/fallback/unavailable
+            - id: personalization-trending
+              uri: lb://personalization-service
+              predicates:
+                - Path=/personalization/trending
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: personalizationService
+                    fallbackUri: forward:/fallback/unavailable
+            - id: personalization-sessions
+              uri: lb://personalization-service
+              predicates:
+                - Path=/personalization/sessions,/personalization/sessions/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: personalizationService
+                    fallbackUri: forward:/fallback/unavailable
+            - id: search-catalog
+              uri: lb://search-service
+              predicates:
+                - Path=/search,/search/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: searchService
+                    fallbackUri: forward:/fallback/unavailable
             - id: vendors-me
               uri: lb://vendor-service
               predicates:
@@ -498,6 +552,10 @@ resilience4j:
         base-config: default
       analyticsService:
         base-config: default
+      personalizationService:
+        base-config: default
+      searchService:
+        base-config: default
   timelimiter:
     configs:
       default:
@@ -528,6 +586,10 @@ resilience4j:
       reviewService:
         base-config: default
       analyticsService:
+        base-config: default
+      personalizationService:
+        base-config: default
+      searchService:
         base-config: default
 
 logging:

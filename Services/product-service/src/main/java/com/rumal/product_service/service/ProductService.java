@@ -44,6 +44,8 @@ public interface ProductService {
     BulkOperationResult bulkDelete(BulkDeleteRequest request);
     BulkOperationResult bulkPriceUpdate(BulkPriceUpdateRequest request);
     BulkOperationResult bulkCategoryReassign(BulkCategoryReassignRequest request);
+    List<ProductSummaryResponse> getByIds(List<UUID> ids);
+    Page<ProductSummaryResponse> listUpdatedSince(Instant since, Pageable pageable);
     byte[] exportProductsCsv();
     CsvImportResult importProductsCsv(InputStream csvInputStream);
 }

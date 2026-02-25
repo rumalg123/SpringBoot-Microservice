@@ -71,6 +71,8 @@ public class SecurityConfig {
                         .pathMatchers("/customers/me", "/customers/me/**", "/customers/register-identity", "/orders/me", "/orders/me/**", "/cart/me", "/cart/me/**", "/wishlist/me", "/wishlist/me/**", "/promotions/me", "/promotions/me/**", "/payments/me", "/payments/me/**")
                         .access(this::hasCustomerAccess)
                         .pathMatchers(HttpMethod.GET, "/promotions", "/promotions/**").permitAll()
+                        .pathMatchers(HttpMethod.POST, "/personalization/sessions/merge").authenticated()
+                        .pathMatchers("/personalization/**").permitAll()
                         .pathMatchers("/admin/vendors/**", "/admin/platform-staff/**").access(this::hasSuperAdminAccess)
                         .pathMatchers("/admin/vendor-staff/**", "/admin/keycloak/users/**", "/admin/access-audit/**").access(this::hasSuperAdminOrVendorAdminAccess)
                         .pathMatchers("/admin/posters/**", "/admin/categories/**").access(this::hasSuperAdminOrPlatformStaffAccess)

@@ -65,6 +65,8 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
             @Param("productIds") Collection<UUID> productIds
     );
 
+    List<Product> findByIdInAndDeletedFalseAndActiveTrue(Collection<UUID> ids);
+
     // --- Analytics queries ---
 
     long countByDeletedFalseAndActiveTrue();

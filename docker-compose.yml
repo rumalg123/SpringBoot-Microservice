@@ -7,6 +7,18 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
 
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
+    environment:
+      TZ: Asia/Colombo
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+
   discovery-server:
     build:
       context: ./Services/discovery-server
@@ -231,6 +243,23 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
 
+  personalization-service:
+    build:
+      context: ./Services/personalization-service
+    depends_on:
+      - discovery-server
+      - redis
+    env_file:
+      - ./env/common.env
+      - ./env/personalization-service.env
+    environment:
+      TZ: Asia/Colombo
+      LOGGING_FILE_NAME: /logs/personalization-service.log
+    volumes:
+      - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+
   analytics-service:
     build:
       context: ./Services/analytics-service
@@ -243,6 +272,24 @@ services:
     environment:
       TZ: Asia/Colombo
       LOGGING_FILE_NAME: /logs/analytics-service.log
+    volumes:
+      - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+
+  search-service:
+    build:
+      context: ./Services/search-service
+    depends_on:
+      - discovery-server
+      - redis
+      - elasticsearch
+    env_file:
+      - ./env/common.env
+      - ./env/search-service.env
+    environment:
+      TZ: Asia/Colombo
+      LOGGING_FILE_NAME: /logs/search-service.log
     volumes:
       - /home/ubuntu/microservice-logs:/logs
       - /etc/localtime:/etc/localtime:ro
@@ -301,3 +348,7 @@ services:
       - /home/ubuntu/microservice-logs:/logs
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
+
+volumes:
+  elasticsearch-data:
+

@@ -1,3 +1,77 @@
+server:
+  port: 8089
+
 spring:
   application:
     name: personalization-service
+  datasource:
+    url: ${PERSONALIZATION_DB_URL:jdbc:postgresql://personalization-db:5432/personalization_db}
+    username: ${PERSONALIZATION_DB_USER:personalization_user}
+    password: ${PERSONALIZATION_DB_PASS:personalization_pass}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    open-in-view: false
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      timeout: ${REDIS_TIMEOUT:2s}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://discovery-server:8761/eureka/}
+
+internal:
+  auth:
+    shared-secret: ${INTERNAL_AUTH_SHARED_SECRET:}
+
+logging:
+  pattern:
+    level: "%5p [${spring.application.name},traceId=%X{traceId},spanId=%X{spanId}]"
+
+personalization:
+  recently-viewed-max: ${PERSONALIZATION_RECENTLY_VIEWED_MAX:50}
+  recommendation-limit: ${PERSONALIZATION_RECOMMENDATION_LIMIT:20}
+  trending-window-hours: ${PERSONALIZATION_TRENDING_WINDOW_HOURS:48}
+  event-retention-days: ${PERSONALIZATION_EVENT_RETENTION_DAYS:90}
+  anonymous-session-expiry-days: ${PERSONALIZATION_ANONYMOUS_SESSION_EXPIRY_DAYS:30}
+  computation:
+    co-purchase-cron: ${PERSONALIZATION_CO_PURCHASE_CRON:0 0 */6 * * *}
+    similarity-cron: ${PERSONALIZATION_SIMILARITY_CRON:0 30 */6 * * *}
+    affinity-cron: ${PERSONALIZATION_AFFINITY_CRON:0 0 * * * *}
+    trending-cron: ${PERSONALIZATION_TRENDING_CRON:0 */30 * * * *}
+    cleanup-cron: ${PERSONALIZATION_CLEANUP_CRON:0 0 3 * * *}
+
+cache:
+  clear-on-startup: ${CACHE_CLEAR_ON_STARTUP:true}
+  key-prefix: ${CACHE_KEY_PREFIX:person:v1::}
+  recommendations-ttl: ${CACHE_RECOMMENDATIONS_TTL:1h}
+  similar-products-ttl: ${CACHE_SIMILAR_PRODUCTS_TTL:6h}
+  bought-together-ttl: ${CACHE_BOUGHT_TOGETHER_TTL:6h}
+  trending-ttl: ${CACHE_TRENDING_TTL:30m}
+
+http:
+  client:
+    connect-timeout-seconds: ${HTTP_CLIENT_CONNECT_TIMEOUT_SECONDS:2}
+    response-timeout-seconds: ${HTTP_CLIENT_RESPONSE_TIMEOUT_SECONDS:8}
+    idle-evict-seconds: ${HTTP_CLIENT_IDLE_EVICT_SECONDS:30}
+    max-connections: ${HTTP_CLIENT_MAX_CONNECTIONS:200}
+    max-connections-per-route: ${HTTP_CLIENT_MAX_CONNECTIONS_PER_ROUTE:30}
+
+resilience:
+  circuit-breaker:
+    failure-rate-threshold: ${CB_FAILURE_RATE_THRESHOLD:50}
+    slow-call-rate-threshold: ${CB_SLOW_CALL_RATE_THRESHOLD:70}
+    slow-call-duration-ms: ${CB_SLOW_CALL_DURATION_MS:5000}
+    sliding-window-size: ${CB_SLIDING_WINDOW_SIZE:20}
+    minimum-number-of-calls: ${CB_MIN_CALLS:10}
+    wait-open-ms: ${CB_WAIT_OPEN_MS:15000}
+    permitted-half-open-calls: ${CB_HALF_OPEN_CALLS:5}
+  time-limiter:
+    timeout-ms: ${CB_TIMEOUT_MS:6000}
+  retry:
+    max-attempts: ${RETRY_MAX_ATTEMPTS:3}
+    wait-duration-ms: ${RETRY_WAIT_DURATION_MS:500}

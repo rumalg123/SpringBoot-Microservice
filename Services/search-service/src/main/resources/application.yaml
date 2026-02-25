@@ -1,0 +1,71 @@
+server:
+  port: 8090
+
+spring:
+  application:
+    name: search-service
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      timeout: ${REDIS_TIMEOUT:2s}
+  elasticsearch:
+    uris: ${ELASTICSEARCH_URIS:http://elasticsearch:9200}
+    connection-timeout: ${ELASTICSEARCH_CONNECTION_TIMEOUT:5s}
+    socket-timeout: ${ELASTICSEARCH_SOCKET_TIMEOUT:30s}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://discovery-server:8761/eureka/}
+
+internal:
+  auth:
+    shared-secret: ${INTERNAL_AUTH_SHARED_SECRET:}
+
+logging:
+  pattern:
+    level: "%5p [${spring.application.name},traceId=%X{traceId},spanId=%X{spanId}]"
+
+search:
+  index:
+    name: ${SEARCH_INDEX_NAME:products}
+  sync:
+    full-reindex-cron: ${SEARCH_FULL_REINDEX_CRON:0 0 3 * * *}
+    incremental-sync-cron: ${SEARCH_INCREMENTAL_SYNC_CRON:0 */5 * * * *}
+    batch-size: ${SEARCH_SYNC_BATCH_SIZE:100}
+  autocomplete:
+    max-suggestions: ${SEARCH_AUTOCOMPLETE_MAX_SUGGESTIONS:8}
+  popular:
+    max-entries: ${SEARCH_POPULAR_MAX_ENTRIES:20}
+    window-hours: ${SEARCH_POPULAR_WINDOW_HOURS:24}
+
+cache:
+  clear-on-startup: ${CACHE_CLEAR_ON_STARTUP:true}
+  key-prefix: ${CACHE_KEY_PREFIX:search:v1::}
+  search-results-ttl: ${CACHE_SEARCH_RESULTS_TTL:5m}
+  popular-searches-ttl: ${CACHE_POPULAR_SEARCHES_TTL:30m}
+  autocomplete-ttl: ${CACHE_AUTOCOMPLETE_TTL:2m}
+
+http:
+  client:
+    connect-timeout-seconds: ${HTTP_CLIENT_CONNECT_TIMEOUT_SECONDS:2}
+    response-timeout-seconds: ${HTTP_CLIENT_RESPONSE_TIMEOUT_SECONDS:8}
+    idle-evict-seconds: ${HTTP_CLIENT_IDLE_EVICT_SECONDS:30}
+    max-connections: ${HTTP_CLIENT_MAX_CONNECTIONS:200}
+    max-connections-per-route: ${HTTP_CLIENT_MAX_CONNECTIONS_PER_ROUTE:30}
+
+resilience:
+  circuit-breaker:
+    failure-rate-threshold: ${CB_FAILURE_RATE_THRESHOLD:50}
+    slow-call-rate-threshold: ${CB_SLOW_CALL_RATE_THRESHOLD:70}
+    slow-call-duration-ms: ${CB_SLOW_CALL_DURATION_MS:5000}
+    sliding-window-size: ${CB_SLIDING_WINDOW_SIZE:20}
+    minimum-number-of-calls: ${CB_MIN_CALLS:10}
+    wait-open-ms: ${CB_WAIT_OPEN_MS:15000}
+    permitted-half-open-calls: ${CB_HALF_OPEN_CALLS:5}
+  time-limiter:
+    timeout-ms: ${CB_TIMEOUT_MS:6000}
+  retry:
+    max-attempts: ${RETRY_MAX_ATTEMPTS:3}
+    wait-duration-ms: ${RETRY_WAIT_DURATION_MS:500}

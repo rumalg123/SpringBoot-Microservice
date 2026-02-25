@@ -9,6 +9,10 @@ import Footer from "../components/Footer";
 import { useAuthSession } from "../../lib/authSession";
 import { getErrorMessage } from "../../lib/error";
 import { PayHereFormData, submitToPayHere } from "../../lib/payhere";
+import { trackPurchase, fetchSimilarProducts, type PersonalizationProduct } from "../../lib/personalization";
+import { calcDiscount } from "../../lib/format";
+import { resolveImageUrl } from "../../lib/image";
+import Image from "next/image";
 
 type CartItem = {
   id: string;
@@ -129,6 +133,7 @@ export default function CartPage() {
   const [preview, setPreview] = useState<CheckoutPreviewResponse | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [couponError, setCouponError] = useState("");
+  const [suggestions, setSuggestions] = useState<PersonalizationProduct[]>([]);
 
   const loadCart = useCallback(async () => {
     if (!apiClient) return;
@@ -167,6 +172,13 @@ export default function CartPage() {
     };
     void run();
   }, [sessionStatus, isAuthenticated, router, ensureCustomer, loadCart, loadAddresses]);
+
+  // Fetch "Complete Your Purchase" suggestions
+  useEffect(() => {
+    const firstProduct = cart.items[0];
+    if (!firstProduct) { setSuggestions([]); return; }
+    fetchSimilarProducts(firstProduct.productId, 4).then(setSuggestions).catch(() => {});
+  }, [cart.items.length > 0 ? cart.items[0]?.productId : null]);
 
   useEffect(() => {
     if (!billingSameAsShipping) return;
@@ -251,6 +263,7 @@ export default function CartPage() {
 
       setStatus("Redirecting to payment...");
       toast.success(`Order placed! Total: ${money(data.grandTotal)}`);
+      trackPurchase(cart.items.map((item) => ({ id: item.productId, price: item.unitPrice })), session.token);
       const payRes = await apiClient.post("/payments/me/initiate", { orderId: data.orderId });
       submitToPayHere(payRes.data as PayHereFormData);
     } catch (err) {
@@ -680,6 +693,31 @@ export default function CartPage() {
           </aside>
         </div>
       </main>
+
+      {/* Complete Your Purchase */}
+      {suggestions.length > 0 && cart.items.length > 0 && (
+        <section className="mx-auto max-w-7xl px-4 pb-8">
+          <h2 style={{ fontFamily: "'Syne', sans-serif", fontSize: "1.3rem", fontWeight: 800, color: "#fff", marginBottom: "16px" }}>Complete Your Purchase</h2>
+          <div style={{ display: "flex", gap: "16px", overflowX: "auto", paddingBottom: "8px" }}>
+            {suggestions.map((p) => {
+              const discount = calcDiscount(p.regularPrice, p.sellingPrice);
+              const imgUrl = resolveImageUrl(p.mainImage);
+              return (
+                <Link href={`/products/${encodeURIComponent((p.slug || p.id).trim())}`} key={p.id} className="product-card no-underline" style={{ minWidth: "200px", maxWidth: "220px", flexShrink: 0 }}>
+                  {discount && <span className="badge-sale">-{discount}%</span>}
+                  <div style={{ position: "relative", aspectRatio: "1/1", overflow: "hidden", background: "var(--surface-2)" }}>
+                    {imgUrl ? (<Image src={imgUrl} alt={p.name} width={300} height={300} className="product-card-img" unoptimized />) : (<div style={{ display: "grid", placeItems: "center", width: "100%", height: "100%", background: "linear-gradient(135deg, var(--surface), #1c1c38)", color: "var(--muted-2)", fontSize: "0.75rem" }}>No Image</div>)}
+                  </div>
+                  <div className="product-card-body">
+                    <p style={{ margin: "0 0 4px", fontSize: "0.8rem", fontWeight: 600, color: "var(--ink)", display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{p.name}</p>
+                    <span className="price-current" style={{ fontSize: "0.85rem" }}>{money(p.sellingPrice)}</span>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       <Footer />
     </div>

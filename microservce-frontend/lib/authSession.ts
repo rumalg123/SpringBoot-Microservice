@@ -513,6 +513,9 @@ export function useAuthSession() {
 
   const logout = useCallback(async () => {
     if (!client) return;
+    if (typeof localStorage !== "undefined") {
+      localStorage.removeItem("_ps_merged");
+    }
     await client.logout({
       redirectUri: typeof window === "undefined" ? undefined : window.location.origin,
     });
@@ -568,6 +571,14 @@ export function useAuthSession() {
     };
   }, [status, isAuthenticated, hasCustomerRole, canViewAdmin, apiClient, emailVerified, ensureCustomer]);
 
+  // Merge anonymous personalization session on login
+  useEffect(() => {
+    if (!isAuthenticated || !client?.token) return;
+    import("./personalization").then(({ mergeSession }) => {
+      if (client.token) mergeSession(client.token).catch(() => {});
+    }).catch(() => {});
+  }, [isAuthenticated, client]);
+
   const resendVerificationEmail = useCallback(async () => {
     if (!apiClient || !isAuthenticated) return;
     await apiClient.post("/auth/resend-verification");
@@ -575,6 +586,7 @@ export function useAuthSession() {
 
   return {
     env,
+    token: client?.token || null,
     status,
     error,
     isAuthenticated,
