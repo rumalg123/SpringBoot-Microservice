@@ -59,6 +59,8 @@ public class VendorClient {
 
     @SuppressWarnings("unused")
     public VendorSummaryForOrder vendorFallback(String userSub, UUID vendorIdHint, Throwable ex) {
+        if (ex instanceof ResourceNotFoundException rnfe) throw rnfe;
+        if (ex instanceof ValidationException ve) throw ve;
         throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
     }
 }

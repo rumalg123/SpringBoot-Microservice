@@ -56,6 +56,7 @@ public class CartClient {
 
     @SuppressWarnings("unused")
     public void addItemFallback(String keycloakId, UUID productId, int quantity, Throwable ex) {
+        if (ex instanceof ValidationException ve) throw ve;
         throw new ServiceUnavailableException(
                 "Cart service unavailable. Try again later.",
                 ex

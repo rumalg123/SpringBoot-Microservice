@@ -106,16 +106,19 @@ public class PromotionClient {
 
     @SuppressWarnings("unused")
     public PromotionQuoteResponse promotionFallbackQuote(PromotionQuoteRequest request, Throwable ex) {
+        if (ex instanceof ValidationException ve) throw ve;
         throw new ServiceUnavailableException("Promotion service unavailable for pricing preview. Try again later.", ex);
     }
 
     @SuppressWarnings("unused")
     public CouponReservationResponse promotionFallbackReserve(CreateCouponReservationRequest request, Throwable ex) {
+        if (ex instanceof ValidationException ve) throw ve;
         throw new ServiceUnavailableException("Promotion service unavailable for coupon reservation. Try again later.", ex);
     }
 
     @SuppressWarnings("unused")
     public CouponReservationResponse promotionFallbackRelease(UUID reservationId, String reason, Throwable ex) {
+        if (ex instanceof ValidationException ve) throw ve;
         throw new ServiceUnavailableException("Promotion service unavailable for coupon reservation release. Try again later.", ex);
     }
 

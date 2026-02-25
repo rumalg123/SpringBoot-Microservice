@@ -138,26 +138,31 @@ public class CustomerClient {
 
     @SuppressWarnings("unused")
     public void customerFallback(UUID customerId, Throwable ex) {
+        if (ex instanceof ResourceNotFoundException rnfe) throw rnfe;
         throw new ServiceUnavailableException("Customer service unavailable for customer " + customerId + ". Try again later.", ex);
     }
 
     @SuppressWarnings("unused")
     public CustomerSummary customerFallbackGetCustomer(UUID customerId, Throwable ex) {
+        if (ex instanceof ResourceNotFoundException rnfe) throw rnfe;
         throw new ServiceUnavailableException("Customer service unavailable for customer " + customerId + ". Try again later.", ex);
     }
 
     @SuppressWarnings("unused")
     public CustomerSummary customerFallbackGetCustomerByKeycloak(String keycloakId, Throwable ex) {
+        if (ex instanceof ResourceNotFoundException rnfe) throw rnfe;
         throw new ServiceUnavailableException("Customer service unavailable for principal " + keycloakId + ". Try again later.", ex);
     }
 
     @SuppressWarnings("unused")
     public CustomerSummary customerFallbackGetCustomerByEmail(String email, Throwable ex) {
+        if (ex instanceof ResourceNotFoundException rnfe) throw rnfe;
         throw new ServiceUnavailableException("Customer service unavailable for email " + email + ". Try again later.", ex);
     }
 
     @SuppressWarnings("unused")
     public CustomerAddressSummary customerFallbackGetCustomerAddress(UUID customerId, UUID addressId, Throwable ex) {
+        if (ex instanceof ResourceNotFoundException rnfe) throw rnfe;
         throw new ServiceUnavailableException(
                 "Customer service unavailable for customer " + customerId + " address " + addressId + ". Try again later.",
                 ex

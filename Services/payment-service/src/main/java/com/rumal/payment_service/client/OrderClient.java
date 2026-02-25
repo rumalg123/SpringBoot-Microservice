@@ -161,26 +161,31 @@ public class OrderClient {
     // Fallback methods
     @SuppressWarnings("unused")
     public OrderSummary getOrderFallback(UUID orderId, Throwable ex) {
+        if (ex instanceof ResourceNotFoundException rnfe) throw rnfe;
         throw new ServiceUnavailableException("Order service unavailable for order " + orderId + ". Try again later.", ex);
     }
 
     @SuppressWarnings("unused")
     public void setPaymentInfoFallback(UUID orderId, String paymentId, String paymentMethod, String paymentGatewayRef, Throwable ex) {
+        if (ex instanceof ResourceNotFoundException rnfe) throw rnfe;
         throw new ServiceUnavailableException("Order service unavailable for setting payment info. Try again later.", ex);
     }
 
     @SuppressWarnings("unused")
     public void updateOrderStatusFallback(UUID orderId, String status, String reason, Throwable ex) {
+        if (ex instanceof ResourceNotFoundException rnfe) throw rnfe;
         throw new ServiceUnavailableException("Order service unavailable for status update. Try again later.", ex);
     }
 
     @SuppressWarnings("unused")
     public VendorOrderSummary getVendorOrderFallback(UUID orderId, UUID vendorOrderId, Throwable ex) {
+        if (ex instanceof ResourceNotFoundException rnfe) throw rnfe;
         throw new ServiceUnavailableException("Order service unavailable for vendor order " + vendorOrderId + ". Try again later.", ex);
     }
 
     @SuppressWarnings("unused")
     public void updateVendorOrderStatusFallback(UUID orderId, UUID vendorOrderId, String status, String reason, Throwable ex) {
+        if (ex instanceof ResourceNotFoundException rnfe) throw rnfe;
         throw new ServiceUnavailableException("Order service unavailable for vendor order status update. Try again later.", ex);
     }
 }

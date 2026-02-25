@@ -83,11 +83,15 @@ public class PromotionClient {
 
     @SuppressWarnings("unused")
     public CouponReservationResponse promotionFallbackCommit(UUID reservationId, UUID orderId, Throwable ex) {
+        if (ex instanceof ValidationException ve) throw ve;
+        if (ex instanceof ResourceNotFoundException rnfe) throw rnfe;
         throw new ServiceUnavailableException("Promotion service unavailable for coupon reservation commit. Try again later.", ex);
     }
 
     @SuppressWarnings("unused")
     public CouponReservationResponse promotionFallbackRelease(UUID reservationId, String reason, Throwable ex) {
+        if (ex instanceof ValidationException ve) throw ve;
+        if (ex instanceof ResourceNotFoundException rnfe) throw rnfe;
         throw new ServiceUnavailableException("Promotion service unavailable for coupon reservation release. Try again later.", ex);
     }
 

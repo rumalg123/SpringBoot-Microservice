@@ -44,6 +44,7 @@ public class ProductClient {
 
     @SuppressWarnings("unused")
     public ProductSummary productFallbackGetById(UUID productId, Throwable ex) {
+        if (ex instanceof ResourceNotFoundException rnfe) throw rnfe;
         throw new ServiceUnavailableException("Product service unavailable for product " + productId + ". Try again later.", ex);
     }
 }

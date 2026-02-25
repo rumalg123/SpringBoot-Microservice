@@ -80,11 +80,13 @@ public class CustomerClient {
 
     @SuppressWarnings("unused")
     public CustomerSummary getCustomerFallback(String keycloakId, Throwable ex) {
+        if (ex instanceof ResourceNotFoundException rnfe) throw rnfe;
         throw new ServiceUnavailableException("Customer service unavailable. Try again later.", ex);
     }
 
     @SuppressWarnings("unused")
     public List<CustomerAddressSummary> getAddressesFallback(String keycloakId, Throwable ex) {
+        if (ex instanceof ResourceNotFoundException rnfe) throw rnfe;
         throw new ServiceUnavailableException("Customer service unavailable. Try again later.", ex);
     }
 }

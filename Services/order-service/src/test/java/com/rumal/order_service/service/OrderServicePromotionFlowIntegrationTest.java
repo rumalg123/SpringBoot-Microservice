@@ -1,6 +1,7 @@
 package com.rumal.order_service.service;
 
 import com.rumal.order_service.client.CustomerClient;
+import com.rumal.order_service.client.InventoryClient;
 import com.rumal.order_service.client.ProductClient;
 import com.rumal.order_service.client.PromotionClient;
 import com.rumal.order_service.client.VendorClient;
@@ -80,6 +81,7 @@ class OrderServicePromotionFlowIntegrationTest {
         customerClient = Mockito.mock(CustomerClient.class);
         productClient = Mockito.mock(ProductClient.class);
         promotionClient = Mockito.mock(PromotionClient.class);
+        InventoryClient inventoryClient = Mockito.mock(InventoryClient.class);
         VendorClient vendorClient = Mockito.mock(VendorClient.class);
         vendorOperationalStateClient = Mockito.mock(VendorOperationalStateClient.class);
         OrderCacheVersionService orderCacheVersionService = Mockito.mock(OrderCacheVersionService.class);
@@ -92,6 +94,7 @@ class OrderServicePromotionFlowIntegrationTest {
                 customerClient,
                 productClient,
                 promotionClient,
+                inventoryClient,
                 vendorClient,
                 vendorOperationalStateClient,
                 new ShippingFeeCalculator(
