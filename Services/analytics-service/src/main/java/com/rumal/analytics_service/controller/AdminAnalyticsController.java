@@ -4,12 +4,16 @@ import com.rumal.analytics_service.dto.*;
 import com.rumal.analytics_service.exception.UnauthorizedException;
 import com.rumal.analytics_service.security.InternalRequestVerifier;
 import com.rumal.analytics_service.service.AdminAnalyticsService;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Set;
 
+@Validated
 @RestController
 @RequestMapping("/analytics/admin")
 @RequiredArgsConstructor
@@ -24,7 +28,7 @@ public class AdminAnalyticsController {
     public AdminDashboardAnalytics dashboard(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
-            @RequestParam(defaultValue = "30") int periodDays) {
+            @RequestParam(defaultValue = "30") @Min(1) @Max(365) int periodDays) {
         verifyAdminAccess(internalAuth, userRoles);
         return adminAnalyticsService.getDashboardSummary(periodDays);
     }
@@ -33,7 +37,7 @@ public class AdminAnalyticsController {
     public AdminRevenueTrendResponse revenueTrend(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
-            @RequestParam(defaultValue = "30") int days) {
+            @RequestParam(defaultValue = "30") @Min(1) @Max(365) int days) {
         verifyAdminAccess(internalAuth, userRoles);
         return adminAnalyticsService.getRevenueTrend(days);
     }

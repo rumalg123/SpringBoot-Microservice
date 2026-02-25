@@ -8,7 +8,6 @@ import com.rumal.payment_service.exception.PayHereApiException;
 import com.rumal.payment_service.exception.ResourceNotFoundException;
 import com.rumal.payment_service.exception.UnauthorizedException;
 import com.rumal.payment_service.exception.ValidationException;
-import com.rumal.payment_service.repo.PaymentAuditRepository;
 import com.rumal.payment_service.repo.PaymentRepository;
 import com.rumal.payment_service.repo.RefundRequestRepository;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +17,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import org.springframework.data.domain.PageRequest;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -35,7 +36,7 @@ public class RefundService {
 
     private final RefundRequestRepository refundRequestRepository;
     private final PaymentRepository paymentRepository;
-    private final PaymentAuditRepository auditRepository;
+    private final PaymentAuditService paymentAuditService;
     private final OrderClient orderClient;
     private final PayHereClient payHereClient;
 
@@ -88,7 +89,7 @@ public class RefundService {
         // 5. Save and write audit
         refund = refundRequestRepository.save(refund);
 
-        writeAudit(null, refund.getId(), null,
+        paymentAuditService.writeAudit(null, refund.getId(), null,
                 "REFUND_REQUESTED", null, "REQUESTED",
                 "customer", keycloakId, null, null);
 
@@ -133,7 +134,7 @@ public class RefundService {
         refund = refundRequestRepository.save(refund);
 
         // 8. Write audit
-        writeAudit(null, refundId, null,
+        paymentAuditService.writeAudit(null, refundId, null,
                 "VENDOR_RESPONSE", oldStatus, refund.getStatus().name(),
                 "vendor", vendorKeycloakId, null, null);
 
@@ -200,7 +201,7 @@ public class RefundService {
 
             refund = refundRequestRepository.save(refund);
 
-            writeAudit(null, refundId, null,
+            paymentAuditService.writeAudit(null, refundId, null,
                     "ADMIN_FINALIZE", oldStatus, refund.getStatus().name(),
                     "admin", adminKeycloakId, null, null);
 
@@ -209,7 +210,7 @@ public class RefundService {
             refund.setStatus(ADMIN_REJECTED);
             refund = refundRequestRepository.save(refund);
 
-            writeAudit(null, refundId, null,
+            paymentAuditService.writeAudit(null, refundId, null,
                     "ADMIN_FINALIZE", oldStatus, "ADMIN_REJECTED",
                     "admin", adminKeycloakId, null, null);
         }
@@ -220,27 +221,32 @@ public class RefundService {
 
     // ── List & Get Methods ─────────────────────────────────────────────
 
+    @Transactional(readOnly = true)
     public Page<RefundRequestResponse> listRefundsForCustomer(String keycloakId, Pageable pageable) {
         return refundRequestRepository.findByCustomerKeycloakId(keycloakId, pageable)
                 .map(this::toResponse);
     }
 
+    @Transactional(readOnly = true)
     public Page<RefundRequestResponse> listRefundsForVendor(UUID vendorId, RefundStatus status, Pageable pageable) {
         return refundRequestRepository.findByVendorFiltered(vendorId, status, pageable)
                 .map(this::toResponse);
     }
 
+    @Transactional(readOnly = true)
     public Page<RefundRequestResponse> listAllRefunds(UUID vendorId, RefundStatus status, Pageable pageable) {
         return refundRequestRepository.findAllFiltered(vendorId, status, pageable)
                 .map(this::toResponse);
     }
 
+    @Transactional(readOnly = true)
     public RefundRequestResponse getRefundById(UUID refundId) {
         RefundRequest refund = refundRequestRepository.findById(refundId)
                 .orElseThrow(() -> new ResourceNotFoundException("Refund request not found: " + refundId));
         return toResponse(refund);
     }
 
+    @Transactional(readOnly = true)
     public RefundRequestResponse getRefundByIdAndCustomer(UUID refundId, String keycloakId) {
         RefundRequest refund = refundRequestRepository.findById(refundId)
                 .orElseThrow(() -> new ResourceNotFoundException("Refund request not found: " + refundId));
@@ -251,6 +257,7 @@ public class RefundService {
         return toResponse(refund);
     }
 
+    @Transactional(readOnly = true)
     public RefundRequestResponse getRefundByIdAndVendor(UUID refundId, UUID vendorId) {
         RefundRequest refund = refundRequestRepository.findById(refundId)
                 .orElseThrow(() -> new ResourceNotFoundException("Refund request not found: " + refundId));
@@ -265,20 +272,26 @@ public class RefundService {
 
     @Transactional
     public void escalateExpiredRefunds() {
-        List<RefundRequest> expired = refundRequestRepository
-                .findByStatusAndVendorResponseDeadlineBefore(REQUESTED, Instant.now());
+        int totalEscalated = 0;
+        Page<RefundRequest> page;
 
-        for (RefundRequest refund : expired) {
-            refund.setStatus(ESCALATED_TO_ADMIN);
-            refundRequestRepository.save(refund);
+        do {
+            page = refundRequestRepository
+                    .findByStatusAndVendorResponseDeadlineBefore(REQUESTED, Instant.now(), PageRequest.of(0, 100));
 
-            writeAudit(null, refund.getId(), null,
-                    "REFUND_ESCALATED", "REQUESTED", "ESCALATED_TO_ADMIN",
-                    "system", null, null, null);
-        }
+            for (RefundRequest refund : page.getContent()) {
+                refund.setStatus(ESCALATED_TO_ADMIN);
+                refundRequestRepository.save(refund);
 
-        if (!expired.isEmpty()) {
-            log.info("Escalated {} expired refund requests to admin", expired.size());
+                paymentAuditService.writeAudit(null, refund.getId(), null,
+                        "REFUND_ESCALATED", "REQUESTED", "ESCALATED_TO_ADMIN",
+                        "system", null, null, null);
+            }
+            totalEscalated += page.getNumberOfElements();
+        } while (!page.isEmpty());
+
+        if (totalEscalated > 0) {
+            log.info("Escalated {} expired refund requests to admin", totalEscalated);
         }
     }
 
@@ -307,21 +320,4 @@ public class RefundService {
         );
     }
 
-    private void writeAudit(UUID paymentId, UUID refundRequestId, UUID payoutId,
-                            String eventType, String fromStatus, String toStatus,
-                            String actorType, String actorId, String note, String rawPayload) {
-        PaymentAudit audit = PaymentAudit.builder()
-                .paymentId(paymentId)
-                .refundRequestId(refundRequestId)
-                .payoutId(payoutId)
-                .eventType(eventType)
-                .fromStatus(fromStatus)
-                .toStatus(toStatus)
-                .actorType(actorType)
-                .actorId(actorId)
-                .note(note)
-                .rawPayload(rawPayload)
-                .build();
-        auditRepository.save(audit);
-    }
 }

@@ -43,6 +43,9 @@ public class StockReservation {
     @Column(name = "quantity_reserved", nullable = false)
     private int quantityReserved;
 
+    @Version
+    private Long version;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private ReservationStatus status;

@@ -1,6 +1,7 @@
 package com.rumal.personalization_service.repository;
 
 import com.rumal.personalization_service.model.UserEvent;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -32,13 +33,13 @@ public interface UserEventRepository extends JpaRepository<UserEvent, UUID> {
             """)
     List<Object[]> findTrendingProducts(Instant since, Pageable pageable);
 
-    List<UserEvent> findByUserIdAndEventTypeOrderByCreatedAtDesc(UUID userId, String eventType, Pageable pageable);
+    Page<UserEvent> findByUserIdAndEventTypeOrderByCreatedAtDesc(UUID userId, String eventType, Pageable pageable);
 
-    List<UserEvent> findBySessionIdAndEventTypeOrderByCreatedAtDesc(String sessionId, String eventType, Pageable pageable);
+    Page<UserEvent> findBySessionIdAndEventTypeOrderByCreatedAtDesc(String sessionId, String eventType, Pageable pageable);
 
-    List<UserEvent> findByUserIdOrderByCreatedAtDesc(UUID userId, Pageable pageable);
+    Page<UserEvent> findByUserIdOrderByCreatedAtDesc(UUID userId, Pageable pageable);
 
-    List<UserEvent> findBySessionIdOrderByCreatedAtDesc(String sessionId, Pageable pageable);
+    Page<UserEvent> findBySessionIdOrderByCreatedAtDesc(String sessionId, Pageable pageable);
 
     @Query("""
             SELECT e.productId FROM UserEvent e

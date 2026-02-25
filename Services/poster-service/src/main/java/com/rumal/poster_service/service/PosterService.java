@@ -22,7 +22,7 @@ public interface PosterService {
     Page<PosterResponse> listAllActive(Pageable pageable);
     List<PosterResponse> listAllNonDeleted();
     Page<PosterResponse> listAllNonDeleted(Pageable pageable);
-    List<PosterResponse> listDeleted();
+    Page<PosterResponse> listDeleted();
     Page<PosterResponse> listDeleted(Pageable pageable);
     void softDelete(UUID id);
     PosterResponse restore(UUID id);

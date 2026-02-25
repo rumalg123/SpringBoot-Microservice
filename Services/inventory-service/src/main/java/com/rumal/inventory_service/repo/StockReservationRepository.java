@@ -22,10 +22,12 @@ public interface StockReservationRepository extends JpaRepository<StockReservati
             @Param("status") ReservationStatus status
     );
 
-    @Query("select r from StockReservation r join fetch r.stockItem where r.status = :status and r.expiresAt <= :now")
-    List<StockReservation> findExpiredReservations(
+    @Query(value = "select r from StockReservation r join fetch r.stockItem where r.status = :status and r.expiresAt <= :now",
+            countQuery = "select count(r) from StockReservation r where r.status = :status and r.expiresAt <= :now")
+    Page<StockReservation> findExpiredReservations(
             @Param("status") ReservationStatus status,
-            @Param("now") Instant now
+            @Param("now") Instant now,
+            Pageable pageable
     );
 
     Page<StockReservation> findByStatus(ReservationStatus status, Pageable pageable);

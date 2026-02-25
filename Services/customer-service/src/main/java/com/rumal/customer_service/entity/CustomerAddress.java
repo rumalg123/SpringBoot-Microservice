@@ -14,6 +14,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import jakarta.persistence.Version;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -74,6 +75,9 @@ public class CustomerAddress {
     @Column(name = "default_billing", nullable = false)
     @Builder.Default
     private boolean defaultBilling = false;
+
+    @Version
+    private Long version;
 
     @Column(nullable = false)
     @Builder.Default

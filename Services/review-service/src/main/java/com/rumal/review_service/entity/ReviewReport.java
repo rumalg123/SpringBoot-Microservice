@@ -45,6 +45,9 @@ public class ReviewReport {
     @Column(name = "reporter_user_id", nullable = false)
     private UUID reporterUserId;
 
+    @Version
+    private Long version;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private ReportReason reason;

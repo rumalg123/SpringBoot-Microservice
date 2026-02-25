@@ -10,6 +10,9 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+
 import java.util.List;
 
 import static com.rumal.payment_service.entity.PaymentStatus.*;
@@ -26,23 +29,30 @@ public class OrderSyncRetryScheduler {
     @Transactional
     public void retryPendingOrderSyncs() {
         try {
-            List<Payment> pending = paymentRepository.findOrderSyncPending(
-                    List.of(SUCCESS, FAILED, CANCELLED));
+            int totalSynced = 0;
+            int totalProcessed = 0;
+            Page<Payment> page;
 
-            for (Payment payment : pending) {
-                try {
-                    syncOrder(payment);
-                    payment.setOrderSyncPending(false);
-                    paymentRepository.save(payment);
-                } catch (Exception ex) {
-                    log.warn("Order sync retry failed for payment {}. Will retry next cycle.",
-                            payment.getId(), ex);
+            do {
+                page = paymentRepository.findOrderSyncPending(
+                        List.of(SUCCESS, FAILED, CANCELLED), PageRequest.of(0, 100));
+
+                for (Payment payment : page.getContent()) {
+                    try {
+                        syncOrder(payment);
+                        payment.setOrderSyncPending(false);
+                        paymentRepository.save(payment);
+                        totalSynced++;
+                    } catch (Exception ex) {
+                        log.warn("Order sync retry failed for payment {}. Will retry next cycle.",
+                                payment.getId(), ex);
+                    }
                 }
-            }
+                totalProcessed += page.getNumberOfElements();
+            } while (!page.isEmpty());
 
-            if (!pending.isEmpty()) {
-                long synced = pending.stream().filter(p -> !p.isOrderSyncPending()).count();
-                log.info("Order sync retry: {}/{} synced successfully", synced, pending.size());
+            if (totalProcessed > 0) {
+                log.info("Order sync retry: {}/{} synced successfully", totalSynced, totalProcessed);
             }
         } catch (Exception ex) {
             log.error("Error during order sync retry", ex);

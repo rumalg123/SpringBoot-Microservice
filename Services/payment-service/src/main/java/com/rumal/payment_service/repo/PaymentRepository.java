@@ -39,10 +39,10 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
             "AND (:status IS NULL OR p.status = :status)")
     Page<Payment> findFiltered(UUID customerId, PaymentStatus status, Pageable pageable);
 
-    List<Payment> findByStatusAndExpiresAtBefore(PaymentStatus status, Instant now);
+    Page<Payment> findByStatusAndExpiresAtBefore(PaymentStatus status, Instant now, Pageable pageable);
 
     @Query("SELECT p FROM Payment p WHERE p.orderSyncPending = true AND p.status IN :statuses")
-    List<Payment> findOrderSyncPending(@Param("statuses") List<PaymentStatus> statuses);
+    Page<Payment> findOrderSyncPending(@Param("statuses") List<PaymentStatus> statuses, Pageable pageable);
 
     // --- Analytics queries ---
 

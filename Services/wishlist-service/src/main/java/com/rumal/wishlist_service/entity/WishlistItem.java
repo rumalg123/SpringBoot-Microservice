@@ -11,6 +11,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -71,6 +72,9 @@ public class WishlistItem {
 
     @Column(name = "selling_price_snapshot", precision = 19, scale = 2)
     private BigDecimal sellingPriceSnapshot;
+
+    @Version
+    private Long version;
 
     @Column(name = "note", length = 500)
     private String note;

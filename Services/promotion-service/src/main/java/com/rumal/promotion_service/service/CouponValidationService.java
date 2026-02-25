@@ -9,6 +9,7 @@ import com.rumal.promotion_service.repo.CouponCodeRepository;
 import com.rumal.promotion_service.repo.CouponReservationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.Instant;
@@ -18,6 +19,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class CouponValidationService {
 
     private final CouponCodeRepository couponCodeRepository;

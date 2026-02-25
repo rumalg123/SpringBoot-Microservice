@@ -37,5 +37,5 @@ public interface RefundRequestRepository extends JpaRepository<RefundRequest, UU
             "AND (:status IS NULL OR r.status = :status)")
     Page<RefundRequest> findAllFiltered(UUID vendorId, RefundStatus status, Pageable pageable);
 
-    List<RefundRequest> findByStatusAndVendorResponseDeadlineBefore(RefundStatus status, Instant deadline);
+    Page<RefundRequest> findByStatusAndVendorResponseDeadlineBefore(RefundStatus status, Instant deadline, Pageable pageable);
 }

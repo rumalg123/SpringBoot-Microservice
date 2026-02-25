@@ -37,6 +37,7 @@ public class PaymentService {
 
     private final PaymentRepository paymentRepository;
     private final PaymentAuditRepository auditRepository;
+    private final PaymentAuditService paymentAuditService;
     private final PayHereProperties payHereProperties;
     private final OrderClient orderClient;
     private final CustomerClient customerClient;
@@ -53,16 +54,18 @@ public class PaymentService {
         // 1. Fetch order
         OrderSummary order = orderClient.getOrder(orderId);
 
-        // 2. Validate order status and transition PENDING → PAYMENT_PENDING
+        // 2. Verify requesting customer owns this order
+        CustomerSummary customer = customerClient.getCustomerByKeycloakId(keycloakId);
+        if (!customer.id().equals(order.customerId())) {
+            throw new com.rumal.payment_service.exception.UnauthorizedException(
+                    "You are not authorized to pay for this order");
+        }
+
+        // 3. Validate order status and transition PENDING → PAYMENT_PENDING
         if ("PENDING".equals(order.status())) {
             orderClient.updateOrderStatus(orderId, "PAYMENT_PENDING", "Payment initiated by customer");
         } else if (!"PAYMENT_PENDING".equals(order.status())) {
             throw new ValidationException("Order is not eligible for payment (status: " + order.status() + ")");
-        }
-
-        // 3. Verify customer is set
-        if (order.customerId() == null) {
-            throw new ValidationException("Order has no customer assigned");
         }
 
         // 4. Check for existing payment (with lock to prevent duplicate creation)
@@ -83,7 +86,6 @@ public class PaymentService {
             }
         } else {
             // 5. Create new payment
-            CustomerSummary customer = customerClient.getCustomerByKeycloakId(keycloakId);
             List<CustomerAddressSummary> addresses = customerClient.getCustomerAddresses(keycloakId);
 
             // Find default billing address, fallback to first non-deleted
@@ -149,7 +151,7 @@ public class PaymentService {
             payment = paymentRepository.save(payment);
 
             // Audit
-            writeAudit(payment.getId(), null, null,
+            paymentAuditService.writeAudit(payment.getId(), null, null,
                     "PAYMENT_INITIATED", null, "INITIATED",
                     "customer", keycloakId, null, null);
         }
@@ -308,36 +310,41 @@ public class PaymentService {
         }
 
         // 12. Audit
-        writeAudit(paymentUuid, null, null,
+        paymentAuditService.writeAudit(paymentUuid, null, null,
                 "WEBHOOK_RECEIVED", oldStatus.name(), newStatus.name(),
                 "payhere", null, null, rawPayload);
     }
 
     // ── Query Methods ──────────────────────────────────────────────────
 
+    @Transactional(readOnly = true)
     public PaymentResponse getPaymentById(UUID paymentId) {
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment not found: " + paymentId));
         return toPaymentResponse(payment);
     }
 
+    @Transactional(readOnly = true)
     public PaymentResponse getPaymentByOrder(UUID orderId) {
         Payment payment = paymentRepository.findTopByOrderIdOrderByCreatedAtDesc(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment not found for order: " + orderId));
         return toPaymentResponse(payment);
     }
 
+    @Transactional(readOnly = true)
     public PaymentDetailResponse getPaymentDetail(UUID paymentId) {
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment not found: " + paymentId));
         return toPaymentDetailResponse(payment);
     }
 
+    @Transactional(readOnly = true)
     public Page<PaymentResponse> listPaymentsForCustomer(String keycloakId, Pageable pageable) {
         return paymentRepository.findByCustomerKeycloakId(keycloakId, pageable)
                 .map(this::toPaymentResponse);
     }
 
+    @Transactional(readOnly = true)
     public Page<PaymentResponse> listAllPayments(UUID customerId, PaymentStatus status, Pageable pageable) {
         return paymentRepository.findFiltered(customerId, status, pageable)
                 .map(this::toPaymentResponse);
@@ -353,7 +360,7 @@ public class PaymentService {
         Map<String, Object> response = payHereClient.retrievePayment("ORD-" + paymentId);
         log.info("PayHere verify response for payment {}: {}", paymentId, response);
 
-        writeAudit(paymentId, null, null,
+        paymentAuditService.writeAudit(paymentId, null, null,
                 "ADMIN_VERIFY", null, null,
                 "admin", null, null, null);
 
@@ -362,6 +369,7 @@ public class PaymentService {
 
     // ── Audit Trail ────────────────────────────────────────────────────
 
+    @Transactional(readOnly = true)
     public List<PaymentAuditResponse> getAuditTrail(UUID paymentId) {
         return auditRepository.findByPaymentIdOrderByCreatedAtAsc(paymentId)
                 .stream()
@@ -427,21 +435,4 @@ public class PaymentService {
         );
     }
 
-    private void writeAudit(UUID paymentId, UUID refundRequestId, UUID payoutId,
-                            String eventType, String fromStatus, String toStatus,
-                            String actorType, String actorId, String note, String rawPayload) {
-        PaymentAudit audit = PaymentAudit.builder()
-                .paymentId(paymentId)
-                .refundRequestId(refundRequestId)
-                .payoutId(payoutId)
-                .eventType(eventType)
-                .fromStatus(fromStatus)
-                .toStatus(toStatus)
-                .actorType(actorType)
-                .actorId(actorId)
-                .note(note)
-                .rawPayload(rawPayload)
-                .build();
-        auditRepository.save(audit);
-    }
 }

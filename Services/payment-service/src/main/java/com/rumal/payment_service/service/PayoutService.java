@@ -2,13 +2,11 @@ package com.rumal.payment_service.service;
 
 import com.rumal.payment_service.client.OrderClient;
 import com.rumal.payment_service.dto.*;
-import com.rumal.payment_service.entity.PaymentAudit;
 import com.rumal.payment_service.entity.PayoutStatus;
 import com.rumal.payment_service.entity.VendorBankAccount;
 import com.rumal.payment_service.entity.VendorPayout;
 import com.rumal.payment_service.exception.ResourceNotFoundException;
 import com.rumal.payment_service.exception.ValidationException;
-import com.rumal.payment_service.repo.PaymentAuditRepository;
 import com.rumal.payment_service.repo.VendorBankAccountRepository;
 import com.rumal.payment_service.repo.VendorPayoutRepository;
 import lombok.RequiredArgsConstructor;
@@ -32,7 +30,7 @@ public class PayoutService {
 
     private final VendorPayoutRepository payoutRepository;
     private final VendorBankAccountRepository bankAccountRepository;
-    private final PaymentAuditRepository auditRepository;
+    private final PaymentAuditService paymentAuditService;
     private final OrderClient orderClient;
 
     // ── Create Payout ──────────────────────────────────────────────────
@@ -76,7 +74,7 @@ public class PayoutService {
         // 4. Save and write audit
         payout = payoutRepository.save(payout);
 
-        writeAudit(null, null, payout.getId(),
+        paymentAuditService.writeAudit(null, null, payout.getId(),
                 "PAYOUT_CREATED", null, "PENDING",
                 "admin", adminKeycloakId, null, null);
 
@@ -107,7 +105,7 @@ public class PayoutService {
         // 4. Save and write audit
         payout = payoutRepository.save(payout);
 
-        writeAudit(null, null, payoutId,
+        paymentAuditService.writeAudit(null, null, payoutId,
                 "PAYOUT_APPROVED", oldStatus, "APPROVED",
                 "admin", adminKeycloakId, null, null);
 
@@ -150,7 +148,7 @@ public class PayoutService {
         // 5. Save and write audit
         payout = payoutRepository.save(payout);
 
-        writeAudit(null, null, payoutId,
+        paymentAuditService.writeAudit(null, null, payoutId,
                 "PAYOUT_COMPLETED", oldStatus, "COMPLETED",
                 "admin", adminKeycloakId, null, null);
 
@@ -180,7 +178,7 @@ public class PayoutService {
         // 4. Save and write audit
         payout = payoutRepository.save(payout);
 
-        writeAudit(null, null, payoutId,
+        paymentAuditService.writeAudit(null, null, payoutId,
                 "PAYOUT_CANCELLED", oldStatus, "CANCELLED",
                 "admin", adminKeycloakId, null, null);
 
@@ -190,11 +188,13 @@ public class PayoutService {
 
     // ── List & Get Methods ─────────────────────────────────────────────
 
+    @Transactional(readOnly = true)
     public Page<VendorPayoutResponse> listPayouts(UUID vendorId, PayoutStatus status, Pageable pageable) {
         return payoutRepository.findFiltered(vendorId, status, pageable)
                 .map(this::toResponse);
     }
 
+    @Transactional(readOnly = true)
     public VendorPayoutResponse getPayoutById(UUID payoutId) {
         VendorPayout payout = payoutRepository.findById(payoutId)
                 .orElseThrow(() -> new ResourceNotFoundException("Payout not found: " + payoutId));
@@ -225,21 +225,4 @@ public class PayoutService {
         );
     }
 
-    private void writeAudit(UUID paymentId, UUID refundRequestId, UUID payoutId,
-                            String eventType, String fromStatus, String toStatus,
-                            String actorType, String actorId, String note, String rawPayload) {
-        PaymentAudit audit = PaymentAudit.builder()
-                .paymentId(paymentId)
-                .refundRequestId(refundRequestId)
-                .payoutId(payoutId)
-                .eventType(eventType)
-                .fromStatus(fromStatus)
-                .toStatus(toStatus)
-                .actorType(actorType)
-                .actorId(actorId)
-                .note(note)
-                .rawPayload(rawPayload)
-                .build();
-        auditRepository.save(audit);
-    }
 }

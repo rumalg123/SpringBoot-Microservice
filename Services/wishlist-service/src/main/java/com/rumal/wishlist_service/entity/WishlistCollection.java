@@ -7,6 +7,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -53,6 +54,9 @@ public class WishlistCollection {
     @Column(name = "is_default", nullable = false)
     @Builder.Default
     private boolean isDefault = false;
+
+    @Version
+    private Long version;
 
     @Column(name = "shared", nullable = false)
     @Builder.Default

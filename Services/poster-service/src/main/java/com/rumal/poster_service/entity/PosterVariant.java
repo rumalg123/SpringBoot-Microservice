@@ -9,6 +9,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -78,6 +79,9 @@ public class PosterVariant {
     @Column(name = "click_count", nullable = false)
     @Builder.Default
     private long clicks = 0;
+
+    @Version
+    private Long version;
 
     @Column(name = "is_active", nullable = false)
     @Builder.Default

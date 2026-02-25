@@ -20,8 +20,6 @@ public interface PosterRepository extends JpaRepository<Poster, UUID> {
     boolean existsBySlugAndIdNot(String slug, UUID id);
     List<Poster> findByDeletedFalseAndPlacementOrderBySortOrderAscCreatedAtDesc(PosterPlacement placement);
     List<Poster> findByDeletedFalseOrderByPlacementAscSortOrderAscCreatedAtDesc();
-    List<Poster> findByDeletedTrueOrderByUpdatedAtDesc();
-
     Page<Poster> findByDeletedFalseOrderByPlacementAscSortOrderAscCreatedAtDesc(Pageable pageable);
     Page<Poster> findByDeletedTrueOrderByUpdatedAtDesc(Pageable pageable);
     Page<Poster> findByDeletedFalseAndPlacementOrderBySortOrderAscCreatedAtDesc(PosterPlacement placement, Pageable pageable);

@@ -18,6 +18,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import jakarta.persistence.Version;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -75,6 +76,9 @@ public class PlatformStaffAccess {
 
     @Column(name = "allowed_ips", length = 1000)
     private String allowedIps;
+
+    @Version
+    private Long version;
 
     @Column(name = "is_active", nullable = false)
     @Builder.Default

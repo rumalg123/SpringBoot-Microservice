@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -401,38 +402,44 @@ public class StockService {
     @Transactional
     public int expireStaleReservations() {
         Instant now = Instant.now();
-        List<StockReservation> expired = stockReservationRepository
-                .findExpiredReservations(ReservationStatus.RESERVED, now);
+        int totalExpired = 0;
+        Page<StockReservation> page;
 
-        if (expired.isEmpty()) return 0;
+        do {
+            page = stockReservationRepository
+                    .findExpiredReservations(ReservationStatus.RESERVED, now, PageRequest.of(0, 100));
 
-        for (StockReservation reservation : expired) {
-            StockItem stockItem = stockItemRepository.findByIdForUpdate(reservation.getStockItem().getId())
-                    .orElse(null);
-            if (stockItem == null) {
-                log.warn("StockItem {} not found during expiry of reservation {}", reservation.getStockItem().getId(), reservation.getId());
-                continue;
+            for (StockReservation reservation : page.getContent()) {
+                StockItem stockItem = stockItemRepository.findByIdForUpdate(reservation.getStockItem().getId())
+                        .orElse(null);
+                if (stockItem == null) {
+                    log.warn("StockItem {} not found during expiry of reservation {}", reservation.getStockItem().getId(), reservation.getId());
+                    continue;
+                }
+
+                int quantityBefore = stockItem.getQuantityAvailable();
+                stockItem.setQuantityReserved(stockItem.getQuantityReserved() - reservation.getQuantityReserved());
+                stockItem.recalculateAvailable();
+                stockItem.recalculateStatus();
+                stockItemRepository.save(stockItem);
+
+                reservation.setStatus(ReservationStatus.EXPIRED);
+                reservation.setReleasedAt(now);
+                reservation.setReleaseReason("Reservation expired");
+                stockReservationRepository.save(reservation);
+
+                recordMovement(stockItem, MovementType.RESERVATION_RELEASE, reservation.getQuantityReserved(),
+                        quantityBefore, stockItem.getQuantityAvailable(),
+                        "order", reservation.getOrderId(), "system", "scheduler",
+                        "Reservation expired for order " + reservation.getOrderId());
             }
+            totalExpired += page.getNumberOfElements();
+        } while (!page.isEmpty());
 
-            int quantityBefore = stockItem.getQuantityAvailable();
-            stockItem.setQuantityReserved(stockItem.getQuantityReserved() - reservation.getQuantityReserved());
-            stockItem.recalculateAvailable();
-            stockItem.recalculateStatus();
-            stockItemRepository.save(stockItem);
-
-            reservation.setStatus(ReservationStatus.EXPIRED);
-            reservation.setReleasedAt(now);
-            reservation.setReleaseReason("Reservation expired");
-            stockReservationRepository.save(reservation);
-
-            recordMovement(stockItem, MovementType.RESERVATION_RELEASE, reservation.getQuantityReserved(),
-                    quantityBefore, stockItem.getQuantityAvailable(),
-                    "order", reservation.getOrderId(), "system", "scheduler",
-                    "Reservation expired for order " + reservation.getOrderId());
+        if (totalExpired > 0) {
+            log.info("Expired {} stale reservations", totalExpired);
         }
-
-        log.info("Expired {} stale reservations", expired.size());
-        return expired.size();
+        return totalExpired;
     }
 
     // ─── Helpers ───

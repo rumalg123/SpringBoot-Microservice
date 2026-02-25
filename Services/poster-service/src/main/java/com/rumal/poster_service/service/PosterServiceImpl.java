@@ -137,8 +137,8 @@ public class PosterServiceImpl implements PosterService {
     }
 
     @Override
-    public List<PosterResponse> listDeleted() {
-        return posterRepository.findByDeletedTrueOrderByUpdatedAtDesc().stream().map(this::toResponse).toList();
+    public Page<PosterResponse> listDeleted() {
+        return posterRepository.findByDeletedTrueOrderByUpdatedAtDesc(Pageable.ofSize(50)).map(this::toResponse);
     }
 
     @Override
