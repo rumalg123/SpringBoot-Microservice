@@ -43,15 +43,15 @@ public class SampleOrderDataSeeder implements ApplicationRunner {
     private static final UUID DAVE_ADDR = UUID.fromString("bbbb4444-1111-1111-1111-111111111111");
 
     // Sample product IDs (for reference only — not linked to product-service auto-generated IDs)
-    private static final UUID P_EARBUDS = UUID.fromString("00pp0001-0001-0001-0001-000000000001");
-    private static final UUID P_CHARGER = UUID.fromString("00pp0001-0001-0001-0001-000000000002");
-    private static final UUID P_SNEAKERS = UUID.fromString("00pp0001-0001-0001-0001-000000000003");
-    private static final UUID P_LAMP = UUID.fromString("00pp0001-0001-0001-0001-000000000004");
-    private static final UUID P_PAN_SET = UUID.fromString("00pp0001-0001-0001-0001-000000000005");
-    private static final UUID P_TSHIRT = UUID.fromString("00pp0001-0001-0001-0001-000000000006");
-    private static final UUID P_PROTECTOR = UUID.fromString("00pp0001-0001-0001-0001-000000000007");
-    private static final UUID P_SPEAKER = UUID.fromString("00pp0001-0001-0001-0001-000000000008");
-    private static final UUID P_CASE = UUID.fromString("00pp0001-0001-0001-0001-000000000009");
+    private static final UUID P_EARBUDS = UUID.fromString("00ab0001-0001-0001-0001-000000000001");
+    private static final UUID P_CHARGER = UUID.fromString("00ab0001-0001-0001-0001-000000000002");
+    private static final UUID P_SNEAKERS = UUID.fromString("00ab0001-0001-0001-0001-000000000003");
+    private static final UUID P_LAMP = UUID.fromString("00ab0001-0001-0001-0001-000000000004");
+    private static final UUID P_PAN_SET = UUID.fromString("00ab0001-0001-0001-0001-000000000005");
+    private static final UUID P_TSHIRT = UUID.fromString("00ab0001-0001-0001-0001-000000000006");
+    private static final UUID P_PROTECTOR = UUID.fromString("00ab0001-0001-0001-0001-000000000007");
+    private static final UUID P_SPEAKER = UUID.fromString("00ab0001-0001-0001-0001-000000000008");
+    private static final UUID P_CASE = UUID.fromString("00ab0001-0001-0001-0001-000000000009");
 
     private static final BigDecimal ZERO = BigDecimal.ZERO;
     private static final BigDecimal SHIPPING = bd("5.00");
@@ -291,6 +291,7 @@ public class SampleOrderDataSeeder implements ApplicationRunner {
                                String paymentGatewayRef, Instant paidAt) {
         Order o = Order.builder()
                 .id(id)
+                .version(0L)
                 .customerId(customerId)
                 .shippingAddressId(addressId)
                 .billingAddressId(addressId)
@@ -323,6 +324,7 @@ public class SampleOrderDataSeeder implements ApplicationRunner {
                                            BigDecimal platformFee, BigDecimal payoutAmount) {
         VendorOrder vo = VendorOrder.builder()
                 .id(id)
+                .version(0L)
                 .order(order)
                 .vendorId(vendorId)
                 .status(status)

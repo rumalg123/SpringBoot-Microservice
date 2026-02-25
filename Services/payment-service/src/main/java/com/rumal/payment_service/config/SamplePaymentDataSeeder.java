@@ -81,6 +81,7 @@ public class SamplePaymentDataSeeder implements ApplicationRunner {
                                     String swiftCode, boolean primary, boolean active) {
         entityManager.persist(VendorBankAccount.builder()
                 .id(id)
+                .version(0L)
                 .vendorId(vendorId)
                 .bankName(bankName)
                 .branchName(branchName)

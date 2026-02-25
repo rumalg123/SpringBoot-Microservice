@@ -91,6 +91,7 @@ public class SampleInventoryDataSeeder implements ApplicationRunner {
                                        boolean active) {
         Warehouse w = Warehouse.builder()
                 .id(id)
+                .version(0L)
                 .name(name)
                 .description(description)
                 .vendorId(vendorId)

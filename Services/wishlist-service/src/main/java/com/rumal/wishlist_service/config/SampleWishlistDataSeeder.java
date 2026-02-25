@@ -23,12 +23,12 @@ public class SampleWishlistDataSeeder implements ApplicationRunner {
     private static final Logger log = LoggerFactory.getLogger(SampleWishlistDataSeeder.class);
 
     // Sample product IDs (for reference — not linked to product-service auto-generated IDs)
-    private static final UUID P_EARBUDS = UUID.fromString("00pp0001-0001-0001-0001-000000000001");
-    private static final UUID P_CHARGER = UUID.fromString("00pp0001-0001-0001-0001-000000000002");
-    private static final UUID P_SNEAKERS = UUID.fromString("00pp0001-0001-0001-0001-000000000003");
-    private static final UUID P_LAMP = UUID.fromString("00pp0001-0001-0001-0001-000000000004");
-    private static final UUID P_PAN_SET = UUID.fromString("00pp0001-0001-0001-0001-000000000005");
-    private static final UUID P_SPEAKER = UUID.fromString("00pp0001-0001-0001-0001-000000000008");
+    private static final UUID P_EARBUDS = UUID.fromString("00ab0001-0001-0001-0001-000000000001");
+    private static final UUID P_CHARGER = UUID.fromString("00ab0001-0001-0001-0001-000000000002");
+    private static final UUID P_SNEAKERS = UUID.fromString("00ab0001-0001-0001-0001-000000000003");
+    private static final UUID P_LAMP = UUID.fromString("00ab0001-0001-0001-0001-000000000004");
+    private static final UUID P_PAN_SET = UUID.fromString("00ab0001-0001-0001-0001-000000000005");
+    private static final UUID P_SPEAKER = UUID.fromString("00ab0001-0001-0001-0001-000000000008");
 
     private final WishlistCollectionRepository collectionRepository;
     private final EntityManager em;

@@ -112,6 +112,7 @@ public class SampleCustomerDataSeeder implements ApplicationRunner {
                                      int loyaltyPoints, LocalDate dob, boolean active) {
         Customer c = Customer.builder()
                 .id(id)
+                .version(0L)
                 .name(name)
                 .email(email)
                 .keycloakId(keycloakId)
