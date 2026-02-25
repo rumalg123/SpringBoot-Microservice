@@ -47,7 +47,7 @@ public class VendorAnalyticsClient {
     }
 
     public VendorPerformanceSummary getVendorPerformance(UUID vendorId) {
-        return call(() -> get(BASE_URL + "/vendors/" + vendorId + "/performance", VendorPerformanceSummary.class));
+        return call(() -> get(BASE_URL + "/" + vendorId + "/performance", VendorPerformanceSummary.class));
     }
 
     private <T> T get(String url, Class<T> type) {

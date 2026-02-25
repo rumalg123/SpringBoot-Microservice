@@ -16,7 +16,7 @@ import java.util.function.Supplier;
 @Component
 public class CartAnalyticsClient {
 
-    private static final String BASE_URL = "http://cart-service/internal/carts/analytics";
+    private static final String BASE_URL = "http://cart-service/internal/cart/analytics";
 
     private final RestClient.Builder lbRestClientBuilder;
     private final CircuitBreakerFactory<?, ?> circuitBreakerFactory;

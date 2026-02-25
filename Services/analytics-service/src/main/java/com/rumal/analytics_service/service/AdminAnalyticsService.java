@@ -31,7 +31,7 @@ public class AdminAnalyticsService {
     private final WishlistAnalyticsClient wishlistClient;
     private final CartAnalyticsClient cartClient;
 
-    @Cacheable(cacheNames = "dashboardSummary")
+    @Cacheable(cacheNames = "dashboardSummary", key = "#periodDays")
     public AdminDashboardAnalytics getDashboardSummary(int periodDays) {
         var ordersFuture = CompletableFuture.supplyAsync(() ->
                 safeCall(() -> orderClient.getPlatformSummary(periodDays), null));
@@ -68,7 +68,7 @@ public class AdminAnalyticsService {
         );
     }
 
-    @Cacheable(cacheNames = "revenueSummary")
+    @Cacheable(cacheNames = "revenueSummary", key = "#days")
     public AdminRevenueTrendResponse getRevenueTrend(int days) {
         var trendFuture = CompletableFuture.supplyAsync(() ->
                 safeCall(() -> orderClient.getRevenueTrend(days), List.<DailyRevenueBucket>of()));
@@ -104,7 +104,7 @@ public class AdminAnalyticsService {
         return new AdminCustomerSegmentationResponse(summaryFuture.join(), growthFuture.join());
     }
 
-    @Cacheable(cacheNames = "vendorLeaderboard")
+    @Cacheable(cacheNames = "vendorLeaderboard", key = "#sortBy")
     public AdminVendorLeaderboardResponse getVendorLeaderboard(String sortBy) {
         var summaryFuture = CompletableFuture.supplyAsync(() ->
                 safeCall(() -> vendorClient.getPlatformSummary(), null));

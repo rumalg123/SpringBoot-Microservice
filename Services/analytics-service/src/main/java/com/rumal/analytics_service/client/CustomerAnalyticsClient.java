@@ -47,7 +47,7 @@ public class CustomerAnalyticsClient {
     }
 
     public CustomerProfileSummary getProfileSummary(UUID customerId) {
-        return call(() -> get(BASE_URL + "/customers/" + customerId + "/profile-summary", CustomerProfileSummary.class));
+        return call(() -> get(BASE_URL + "/" + customerId + "/profile-summary", CustomerProfileSummary.class));
     }
 
     private <T> T get(String url, Class<T> type) {

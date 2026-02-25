@@ -18,7 +18,7 @@ import java.util.function.Supplier;
 @Component
 public class WishlistAnalyticsClient {
 
-    private static final String BASE_URL = "http://wishlist-service/internal/wishlists/analytics";
+    private static final String BASE_URL = "http://wishlist-service/internal/wishlist/analytics";
 
     private final RestClient.Builder lbRestClientBuilder;
     private final CircuitBreakerFactory<?, ?> circuitBreakerFactory;
