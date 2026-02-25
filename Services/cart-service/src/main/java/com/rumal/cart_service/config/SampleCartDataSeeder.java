@@ -108,15 +108,14 @@ public class SampleCartDataSeeder implements ApplicationRunner {
                 .note(note)
                 .lastActivityAt(Instant.now())
                 .build();
-        em.persist(c);
-        return c;
+        return em.merge(c);
     }
 
     private void persistItem(UUID id, Cart cart, UUID productId, String productSlug,
                              String productName, String productSku, String mainImage,
                              String categoryIds, BigDecimal unitPrice, int quantity,
                              boolean savedForLater) {
-        em.persist(CartItem.builder()
+        em.merge(CartItem.builder()
                 .id(id)
                 .cart(cart)
                 .productId(productId)

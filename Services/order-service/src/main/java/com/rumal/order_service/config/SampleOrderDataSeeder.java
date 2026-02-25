@@ -314,8 +314,7 @@ public class SampleOrderDataSeeder implements ApplicationRunner {
                 .paymentGatewayRef(paymentGatewayRef)
                 .paidAt(paidAt)
                 .build();
-        em.persist(o);
-        return o;
+        return em.merge(o);
     }
 
     private VendorOrder persistVendorOrder(UUID id, Order order, UUID vendorId,
@@ -337,14 +336,13 @@ public class SampleOrderDataSeeder implements ApplicationRunner {
                 .platformFee(platformFee)
                 .payoutAmount(payoutAmount)
                 .build();
-        em.persist(vo);
-        return vo;
+        return em.merge(vo);
     }
 
     private void persistItem(UUID id, Order order, VendorOrder vendorOrder,
                              UUID productId, UUID vendorId, String sku, String name,
                              int quantity, BigDecimal unitPrice) {
-        em.persist(OrderItem.builder()
+        em.merge(OrderItem.builder()
                 .id(id)
                 .order(order)
                 .vendorOrder(vendorOrder)

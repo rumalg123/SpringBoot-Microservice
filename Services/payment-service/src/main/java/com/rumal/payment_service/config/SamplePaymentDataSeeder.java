@@ -79,7 +79,7 @@ public class SamplePaymentDataSeeder implements ApplicationRunner {
     private void persistBankAccount(UUID id, UUID vendorId, String bankName, String branchName,
                                     String branchCode, String accountNumber, String accountHolderName,
                                     String swiftCode, boolean primary, boolean active) {
-        entityManager.persist(VendorBankAccount.builder()
+        entityManager.merge(VendorBankAccount.builder()
                 .id(id)
                 .version(0L)
                 .vendorId(vendorId)

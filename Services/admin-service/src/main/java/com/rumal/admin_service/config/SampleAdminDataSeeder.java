@@ -94,7 +94,7 @@ public class SampleAdminDataSeeder implements ApplicationRunner {
     }
 
     private void persistConfig(UUID id, String key, String value, String description, String valueType) {
-        em.persist(SystemConfig.builder()
+        em.merge(SystemConfig.builder()
                 .id(id)
                 .version(0L)
                 .configKey(key)
@@ -107,7 +107,7 @@ public class SampleAdminDataSeeder implements ApplicationRunner {
 
     private void persistFlag(UUID id, String flagKey, String description,
                              boolean enabled, String enabledForRoles, Integer rolloutPercentage) {
-        em.persist(FeatureFlag.builder()
+        em.merge(FeatureFlag.builder()
                 .id(id)
                 .version(0L)
                 .flagKey(flagKey)

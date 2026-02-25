@@ -61,11 +61,12 @@ export default function AppNav({
   const showAdminPosters = canManageAdminPosters ?? canViewAdmin;
   const showAdminCategories = canManageAdminCategories ?? isSuperAdmin;
   const showAdminPromotions = canViewAdmin;
+  const showAdminInventory = canViewAdmin;
   const showVendorStaffAdmin = isSuperAdmin || isVendorAdmin;
   const showAdminDashboard = isSuperAdmin;
   const showAdminPermissionGroups = isSuperAdmin;
   const showAdminAccessAudit = isSuperAdmin;
-  const showAnyAdminLinks = showAdminOrders || showAdminProducts || showAdminVendors || showVendorStaffAdmin || showAdminPosters || showAdminPromotions || showAdminDashboard || showAdminCategories;
+  const showAnyAdminLinks = showAdminOrders || showAdminProducts || showAdminVendors || showVendorStaffAdmin || showAdminPosters || showAdminPromotions || showAdminDashboard || showAdminCategories || showAdminInventory;
   const showVendorPortal = isVendorAdmin;
 
   return (
@@ -204,6 +205,16 @@ export default function AppNav({
               >
                 Vendor Portal
               </Link>
+              <Link href="/vendor/inventory"
+                className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
+                style={{
+                  color: isActive("/vendor/inventory") ? "#34d399" : "rgba(52,211,153,0.6)",
+                  background: isActive("/vendor/inventory") ? "rgba(52,211,153,0.1)" : "transparent",
+                  border: isActive("/vendor/inventory") ? "1px solid rgba(52,211,153,0.25)" : "1px solid transparent",
+                }}
+              >
+                Vendor Inventory
+              </Link>
             </>
           )}
           {showAnyAdminLinks && (
@@ -315,6 +326,18 @@ export default function AppNav({
                   }}
                 >
                   Promotions
+                </Link>
+              )}
+              {showAdminInventory && (
+                <Link href="/admin/inventory"
+                  className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
+                  style={{
+                    color: isActive("/admin/inventory") ? "#a78bfa" : "rgba(167,139,250,0.6)",
+                    background: isActive("/admin/inventory") ? "var(--accent-soft)" : "transparent",
+                    border: isActive("/admin/inventory") ? "1px solid var(--accent-glow)" : "1px solid transparent",
+                  }}
+                >
+                  Inventory
                 </Link>
               )}
               {showAdminPermissionGroups && (

@@ -37,6 +37,35 @@ export const VENDOR_STATUS_COLORS: Record<string, ColorDef> = {
   VERIFIED: { bg: "var(--success-soft)", border: "rgba(34,197,94,0.3)", color: "var(--success)" },
 };
 
+export const STOCK_STATUS_COLORS: Record<string, ColorDef> = {
+  IN_STOCK: { bg: "var(--success-soft)", border: "rgba(34,197,94,0.3)", color: "var(--success)" },
+  LOW_STOCK: { bg: "var(--warning-soft)", border: "var(--warning-border)", color: "var(--warning-text)" },
+  OUT_OF_STOCK: { bg: "var(--danger-soft)", border: "rgba(239,68,68,0.25)", color: "#f87171" },
+  BACKORDER: { bg: "var(--accent-soft)", border: "rgba(124,58,237,0.3)", color: "var(--accent)" },
+};
+
+export const WAREHOUSE_TYPE_COLORS: Record<string, ColorDef> = {
+  VENDOR_OWNED: { bg: "var(--brand-soft)", border: "var(--line-bright)", color: "var(--brand)" },
+  PLATFORM_MANAGED: { bg: "var(--accent-soft)", border: "rgba(124,58,237,0.3)", color: "var(--accent)" },
+};
+
+export const MOVEMENT_TYPE_COLORS: Record<string, ColorDef> = {
+  STOCK_IN: { bg: "var(--success-soft)", border: "rgba(34,197,94,0.3)", color: "var(--success)" },
+  STOCK_OUT: { bg: "var(--danger-soft)", border: "rgba(239,68,68,0.25)", color: "#f87171" },
+  RESERVATION: { bg: "var(--warning-soft)", border: "var(--warning-border)", color: "var(--warning-text)" },
+  RESERVATION_CONFIRM: { bg: "var(--success-soft)", border: "rgba(34,197,94,0.3)", color: "var(--success)" },
+  RESERVATION_RELEASE: { bg: "var(--brand-soft)", border: "var(--line-bright)", color: "var(--brand)" },
+  ADJUSTMENT: { bg: "var(--accent-soft)", border: "rgba(124,58,237,0.3)", color: "var(--accent)" },
+  BULK_IMPORT: { bg: "var(--brand-soft)", border: "var(--line-bright)", color: "var(--brand)" },
+};
+
+export const RESERVATION_STATUS_COLORS: Record<string, ColorDef> = {
+  RESERVED: { bg: "var(--warning-soft)", border: "var(--warning-border)", color: "var(--warning-text)" },
+  CONFIRMED: { bg: "var(--success-soft)", border: "rgba(34,197,94,0.3)", color: "var(--success)" },
+  RELEASED: { bg: "var(--brand-soft)", border: "var(--line-bright)", color: "var(--brand)" },
+  EXPIRED: { bg: "var(--danger-soft)", border: "rgba(239,68,68,0.25)", color: "#f87171" },
+};
+
 export const ACTIVE_INACTIVE_COLORS: Record<string, ColorDef> = {
   Active: { bg: "var(--success-soft)", border: "rgba(34,197,94,0.3)", color: "var(--success)" },
   Inactive: { bg: "var(--danger-soft)", border: "rgba(239,68,68,0.25)", color: "#f87171" },

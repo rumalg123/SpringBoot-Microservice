@@ -128,8 +128,9 @@ public class SampleVendorDataSeeder implements ApplicationRunner {
             VendorStatus status,
             boolean active
     ) {
-        entityManager.persist(Vendor.builder()
+        entityManager.merge(Vendor.builder()
                 .id(id)
+                .version(0L)
                 .name(name)
                 .normalizedName(name.toLowerCase(Locale.ROOT))
                 .slug(slug)

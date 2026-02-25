@@ -107,7 +107,6 @@ public class SampleInventoryDataSeeder implements ApplicationRunner {
                 .contactEmail(contactEmail)
                 .active(active)
                 .build();
-        entityManager.persist(w);
-        return w;
+        return entityManager.merge(w);
     }
 }

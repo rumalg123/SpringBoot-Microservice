@@ -126,15 +126,14 @@ public class SampleCustomerDataSeeder implements ApplicationRunner {
         if (!active) {
             c.setDeactivatedAt(java.time.Instant.now());
         }
-        entityManager.persist(c);
-        return c;
+        return entityManager.merge(c);
     }
 
     private void persistAddress(UUID id, Customer customer, String label, String recipientName,
                                 String phone, String line1, String line2, String city,
                                 String state, String postalCode, String countryCode,
                                 boolean defaultShipping, boolean defaultBilling) {
-        entityManager.persist(CustomerAddress.builder()
+        entityManager.merge(CustomerAddress.builder()
                 .id(id)
                 .customer(customer)
                 .label(label)
@@ -154,7 +153,7 @@ public class SampleCustomerDataSeeder implements ApplicationRunner {
 
     private void persistCommPrefs(Customer customer, boolean emailMarketing, boolean smsMarketing,
                                   boolean pushNotifications, boolean orderUpdates, boolean promotionalAlerts) {
-        entityManager.persist(CommunicationPreferences.builder()
+        entityManager.merge(CommunicationPreferences.builder()
                 .customer(customer)
                 .emailMarketing(emailMarketing)
                 .smsMarketing(smsMarketing)
