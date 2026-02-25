@@ -57,4 +57,25 @@ public interface StockItemRepository extends JpaRepository<StockItem, UUID> {
             @Param("stockStatus") StockStatus stockStatus,
             Pageable pageable
     );
+
+    // --- Analytics queries ---
+
+    long countByStockStatus(StockStatus stockStatus);
+
+    @Query("SELECT COALESCE(SUM(si.quantityOnHand), 0) FROM StockItem si")
+    long sumTotalQuantityOnHand();
+
+    @Query("SELECT COALESCE(SUM(si.quantityReserved), 0) FROM StockItem si")
+    long sumTotalQuantityReserved();
+
+    // Vendor-specific
+    @Query("SELECT COUNT(si) FROM StockItem si WHERE si.vendorId = :vendorId")
+    long countByVendorId(@Param("vendorId") UUID vendorId);
+
+    @Query("SELECT COUNT(si) FROM StockItem si WHERE si.vendorId = :vendorId AND si.stockStatus = :status")
+    long countByVendorIdAndStockStatus(@Param("vendorId") UUID vendorId, @Param("status") StockStatus status);
+
+    // Low stock alerts
+    @Query("SELECT si FROM StockItem si WHERE si.stockStatus IN (com.rumal.inventory_service.entity.StockStatus.LOW_STOCK, com.rumal.inventory_service.entity.StockStatus.OUT_OF_STOCK) ORDER BY si.quantityAvailable ASC")
+    List<StockItem> findLowStockAlerts(Pageable pageable);
 }

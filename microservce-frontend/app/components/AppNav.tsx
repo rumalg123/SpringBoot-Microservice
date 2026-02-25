@@ -177,6 +177,7 @@ export default function AppNav({
             { href: "/orders", label: "My Orders" },
             { href: "/promotions", label: "Promotions" },
             { href: "/profile", label: "Profile" },
+            { href: "/profile/insights", label: "Insights" },
           ].map(({ href, label }) => (
             <Link
               key={href}
@@ -214,6 +215,16 @@ export default function AppNav({
                 }}
               >
                 Vendor Inventory
+              </Link>
+              <Link href="/vendor/analytics"
+                className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
+                style={{
+                  color: isActive("/vendor/analytics") ? "#34d399" : "rgba(52,211,153,0.6)",
+                  background: isActive("/vendor/analytics") ? "rgba(52,211,153,0.1)" : "transparent",
+                  border: isActive("/vendor/analytics") ? "1px solid rgba(52,211,153,0.25)" : "1px solid transparent",
+                }}
+              >
+                Analytics
               </Link>
             </>
           )}

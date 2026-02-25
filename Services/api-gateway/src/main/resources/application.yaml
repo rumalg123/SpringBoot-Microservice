@@ -112,14 +112,41 @@ spring:
                   args:
                     name: wishlistService
                     fallbackUri: forward:/fallback/unavailable
+            - id: analytics-admin
+              uri: lb://analytics-service
+              predicates:
+                - Path=/analytics/admin,/analytics/admin/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: analyticsService
+                    fallbackUri: forward:/fallback/unavailable
+            - id: analytics-vendor
+              uri: lb://analytics-service
+              predicates:
+                - Path=/analytics/vendor,/analytics/vendor/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: analyticsService
+                    fallbackUri: forward:/fallback/unavailable
+            - id: analytics-customer
+              uri: lb://analytics-service
+              predicates:
+                - Path=/analytics/customer,/analytics/customer/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: analyticsService
+                    fallbackUri: forward:/fallback/unavailable
             - id: admin-dashboard
-              uri: lb://admin-service
+              uri: lb://analytics-service
               predicates:
                 - Path=/admin/dashboard,/admin/dashboard/**
               filters:
                 - name: CircuitBreaker
                   args:
-                    name: adminService
+                    name: analyticsService
                     fallbackUri: forward:/fallback/unavailable
             - id: admin-audit-log
               uri: lb://admin-service
@@ -469,6 +496,8 @@ resilience4j:
         base-config: default
       reviewService:
         base-config: default
+      analyticsService:
+        base-config: default
   timelimiter:
     configs:
       default:
@@ -497,6 +526,8 @@ resilience4j:
       inventoryService:
         base-config: default
       reviewService:
+        base-config: default
+      analyticsService:
         base-config: default
 
 logging:

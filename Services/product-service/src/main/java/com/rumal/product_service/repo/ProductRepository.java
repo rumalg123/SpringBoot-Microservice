@@ -8,6 +8,8 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import org.springframework.data.domain.Pageable;
+
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -62,4 +64,38 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
             @Param("value") String value,
             @Param("productIds") Collection<UUID> productIds
     );
+
+    // --- Analytics queries ---
+
+    long countByDeletedFalseAndActiveTrue();
+
+    long countByDeletedFalseAndApprovalStatus(com.rumal.product_service.entity.ApprovalStatus approvalStatus);
+
+    @Query("SELECT COALESCE(SUM(p.viewCount), 0) FROM Product p WHERE p.deleted = false")
+    long sumTotalViews();
+
+    @Query("SELECT COALESCE(SUM(p.soldCount), 0) FROM Product p WHERE p.deleted = false")
+    long sumTotalSold();
+
+    @Query("SELECT p.id, p.name, p.vendorId, p.viewCount FROM Product p WHERE p.deleted = false AND p.active = true ORDER BY p.viewCount DESC")
+    List<Object[]> findTopByViews(Pageable pageable);
+
+    @Query("SELECT p.id, p.name, p.vendorId, p.soldCount FROM Product p WHERE p.deleted = false AND p.active = true ORDER BY p.soldCount DESC")
+    List<Object[]> findTopBySold(Pageable pageable);
+
+    @Query("SELECT p.approvalStatus, COUNT(p) FROM Product p WHERE p.deleted = false GROUP BY p.approvalStatus")
+    List<Object[]> countByApprovalStatusGrouped();
+
+    // Vendor-specific
+    @Query("SELECT COUNT(p) FROM Product p WHERE p.vendorId = :vendorId AND p.deleted = false")
+    long countByVendorIdAndDeletedFalse(@Param("vendorId") UUID vendorId);
+
+    @Query("SELECT COUNT(p) FROM Product p WHERE p.vendorId = :vendorId AND p.deleted = false AND p.active = true")
+    long countByVendorIdAndDeletedFalseAndActiveTrue(@Param("vendorId") UUID vendorId);
+
+    @Query("SELECT COALESCE(SUM(p.viewCount), 0) FROM Product p WHERE p.vendorId = :vendorId AND p.deleted = false")
+    long sumViewsByVendorId(@Param("vendorId") UUID vendorId);
+
+    @Query("SELECT COALESCE(SUM(p.soldCount), 0) FROM Product p WHERE p.vendorId = :vendorId AND p.deleted = false")
+    long sumSoldByVendorId(@Param("vendorId") UUID vendorId);
 }

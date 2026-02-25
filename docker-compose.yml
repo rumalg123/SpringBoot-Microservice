@@ -231,6 +231,23 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
 
+  analytics-service:
+    build:
+      context: ./Services/analytics-service
+    depends_on:
+      - discovery-server
+      - redis
+    env_file:
+      - ./env/common.env
+      - ./env/analytics-service.env
+    environment:
+      TZ: Asia/Colombo
+      LOGGING_FILE_NAME: /logs/analytics-service.log
+    volumes:
+      - /home/ubuntu/microservice-logs:/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+
   payment-service:
     build:
       context: ./Services/payment-service

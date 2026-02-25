@@ -103,4 +103,44 @@ public interface OrderRepository extends JpaRepository<Order, UUID>, JpaSpecific
             ORDER BY o.updatedAt DESC
             """)
     List<UUID> findDeliveredOrderIdsByCustomerAndProduct(@Param("customerId") UUID customerId, @Param("productId") UUID productId);
+
+    // --- Analytics queries ---
+
+    long countByStatus(OrderStatus status);
+
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.status IN :statuses")
+    long countByStatusIn(@Param("statuses") Collection<OrderStatus> statuses);
+
+    @Query("SELECT COALESCE(SUM(o.orderTotal), 0) FROM Order o WHERE o.status IN :statuses")
+    java.math.BigDecimal sumOrderTotalByStatusIn(@Param("statuses") Collection<OrderStatus> statuses);
+
+    @Query("SELECT COALESCE(SUM(o.totalDiscount), 0) FROM Order o WHERE o.status IN :statuses")
+    java.math.BigDecimal sumTotalDiscountByStatusIn(@Param("statuses") Collection<OrderStatus> statuses);
+
+    @Query("SELECT COALESCE(SUM(o.shippingAmount), 0) FROM Order o WHERE o.status IN :statuses")
+    java.math.BigDecimal sumShippingAmountByStatusIn(@Param("statuses") Collection<OrderStatus> statuses);
+
+    @Query("SELECT CAST(o.createdAt AS LocalDate), COALESCE(SUM(o.orderTotal), 0), COUNT(o) FROM Order o WHERE o.createdAt >= :since AND o.status IN :statuses GROUP BY CAST(o.createdAt AS LocalDate) ORDER BY CAST(o.createdAt AS LocalDate)")
+    List<Object[]> getRevenueByDay(@Param("since") java.time.Instant since, @Param("statuses") Collection<OrderStatus> statuses);
+
+    // Customer analytics
+    @Query("SELECT COUNT(DISTINCT oi.vendorId) FROM OrderItem oi JOIN oi.order o WHERE o.customerId = :customerId")
+    long countUniqueVendorsByCustomer(@Param("customerId") UUID customerId);
+
+    @Query("SELECT COALESCE(SUM(o.orderTotal), 0) FROM Order o WHERE o.customerId = :customerId AND o.status IN :statuses")
+    java.math.BigDecimal sumCustomerSpentByStatusIn(@Param("customerId") UUID customerId, @Param("statuses") Collection<OrderStatus> statuses);
+
+    @Query("SELECT COALESCE(SUM(o.totalDiscount), 0) FROM Order o WHERE o.customerId = :customerId AND o.status IN :statuses")
+    java.math.BigDecimal sumCustomerSavedByStatusIn(@Param("customerId") UUID customerId, @Param("statuses") Collection<OrderStatus> statuses);
+
+    long countByCustomerId(UUID customerId);
+
+    long countByCustomerIdAndStatus(UUID customerId, OrderStatus status);
+
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.customerId = :customerId AND o.status IN :statuses")
+    long countByCustomerIdAndStatusIn(@Param("customerId") UUID customerId, @Param("statuses") Collection<OrderStatus> statuses);
+
+    // Monthly spending for customer
+    @Query(value = "SELECT TO_CHAR(o.created_at, 'YYYY-MM'), COALESCE(SUM(o.order_total), 0), COUNT(*) FROM orders o WHERE o.customer_id = :customerId AND o.status IN :statuses AND o.created_at >= :since GROUP BY TO_CHAR(o.created_at, 'YYYY-MM') ORDER BY TO_CHAR(o.created_at, 'YYYY-MM')", nativeQuery = true)
+    List<Object[]> getCustomerMonthlySpending(@Param("customerId") UUID customerId, @Param("statuses") Collection<String> statuses, @Param("since") java.time.Instant since);
 }

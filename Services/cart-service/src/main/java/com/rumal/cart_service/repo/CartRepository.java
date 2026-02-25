@@ -24,4 +24,9 @@ public interface CartRepository extends JpaRepository<Cart, UUID> {
     @Modifying
     @Query("delete from Cart c where c.lastActivityAt < :cutoff")
     int deleteExpiredCarts(@Param("cutoff") Instant cutoff);
+
+    // --- Analytics queries ---
+
+    @Query("SELECT COUNT(c) FROM Cart c WHERE c.items IS NOT EMPTY")
+    long countActiveCarts();
 }

@@ -24,4 +24,37 @@ public interface ReviewRepository extends JpaRepository<Review, UUID>, JpaSpecif
 
     @Query("SELECT COUNT(r) FROM Review r WHERE r.productId = :productId AND r.deleted = false AND r.active = true")
     long countActiveByProductId(@Param("productId") UUID productId);
+
+    // --- Analytics queries ---
+
+    @Query("SELECT COUNT(r) FROM Review r WHERE r.deleted = false AND r.active = true")
+    long countActiveReviews();
+
+    @Query("SELECT COALESCE(AVG(CAST(r.rating AS double)), 0) FROM Review r WHERE r.deleted = false AND r.active = true")
+    double avgActiveRating();
+
+    @Query("SELECT COUNT(r) FROM Review r WHERE r.deleted = false AND r.active = true AND r.verifiedPurchase = true")
+    long countVerifiedPurchaseReviews();
+
+    @Query("SELECT COUNT(r) FROM Review r WHERE r.deleted = false AND r.reportCount > 0")
+    long countReportedReviews();
+
+    @Query("SELECT COUNT(r) FROM Review r WHERE r.deleted = false AND r.active = true AND r.createdAt >= :since")
+    long countActiveReviewsSince(@Param("since") java.time.Instant since);
+
+    @Query("SELECT r.rating, COUNT(r) FROM Review r WHERE r.deleted = false AND r.active = true GROUP BY r.rating ORDER BY r.rating")
+    List<Object[]> getRatingDistribution();
+
+    // Vendor-specific
+    @Query("SELECT COUNT(r) FROM Review r WHERE r.vendorId = :vendorId AND r.deleted = false AND r.active = true")
+    long countActiveByVendorId(@Param("vendorId") java.util.UUID vendorId);
+
+    @Query("SELECT COALESCE(AVG(CAST(r.rating AS double)), 0) FROM Review r WHERE r.vendorId = :vendorId AND r.deleted = false AND r.active = true")
+    double avgRatingByVendorId(@Param("vendorId") java.util.UUID vendorId);
+
+    @Query("SELECT r.rating, COUNT(r) FROM Review r WHERE r.vendorId = :vendorId AND r.deleted = false AND r.active = true GROUP BY r.rating ORDER BY r.rating")
+    List<Object[]> getRatingDistributionByVendorId(@Param("vendorId") java.util.UUID vendorId);
+
+    @Query("SELECT COUNT(r) FROM Review r WHERE r.vendorId = :vendorId AND r.deleted = false AND r.active = true AND r.verifiedPurchase = true")
+    long countVerifiedPurchaseByVendorId(@Param("vendorId") java.util.UUID vendorId);
 }

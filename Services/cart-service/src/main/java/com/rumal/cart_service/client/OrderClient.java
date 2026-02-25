@@ -9,6 +9,10 @@ import com.rumal.cart_service.exception.ServiceUnavailableException;
 import com.rumal.cart_service.exception.ValidationException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
@@ -19,10 +23,14 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 import java.util.List;
+import java.util.StringJoiner;
 import java.util.UUID;
 
 @Component
 public class OrderClient {
+
+    private static final Logger log = LoggerFactory.getLogger(OrderClient.class);
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final RestClient.Builder lbRestClientBuilder;
     private final String internalSharedSecret;
@@ -61,6 +69,7 @@ public class OrderClient {
                     .retrieve()
                     .body(OrderResponse.class);
         } catch (HttpClientErrorException ex) {
+            log.warn("Order service returned HTTP {} during checkout: {}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
             HttpStatusCode status = ex.getStatusCode();
             int statusCode = status.value();
             if (statusCode == 400 || statusCode == 409 || statusCode == 422) {
@@ -101,17 +110,26 @@ public class OrderClient {
         if (body == null || body.isBlank()) {
             return fallback;
         }
-        int messageIndex = body.indexOf("\"message\"");
-        if (messageIndex >= 0) {
-            int colonIndex = body.indexOf(':', messageIndex);
-            int quoteStart = body.indexOf('"', colonIndex + 1);
-            int quoteEnd = body.indexOf('"', quoteStart + 1);
-            if (quoteStart >= 0 && quoteEnd > quoteStart) {
-                String message = body.substring(quoteStart + 1, quoteEnd).trim();
-                if (!message.isEmpty()) {
-                    return message;
+        try {
+            JsonNode tree = MAPPER.readTree(body);
+
+            // Check fieldErrors first (from bean validation: MethodArgumentNotValidException)
+            JsonNode fieldErrors = tree.get("fieldErrors");
+            if (fieldErrors != null && fieldErrors.isObject()) {
+                StringJoiner sj = new StringJoiner("; ");
+                fieldErrors.fields().forEachRemaining(e -> sj.add(e.getValue().asText()));
+                if (sj.length() > 0) {
+                    return sj.toString();
                 }
             }
+
+            // Fall back to "message" field (from business ValidationException)
+            JsonNode message = tree.get("message");
+            if (message != null && !message.asText().isBlank()) {
+                return message.asText();
+            }
+        } catch (Exception ignored) {
+            // Non-JSON response — fall through to fallback
         }
         return fallback;
     }

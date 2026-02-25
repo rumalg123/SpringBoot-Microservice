@@ -36,4 +36,27 @@ public interface VendorRepository extends JpaRepository<Vendor, UUID> {
            "WHERE v.deleted = false AND v.active = true AND v.status = :status " +
            "AND (v.primaryCategory = :category OR s = :category)")
     Page<Vendor> findActiveVendorsByCategory(@Param("status") VendorStatus status, @Param("category") String category, Pageable pageable);
+
+    // --- Analytics queries ---
+
+    long countByDeletedFalse();
+
+    long countByDeletedFalseAndStatus(VendorStatus status);
+
+    long countByDeletedFalseAndVerifiedTrue();
+
+    @Query("SELECT COALESCE(AVG(v.commissionRate), 0) FROM Vendor v WHERE v.deleted = false AND v.active = true")
+    java.math.BigDecimal avgCommissionRate();
+
+    @Query("SELECT COALESCE(AVG(v.fulfillmentRate), 0) FROM Vendor v WHERE v.deleted = false AND v.active = true AND v.fulfillmentRate IS NOT NULL")
+    java.math.BigDecimal avgFulfillmentRate();
+
+    @Query("SELECT v FROM Vendor v WHERE v.deleted = false AND v.active = true ORDER BY v.totalOrdersCompleted DESC")
+    List<Vendor> findTopVendorsByOrdersCompleted(Pageable pageable);
+
+    @Query("SELECT v FROM Vendor v WHERE v.deleted = false AND v.active = true ORDER BY v.averageRating DESC")
+    List<Vendor> findTopVendorsByRating(Pageable pageable);
+
+    @Query("SELECT v FROM Vendor v WHERE v.deleted = false AND v.active = true ORDER BY v.fulfillmentRate DESC NULLS LAST")
+    List<Vendor> findTopVendorsByFulfillment(Pageable pageable);
 }

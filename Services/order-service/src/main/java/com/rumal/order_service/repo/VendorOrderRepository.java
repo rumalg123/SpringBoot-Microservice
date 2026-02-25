@@ -53,4 +53,25 @@ public interface VendorOrderRepository extends JpaRepository<VendorOrder, UUID> 
     Page<VendorOrder> findByVendorIdOrderByCreatedAtDesc(UUID vendorId, Pageable pageable);
 
     Page<VendorOrder> findByVendorIdAndStatusOrderByCreatedAtDesc(UUID vendorId, OrderStatus status, Pageable pageable);
+
+    // --- Vendor Analytics queries ---
+
+    long countByVendorId(UUID vendorId);
+
+    long countByVendorIdAndStatus(UUID vendorId, OrderStatus status);
+
+    @Query("SELECT COUNT(vo) FROM VendorOrder vo WHERE vo.vendorId = :vendorId AND vo.status IN :statuses")
+    long countByVendorIdAndStatusIn(@Param("vendorId") UUID vendorId, @Param("statuses") Collection<OrderStatus> statuses);
+
+    @Query("SELECT COALESCE(SUM(vo.orderTotal), 0) FROM VendorOrder vo WHERE vo.vendorId = :vendorId AND vo.status IN :statuses")
+    java.math.BigDecimal sumVendorRevenueByStatusIn(@Param("vendorId") UUID vendorId, @Param("statuses") Collection<OrderStatus> statuses);
+
+    @Query("SELECT COALESCE(SUM(vo.platformFee), 0) FROM VendorOrder vo WHERE vo.vendorId = :vendorId AND vo.status IN :statuses")
+    java.math.BigDecimal sumVendorPlatformFeesByStatusIn(@Param("vendorId") UUID vendorId, @Param("statuses") Collection<OrderStatus> statuses);
+
+    @Query("SELECT COALESCE(SUM(vo.payoutAmount), 0) FROM VendorOrder vo WHERE vo.vendorId = :vendorId AND vo.status IN :statuses")
+    java.math.BigDecimal sumVendorPayoutsByStatusIn(@Param("vendorId") UUID vendorId, @Param("statuses") Collection<OrderStatus> statuses);
+
+    @Query("SELECT CAST(vo.createdAt AS LocalDate), COALESCE(SUM(vo.orderTotal), 0), COUNT(vo) FROM VendorOrder vo WHERE vo.vendorId = :vendorId AND vo.createdAt >= :since AND vo.status IN :statuses GROUP BY CAST(vo.createdAt AS LocalDate) ORDER BY CAST(vo.createdAt AS LocalDate)")
+    List<Object[]> getVendorRevenueByDay(@Param("vendorId") UUID vendorId, @Param("since") java.time.Instant since, @Param("statuses") Collection<OrderStatus> statuses);
 }

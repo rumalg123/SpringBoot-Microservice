@@ -7,6 +7,7 @@ import toast from "react-hot-toast";
 import AppNav from "../components/AppNav";
 import Footer from "../components/Footer";
 import { useAuthSession } from "../../lib/authSession";
+import { getErrorMessage } from "../../lib/error";
 import { PayHereFormData, submitToPayHere } from "../../lib/payhere";
 
 type CartItem = {
@@ -253,7 +254,7 @@ export default function CartPage() {
       const payRes = await apiClient.post("/payments/me/initiate", { orderId: data.orderId });
       submitToPayHere(payRes.data as PayHereFormData);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Checkout failed";
+      const message = getErrorMessage(err);
       setStatus(message);
       toast.error(message);
       setCheckingOut(false);
