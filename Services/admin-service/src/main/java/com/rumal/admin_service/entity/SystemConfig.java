@@ -2,8 +2,8 @@ package com.rumal.admin_service.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
@@ -33,6 +33,7 @@ import java.util.UUID;
 public class SystemConfig {
 
     @Id
+    @GeneratedValue
     private UUID id;
 
     @Version
@@ -63,8 +64,4 @@ public class SystemConfig {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    @PrePersist
-    void ensureId() {
-        if (id == null) id = UUID.randomUUID();
-    }
 }

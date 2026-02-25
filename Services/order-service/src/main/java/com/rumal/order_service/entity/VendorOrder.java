@@ -29,6 +29,7 @@ import java.util.UUID;
 public class VendorOrder {
 
     @Id
+    @GeneratedValue
     private UUID id;
 
     @Version
@@ -112,8 +113,4 @@ public class VendorOrder {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    @PrePersist
-    void ensureId() {
-        if (id == null) id = UUID.randomUUID();
-    }
 }

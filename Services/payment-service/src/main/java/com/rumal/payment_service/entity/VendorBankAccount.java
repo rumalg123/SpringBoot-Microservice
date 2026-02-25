@@ -16,6 +16,7 @@ import java.util.UUID;
 public class VendorBankAccount {
 
     @Id
+    @GeneratedValue
     private UUID id;
 
     @Version
@@ -58,8 +59,4 @@ public class VendorBankAccount {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    @PrePersist
-    void ensureId() {
-        if (id == null) id = UUID.randomUUID();
-    }
 }

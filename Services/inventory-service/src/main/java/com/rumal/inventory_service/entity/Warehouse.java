@@ -26,6 +26,7 @@ import java.util.UUID;
 public class Warehouse {
 
     @Id
+    @GeneratedValue
     private UUID id;
 
     @Version
@@ -83,8 +84,4 @@ public class Warehouse {
     @Column(nullable = false)
     private Instant updatedAt;
 
-    @PrePersist
-    void ensureId() {
-        if (id == null) id = UUID.randomUUID();
-    }
 }

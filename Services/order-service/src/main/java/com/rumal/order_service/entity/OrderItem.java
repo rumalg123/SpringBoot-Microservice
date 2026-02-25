@@ -22,6 +22,7 @@ import java.util.UUID;
 public class OrderItem {
 
     @Id
+    @GeneratedValue
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -62,8 +63,4 @@ public class OrderItem {
     @Column(name = "cancelled_quantity")
     private Integer cancelledQuantity;
 
-    @PrePersist
-    void ensureId() {
-        if (id == null) id = UUID.randomUUID();
-    }
 }
