@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import AppNav from "../../components/AppNav";
 import Footer from "../../components/Footer";
@@ -34,6 +34,7 @@ function slugify(v: string) {
 
 export default function ProductDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const {
     isAuthenticated,
     profile,
@@ -59,6 +60,7 @@ export default function ProductDetailPage() {
   const [quantity, setQuantity] = useState(1);
   const [status, setStatus] = useState("Loading product...");
   const [addingToCart, setAddingToCart] = useState(false);
+  const [buyingNow, setBuyingNow] = useState(false);
   const [signingInToBuy, setSigningInToBuy] = useState(false);
   const [wishlistItemId, setWishlistItemId] = useState("");
   const [wishlistPending, setWishlistPending] = useState(false);
@@ -186,6 +188,27 @@ export default function ProductDetailPage() {
     } finally { setAddingToCart(false); }
   };
 
+  const buyNow = async () => {
+    if (!apiClient || !product || buyingNow) return;
+    if (product.productType === "PARENT") {
+      if (parentAttributeNames.some((n) => !(selectedAttributes[n] || "").trim())) {
+        toast.error("Select all variation attributes before purchasing");
+        return;
+      }
+    }
+    const targetProductId = product.productType === "PARENT" ? selectedVariationId.trim() : product.id;
+    if (!targetProductId) { toast.error("Select a variation before purchasing"); return; }
+    setBuyingNow(true);
+    try {
+      await apiClient.post("/cart/me/items", { productId: targetProductId, quantity });
+      emitCartUpdate();
+      router.push("/cart");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to proceed to checkout");
+      setBuyingNow(false);
+    }
+  };
+
   const toggleWishlist = async () => {
     if (!apiClient || !isAuthenticated || wishlistPending) return;
     const targetProductId = (selectedVariation?.id || product?.id || "").trim();
@@ -214,7 +237,9 @@ export default function ProductDetailPage() {
   const requiresVariationSelection = product?.productType === "PARENT";
   const allAttributesSelected = !requiresVariationSelection || parentAttributeNames.every((n) => (selectedAttributes[n] || "").trim());
   const hasMatchingVariation = !requiresVariationSelection || Boolean(selectedVariationId.trim());
-  const canAddToCart = !addingToCart && quantity > 0 && (!requiresVariationSelection || (allAttributesSelected && hasMatchingVariation));
+  const productReady = quantity > 0 && (!requiresVariationSelection || (allAttributesSelected && hasMatchingVariation));
+  const canAddToCart = !addingToCart && !buyingNow && productReady;
+  const canBuyNow = !buyingNow && !addingToCart && productReady;
 
   /* Loading / not found */
   if (!displayProduct) {
@@ -489,28 +514,42 @@ export default function ProductDetailPage() {
                     <div>
                       <label style={{ display: "block", fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--muted)", marginBottom: "8px" }}>Quantity</label>
                       <div className="qty-stepper">
-                        <button disabled={addingToCart} onClick={() => setQuantity((old) => Math.max(1, old - 1))}>−</button>
+                        <button disabled={addingToCart || buyingNow} onClick={() => setQuantity((old) => Math.max(1, old - 1))}>−</button>
                         <span>{quantity}</span>
-                        <button disabled={addingToCart} onClick={() => setQuantity((old) => old + 1)}>+</button>
+                        <button disabled={addingToCart || buyingNow} onClick={() => setQuantity((old) => old + 1)}>+</button>
                       </div>
                     </div>
 
-                    {/* Add to Cart + Wishlist */}
+                    {/* Add to Cart + Buy Now + Wishlist */}
                     <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
                       <button
                         disabled={!canAddToCart}
                         onClick={() => void addToCart()}
                         style={{
-                          flex: 1, minWidth: "140px", padding: "13px 20px", borderRadius: "12px", border: "none",
-                          background: canAddToCart ? "var(--gradient-brand)" : "var(--line-bright)",
-                          color: "#fff", fontSize: "0.9rem", fontWeight: 800,
+                          flex: 1, minWidth: "120px", padding: "13px 20px", borderRadius: "12px",
+                          border: "1px solid var(--line-bright)", background: canAddToCart ? "rgba(0,0,10,0.4)" : "var(--line-bright)",
+                          color: canAddToCart ? "var(--brand)" : "var(--muted)", fontSize: "0.9rem", fontWeight: 800,
                           cursor: canAddToCart ? "pointer" : "not-allowed",
-                          boxShadow: canAddToCart ? "0 0 20px var(--line-bright)" : "none",
                           display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "8px",
                         }}
                       >
                         {addingToCart && <span className="spinner-sm" />}
                         {addingToCart ? "Adding..." : "Add to Cart"}
+                      </button>
+                      <button
+                        disabled={!canBuyNow}
+                        onClick={() => void buyNow()}
+                        style={{
+                          flex: 1, minWidth: "120px", padding: "13px 20px", borderRadius: "12px", border: "none",
+                          background: canBuyNow ? "var(--gradient-brand)" : "var(--line-bright)",
+                          color: "#fff", fontSize: "0.9rem", fontWeight: 800,
+                          cursor: canBuyNow ? "pointer" : "not-allowed",
+                          boxShadow: canBuyNow ? "0 0 20px var(--line-bright)" : "none",
+                          display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "8px",
+                        }}
+                      >
+                        {buyingNow && <span className="spinner-sm" />}
+                        {buyingNow ? "Processing..." : "Buy Now"}
                       </button>
                       <button
                         disabled={wishlistPending}
