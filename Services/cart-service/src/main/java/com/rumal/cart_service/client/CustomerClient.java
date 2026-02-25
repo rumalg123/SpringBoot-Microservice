@@ -56,6 +56,7 @@ public class CustomerClient {
             return lbRestClientBuilder.build()
                     .get()
                     .uri("http://customer-service/customers/{customerId}/addresses/{addressId}", customerId, addressId)
+                    .header("X-Internal-Auth", internalSharedSecret)
                     .retrieve()
                     .body(CustomerAddressSummary.class);
         } catch (HttpClientErrorException ex) {
