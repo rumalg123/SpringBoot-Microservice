@@ -5,14 +5,8 @@ import Link from "next/link";
 import AppNav from "../components/AppNav";
 import Footer from "../components/Footer";
 import { useAuthSession } from "../../lib/authSession";
-
-type Category = {
-  id: string;
-  name: string;
-  slug?: string | null;
-  type: "PARENT" | "SUB";
-  parentCategoryId: string | null;
-};
+import type { Category } from "../../lib/types/category";
+import { API_BASE } from "../../lib/constants";
 
 /* ── Per-category accent colours & SVG icons ── */
 const CATEGORY_META: Record<string, { accent: string; icon: React.ReactNode }> = {
@@ -129,18 +123,20 @@ export default function CategoriesPage() {
   const [status, setStatus] = useState("loading");
 
   useEffect(() => {
+    const controller = new AbortController();
     const run = async () => {
       try {
-        const apiBase = process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me";
-        const res = await fetch(`${apiBase}/categories`, { cache: "no-store" });
+        const res = await fetch(`${API_BASE}/categories`, { cache: "no-store", signal: controller.signal });
         if (!res.ok) throw new Error("Failed to load categories");
+        if (controller.signal.aborted) return;
         setCategories(((await res.json()) as Category[]) || []);
         setStatus("ready");
       } catch {
-        setStatus("error");
+        if (!controller.signal.aborted) setStatus("error");
       }
     };
     void run();
+    return () => controller.abort();
   }, []);
 
   const parents = useMemo(

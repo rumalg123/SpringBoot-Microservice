@@ -13,12 +13,12 @@ public interface CartItemRepository extends JpaRepository<CartItem, UUID> {
 
     // --- Analytics queries ---
 
-    @Query("SELECT COUNT(ci) FROM CartItem ci WHERE ci.savedForLater = false AND ci.createdAt >= :since")
+    @Query("SELECT COUNT(ci) FROM CartItem ci WHERE ci.savedForLater = false AND ci.cart.createdAt >= :since")
     long countActiveCartItems(@Param("since") Instant since);
 
-    @Query("SELECT COUNT(ci) FROM CartItem ci WHERE ci.savedForLater = true AND ci.createdAt >= :since")
+    @Query("SELECT COUNT(ci) FROM CartItem ci WHERE ci.savedForLater = true AND ci.cart.createdAt >= :since")
     long countSavedForLaterItems(@Param("since") Instant since);
 
-    @Query("SELECT COALESCE(AVG(ci.lineTotal), 0) FROM CartItem ci WHERE ci.savedForLater = false AND ci.createdAt >= :since")
+    @Query("SELECT COALESCE(AVG(ci.lineTotal), 0) FROM CartItem ci WHERE ci.savedForLater = false AND ci.cart.createdAt >= :since")
     java.math.BigDecimal avgCartItemValue(@Param("since") Instant since);
 }

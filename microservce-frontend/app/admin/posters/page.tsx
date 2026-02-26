@@ -12,6 +12,7 @@ import PosterFormField from "../../components/posters/admin/PosterFormField";
 import PosterLinkTargetEditor from "../../components/posters/admin/PosterLinkTargetEditor";
 import StatusBadge, { ACTIVE_INACTIVE_COLORS } from "../../components/ui/StatusBadge";
 import { useAuthSession } from "../../../lib/authSession";
+import { API_BASE } from "../../../lib/constants";
 
 type Placement =
   | "HOME_HERO"
@@ -185,7 +186,7 @@ function toLocalDateTime(v: string | null) {
 function posterImageSources(key: string | null): { primary: string | null; fallback: string | null } {
   if (!key) return { primary: null, fallback: null };
   const normalized = key.replace(/^\/+/, "");
-  const apiBase = (process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me").trim();
+  const apiBase = API_BASE;
   const encoded = normalized.split("/").map(encodeURIComponent).join("/");
   const apiUrl = `${apiBase.replace(/\/+$/, "")}/posters/images/${encoded}`;
   const cdnBase = (process.env.NEXT_PUBLIC_POSTER_IMAGE_BASE_URL || "").trim();
@@ -719,10 +720,10 @@ export default function AdminPostersPage() {
             <p style={{ margin: "4px 0 0", color: "var(--muted)", fontSize: "0.85rem" }}>Placement presets, image uploads, auto slug, scheduling, and duplicate flow.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => setShowAnalytics((v) => !v)} disabled={analyticsLoading} style={{ padding: "8px 12px", borderRadius: "10px", border: "1px solid var(--line-bright)", background: showAnalytics ? "rgba(59,130,246,0.12)" : "var(--brand-soft)", color: showAnalytics ? "#60a5fa" : "var(--brand)", fontWeight: 700, opacity: analyticsLoading ? 0.7 : 1, cursor: analyticsLoading ? "not-allowed" : "pointer" }}>
+            <button type="button" onClick={() => setShowAnalytics((v) => !v)} disabled={analyticsLoading} style={{ padding: "8px 12px", borderRadius: "10px", border: "1px solid var(--line-bright)", background: showAnalytics ? "var(--accent-soft)" : "var(--brand-soft)", color: showAnalytics ? "var(--accent)" : "var(--brand)", fontWeight: 700, opacity: analyticsLoading ? 0.7 : 1, cursor: analyticsLoading ? "not-allowed" : "pointer" }}>
               {analyticsLoading ? "Loading..." : showAnalytics ? "Hide Analytics" : "Show Analytics"}
             </button>
-            <button type="button" onClick={() => setShowDeleted((v) => !v)} disabled={loading} style={{ padding: "8px 12px", borderRadius: "10px", border: "1px solid var(--line-bright)", background: showDeleted ? "rgba(239,68,68,0.1)" : "var(--brand-soft)", color: showDeleted ? "#f87171" : "var(--brand)", fontWeight: 700, opacity: loading ? 0.7 : 1, cursor: loading ? "not-allowed" : "pointer" }}>
+            <button type="button" onClick={() => setShowDeleted((v) => !v)} disabled={loading} style={{ padding: "8px 12px", borderRadius: "10px", border: "1px solid var(--line-bright)", background: showDeleted ? "var(--danger-soft)" : "var(--brand-soft)", color: showDeleted ? "var(--danger)" : "var(--brand)", fontWeight: 700, opacity: loading ? 0.7 : 1, cursor: loading ? "not-allowed" : "pointer" }}>
               {showDeleted ? "Showing Deleted" : "Show Deleted"}
             </button>
           </div>

@@ -7,47 +7,11 @@ import AppNav from "../components/AppNav";
 import Footer from "../components/Footer";
 import Pagination from "../components/Pagination";
 import { useAuthSession } from "../../lib/authSession";
-
-/* ───── types ───── */
-
-type SpendTier = { thresholdAmount: number; discountAmount: number };
-
-type PublicPromotion = {
-  id: string;
-  name: string;
-  description: string | null;
-  scopeType: string;
-  applicationLevel: string;
-  benefitType: string;
-  benefitValue: number | null;
-  buyQuantity: number | null;
-  getQuantity: number | null;
-  spendTiers: SpendTier[];
-  minimumOrderAmount: number | null;
-  maximumDiscountAmount: number | null;
-  stackable: boolean;
-  autoApply: boolean;
-  targetProductIds: string[];
-  targetCategoryIds: string[];
-  flashSale: boolean;
-  flashSaleStartAt: string | null;
-  flashSaleEndAt: string | null;
-  startsAt: string | null;
-  endsAt: string | null;
-};
-
-type PageResponse = {
-  content: PublicPromotion[];
-  number?: number;
-  totalPages?: number;
-  totalElements?: number;
-  page?: { number?: number; totalPages?: number; totalElements?: number };
-};
+import type { PublicPromotion, SpendTier } from "../../lib/types/promotion";
+import type { PagedResponse } from "../../lib/types/pagination";
+import { API_BASE, PAGE_SIZE_DEFAULT as PAGE_SIZE } from "../../lib/constants";
 
 /* ───── helpers ───── */
-
-const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me").replace(/\/+$/, "");
-const PAGE_SIZE = 20;
 
 function formatBenefit(p: PublicPromotion): string {
   switch (p.benefitType) {
@@ -279,7 +243,7 @@ export default function PromotionsPage() {
       try {
         const res = await fetch(`${API_BASE}/promotions/flash-sales?page=0&size=10`, { cache: "no-store" });
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-        const data = (await res.json()) as PageResponse;
+        const data = (await res.json()) as PagedResponse<PublicPromotion>;
         setFlashSales(data.content || []);
       } catch (err) {
         console.error("Failed to load flash sales", err);
@@ -305,7 +269,7 @@ export default function PromotionsPage() {
 
         const res = await fetch(`${API_BASE}/promotions?${params.toString()}`, { cache: "no-store" });
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-        const data = (await res.json()) as PageResponse;
+        const data = (await res.json()) as PagedResponse<PublicPromotion>;
         setPromotions(data.content || []);
         setTotalPages(data.totalPages ?? data.page?.totalPages ?? 0);
         setTotalElements(data.totalElements ?? data.page?.totalElements ?? 0);

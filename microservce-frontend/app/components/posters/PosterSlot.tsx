@@ -3,6 +3,7 @@
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { API_BASE } from "../../../lib/constants";
 
 type PosterPlacement =
   | "HOME_HERO"
@@ -50,7 +51,7 @@ type Props = {
 function resolvePosterImageSources(imageName: string | null): { primary: string | null; fallback: string | null } {
   if (!imageName) return { primary: null, fallback: null };
   const normalized = imageName.replace(/^\/+/, "");
-  const apiBase = (process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me").trim();
+  const apiBase = API_BASE;
   const encoded = normalized.split("/").map((s) => encodeURIComponent(s)).join("/");
   const apiUrl = `${apiBase.replace(/\/+$/, "")}/posters/images/${encoded}`;
   const cdnBase = (process.env.NEXT_PUBLIC_POSTER_IMAGE_BASE_URL || "").trim();
@@ -361,25 +362,24 @@ export default function PosterSlot({
   const touchSuppressClickRef = useRef(false);
 
   useEffect(() => {
-    let active = true;
+    const controller = new AbortController();
     const run = async () => {
       setLoading(true);
       try {
-        const apiBase = (process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me").trim();
-        const res = await fetch(`${apiBase}/posters?placement=${encodeURIComponent(placement)}`, { cache: "no-store" });
+        const res = await fetch(`${API_BASE}/posters?placement=${encodeURIComponent(placement)}`, { cache: "no-store", signal: controller.signal });
         if (!res.ok) throw new Error("Failed");
         const json = await res.json();
         const data: PosterItem[] = Array.isArray(json) ? json : (json.content ?? []);
-        if (!active) return;
+        if (controller.signal.aborted) return;
         setItems(data.slice(0, Math.max(1, maxItems)));
       } catch {
-        if (active) setItems([]);
+        if (!controller.signal.aborted) setItems([]);
       } finally {
-        if (active) setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     };
     void run();
-    return () => { active = false; };
+    return () => controller.abort();
   }, [placement, maxItems]);
 
   const visibleItems = useMemo(() => items.filter(Boolean), [items]);

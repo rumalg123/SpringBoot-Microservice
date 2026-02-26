@@ -4,6 +4,7 @@ import type { AxiosInstance } from "axios";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { money } from "../../lib/format";
 
 type CartItem = {
   id: string;
@@ -17,10 +18,6 @@ type CustomerAddress = { id: string };
 type Props = { apiClient?: AxiosInstance | null; emailVerified?: boolean | null };
 
 const emptyCart: CartResponse = { items: [], itemCount: 0, subtotal: 0 };
-
-function money(value: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value || 0);
-}
 
 const popupStyle: React.CSSProperties = {
   position: "absolute",

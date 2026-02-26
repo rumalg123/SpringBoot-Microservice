@@ -1,6 +1,7 @@
 import Keycloak, { KeycloakInstance, KeycloakTokenParsed } from "keycloak-js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createApiClient } from "./apiClient";
+import { API_BASE } from "./constants";
 
 type SessionStatus = "idle" | "loading" | "ready" | "error";
 type UserProfile = Record<string, unknown> | null;
@@ -15,7 +16,7 @@ const env = {
   clientId: process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID || "",
   audience: process.env.NEXT_PUBLIC_KEYCLOAK_AUDIENCE || "",
   claimsNamespace: process.env.NEXT_PUBLIC_KEYCLOAK_CLAIMS_NAMESPACE || "",
-  apiBase: process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me",
+  apiBase: API_BASE,
 };
 
 function parseJwtPayload(token: string): Record<string, unknown> | null {
@@ -239,6 +240,9 @@ function buildResetCredentialsUrl(returnTo: string, loginHint?: string): string 
 }
 
 function getKeycloak(): KeycloakInstance {
+  if (typeof window === "undefined") {
+    throw new Error("Keycloak can only be initialized in the browser");
+  }
   if (keycloakSingleton) return keycloakSingleton;
   keycloakSingleton = new Keycloak({
     url: env.url,

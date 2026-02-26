@@ -127,9 +127,9 @@ export default function CatalogToolbar({
             style={{
               padding: "8px 16px",
               borderRadius: "10px",
-              border: "1px solid rgba(239,68,68,0.25)",
-              background: "rgba(239,68,68,0.05)",
-              color: "#ef4444",
+              border: "1px solid var(--danger-glow)",
+              background: "var(--danger-soft)",
+              color: "var(--danger)",
               fontSize: "0.78rem",
               fontWeight: 700,
               cursor: loading ? "not-allowed" : "pointer",

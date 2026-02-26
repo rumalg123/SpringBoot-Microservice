@@ -3,6 +3,7 @@
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type { AutocompleteSuggestion, AutocompleteResponse } from "../../../lib/types";
+import { API_BASE } from "../../../lib/constants";
 
 type ProductSearchBarProps = {
   className?: string;
@@ -42,6 +43,22 @@ export default function ProductSearchBar({
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, []);
 
+  // Fetch popular searches on mount so they're ready when the user focuses
+  useEffect(() => {
+    const controller = new AbortController();
+    const run = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/search/popular`, { cache: "no-store", signal: controller.signal });
+        if (!res.ok) return;
+        if (controller.signal.aborted) return;
+        const data = (await res.json()) as { searches: string[] };
+        setPopularSearches(data.searches || []);
+      } catch { /* ignore */ }
+    };
+    void run();
+    return () => controller.abort();
+  }, []);
+
   useEffect(() => {
     const term = searchText.trim();
     if (term.length < 1) {
@@ -50,29 +67,28 @@ export default function ProductSearchBar({
       return;
     }
 
-    let active = true;
+    const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       setSuggestionsLoading(true);
       try {
-        const apiBase = (process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me").trim();
         const params = new URLSearchParams({ prefix: term, limit: "8" });
-        const res = await fetch(`${apiBase}/search/autocomplete?${params.toString()}`, { cache: "no-store" });
+        const res = await fetch(`${API_BASE}/search/autocomplete?${params.toString()}`, { cache: "no-store", signal: controller.signal });
         if (!res.ok) throw new Error("Failed");
         const data = (await res.json()) as AutocompleteResponse;
-        if (!active) return;
+        if (controller.signal.aborted) return;
         setSuggestions(data.suggestions || []);
         setPopularSearches(data.popularSearches || []);
       } catch {
-        if (!active) return;
+        if (controller.signal.aborted) return;
         setSuggestions([]);
         setPopularSearches([]);
       } finally {
-        if (active) setSuggestionsLoading(false);
+        if (!controller.signal.aborted) setSuggestionsLoading(false);
       }
     }, 200);
 
     return () => {
-      active = false;
+      controller.abort();
       window.clearTimeout(timer);
     };
   }, [searchText]);

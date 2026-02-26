@@ -1,7 +1,9 @@
+import { API_BASE } from "./constants";
+
 export function resolveImageUrl(imageName: string | null): string | null {
   if (!imageName) return null;
   const normalized = imageName.replace(/^\/+/, "");
-  const apiBase = (process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me").trim();
+  const apiBase = API_BASE;
   const encoded = normalized.split("/").map((s) => encodeURIComponent(s)).join("/");
   const base = (process.env.NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL || "").trim();
 

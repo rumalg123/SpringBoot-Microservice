@@ -10,36 +10,18 @@ import CategoryMenu from "../components/CategoryMenu";
 import Footer from "../components/Footer";
 import Pagination from "../components/Pagination";
 import CatalogToolbar from "../components/catalog/CatalogToolbar";
+import { API_BASE } from "../../lib/constants";
 import CatalogFiltersSidebar from "../components/catalog/CatalogFiltersSidebar";
 import { useAuthSession } from "../../lib/authSession";
-import { emitWishlistUpdate } from "../../lib/navEvents";
 import { money, calcDiscount } from "../../lib/format";
 import { resolveImageUrl } from "../../lib/image";
 import type { ProductSummary, PagedResponse, SearchResponse } from "../../lib/types";
-
-type WishlistItem = {
-  id: string;
-  productId: string;
-};
-
-type WishlistResponse = {
-  items: WishlistItem[];
-  itemCount: number;
-};
-
-type Category = {
-  id: string;
-  name: string;
-  slug?: string | null;
-  type: "PARENT" | "SUB";
-  parentCategoryId: string | null;
-};
-
-type SortKey = "newest" | "priceAsc" | "priceDesc" | "nameAsc";
-
-const PAGE_SIZE = 12;
-const AGGREGATE_PAGE_SIZE = 100;
-const AGGREGATE_MAX_PAGES = 10;
+import type { Category } from "../../lib/types/category";
+import type { SortKey } from "../../lib/types/product";
+import { PAGE_SIZE_SMALL as PAGE_SIZE, AGGREGATE_PAGE_SIZE, AGGREGATE_MAX_PAGES } from "../../lib/constants";
+import { useWishlistToggle } from "../../lib/hooks/useWishlistToggle";
+import ProductCard from "../components/catalog/ProductCard";
+import ProductCardSkeleton from "../components/catalog/ProductCardSkeleton";
 
 
 function parsePrice(value: string): number | null {
@@ -114,8 +96,7 @@ function ProductsPageContent() {
   const [totalPages, setTotalPages] = useState(1);
   const [productsLoading, setProductsLoading] = useState(false);
   const [status, setStatus] = useState("Loading products...");
-  const [wishlistByProductId, setWishlistByProductId] = useState<Record<string, string>>({});
-  const [wishlistPendingProductId, setWishlistPendingProductId] = useState<string | null>(null);
+  const { isWishlisted, isBusy: isWishlistBusy, toggle: toggleWishlist } = useWishlistToggle(apiClient, isAuthenticated);
 
   useEffect(() => {
     const q = (searchParams.get("q") || "").trim();
@@ -132,7 +113,7 @@ function ProductsPageContent() {
   useEffect(() => {
     const run = async () => {
       try {
-        const apiBase = process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me";
+        const apiBase = API_BASE;
         const res = await fetch(`${apiBase}/categories`, { cache: "no-store" });
         if (!res.ok) return;
         const data = (await res.json()) as Category[];
@@ -184,28 +165,12 @@ function ProductsPageContent() {
   }, [parents, selectedParentNames]);
 
   useEffect(() => {
-    if (!isAuthenticated || !apiClient) { setWishlistByProductId({}); return; }
-    let cancelled = false;
-    const run = async () => {
-      try {
-        const res = await apiClient.get("/wishlist/me");
-        const raw = res.data as Record<string, unknown>;
-        const items = (Array.isArray(raw.content) ? raw.content : raw.items || []) as WishlistItem[];
-        if (cancelled) return;
-        const map: Record<string, string> = {};
-        for (const item of items) { if (item.productId && item.id) map[item.productId] = item.id; }
-        setWishlistByProductId(map);
-      } catch { if (!cancelled) setWishlistByProductId({}); }
-    };
-    void run();
-    return () => { cancelled = true; };
-  }, [isAuthenticated, apiClient]);
-
-  useEffect(() => {
+    const controller = new AbortController();
+    const { signal } = controller;
     const run = async () => {
       setProductsLoading(true);
       try {
-        const apiBase = process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me";
+        const apiBase = API_BASE;
         const sort = sortParams(sortBy);
 
         // Use search-service when a text query is present
@@ -225,9 +190,10 @@ function ProductsPageContent() {
           if (appliedMaxPrice !== null) params.set("maxPrice", appliedMaxPrice.toString());
           if (selectedParentNames.length === 1) params.set("mainCategory", selectedParentNames[0]);
           if (selectedSubNames.length === 1) params.set("subCategory", selectedSubNames[0]);
-          const res = await fetch(`${apiBase}/search/products?${params.toString()}`, { cache: "no-store" });
+          const res = await fetch(`${apiBase}/search/products?${params.toString()}`, { cache: "no-store", signal });
           if (!res.ok) throw new Error("Failed to fetch search results");
           const data = (await res.json()) as SearchResponse;
+          if (signal.aborted) return;
           const mapped: ProductSummary[] = (data.content || []).map((hit) => ({
             id: hit.id,
             slug: hit.slug,
@@ -258,9 +224,10 @@ function ProductsPageContent() {
           if (appliedMaxPrice !== null) params.set("maxSellingPrice", appliedMaxPrice.toString());
           if (selectedParentNames.length === 1) params.set("mainCategory", selectedParentNames[0]);
           if (selectedSubNames.length === 1) params.set("subCategory", selectedSubNames[0]);
-          const res = await fetch(`${apiBase}/products?${params.toString()}`, { cache: "no-store" });
+          const res = await fetch(`${apiBase}/products?${params.toString()}`, { cache: "no-store", signal });
           if (!res.ok) throw new Error("Failed to fetch products");
           const data = (await res.json()) as PagedResponse<ProductSummary>;
+          if (signal.aborted) return;
           setProducts(data.content || []);
           setTotalPages(Math.max(data.totalPages ?? data.page?.totalPages ?? 1, 1));
           setStatus(`Showing ${data.content?.length || 0} products`);
@@ -277,9 +244,10 @@ function ProductsPageContent() {
           params.set("sort", `${sort.field},${sort.direction}`);
           if (appliedMinPrice !== null) params.set("minSellingPrice", appliedMinPrice.toString());
           if (appliedMaxPrice !== null) params.set("maxSellingPrice", appliedMaxPrice.toString());
-          const res = await fetch(`${apiBase}/products?${params.toString()}`, { cache: "no-store" });
+          const res = await fetch(`${apiBase}/products?${params.toString()}`, { cache: "no-store", signal });
           if (!res.ok) throw new Error("Failed to fetch products");
           const data = (await res.json()) as PagedResponse<ProductSummary>;
+          if (signal.aborted) return;
           aggregated.push(...(data.content || []));
           totalServerPages = Math.max(data.totalPages ?? data.page?.totalPages ?? 1, 1);
           currentPage += 1;
@@ -300,15 +268,17 @@ function ProductsPageContent() {
         setProducts(slice);
         setTotalPages(computedTotalPages);
         setStatus(`Showing ${slice.length} of ${filtered.length} products`);
-      } catch {
+      } catch (err) {
+        if (signal.aborted) return;
         setProducts([]);
         setTotalPages(1);
         setStatus("Failed to load products.");
       } finally {
-        setProductsLoading(false);
+        if (!signal.aborted) setProductsLoading(false);
       }
     };
     void run();
+    return () => controller.abort();
   }, [search, selectedParentNames, selectedSubNames, appliedMinPrice, appliedMaxPrice, sortBy, page]);
 
   const onSearch = useCallback((e: FormEvent) => {
@@ -370,38 +340,6 @@ function ProductsPageContent() {
     if (appliedMinPrice !== null || appliedMaxPrice !== null) parts.push(`Price: ${appliedMinPrice ?? 0} - ${appliedMaxPrice ?? "Any"}`);
     return parts.length === 0 ? "All Products" : parts.join(" | ");
   }, [selectedParentNames, selectedSubNames, search, appliedMinPrice, appliedMaxPrice]);
-
-  const applyWishlistResponse = (payload: WishlistResponse) => {
-    const map: Record<string, string> = {};
-    for (const item of payload.items || []) { if (item.productId && item.id) map[item.productId] = item.id; }
-    setWishlistByProductId(map);
-  };
-
-  const toggleWishlist = async (event: MouseEvent<HTMLButtonElement>, productId: string) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (!apiClient || !isAuthenticated) return;
-    if (wishlistPendingProductId === productId) return;
-    setWishlistPendingProductId(productId);
-    try {
-      const existingItemId = wishlistByProductId[productId];
-      if (existingItemId) {
-        await apiClient.delete(`/wishlist/me/items/${existingItemId}`);
-        setWishlistByProductId((old) => { const next = { ...old }; delete next[productId]; return next; });
-        toast.success("Removed from wishlist");
-        emitWishlistUpdate();
-      } else {
-        const res = await apiClient.post("/wishlist/me/items", { productId });
-        applyWishlistResponse((res.data as WishlistResponse) || { items: [], itemCount: 0 });
-        toast.success("Added to wishlist");
-        emitWishlistUpdate();
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Wishlist update failed");
-    } finally {
-      setWishlistPendingProductId(null);
-    }
-  };
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
@@ -506,115 +444,23 @@ function ProductsPageContent() {
             {/* Loading skeletons */}
             {productsLoading && (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "16px" }}>
-                {[1, 2, 3, 4, 5, 6].map((i) => (
-                  <div key={i} style={{ borderRadius: "16px", overflow: "hidden", background: "var(--surface)", border: "1px solid var(--line)" }}>
-                    <div className="skeleton" style={{ height: "220px", width: "100%", borderRadius: 0 }} />
-                    <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                      <div className="skeleton" style={{ height: "13px", width: "80%" }} />
-                      <div className="skeleton" style={{ height: "13px", width: "60%" }} />
-                      <div className="skeleton" style={{ height: "18px", width: "45%" }} />
-                    </div>
-                  </div>
-                ))}
+                <ProductCardSkeleton count={6} />
               </div>
             )}
 
             {!productsLoading && (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "16px" }}>
-                {products.map((p, idx) => {
-                  const discount = calcDiscount(p.regularPrice, p.sellingPrice);
-                  const isWished = Boolean(wishlistByProductId[p.id]);
-                  const wishlistBusy = wishlistPendingProductId === p.id;
-                  const imgUrl = resolveImageUrl(p.mainImage);
-
-                  return (
-                    <Link
-                      href={`/products/${encodeURIComponent((p.slug || p.id).trim())}`}
-                      key={p.id}
-                      className="product-card animate-rise no-underline"
-                      style={{ animationDelay: `${idx * 45}ms` }}
-                    >
-                      {discount && <span className="badge-sale">-{discount}%</span>}
-
-                      {/* Wishlist Button */}
-                      {isAuthenticated && (
-                        <button
-                          type="button"
-                          onClick={(event) => { void toggleWishlist(event, p.id); }}
-                          disabled={wishlistBusy}
-                          style={{
-                            position: "absolute",
-                            top: "10px",
-                            right: "10px",
-                            zIndex: 20,
-                            width: "32px",
-                            height: "32px",
-                            borderRadius: "50%",
-                            border: isWished ? "1.5px solid var(--danger)" : "1.5px solid var(--line-bright)",
-                            background: isWished ? "var(--danger-soft)" : "var(--header-bg)",
-                            color: isWished ? "var(--danger)" : "var(--muted)",
-                            cursor: wishlistBusy ? "not-allowed" : "pointer",
-                            opacity: wishlistBusy ? 0.5 : 1,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            transition: "all 0.2s",
-                            backdropFilter: "blur(8px)",
-                            boxShadow: isWished ? "0 0 10px var(--danger-soft)" : "none",
-                          }}
-                          title={isWished ? "Remove from wishlist" : "Add to wishlist"}
-                          aria-label={isWished ? "Remove from wishlist" : "Add to wishlist"}
-                        >
-                          {wishlistBusy ? (
-                            <span className="spinner-sm" style={{ width: "10px", height: "10px" }} />
-                          ) : (
-                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24"
-                              fill={isWished ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2"
-                              strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M12 21s-6.7-4.35-9.33-8.08C.8 10.23 1.2 6.7 4.02 4.82A5.42 5.42 0 0 1 12 6.09a5.42 5.42 0 0 1 7.98-1.27c2.82 1.88 3.22 5.41 1.35 8.1C18.7 16.65 12 21 12 21z" />
-                            </svg>
-                          )}
-                        </button>
-                      )}
-
-                      {/* Image */}
-                      <div style={{ position: "relative", aspectRatio: "1/1", overflow: "hidden", background: "var(--surface-2)" }}>
-                        {imgUrl ? (
-                          <Image src={imgUrl} alt={p.name} width={400} height={400} className="product-card-img" unoptimized />
-                        ) : (
-                          <div style={{ display: "grid", placeItems: "center", width: "100%", height: "100%", background: "linear-gradient(135deg, var(--surface), var(--surface-3))", color: "var(--muted-2)", fontSize: "0.75rem", fontWeight: 600 }}>
-                            No Image
-                          </div>
-                        )}
-                        <div className="product-card-overlay" style={{ borderRadius: "15px 15px 0 0" }}>
-                          <span style={{ background: "var(--gradient-brand)", color: "#fff", padding: "7px 16px", borderRadius: "20px", fontSize: "0.72rem", fontWeight: 800, letterSpacing: "0.04em" }}>
-                            View Product →
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Body */}
-                      <div className="product-card-body">
-                        <p style={{ margin: "0 0 4px", fontSize: "0.875rem", fontWeight: 600, color: "var(--ink)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-                          {p.name}
-                        </p>
-                        <p style={{ margin: "0 0 8px", fontSize: "0.7rem", color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {p.shortDescription}
-                        </p>
-                        <div style={{ display: "flex", alignItems: "center", gap: "4px", flexWrap: "wrap" }}>
-                          <span className="price-current">{money(p.sellingPrice)}</span>
-                          {p.discountedPrice !== null && (
-                            <>
-                              <span className="price-original">{money(p.regularPrice)}</span>
-                              {discount && <span className="price-discount-badge">-{discount}%</span>}
-                            </>
-                          )}
-                        </div>
-                        <p style={{ margin: "6px 0 0", fontSize: "0.65rem", color: "var(--muted-2)" }}>SKU: {p.sku}</p>
-                      </div>
-                    </Link>
-                  );
-                })}
+                {products.map((p, idx) => (
+                  <ProductCard
+                    key={p.id}
+                    product={p}
+                    index={idx}
+                    showWishlist={isAuthenticated}
+                    isWishlisted={isWishlisted(p.id)}
+                    wishlistBusy={isWishlistBusy(p.id)}
+                    onWishlistToggle={(e) => { void toggleWishlist(e, p.id); }}
+                  />
+                ))}
               </div>
             )}
 

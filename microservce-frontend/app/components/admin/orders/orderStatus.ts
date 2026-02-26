@@ -37,15 +37,15 @@ export type StatusChipStyle = {
 export function getStatusChip(status: string): StatusChipStyle {
   const normalized = (status || "").toUpperCase();
   if (["DELIVERED", "CLOSED"].includes(normalized)) {
-    return { bg: "rgba(16,185,129,0.10)", border: "rgba(16,185,129,0.25)", color: "#34d399" };
+    return { bg: "var(--success-soft)", border: "var(--success-glow)", color: "var(--success)" };
   }
   if (["CANCELLED", "REFUNDED"].includes(normalized)) {
-    return { bg: "rgba(239,68,68,0.10)", border: "rgba(239,68,68,0.25)", color: "#fca5a5" };
+    return { bg: "var(--danger-soft)", border: "var(--danger-glow)", color: "var(--danger)" };
   }
   if (["REFUND_PENDING", "RETURN_REQUESTED"].includes(normalized)) {
-    return { bg: "rgba(251,146,60,0.10)", border: "rgba(251,146,60,0.25)", color: "#fdba74" };
+    return { bg: "var(--warning-soft)", border: "var(--warning-border)", color: "var(--warning-text)" };
   }
-  return { bg: "rgba(0,212,255,0.08)", border: "rgba(0,212,255,0.2)", color: "#67e8f9" };
+  return { bg: "var(--brand-soft)", border: "var(--line-bright)", color: "var(--brand)" };
 }
 
 export function normalizeOrderStatus(status: string | null | undefined): OrderStatusValue {

@@ -643,10 +643,10 @@ export default function AdminDashboardPage() {
                             {invHealth.lowStockAlerts.slice(0, 20).map((a, i) => (
                               <tr key={i}>
                                 <td style={{ ...tdStyle, fontWeight: 600 }}>{a.sku || a.productId}</td>
-                                <td style={{ ...tdStyle, color: a.quantityAvailable === 0 ? "#f87171" : "#fbbf24", fontWeight: 600 }}>{num(a.quantityAvailable)}</td>
+                                <td style={{ ...tdStyle, color: a.quantityAvailable === 0 ? "var(--danger)" : "var(--warning-text)", fontWeight: 600 }}>{num(a.quantityAvailable)}</td>
                                 <td style={tdStyle}>{num(a.lowStockThreshold)}</td>
                                 <td style={tdStyle}>
-                                  <span style={{ padding: "3px 10px", borderRadius: 6, fontSize: "0.72rem", fontWeight: 600, background: a.stockStatus === "OUT_OF_STOCK" ? "rgba(239,68,68,0.15)" : "rgba(245,158,11,0.15)", color: a.stockStatus === "OUT_OF_STOCK" ? "#f87171" : "#fbbf24" }}>
+                                  <span style={{ padding: "3px 10px", borderRadius: 6, fontSize: "0.72rem", fontWeight: 600, background: a.stockStatus === "OUT_OF_STOCK" ? "var(--danger-soft)" : "var(--warning-soft)", color: a.stockStatus === "OUT_OF_STOCK" ? "var(--danger)" : "var(--warning-text)" }}>
                                     {(a.stockStatus ?? "").replace(/_/g, " ")}
                                   </span>
                                 </td>

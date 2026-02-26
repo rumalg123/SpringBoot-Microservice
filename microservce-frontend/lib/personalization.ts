@@ -1,25 +1,9 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me";
-const SESSION_COOKIE = "_ps_sid";
+import { API_BASE } from "./constants";
+import type { PersonalizationProduct, TrackEventPayload } from "./types/personalization";
 
-export type PersonalizationProduct = {
-  id: string;
-  slug: string;
-  name: string;
-  shortDescription: string;
-  brandName: string | null;
-  mainImage: string | null;
-  regularPrice: number;
-  discountedPrice: number | null;
-  sellingPrice: number;
-  sku: string;
-  mainCategory: string | null;
-  categories: string[] | null;
-  vendorId: string | null;
-  viewCount: number;
-  soldCount: number;
-  stockAvailable: number | null;
-  stockStatus: string | null;
-};
+export type { PersonalizationProduct } from "./types/personalization";
+
+const SESSION_COOKIE = "_ps_sid";
 
 export function getOrCreateSessionId(): string {
   if (typeof document === "undefined") return "";
@@ -37,16 +21,6 @@ export function getSessionId(): string | null {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
-type TrackEventPayload = {
-  eventType: "PRODUCT_VIEW" | "ADD_TO_CART" | "PURCHASE" | "WISHLIST_ADD" | "SEARCH";
-  productId: string;
-  categorySlugs?: string;
-  vendorId?: string;
-  brandName?: string;
-  price?: number;
-  metadata?: string;
-};
-
 function buildHeaders(token?: string | null): Record<string, string> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   const sessionId = getOrCreateSessionId();
@@ -55,14 +29,60 @@ function buildHeaders(token?: string | null): Record<string, string> {
   return headers;
 }
 
+type QueuedEvent = { payload: TrackEventPayload; token?: string | null };
+
+let eventQueue: QueuedEvent[] = [];
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+const FLUSH_INTERVAL = 2000;
+
+function flushEvents(): void {
+  if (eventQueue.length === 0) return;
+  const batch = eventQueue.splice(0);
+  for (const { payload, token } of batch) {
+    try {
+      fetch(`${API_BASE}/personalization/events`, {
+        method: "POST",
+        headers: buildHeaders(token),
+        body: JSON.stringify(payload),
+      }).catch(() => {});
+    } catch {}
+  }
+}
+
+function scheduleFlush(): void {
+  if (flushTimer) return;
+  flushTimer = setTimeout(() => {
+    flushTimer = null;
+    flushEvents();
+  }, FLUSH_INTERVAL);
+}
+
+if (typeof window !== "undefined") {
+  const onUnload = () => {
+    if (eventQueue.length === 0) return;
+    const batch = eventQueue.splice(0);
+    for (const { payload, token } of batch) {
+      const headers: Record<string, string> = { type: "application/json" };
+      const sessionId = getSessionId();
+      if (sessionId) headers["X-Session-Id"] = sessionId;
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      try {
+        navigator.sendBeacon(
+          `${API_BASE}/personalization/events`,
+          new Blob([JSON.stringify(payload)], { type: "application/json" })
+        );
+      } catch {}
+    }
+  };
+  window.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") onUnload();
+  });
+  window.addEventListener("pagehide", onUnload);
+}
+
 export function trackEvent(payload: TrackEventPayload, token?: string | null): void {
-  try {
-    fetch(`${API_BASE}/personalization/events`, {
-      method: "POST",
-      headers: buildHeaders(token),
-      body: JSON.stringify(payload),
-    }).catch(() => {});
-  } catch {}
+  eventQueue.push({ payload, token });
+  scheduleFlush();
 }
 
 export function trackProductView(
@@ -142,6 +162,20 @@ export async function mergeSession(token: string): Promise<void> {
       localStorage.setItem("_ps_merged", "1");
     }
   } catch {}
+}
+
+export async function fetchTrending(
+  limit: number
+): Promise<PersonalizationProduct[]> {
+  try {
+    const res = await fetch(`${API_BASE}/personalization/trending?limit=${limit}`, {
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    return await res.json();
+  } catch {
+    return [];
+  }
 }
 
 export async function fetchRecommended(

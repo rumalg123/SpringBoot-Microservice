@@ -4,6 +4,7 @@ import "./globals.css";
 import AppToaster from "./components/AppToaster";
 import ScrollToTop from "./components/ScrollToTop";
 import BackToTop from "./components/BackToTop";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 const bodyFont = Inter({
   variable: "--font-body",
@@ -32,7 +33,7 @@ export default function RootLayout({
       <body className={`${bodyFont.variable} ${displayFont.variable} antialiased`}>
         <ScrollToTop />
         <AppToaster />
-        {children}
+        <ErrorBoundary>{children}</ErrorBoundary>
         <BackToTop />
       </body>
     </html>

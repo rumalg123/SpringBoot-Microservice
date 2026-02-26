@@ -8,43 +8,9 @@ import AppNav from "../components/AppNav";
 import Footer from "../components/Footer";
 import { useAuthSession } from "../../lib/authSession";
 import { emitCartUpdate, emitWishlistUpdate } from "../../lib/navEvents";
-
-type WishlistItem = {
-  id: string;
-  productId: string;
-  productSlug: string;
-  productName: string;
-  productType: string;
-  mainImage: string | null;
-  sellingPriceSnapshot: number | null;
-  collectionId?: string;
-  note?: string | null;
-};
-
-type WishlistResponse = {
-  items: WishlistItem[];
-  itemCount: number;
-};
-
-type WishlistCollection = {
-  id: string;
-  name: string;
-  description: string | null;
-  isDefault: boolean;
-  shared: boolean;
-  shareToken: string | null;
-  items: WishlistItem[];
-  itemCount: number;
-  createdAt: string;
-  updatedAt: string;
-};
-
-const emptyWishlist: WishlistResponse = { items: [], itemCount: 0 };
-
-function money(value: number | null): string {
-  if (value === null || Number.isNaN(value)) return "\u2014";
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
-}
+import { money } from "../../lib/format";
+import type { WishlistItem, WishlistResponse, WishlistCollection } from "../../lib/types/wishlist";
+import { emptyWishlist } from "../../lib/types/wishlist";
 
 export default function WishlistPage() {
   const router = useRouter();
@@ -88,7 +54,7 @@ export default function WishlistPage() {
       const raw = res.data as Record<string, unknown>;
       const items = (Array.isArray(raw.content) ? raw.content : raw.items || []) as WishlistItem[];
       const itemCount = Number((raw.page as Record<string, unknown> | undefined)?.totalElements ?? raw.itemCount ?? items.length);
-      setWishlist({ items, itemCount });
+      setWishlist({ keycloakId: (raw.keycloakId as string) || "", items, itemCount });
       setStatus("Wishlist ready.");
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Failed to load wishlist");
@@ -125,7 +91,7 @@ export default function WishlistPage() {
       await apiClient.delete(`/wishlist/me/items/${itemId}`);
       setWishlist((old) => {
         const nextItems = old.items.filter((item) => item.id !== itemId);
-        return { items: nextItems, itemCount: nextItems.length };
+        return { ...old, items: nextItems, itemCount: nextItems.length };
       });
       // Also remove from collections local state
       setCollections((old) =>
@@ -165,11 +131,10 @@ export default function WishlistPage() {
     }
     setMovingItemId(item.id);
     try {
-      await apiClient.post("/cart/me/items", { productId: item.productId, quantity: 1 });
-      await apiClient.delete(`/wishlist/me/items/${item.id}`);
+      await apiClient.post(`/wishlist/me/items/${item.id}/move-to-cart`);
       setWishlist((old) => {
         const nextItems = old.items.filter((e) => e.id !== item.id);
-        return { items: nextItems, itemCount: nextItems.length };
+        return { ...old, items: nextItems, itemCount: nextItems.length };
       });
       setCollections((old) =>
         old.map((c) => ({

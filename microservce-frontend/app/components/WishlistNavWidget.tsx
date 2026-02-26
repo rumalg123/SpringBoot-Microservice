@@ -4,24 +4,11 @@ import type { AxiosInstance } from "axios";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { money } from "../../lib/format";
+import type { WishlistItem, WishlistResponse } from "../../lib/types/wishlist";
+import { emptyWishlist } from "../../lib/types/wishlist";
 
-type WishlistItem = {
-  id: string;
-  productId: string;
-  productSlug: string;
-  productName: string;
-  productType: string;
-  sellingPriceSnapshot: number | null;
-};
-type WishlistResponse = { items: WishlistItem[]; itemCount: number };
 type Props = { apiClient?: AxiosInstance | null };
-
-const emptyWishlist: WishlistResponse = { items: [], itemCount: 0 };
-
-function money(value: number | null): string {
-  if (value === null || Number.isNaN(value)) return "";
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
-}
 
 const popupStyle: React.CSSProperties = {
   position: "absolute",
@@ -52,7 +39,7 @@ export default function WishlistNavWidget({ apiClient }: Props) {
       const raw = res.data as Record<string, unknown>;
       const items = (Array.isArray(raw.content) ? raw.content : raw.items || []) as WishlistItem[];
       const itemCount = Number((raw.page as Record<string, unknown> | undefined)?.totalElements ?? raw.itemCount ?? items.length);
-      setWishlist({ items, itemCount });
+      setWishlist({ keycloakId: (raw.keycloakId as string) || "", items, itemCount });
     } catch { setWishlist(emptyWishlist); }
     finally { setLoading(false); }
   }, [apiClient]);

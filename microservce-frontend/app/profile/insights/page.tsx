@@ -11,36 +11,8 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
 
-/* ───── types ───── */
-
-type CustomerOrderSummary = {
-  customerId: string; totalOrders: number; activeOrders: number;
-  completedOrders: number; totalSpent: number; totalSaved: number;
-  averageOrderValue: number; uniqueVendorsOrdered: number;
-};
-type MonthlySpendBucket = { month: string; amount: number; orderCount: number };
-type CustomerProfileSummary = {
-  id: string; name: string; email: string; loyaltyTier: string;
-  loyaltyPoints: number; memberSince: string; active: boolean;
-};
-type CustomerInsights = {
-  orderSummary: CustomerOrderSummary | null;
-  spendingTrend: MonthlySpendBucket[];
-  profile: CustomerProfileSummary | null;
-};
-
-/* ───── constants ───── */
-
-const CHART_GRID = "rgba(120,120,200,0.08)";
-const CHART_TEXT = "#6868a0";
-
-const TIER_COLORS: Record<string, string> = {
-  BRONZE: "#cd7f32",
-  SILVER: "#c0c0c0",
-  GOLD: "#fbbf24",
-  PLATINUM: "#a78bfa",
-  DIAMOND: "#00d4ff",
-};
+import type { CustomerInsights, MonthlySpendBucket } from "../../../lib/types/customer";
+import { CHART_GRID, CHART_TEXT, TIER_COLORS } from "../../../lib/constants";
 
 /* ───── styles ───── */
 

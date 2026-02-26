@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AxiosInstance } from "axios";
 import CartNavWidget from "./CartNavWidget";
 import WishlistNavWidget from "./WishlistNavWidget";
@@ -22,6 +22,33 @@ type Props = {
   emailVerified?: boolean | null;
   onLogout: () => void | Promise<void>;
 };
+
+type NavItem = { href: string; label: string; show: boolean; color: "brand" | "vendor" | "admin" };
+
+const colorMap = {
+  brand: { active: "var(--brand)", inactive: "rgba(255,255,255,0.6)", bg: "rgba(0,212,255,0.1)", border: "rgba(0,212,255,0.25)" },
+  vendor: { active: "#34d399", inactive: "rgba(52,211,153,0.6)", bg: "rgba(52,211,153,0.1)", border: "rgba(52,211,153,0.25)" },
+  admin: { active: "#a78bfa", inactive: "rgba(167,139,250,0.6)", bg: "var(--accent-soft)", border: "var(--accent-glow)" },
+};
+
+function NavLink({ href, label, color, isActive }: { href: string; label: string; color: "brand" | "vendor" | "admin"; isActive: boolean }) {
+  const c = colorMap[color];
+  return (
+    <Link
+      href={href}
+      aria-current={isActive ? "page" : undefined}
+      className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline relative"
+      style={{
+        color: isActive ? c.active : c.inactive,
+        background: isActive ? c.bg : "transparent",
+        border: isActive ? `1px solid ${c.border}` : "1px solid transparent",
+        textShadow: isActive && color === "brand" ? "0 0 12px rgba(0,212,255,0.5)" : "none",
+      }}
+    >
+      {label}
+    </Link>
+  );
+}
 
 export default function AppNav({
   email,
@@ -48,9 +75,7 @@ export default function AppNav({
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [pathname]);
+  useEffect(() => { setMobileOpen(false); }, [pathname]);
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
@@ -60,14 +85,54 @@ export default function AppNav({
   const showAdminVendors = canManageAdminVendors ?? isSuperAdmin;
   const showAdminPosters = canManageAdminPosters ?? canViewAdmin;
   const showAdminCategories = canManageAdminCategories ?? isSuperAdmin;
-  const showAdminPromotions = canViewAdmin;
-  const showAdminInventory = canViewAdmin;
   const showVendorStaffAdmin = isSuperAdmin || isVendorAdmin;
-  const showAdminDashboard = isSuperAdmin;
-  const showAdminPermissionGroups = isSuperAdmin;
-  const showAdminAccessAudit = isSuperAdmin;
-  const showAnyAdminLinks = showAdminOrders || showAdminProducts || showAdminVendors || showVendorStaffAdmin || showAdminPosters || showAdminPromotions || showAdminDashboard || showAdminCategories || showAdminInventory;
-  const showVendorPortal = isVendorAdmin;
+
+  const navItems: NavItem[] = useMemo(() => [
+    // User links
+    { href: "/", label: "Home", show: true, color: "brand" },
+    { href: "/products", label: "Shop", show: true, color: "brand" },
+    { href: "/wishlist", label: "Wishlist", show: true, color: "brand" },
+    { href: "/cart", label: "Cart", show: true, color: "brand" },
+    { href: "/orders", label: "My Orders", show: true, color: "brand" },
+    { href: "/promotions", label: "Promotions", show: true, color: "brand" },
+    { href: "/profile", label: "Profile", show: true, color: "brand" },
+    { href: "/profile/insights", label: "Insights", show: true, color: "brand" },
+    // Vendor links
+    { href: "/vendor", label: "Vendor Portal", show: isVendorAdmin, color: "vendor" },
+    { href: "/vendor/inventory", label: "Vendor Inventory", show: isVendorAdmin, color: "vendor" },
+    { href: "/vendor/analytics", label: "Analytics", show: isVendorAdmin, color: "vendor" },
+    { href: "/vendor/reviews", label: "Reviews", show: isVendorAdmin, color: "vendor" },
+    { href: "/vendor/bank-accounts", label: "Bank Accounts", show: isVendorAdmin, color: "vendor" },
+    { href: "/vendor/payouts", label: "Payouts", show: isVendorAdmin, color: "vendor" },
+    // Admin links
+    { href: "/admin/dashboard", label: "Dashboard", show: isSuperAdmin, color: "admin" },
+    { href: "/admin/orders", label: "Admin Orders", show: showAdminOrders, color: "admin" },
+    { href: "/admin/products", label: "Admin Products", show: showAdminProducts, color: "admin" },
+    { href: "/admin/categories", label: "Categories", show: showAdminCategories, color: "admin" },
+    { href: "/admin/vendors", label: "Admin Vendors", show: showAdminVendors, color: "admin" },
+    { href: "/admin/vendor-staff", label: "Vendor Staff", show: showVendorStaffAdmin, color: "admin" },
+    { href: "/admin/platform-staff", label: "Platform Staff", show: showAdminVendors, color: "admin" },
+    { href: "/admin/posters", label: "Admin Posters", show: showAdminPosters, color: "admin" },
+    { href: "/admin/reviews", label: "Reviews", show: canViewAdmin, color: "admin" },
+    { href: "/admin/payments", label: "Payments", show: canViewAdmin, color: "admin" },
+    { href: "/admin/api-keys", label: "API Keys", show: isSuperAdmin, color: "admin" },
+    { href: "/admin/sessions", label: "Sessions", show: isSuperAdmin, color: "admin" },
+    { href: "/admin/settings", label: "Settings", show: isSuperAdmin, color: "admin" },
+    { href: "/admin/promotions", label: "Promotions", show: canViewAdmin, color: "admin" },
+    { href: "/admin/inventory", label: "Inventory", show: canViewAdmin, color: "admin" },
+    { href: "/admin/permission-groups", label: "Permissions", show: isSuperAdmin, color: "admin" },
+    { href: "/admin/access-audit", label: "Access Audit", show: isSuperAdmin, color: "admin" },
+  ], [isSuperAdmin, isVendorAdmin, canViewAdmin, showAdminOrders, showAdminProducts, showAdminVendors, showAdminPosters, showAdminCategories, showVendorStaffAdmin]);
+
+  const userLinks = navItems.filter((i) => i.color === "brand" && i.show);
+  const vendorLinks = navItems.filter((i) => i.color === "vendor" && i.show);
+  const adminLinks = navItems.filter((i) => i.color === "admin" && i.show);
+
+  const handleLogout = async () => {
+    if (logoutPending) return;
+    setLogoutPending(true);
+    try { await onLogout(); } finally { setLogoutPending(false); }
+  };
 
   return (
     <header
@@ -128,11 +193,7 @@ export default function AppNav({
           </span>
           <button type="button"
             disabled={logoutPending}
-            onClick={async () => {
-              if (logoutPending) return;
-              setLogoutPending(true);
-              try { await onLogout(); } finally { setLogoutPending(false); }
-            }}
+            onClick={() => { void handleLogout(); }}
             className="hidden md:inline-flex rounded-xl px-4 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
             style={{
               background: "var(--gradient-brand)",
@@ -151,6 +212,8 @@ export default function AppNav({
             className="md:hidden rounded-lg p-2 transition"
             style={{ color: "#fff", background: "rgba(255,255,255,0.05)", border: "1px solid var(--line-bright)" }}
             aria-label={mobileOpen ? "Close menu" : "Open menu"}
+            aria-expanded={mobileOpen}
+            aria-controls="main-nav"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
               stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -165,252 +228,61 @@ export default function AppNav({
 
       {/* Bottom nav strip */}
       <nav
+        id="main-nav"
+        aria-label="Main navigation"
         className={mobileOpen ? "block" : "hidden md:block"}
         style={{ borderTop: "1px solid var(--brand-soft)", background: "rgba(8,8,18,0.6)" }}
       >
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-1 px-4 py-2">
-          {[
-            { href: "/", label: "Home" },
-            { href: "/products", label: "Shop" },
-            { href: "/wishlist", label: "Wishlist" },
-            { href: "/cart", label: "Cart" },
-            { href: "/orders", label: "My Orders" },
-            { href: "/promotions", label: "Promotions" },
-            { href: "/profile", label: "Profile" },
-            { href: "/profile/insights", label: "Insights" },
-          ].map(({ href, label }) => (
-            <Link
-              key={href}
-              href={href}
-              className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline relative"
-              style={{
-                color: isActive(href) ? "var(--brand)" : "rgba(255,255,255,0.6)",
-                background: isActive(href) ? "rgba(0,212,255,0.1)" : "transparent",
-                border: isActive(href) ? "1px solid rgba(0,212,255,0.25)" : "1px solid transparent",
-                textShadow: isActive(href) ? "0 0 12px rgba(0,212,255,0.5)" : "none",
-              }}
-            >
-              {label}
-            </Link>
+          {userLinks.map((item) => (
+            <NavLink key={item.href} href={item.href} label={item.label} color={item.color} isActive={isActive(item.href)} />
           ))}
-          {showVendorPortal && (
+
+          {vendorLinks.length > 0 && (
             <>
               <span className="mx-1 hidden h-4 w-px bg-white/10 md:inline-block" />
-              <Link href="/vendor"
-                className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
-                style={{
-                  color: isActive("/vendor") ? "#34d399" : "rgba(52,211,153,0.6)",
-                  background: isActive("/vendor") ? "rgba(52,211,153,0.1)" : "transparent",
-                  border: isActive("/vendor") ? "1px solid rgba(52,211,153,0.25)" : "1px solid transparent",
-                }}
-              >
-                Vendor Portal
-              </Link>
-              <Link href="/vendor/inventory"
-                className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
-                style={{
-                  color: isActive("/vendor/inventory") ? "#34d399" : "rgba(52,211,153,0.6)",
-                  background: isActive("/vendor/inventory") ? "rgba(52,211,153,0.1)" : "transparent",
-                  border: isActive("/vendor/inventory") ? "1px solid rgba(52,211,153,0.25)" : "1px solid transparent",
-                }}
-              >
-                Vendor Inventory
-              </Link>
-              <Link href="/vendor/analytics"
-                className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
-                style={{
-                  color: isActive("/vendor/analytics") ? "#34d399" : "rgba(52,211,153,0.6)",
-                  background: isActive("/vendor/analytics") ? "rgba(52,211,153,0.1)" : "transparent",
-                  border: isActive("/vendor/analytics") ? "1px solid rgba(52,211,153,0.25)" : "1px solid transparent",
-                }}
-              >
-                Analytics
-              </Link>
+              {vendorLinks.map((item) => (
+                <NavLink key={item.href} href={item.href} label={item.label} color={item.color} isActive={isActive(item.href)} />
+              ))}
             </>
           )}
-          {showAnyAdminLinks && (
+
+          {adminLinks.length > 0 && (
             <>
               <span className="mx-1 hidden h-4 w-px bg-white/10 md:inline-block" />
-              {showAdminDashboard && (
-                <Link href="/admin/dashboard"
-                  className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
-                  style={{
-                    color: isActive("/admin/dashboard") ? "#a78bfa" : "rgba(167,139,250,0.6)",
-                    background: isActive("/admin/dashboard") ? "var(--accent-soft)" : "transparent",
-                    border: isActive("/admin/dashboard") ? "1px solid var(--accent-glow)" : "1px solid transparent",
-                  }}
-                >
-                  Dashboard
-                </Link>
-              )}
-              {showAdminOrders && (
-                <Link href="/admin/orders"
-                  className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
-                  style={{
-                    color: isActive("/admin/orders") ? "#a78bfa" : "rgba(167,139,250,0.6)",
-                    background: isActive("/admin/orders") ? "var(--accent-soft)" : "transparent",
-                    border: isActive("/admin/orders") ? "1px solid var(--accent-glow)" : "1px solid transparent",
-                  }}
-                >
-                  Admin Orders
-                </Link>
-              )}
-              {showAdminProducts && (
-                <Link href="/admin/products"
-                  className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
-                  style={{
-                    color: isActive("/admin/products") ? "#a78bfa" : "rgba(167,139,250,0.6)",
-                    background: isActive("/admin/products") ? "var(--accent-soft)" : "transparent",
-                    border: isActive("/admin/products") ? "1px solid var(--accent-glow)" : "1px solid transparent",
-                  }}
-                >
-                  Admin Products
-                </Link>
-              )}
-              {showAdminCategories && (
-                <Link href="/admin/categories"
-                  className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
-                  style={{
-                    color: isActive("/admin/categories") ? "#a78bfa" : "rgba(167,139,250,0.6)",
-                    background: isActive("/admin/categories") ? "var(--accent-soft)" : "transparent",
-                    border: isActive("/admin/categories") ? "1px solid var(--accent-glow)" : "1px solid transparent",
-                  }}
-                >
-                  Categories
-                </Link>
-              )}
-              {showAdminVendors && (
-                <Link href="/admin/vendors"
-                  className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
-                  style={{
-                    color: isActive("/admin/vendors") ? "#a78bfa" : "rgba(167,139,250,0.6)",
-                    background: isActive("/admin/vendors") ? "var(--accent-soft)" : "transparent",
-                    border: isActive("/admin/vendors") ? "1px solid var(--accent-glow)" : "1px solid transparent",
-                  }}
-                >
-                  Admin Vendors
-                </Link>
-              )}
-              {showVendorStaffAdmin && (
-                <Link href="/admin/vendor-staff"
-                  className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
-                  style={{
-                    color: isActive("/admin/vendor-staff") ? "#a78bfa" : "rgba(167,139,250,0.6)",
-                    background: isActive("/admin/vendor-staff") ? "var(--accent-soft)" : "transparent",
-                    border: isActive("/admin/vendor-staff") ? "1px solid var(--accent-glow)" : "1px solid transparent",
-                  }}
-                >
-                  Vendor Staff
-                </Link>
-              )}
-              {showAdminVendors && (
-                <Link href="/admin/platform-staff"
-                  className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
-                  style={{
-                    color: isActive("/admin/platform-staff") ? "#a78bfa" : "rgba(167,139,250,0.6)",
-                    background: isActive("/admin/platform-staff") ? "var(--accent-soft)" : "transparent",
-                    border: isActive("/admin/platform-staff") ? "1px solid var(--accent-glow)" : "1px solid transparent",
-                  }}
-                >
-                  Platform Staff
-                </Link>
-              )}
-              {showAdminPosters && (
-                <Link href="/admin/posters"
-                  className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
-                  style={{
-                    color: isActive("/admin/posters") ? "#a78bfa" : "rgba(167,139,250,0.6)",
-                    background: isActive("/admin/posters") ? "var(--accent-soft)" : "transparent",
-                    border: isActive("/admin/posters") ? "1px solid var(--accent-glow)" : "1px solid transparent",
-                  }}
-                >
-                  Admin Posters
-                </Link>
-              )}
-              {showAdminPromotions && (
-                <Link href="/admin/promotions"
-                  className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
-                  style={{
-                    color: isActive("/admin/promotions") ? "#a78bfa" : "rgba(167,139,250,0.6)",
-                    background: isActive("/admin/promotions") ? "var(--accent-soft)" : "transparent",
-                    border: isActive("/admin/promotions") ? "1px solid var(--accent-glow)" : "1px solid transparent",
-                  }}
-                >
-                  Promotions
-                </Link>
-              )}
-              {showAdminInventory && (
-                <Link href="/admin/inventory"
-                  className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
-                  style={{
-                    color: isActive("/admin/inventory") ? "#a78bfa" : "rgba(167,139,250,0.6)",
-                    background: isActive("/admin/inventory") ? "var(--accent-soft)" : "transparent",
-                    border: isActive("/admin/inventory") ? "1px solid var(--accent-glow)" : "1px solid transparent",
-                  }}
-                >
-                  Inventory
-                </Link>
-              )}
-              {showAdminPermissionGroups && (
-                <Link href="/admin/permission-groups"
-                  className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
-                  style={{
-                    color: isActive("/admin/permission-groups") ? "#a78bfa" : "rgba(167,139,250,0.6)",
-                    background: isActive("/admin/permission-groups") ? "var(--accent-soft)" : "transparent",
-                    border: isActive("/admin/permission-groups") ? "1px solid var(--accent-glow)" : "1px solid transparent",
-                  }}
-                >
-                  Permissions
-                </Link>
-              )}
-              {showAdminAccessAudit && (
-                <Link href="/admin/access-audit"
-                  className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
-                  style={{
-                    color: isActive("/admin/access-audit") ? "#a78bfa" : "rgba(167,139,250,0.6)",
-                    background: isActive("/admin/access-audit") ? "var(--accent-soft)" : "transparent",
-                    border: isActive("/admin/access-audit") ? "1px solid var(--accent-glow)" : "1px solid transparent",
-                  }}
-                >
-                  Access Audit
-                </Link>
-              )}
+              {adminLinks.map((item) => (
+                <NavLink key={item.href} href={item.href} label={item.label} color={item.color} isActive={isActive(item.href)} />
+              ))}
             </>
           )}
+
           {/* Mobile-only: user info + logout */}
           {mobileOpen && (
-            <>
-              <div className="w-full mt-1 pt-2" style={{ borderTop: "1px solid var(--brand-soft)" }}>
-                <div className="flex items-center justify-between gap-3">
-                  {email && (
-                    <span className="text-xs font-medium" style={{ color: "rgba(0,212,255,0.7)" }}>
-                      {email}
-                    </span>
-                  )}
-                  <button type="button"
-                    disabled={logoutPending}
-                    onClick={async () => {
-                      if (logoutPending) return;
-                      setLogoutPending(true);
-                      try { await onLogout(); } finally { setLogoutPending(false); }
-                    }}
-                    className="rounded-lg px-4 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
-                    style={{
-                      background: "var(--gradient-brand)",
-                      color: "#fff",
-                      border: "none",
-                      cursor: "pointer",
-                    }}
-                  >
-                    {logoutPending ? "Logging out..." : "Logout"}
-                  </button>
-                </div>
+            <div className="w-full mt-1 pt-2" style={{ borderTop: "1px solid var(--brand-soft)" }}>
+              <div className="flex items-center justify-between gap-3">
+                {email && (
+                  <span className="text-xs font-medium" style={{ color: "rgba(0,212,255,0.7)" }}>
+                    {email}
+                  </span>
+                )}
+                <button type="button"
+                  disabled={logoutPending}
+                  onClick={() => { void handleLogout(); }}
+                  className="rounded-lg px-4 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
+                  style={{
+                    background: "var(--gradient-brand)",
+                    color: "#fff",
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  {logoutPending ? "Logging out..." : "Logout"}
+                </button>
               </div>
-            </>
+            </div>
           )}
         </div>
       </nav>
     </header>
   );
 }
-

@@ -8,51 +8,18 @@ import AppNav from "../components/AppNav";
 import Footer from "../components/Footer";
 import { useAuthSession } from "../../lib/authSession";
 import { PayHereFormData, submitToPayHere } from "../../lib/payhere";
+import { money } from "../../lib/format";
+import type { Order, OrderDetail } from "../../lib/types/order";
+import type { CustomerAddress } from "../../lib/types/customer";
+import type { ProductSummary } from "../../lib/types/product";
+import type { PagedResponse } from "../../lib/types/pagination";
+import { API_BASE, ORDER_STATUS_COLORS as STATUS_COLORS } from "../../lib/constants";
 
 const CREATING_STATUS = "Creating purchase...";
+const CANCELLABLE = new Set(["PENDING", "PAYMENT_PENDING", "PAYMENT_FAILED", "CONFIRMED"]);
 
-type Order = {
-  id: string; customerId: string; item: string; quantity: number; itemCount: number;
-  orderTotal: number; subtotal: number; lineDiscountTotal: number; cartDiscountTotal: number;
-  shippingAmount: number; shippingDiscountTotal: number; totalDiscount: number;
-  couponCode: string | null; status: string; createdAt: string;
-};
-type OrderItem = { id: string | null; item: string; quantity: number };
-type OrderAddress = {
-  sourceAddressId: string; label: string | null; recipientName: string; phone: string;
-  line1: string; line2: string | null; city: string; state: string; postalCode: string; countryCode: string;
-};
-type OrderDetail = {
-  id: string; customerId: string; item: string; quantity: number; itemCount: number;
-  orderTotal: number; subtotal: number; lineDiscountTotal: number; cartDiscountTotal: number;
-  shippingAmount: number; shippingDiscountTotal: number; totalDiscount: number;
-  couponCode: string | null; status: string; createdAt: string;
-  items: OrderItem[]; shippingAddress?: OrderAddress | null; billingAddress?: OrderAddress | null;
-  warnings?: string[];
-};
 type PagedOrder = { content: Order[] };
-type ProductSummary = { id: string; name: string; sku: string; productType: string };
 type ProductPageResponse = { content: ProductSummary[] };
-type CustomerAddress = {
-  id: string; customerId: string; label: string | null; recipientName: string;
-  phone: string; line1: string; line2: string | null; city: string; state: string;
-  postalCode: string; countryCode: string; defaultShipping: boolean; defaultBilling: boolean;
-};
-
-function money(value: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value || 0);
-}
-
-const STATUS_COLORS: Record<string, { bg: string; border: string; color: string }> = {
-  PAYMENT_PENDING: { bg: "var(--warning-soft)", border: "var(--warning-border)", color: "var(--warning-text)" },
-  PAYMENT_FAILED: { bg: "var(--danger-soft)", border: "var(--danger-glow)", color: "var(--danger)" },
-  PENDING: { bg: "var(--warning-soft)", border: "var(--warning-border)", color: "var(--warning-text)" },
-  CONFIRMED: { bg: "var(--brand-soft)", border: "var(--line-bright)", color: "var(--brand)" },
-  PROCESSING: { bg: "var(--brand-soft)", border: "var(--line-bright)", color: "var(--brand)" },
-  SHIPPED: { bg: "var(--accent-soft)", border: "var(--accent-glow)", color: "var(--accent)" },
-  DELIVERED: { bg: "var(--success-soft)", border: "var(--success-glow)", color: "var(--success)" },
-  CANCELLED: { bg: "var(--danger-soft)", border: "var(--danger-glow)", color: "var(--danger)" },
-};
 
 export default function OrdersPage() {
   const router = useRouter();
@@ -71,6 +38,9 @@ export default function OrdersPage() {
   const [resendingVerification, setResendingVerification] = useState(false);
   const [detailLoadingTarget, setDetailLoadingTarget] = useState<string | null>(null);
   const [payingOrderId, setPayingOrderId] = useState<string | null>(null);
+  const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [paymentInfo, setPaymentInfo] = useState<{ status: string; paymentMethod: string; cardNoMasked: string | null; paidAt: string | null } | null>(null);
 
   const loadOrders = useCallback(async () => {
     if (!apiClient) return;
@@ -79,7 +49,7 @@ export default function OrdersPage() {
   }, [apiClient]);
 
   const loadProducts = useCallback(async () => {
-    const apiBase = process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me";
+    const apiBase = API_BASE;
     const res = await fetch(`${apiBase}/products?page=0&size=100`, { cache: "no-store" });
     if (!res.ok) return;
     const data = (await res.json()) as ProductPageResponse;
@@ -139,10 +109,18 @@ export default function OrdersPage() {
     const targetId = (orderId || selectedId).trim();
     if (!apiClient || !targetId || detailLoadingTarget) return;
     setDetailLoadingTarget(targetId);
+    setPaymentInfo(null);
     try {
-      const res = await apiClient.get(`/orders/me/${targetId}`);
-      setSelectedDetail(res.data as OrderDetail);
+      const [orderRes, paymentRes] = await Promise.all([
+        apiClient.get(`/orders/me/${targetId}`),
+        apiClient.get(`/payments/me/order/${targetId}`).catch(() => null),
+      ]);
+      setSelectedDetail(orderRes.data as OrderDetail);
       setSelectedId(targetId);
+      if (paymentRes?.data) {
+        const p = paymentRes.data as { status: string; paymentMethod: string; cardNoMasked: string | null; paidAt: string | null };
+        setPaymentInfo(p);
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to load detail");
     } finally { setDetailLoadingTarget(null); }
@@ -168,6 +146,26 @@ export default function OrdersPage() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to initiate payment");
       setPayingOrderId(null);
+    }
+  };
+
+  const cancelOrder = async (orderId: string) => {
+    if (!apiClient || cancellingOrderId) return;
+    setCancellingOrderId(orderId);
+    try {
+      await apiClient.post(`/orders/me/${orderId}/cancel`, {
+        reason: cancelReason.trim() || undefined,
+      });
+      setCancelReason("");
+      setCancellingOrderId(null);
+      await loadOrders();
+      if (selectedDetail?.id === orderId) {
+        void loadDetail(orderId);
+      }
+      toast.success("Order cancelled");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to cancel order");
+      setCancellingOrderId(null);
     }
   };
 
@@ -359,6 +357,58 @@ export default function OrdersPage() {
                       >
                         {detailLoadingTarget === order.id ? "Loading..." : "View Details"}
                       </button>
+                      {CANCELLABLE.has(order.status) && (
+                        <>
+                          {cancellingOrderId === order.id ? (
+                            <div style={{ display: "flex", gap: "4px" }}>
+                              <input
+                                value={cancelReason}
+                                onChange={(e) => setCancelReason(e.target.value)}
+                                placeholder="Reason (optional)"
+                                className="form-input"
+                                style={{ fontSize: "0.7rem", padding: "5px 8px", width: "130px" }}
+                                maxLength={240}
+                              />
+                              <button
+                                onClick={() => { void cancelOrder(order.id); }}
+                                style={{
+                                  padding: "5px 10px", borderRadius: "8px", border: "none",
+                                  background: "var(--danger)", color: "#fff",
+                                  fontSize: "0.7rem", fontWeight: 700, cursor: "pointer",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                Confirm
+                              </button>
+                              <button
+                                onClick={() => { setCancellingOrderId(null); setCancelReason(""); }}
+                                style={{
+                                  padding: "5px 8px", borderRadius: "8px",
+                                  border: "1px solid var(--line-bright)", background: "transparent",
+                                  color: "var(--muted)", fontSize: "0.7rem", fontWeight: 700,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                No
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setCancellingOrderId(order.id)}
+                              disabled={Boolean(cancellingOrderId)}
+                              style={{
+                                padding: "7px 14px", borderRadius: "9px",
+                                border: "1px solid rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.06)",
+                                color: "var(--danger)", fontSize: "0.75rem", fontWeight: 700,
+                                cursor: cancellingOrderId ? "not-allowed" : "pointer",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              Cancel Order
+                            </button>
+                          )}
+                        </>
+                      )}
                     </div>
                   </div>
                 </article>
@@ -542,6 +592,32 @@ export default function OrdersPage() {
                           {payingOrderId === selectedDetail.id ? "Redirecting..." : "Pay Now"}
                         </button>
                       )}
+                      {CANCELLABLE.has(selectedDetail.status) && (
+                        <div style={{ marginTop: "10px", display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
+                          <input
+                            value={cancelReason}
+                            onChange={(e) => setCancelReason(e.target.value)}
+                            placeholder="Cancel reason (optional)"
+                            className="form-input"
+                            style={{ fontSize: "0.72rem", padding: "6px 10px", flex: 1, minWidth: "120px" }}
+                            maxLength={240}
+                          />
+                          <button
+                            onClick={() => { void cancelOrder(selectedDetail.id); }}
+                            disabled={Boolean(cancellingOrderId)}
+                            style={{
+                              padding: "7px 14px", borderRadius: "9px",
+                              border: "1px solid rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.06)",
+                              color: "var(--danger)", fontSize: "0.75rem", fontWeight: 700,
+                              cursor: cancellingOrderId ? "not-allowed" : "pointer",
+                              display: "inline-flex", alignItems: "center", gap: "6px",
+                            }}
+                          >
+                            {cancellingOrderId === selectedDetail.id && <span className="spinner-sm" />}
+                            {cancellingOrderId === selectedDetail.id ? "Cancelling..." : "Cancel Order"}
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     {/* Price Breakdown */}
@@ -571,6 +647,40 @@ export default function OrdersPage() {
                         <span style={{ color: "var(--brand)", fontSize: "1rem" }}>{money(selectedDetail.orderTotal || selectedDetail.subtotal)}</span>
                       </div>
                     </div>
+
+                    {/* Payment Info */}
+                    {paymentInfo && (
+                      <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--brand-soft)", fontSize: "0.78rem" }}>
+                        <p style={{ fontSize: "0.6rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--brand)", margin: "0 0 8px" }}>Payment</p>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                          <div>
+                            <span style={{ color: "var(--muted)" }}>Status: </span>
+                            <span style={{
+                              fontWeight: 700,
+                              color: paymentInfo.status === "COMPLETED" ? "var(--success)" : paymentInfo.status === "FAILED" ? "var(--danger)" : "var(--warning-text)",
+                            }}>
+                              {paymentInfo.status}
+                            </span>
+                          </div>
+                          <div>
+                            <span style={{ color: "var(--muted)" }}>Method: </span>
+                            <span style={{ color: "var(--ink-light)", fontWeight: 600 }}>{paymentInfo.paymentMethod || "—"}</span>
+                          </div>
+                          {paymentInfo.cardNoMasked && (
+                            <div>
+                              <span style={{ color: "var(--muted)" }}>Card: </span>
+                              <span style={{ color: "var(--ink-light)", fontFamily: "monospace" }}>{paymentInfo.cardNoMasked}</span>
+                            </div>
+                          )}
+                          {paymentInfo.paidAt && (
+                            <div>
+                              <span style={{ color: "var(--muted)" }}>Paid: </span>
+                              <span style={{ color: "var(--ink-light)", fontWeight: 600 }}>{new Date(paymentInfo.paidAt).toLocaleString()}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     {(selectedDetail.shippingAddress || selectedDetail.billingAddress) && (
                       <div style={{ padding: "12px 14px", display: "grid", gap: "8px", gridTemplateColumns: "1fr 1fr", borderBottom: "1px solid var(--brand-soft)" }}>

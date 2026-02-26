@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
+import { API_BASE } from "../../../lib/constants";
 import ReviewSummaryBar from "./ReviewSummaryBar";
 import ReviewCard from "./ReviewCard";
 import ReviewForm from "./ReviewForm";
@@ -25,7 +26,7 @@ type Props = {
 };
 
 export default function ReviewSection({ productId, vendorId, isAuthenticated, apiClient }: Props) {
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me";
+  const apiBase = API_BASE;
 
   const [summary, setSummary] = useState<Summary | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -34,6 +35,9 @@ export default function ReviewSection({ productId, vendorId, isAuthenticated, ap
   const [sortBy, setSortBy] = useState("recent");
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [reportingId, setReportingId] = useState<string | null>(null);
+  const [reportReason, setReportReason] = useState("INAPPROPRIATE");
+  const [reportDescription, setReportDescription] = useState("");
 
   const loadSummary = useCallback(async () => {
     try {
@@ -68,11 +72,22 @@ export default function ReviewSection({ productId, vendorId, isAuthenticated, ap
     }
   };
 
-  const handleReport = async (reviewId: string) => {
+  const handleReport = (reviewId: string) => {
     if (!apiClient) { toast.error("Sign in to report"); return; }
+    setReportingId(reviewId);
+    setReportReason("INAPPROPRIATE");
+    setReportDescription("");
+  };
+
+  const submitReport = async () => {
+    if (!apiClient || !reportingId) return;
     try {
-      await apiClient.post(`/reviews/me/${reviewId}/report`, { reason: "INAPPROPRIATE" });
+      await apiClient.post(`/reviews/me/${reportingId}/report`, {
+        reason: reportReason,
+        description: reportDescription.trim() || undefined,
+      });
       toast.success("Review reported");
+      setReportingId(null);
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to report");
     }
@@ -146,6 +161,48 @@ export default function ReviewSection({ productId, vendorId, isAuthenticated, ap
             votingDisabled={!isAuthenticated}
           />
         ))
+      )}
+
+      {/* Report Dialog */}
+      {reportingId && (
+        <div style={{ padding: "16px 20px", borderRadius: "12px", border: "1px solid var(--line-bright)", background: "var(--surface)", marginTop: "12px" }}>
+          <p style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--ink)", margin: "0 0 10px" }}>Report this review</p>
+          <select
+            value={reportReason}
+            onChange={(e) => setReportReason(e.target.value)}
+            className="form-select"
+            style={{ width: "100%", marginBottom: "8px", padding: "8px 12px", borderRadius: "8px", border: "1px solid var(--line)", background: "var(--bg)", color: "var(--ink)", fontSize: "0.8rem" }}
+          >
+            <option value="INAPPROPRIATE">Inappropriate content</option>
+            <option value="SPAM">Spam</option>
+            <option value="FAKE">Fake review</option>
+            <option value="OFF_TOPIC">Off topic</option>
+            <option value="OTHER">Other</option>
+          </select>
+          <textarea
+            value={reportDescription}
+            onChange={(e) => setReportDescription(e.target.value)}
+            placeholder="Additional details (optional)"
+            maxLength={500}
+            rows={2}
+            className="form-input"
+            style={{ width: "100%", marginBottom: "10px", padding: "8px 12px", borderRadius: "8px", border: "1px solid var(--line)", background: "var(--bg)", color: "var(--ink)", fontSize: "0.8rem", resize: "vertical" }}
+          />
+          <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+            <button
+              onClick={() => setReportingId(null)}
+              style={{ padding: "7px 14px", borderRadius: "8px", border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", fontSize: "0.78rem", fontWeight: 700, cursor: "pointer" }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => { void submitReport(); }}
+              style={{ padding: "7px 14px", borderRadius: "8px", border: "none", background: "var(--danger)", color: "#fff", fontSize: "0.78rem", fontWeight: 700, cursor: "pointer" }}
+            >
+              Submit Report
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Pagination */}

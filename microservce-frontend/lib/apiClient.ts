@@ -1,4 +1,5 @@
 import axios, { AxiosError, AxiosHeaders, AxiosInstance, AxiosRequestConfig } from "axios";
+import { IDEMPOTENCY_WINDOW_MS, IDEMPOTENCY_MAX_CACHE_SIZE } from "./constants";
 
 type CreateApiClientOptions = {
   baseURL: string;
@@ -19,7 +20,7 @@ type CachedIdempotencyKey = {
 };
 
 const idempotencyKeyCache = new Map<string, CachedIdempotencyKey>();
-const DEFAULT_IDEMPOTENCY_WINDOW_MS = 15_000;
+const DEFAULT_IDEMPOTENCY_WINDOW_MS = IDEMPOTENCY_WINDOW_MS;
 
 function generateIdempotencyKey(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -65,6 +66,11 @@ function resolveIdempotencyKeyForFingerprint(fingerprint: string, windowMs: numb
   if (existing && existing.expiresAt > now) {
     return existing.key;
   }
+  // Evict oldest entries if cache exceeds max size
+  if (idempotencyKeyCache.size >= IDEMPOTENCY_MAX_CACHE_SIZE) {
+    const oldest = idempotencyKeyCache.keys().next().value;
+    if (oldest !== undefined) idempotencyKeyCache.delete(oldest);
+  }
   const created = generateIdempotencyKey();
   idempotencyKeyCache.set(fingerprint, {
     key: created,
@@ -76,6 +82,7 @@ function resolveIdempotencyKeyForFingerprint(fingerprint: string, windowMs: numb
 export function createApiClient(options: CreateApiClientOptions): AxiosInstance {
   const client = axios.create({
     baseURL: options.baseURL,
+    timeout: 30_000,
   });
 
   client.interceptors.request.use(async (config) => {

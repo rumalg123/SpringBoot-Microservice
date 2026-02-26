@@ -2,14 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-
-type Category = {
-  id: string;
-  name: string;
-  slug?: string | null;
-  type: "PARENT" | "SUB";
-  parentCategoryId: string | null;
-};
+import type { Category } from "../../lib/types/category";
+import { API_BASE } from "../../lib/constants";
 
 function slugify(value: string): string {
   return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").replace(/-+/g, "-");
@@ -52,17 +46,19 @@ export default function CategoryMenu() {
   };
 
   useEffect(() => {
+    const controller = new AbortController();
     const run = async () => {
       try {
-        const apiBase = process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me";
-        const res = await fetch(`${apiBase}/categories`, { cache: "no-store" });
+        const res = await fetch(`${API_BASE}/categories`, { cache: "no-store", signal: controller.signal });
         if (!res.ok) return;
+        if (controller.signal.aborted) return;
         setCategories(((await res.json()) as Category[]) || []);
       } catch {
-        setCategories([]);
+        if (!controller.signal.aborted) setCategories([]);
       }
     };
     void run();
+    return () => controller.abort();
   }, []);
 
   const parents = useMemo(
@@ -132,7 +128,7 @@ export default function CategoryMenu() {
 
         {/* Dropdown Panel */}
         {open && (
-          <div style={dropdownStyle} onMouseEnter={openMenu} onMouseLeave={scheduleClose}>
+          <div role="menu" style={dropdownStyle} onMouseEnter={openMenu} onMouseLeave={scheduleClose}>
             {/* Header */}
             <div style={{ padding: "12px 14px", borderBottom: "1px solid rgba(0,212,255,0.08)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <p style={{ fontSize: "0.65rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.12em", color: "var(--muted)", margin: 0 }}>Browse Categories</p>
@@ -157,6 +153,7 @@ export default function CategoryMenu() {
                   return (
                     <Link
                       key={parent.id}
+                      role="menuitem"
                       href={`/categories/${encodeURIComponent(toCategorySlug(parent))}`}
                       onMouseEnter={() => setActiveParentId(parent.id)}
                       style={{

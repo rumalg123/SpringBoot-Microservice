@@ -7,61 +7,13 @@ import toast from "react-hot-toast";
 import AppNav from "../components/AppNav";
 import Footer from "../components/Footer";
 import { useAuthSession } from "../../lib/authSession";
+import type { Customer, CustomerAddress, AddressForm, CommunicationPreferences, ActivityLogEntry, LinkedAccounts, CouponUsageEntry } from "../../lib/types/customer";
+import { emptyAddressForm } from "../../lib/types/customer";
+import type { PagedResponse } from "../../lib/types/pagination";
+import { normalizePage } from "../../lib/types/pagination";
 
-type Customer = { id: string; name: string; email: string; createdAt: string };
-type CustomerAddress = {
-  id: string; customerId: string; label: string | null; recipientName: string;
-  phone: string; line1: string; line2: string | null; city: string; state: string;
-  postalCode: string; countryCode: string; defaultShipping: boolean; defaultBilling: boolean;
-  deleted: boolean; createdAt: string; updatedAt: string;
-};
-type AddressForm = {
-  id?: string; label: string; recipientName: string; phone: string;
-  line1: string; line2: string; city: string; state: string;
-  postalCode: string; countryCode: string; defaultShipping: boolean; defaultBilling: boolean;
-};
 type DefaultAction = { addressId: string; type: "shipping" | "billing" };
-
-type CommunicationPreferences = {
-  id: string; customerId: string;
-  emailMarketing: boolean; smsMarketing: boolean; pushNotifications: boolean;
-  orderUpdates: boolean; promotionalAlerts: boolean;
-  createdAt: string; updatedAt: string;
-};
-
-type ActivityLogEntry = {
-  id: string; customerId: string; action: string; details: string;
-  ipAddress: string; createdAt: string;
-};
-
-type LinkedAccounts = { customerId: string; providers: string[] };
-
-type CouponUsageEntry = {
-  reservationId: string; couponCode: string; promotionName: string;
-  discountAmount: number; orderId: string; committedAt: string;
-};
-
-type SpringPageRaw<T> = {
-  content: T[];
-  totalPages?: number;
-  totalElements?: number;
-  number?: number;
-  page?: { totalPages?: number; totalElements?: number; number?: number };
-};
-
-type SpringPage<T> = {
-  content: T[];
-  totalPages: number;
-  totalElements: number;
-  number: number;
-};
-
 type TabKey = "account" | "preferences" | "activity" | "coupon-history";
-
-const emptyAddressForm: AddressForm = {
-  label: "", recipientName: "", phone: "", line1: "", line2: "", city: "",
-  state: "", postalCode: "", countryCode: "US", defaultShipping: false, defaultBilling: false,
-};
 
 function splitDisplayName(name: string) {
   const normalized = name.trim().replace(/\s+/g, " ");
@@ -110,13 +62,13 @@ export default function ProfilePage() {
   const [linkedAccountsLoaded, setLinkedAccountsLoaded] = useState(false);
 
   /* ── Activity Log state ── */
-  const [activityLog, setActivityLog] = useState<SpringPage<ActivityLogEntry> | null>(null);
+  const [activityLog, setActivityLog] = useState<{ content: ActivityLogEntry[]; totalPages: number; totalElements: number; number: number } | null>(null);
   const [activityLogLoading, setActivityLogLoading] = useState(false);
   const [activityLogLoaded, setActivityLogLoaded] = useState(false);
   const [activityLogPage, setActivityLogPage] = useState(0);
 
   /* ── Coupon Usage History state ── */
-  const [couponUsage, setCouponUsage] = useState<SpringPage<CouponUsageEntry> | null>(null);
+  const [couponUsage, setCouponUsage] = useState<{ content: CouponUsageEntry[]; totalPages: number; totalElements: number; number: number } | null>(null);
   const [couponUsageLoading, setCouponUsageLoading] = useState(false);
   const [couponUsageLoaded, setCouponUsageLoaded] = useState(false);
   const [couponUsagePage, setCouponUsagePage] = useState(0);
@@ -255,12 +207,13 @@ export default function ProfilePage() {
     setActivityLogLoading(true);
     try {
       const response = await apiClient.get(`/customers/me/activity-log?page=${page}&size=20`);
-      const raw = response.data as SpringPageRaw<ActivityLogEntry>;
+      const raw = response.data as PagedResponse<ActivityLogEntry>;
+      const page_ = normalizePage(raw);
       setActivityLog({
-        content: raw.content || [],
-        totalPages: raw.totalPages ?? raw.page?.totalPages ?? 0,
-        totalElements: raw.totalElements ?? raw.page?.totalElements ?? 0,
-        number: raw.number ?? raw.page?.number ?? 0,
+        content: page_.content,
+        totalPages: page_.totalPages,
+        totalElements: page_.totalElements,
+        number: page_.number,
       });
       setActivityLogLoaded(true);
     } catch (err) {
@@ -274,12 +227,13 @@ export default function ProfilePage() {
     setCouponUsageLoading(true);
     try {
       const response = await apiClient.get(`/promotions/me/coupon-usage?page=${page}&size=20`);
-      const raw = response.data as SpringPageRaw<CouponUsageEntry>;
+      const raw = response.data as PagedResponse<CouponUsageEntry>;
+      const page_ = normalizePage(raw);
       setCouponUsage({
-        content: raw.content || [],
-        totalPages: raw.totalPages ?? raw.page?.totalPages ?? 0,
-        totalElements: raw.totalElements ?? raw.page?.totalElements ?? 0,
-        number: raw.number ?? raw.page?.number ?? 0,
+        content: page_.content,
+        totalPages: page_.totalPages,
+        totalElements: page_.totalElements,
+        number: page_.number,
       });
       setCouponUsageLoaded(true);
     } catch (err) {
