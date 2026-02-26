@@ -7,6 +7,7 @@ import com.rumal.order_service.client.PromotionClient;
 import com.rumal.order_service.client.VendorClient;
 import com.rumal.order_service.client.VendorOperationalStateClient;
 import com.rumal.order_service.config.CustomerDetailsMode;
+import com.rumal.order_service.service.OutboxService;
 import com.rumal.order_service.config.OrderAggregationProperties;
 import com.rumal.order_service.dto.CouponReservationResponse;
 import com.rumal.order_service.dto.CreateMyOrderRequest;
@@ -105,7 +106,8 @@ class OrderServicePromotionFlowIntegrationTest {
                 ),
                 new OrderAggregationProperties(CustomerDetailsMode.GRACEFUL),
                 orderCacheVersionService,
-                transactionTemplate
+                transactionTemplate,
+                Mockito.mock(OutboxService.class)
         );
     }
 
