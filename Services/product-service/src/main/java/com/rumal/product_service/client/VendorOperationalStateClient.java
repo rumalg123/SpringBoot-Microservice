@@ -30,16 +30,16 @@ public class VendorOperationalStateClient {
     private static final ParameterizedTypeReference<List<VendorOperationalStateResponse>> LIST_TYPE =
             new ParameterizedTypeReference<>() {};
 
-    private final RestClient.Builder lbRestClientBuilder;
+    private final RestClient restClient;
 
     public VendorOperationalStateClient(@Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder) {
-        this.lbRestClientBuilder = lbRestClientBuilder;
+        this.restClient = lbRestClientBuilder.build();
     }
 
     @Retry(name = "vendorService")
     @CircuitBreaker(name = "vendorService", fallbackMethod = "fallbackGetState")
     public VendorOperationalStateResponse getState(UUID vendorId, String internalAuth) {
-        RestClient rc = lbRestClientBuilder.build();
+        RestClient rc = restClient;
         try {
             return rc.get()
                     .uri(buildUri("/internal/vendors/access/operational-state/" + vendorId))
@@ -59,7 +59,7 @@ public class VendorOperationalStateClient {
         if (vendorIds == null || vendorIds.isEmpty()) {
             return Map.of();
         }
-        RestClient rc = lbRestClientBuilder.build();
+        RestClient rc = restClient;
         try {
             List<VendorOperationalStateResponse> rows = rc.post()
                     .uri(buildUri("/internal/vendors/access/operational-state/batch"))

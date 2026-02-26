@@ -43,3 +43,21 @@ logging:
 
 cache:
   customer-by-keycloak-ttl: ${CACHE_CUSTOMER_BY_KEYCLOAK_TTL:120s}
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      keycloak:
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 3
+        minimum-number-of-calls: 5
+  retry:
+    instances:
+      keycloak:
+        max-attempts: 2
+        wait-duration: 500ms
+        retry-exceptions:
+          - jakarta.ws.rs.ProcessingException
+          - java.net.ConnectException

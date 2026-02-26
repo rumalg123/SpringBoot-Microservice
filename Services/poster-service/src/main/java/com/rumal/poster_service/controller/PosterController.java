@@ -1,5 +1,6 @@
 package com.rumal.poster_service.controller;
 
+import com.rumal.poster_service.config.PosterClickRateLimiter;
 import com.rumal.poster_service.dto.PosterResponse;
 import com.rumal.poster_service.dto.SlugAvailabilityResponse;
 import com.rumal.poster_service.entity.PosterPlacement;
@@ -35,6 +36,7 @@ public class PosterController {
 
     private final PosterService posterService;
     private final PosterImageStorageService posterImageStorageService;
+    private final PosterClickRateLimiter rateLimiter;
 
     @GetMapping
     public Page<PosterResponse> list(
@@ -73,13 +75,15 @@ public class PosterController {
 
     @PostMapping("/{id}/click")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void recordClick(@PathVariable UUID id) {
+    public void recordClick(@PathVariable UUID id, HttpServletRequest request) {
+        if (!rateLimiter.isAllowed(request.getRemoteAddr(), id)) return;
         posterService.recordClick(id);
     }
 
     @PostMapping("/{id}/impression")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void recordImpression(@PathVariable UUID id) {
+    public void recordImpression(@PathVariable UUID id, HttpServletRequest request) {
+        if (!rateLimiter.isAllowed(request.getRemoteAddr(), id)) return;
         posterService.recordImpression(id);
     }
 
@@ -87,8 +91,10 @@ public class PosterController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void recordVariantClick(
             @PathVariable UUID posterId,
-            @PathVariable UUID variantId
+            @PathVariable UUID variantId,
+            HttpServletRequest request
     ) {
+        if (!rateLimiter.isAllowed(request.getRemoteAddr(), posterId)) return;
         posterService.recordVariantClick(posterId, variantId);
     }
 }

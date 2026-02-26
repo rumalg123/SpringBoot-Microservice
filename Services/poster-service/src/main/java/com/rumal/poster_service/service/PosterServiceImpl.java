@@ -28,9 +28,11 @@ import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -90,55 +92,74 @@ public class PosterServiceImpl implements PosterService {
     @Cacheable(cacheNames = "postersByPlacement", key = "'placement::' + #placement")
     public List<PosterResponse> listActiveByPlacement(PosterPlacement placement) {
         Instant now = Instant.now();
-        return posterRepository.findByDeletedFalseAndPlacementOrderBySortOrderAscCreatedAtDesc(placement)
+        List<Poster> posters = posterRepository.findByDeletedFalseAndPlacementOrderBySortOrderAscCreatedAtDesc(placement)
                 .stream()
                 .filter(Poster::isActive)
                 .filter(p -> isActiveInWindow(p, now))
-                .map(this::toResponse)
                 .toList();
+        return toResponseList(posters);
     }
 
     @Override
     @Cacheable(cacheNames = "postersByPlacement", key = "'all-active'")
     public List<PosterResponse> listAllActive() {
         Instant now = Instant.now();
-        return posterRepository.findByDeletedFalseOrderByPlacementAscSortOrderAscCreatedAtDesc()
+        List<Poster> posters = posterRepository.findByDeletedFalseOrderByPlacementAscSortOrderAscCreatedAtDesc()
                 .stream()
                 .filter(Poster::isActive)
                 .filter(p -> isActiveInWindow(p, now))
-                .map(this::toResponse)
                 .toList();
+        return toResponseList(posters);
     }
 
     @Override
     public Page<PosterResponse> listActiveByPlacement(PosterPlacement placement, Pageable pageable) {
-        return posterRepository.findByDeletedFalseAndPlacementOrderBySortOrderAscCreatedAtDesc(placement, pageable)
-                .map(this::toResponse);
+        Page<Poster> page = posterRepository.findActiveByPlacementInWindow(placement, Instant.now(), pageable);
+        Map<UUID, List<PosterVariant>> variantsByPoster = batchFetchVariants(page.getContent());
+        return page.map(p -> toResponse(p, variantsByPoster.getOrDefault(p.getId(), List.of())));
     }
 
     @Override
     public Page<PosterResponse> listAllActive(Pageable pageable) {
-        return posterRepository.findByDeletedFalseOrderByPlacementAscSortOrderAscCreatedAtDesc(pageable)
-                .map(this::toResponse);
+        Page<Poster> page = posterRepository.findAllActiveInWindow(Instant.now(), pageable);
+        Map<UUID, List<PosterVariant>> variantsByPoster = batchFetchVariants(page.getContent());
+        return page.map(p -> toResponse(p, variantsByPoster.getOrDefault(p.getId(), List.of())));
     }
 
     @Override
     public List<PosterResponse> listAllNonDeleted() {
-        return posterRepository.findByDeletedFalseOrderByPlacementAscSortOrderAscCreatedAtDesc()
-                .stream()
-                .map(this::toResponse)
-                .toList();
+        List<Poster> posters = posterRepository.findByDeletedFalseOrderByPlacementAscSortOrderAscCreatedAtDesc();
+        return toResponseList(posters);
     }
 
     @Override
     public Page<PosterResponse> listAllNonDeleted(Pageable pageable) {
-        return posterRepository.findByDeletedFalseOrderByPlacementAscSortOrderAscCreatedAtDesc(pageable)
-                .map(this::toResponse);
+        Page<Poster> page = posterRepository.findByDeletedFalseOrderByPlacementAscSortOrderAscCreatedAtDesc(pageable);
+        Map<UUID, List<PosterVariant>> variantsByPoster = batchFetchVariants(page.getContent());
+        return page.map(p -> toResponse(p, variantsByPoster.getOrDefault(p.getId(), List.of())));
     }
 
     @Override
     public Page<PosterResponse> listDeleted() {
-        return posterRepository.findByDeletedTrueOrderByUpdatedAtDesc(Pageable.ofSize(50)).map(this::toResponse);
+        Page<Poster> page = posterRepository.findByDeletedTrueOrderByUpdatedAtDesc(Pageable.ofSize(50));
+        Map<UUID, List<PosterVariant>> variantsByPoster = batchFetchVariants(page.getContent());
+        return page.map(p -> toResponse(p, variantsByPoster.getOrDefault(p.getId(), List.of())));
+    }
+
+    private List<PosterResponse> toResponseList(List<Poster> posters) {
+        if (posters.isEmpty()) return List.of();
+        Map<UUID, List<PosterVariant>> variantsByPoster = batchFetchVariants(posters);
+        return posters.stream()
+                .map(p -> toResponse(p, variantsByPoster.getOrDefault(p.getId(), List.of())))
+                .toList();
+    }
+
+    private Map<UUID, List<PosterVariant>> batchFetchVariants(List<Poster> posters) {
+        if (posters.isEmpty()) return Map.of();
+        return posterVariantRepository
+                .findByPosterIdInOrderByCreatedAtAsc(posters.stream().map(Poster::getId).toList())
+                .stream()
+                .collect(Collectors.groupingBy(PosterVariant::getPosterId));
     }
 
     @Override
@@ -305,9 +326,10 @@ public class PosterServiceImpl implements PosterService {
     }
 
     private PosterResponse toResponse(Poster p) {
-        // Single query for all variants instead of two separate queries (N+1 fix)
-        List<PosterVariant> allVariantEntities = posterVariantRepository
-                .findByPosterIdOrderByCreatedAtAsc(p.getId());
+        return toResponse(p, posterVariantRepository.findByPosterIdOrderByCreatedAtAsc(p.getId()));
+    }
+
+    private PosterResponse toResponse(Poster p, List<PosterVariant> allVariantEntities) {
         List<PosterVariant> activeVariants = allVariantEntities.stream()
                 .filter(PosterVariant::isActive)
                 .toList();

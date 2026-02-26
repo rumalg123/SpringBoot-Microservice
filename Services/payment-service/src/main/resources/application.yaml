@@ -65,6 +65,17 @@ resilience4j:
           - com.rumal.payment_service.exception.ResourceNotFoundException
           - com.rumal.payment_service.exception.ValidationException
           - com.rumal.payment_service.exception.UnauthorizedException
+      payHereService:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 2
+        slowCallRateThreshold: 80
+        slowCallDurationThreshold: 10000
+        ignoreExceptions:
+          - org.springframework.web.client.HttpClientErrorException
   retry:
     instances:
       orderService:
@@ -79,6 +90,15 @@ resilience4j:
       customerService:
         maxAttempts: 3
         waitDuration: 300ms
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - java.io.IOException
+          - org.springframework.web.client.ResourceAccessException
+          - org.springframework.web.client.HttpServerErrorException
+      payHereService:
+        maxAttempts: 3
+        waitDuration: 500ms
         enableExponentialBackoff: true
         exponentialBackoffMultiplier: 2
         retryExceptions:

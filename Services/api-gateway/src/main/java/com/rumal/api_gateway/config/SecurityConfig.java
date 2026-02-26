@@ -59,7 +59,13 @@ public class SecurityConfig {
                         .pathMatchers(HttpMethod.POST, "/products/*/view").permitAll()
                         .pathMatchers(HttpMethod.GET, "/categories", "/categories/**").permitAll()
                         .pathMatchers(HttpMethod.GET, "/posters", "/posters/**").permitAll()
+                        .pathMatchers(HttpMethod.POST, "/posters/*/click", "/posters/*/impression").permitAll()
+                        .pathMatchers(HttpMethod.GET, "/reviews", "/reviews/**").permitAll()
+                        .pathMatchers(HttpMethod.GET, "/search", "/search/**").permitAll()
                         .pathMatchers("/webhooks/**").permitAll()
+                        .pathMatchers("/analytics/admin/**", "/admin/dashboard/**").access(this::hasSuperAdminAccess)
+                        .pathMatchers("/analytics/vendor/**").access(this::hasSuperAdminOrVendorAdminAccess)
+                        .pathMatchers("/analytics/customer/**").authenticated()
                         .pathMatchers("/orders/vendor/me", "/orders/vendor/me/**").access(this::hasVendorAccess)
                         .pathMatchers("/payments/vendor/me", "/payments/vendor/me/**").access(this::hasVendorAccess)
                         .pathMatchers("/inventory/vendor/me", "/inventory/vendor/me/**").access(this::hasVendorAccess)
@@ -72,6 +78,7 @@ public class SecurityConfig {
                         .access(this::hasCustomerAccess)
                         .pathMatchers(HttpMethod.GET, "/promotions", "/promotions/**").permitAll()
                         .pathMatchers(HttpMethod.POST, "/personalization/sessions/merge").authenticated()
+                        .pathMatchers("/personalization/me", "/personalization/me/**").authenticated()
                         .pathMatchers("/personalization/**").permitAll()
                         .pathMatchers("/admin/vendors/**", "/admin/platform-staff/**").access(this::hasSuperAdminAccess)
                         .pathMatchers("/admin/vendor-staff/**", "/admin/keycloak/users/**", "/admin/access-audit/**").access(this::hasSuperAdminOrVendorAdminAccess)
@@ -102,7 +109,7 @@ public class SecurityConfig {
                 .filter(auth -> auth instanceof JwtAuthenticationToken)
                 .cast(JwtAuthenticationToken.class)
                 .map(JwtAuthenticationToken::getToken)
-                .map(jwt -> (AuthorizationResult) new AuthorizationDecision(hasRole(jwt, "super_admin")))
+                .map(jwt -> (AuthorizationResult) new AuthorizationDecision(isEmailVerified(jwt) && hasRole(jwt, "super_admin")))
                 .defaultIfEmpty(new AuthorizationDecision(false));
     }
 
@@ -113,7 +120,7 @@ public class SecurityConfig {
                 .cast(JwtAuthenticationToken.class)
                 .map(JwtAuthenticationToken::getToken)
                 .map(jwt -> (AuthorizationResult) new AuthorizationDecision(
-                        hasRole(jwt, "super_admin") || hasRole(jwt, "vendor_admin")
+                        isEmailVerified(jwt) && (hasRole(jwt, "super_admin") || hasRole(jwt, "vendor_admin"))
                 ))
                 .defaultIfEmpty(new AuthorizationDecision(false));
     }
@@ -125,7 +132,7 @@ public class SecurityConfig {
                 .cast(JwtAuthenticationToken.class)
                 .map(JwtAuthenticationToken::getToken)
                 .map(jwt -> (AuthorizationResult) new AuthorizationDecision(
-                        hasRole(jwt, "super_admin") || hasRole(jwt, "platform_staff")
+                        isEmailVerified(jwt) && (hasRole(jwt, "super_admin") || hasRole(jwt, "platform_staff"))
                 ))
                 .defaultIfEmpty(new AuthorizationDecision(false));
     }

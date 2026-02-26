@@ -21,12 +21,11 @@ public class VendorAnalyticsClient {
 
     private static final String BASE_URL = "http://vendor-service/internal/vendors/analytics";
 
-    private final RestClient.Builder lbRestClientBuilder;
+    private final RestClient restClient;
     private final CircuitBreakerFactory<?, ?> circuitBreakerFactory;
     private final RetryRegistry retryRegistry;
     private final String internalAuth;
 
-    private final RestClient restClient;
 
     public VendorAnalyticsClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder,
@@ -34,11 +33,10 @@ public class VendorAnalyticsClient {
             RetryRegistry retryRegistry,
             @Value("${internal.auth.shared-secret:}") String internalAuth
     ) {
-        this.lbRestClientBuilder = lbRestClientBuilder;
+        this.restClient = lbRestClientBuilder.build();
         this.circuitBreakerFactory = circuitBreakerFactory;
         this.retryRegistry = retryRegistry;
         this.internalAuth = internalAuth;
-        this.restClient = lbRestClientBuilder.build();
     }
 
     public VendorPlatformSummary getPlatformSummary() {

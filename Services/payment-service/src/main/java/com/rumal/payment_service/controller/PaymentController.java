@@ -48,8 +48,8 @@ public class PaymentController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(emailVerified);
-        requireUserSub(userSub);
-        return paymentService.getPaymentById(paymentId);
+        String keycloakId = requireUserSub(userSub);
+        return paymentService.getPaymentById(paymentId, keycloakId);
     }
 
     @GetMapping("/order/{orderId}")
@@ -61,8 +61,8 @@ public class PaymentController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(emailVerified);
-        requireUserSub(userSub);
-        return paymentService.getPaymentByOrder(orderId);
+        String keycloakId = requireUserSub(userSub);
+        return paymentService.getPaymentByOrder(orderId, keycloakId);
     }
 
     private String requireUserSub(String userSub) {

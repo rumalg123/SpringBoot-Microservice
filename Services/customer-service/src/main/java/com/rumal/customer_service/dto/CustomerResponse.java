@@ -10,6 +10,7 @@ import java.util.UUID;
 
 public record CustomerResponse(
         UUID id,
+        String keycloakId,
         String name,
         String email,
         String phone,

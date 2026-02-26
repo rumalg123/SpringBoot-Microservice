@@ -18,16 +18,16 @@ public class ProductCatalogAdminClient {
 
     private static final Logger log = LoggerFactory.getLogger(ProductCatalogAdminClient.class);
 
-    private final RestClient.Builder lbRestClientBuilder;
+    private final RestClient restClient;
 
     public ProductCatalogAdminClient(@Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder) {
-        this.lbRestClientBuilder = lbRestClientBuilder;
+        this.restClient = lbRestClientBuilder.build();
     }
 
     @Retry(name = "productService")
     @CircuitBreaker(name = "productService", fallbackMethod = "fallbackEvictPublicCachesForVendor")
     public void evictPublicCachesForVendor(UUID vendorId, String internalAuth) {
-        RestClient rc = lbRestClientBuilder.build();
+        RestClient rc = restClient;
         try {
             rc.post()
                     .uri("http://product-service/internal/products/cache/vendors/{vendorId}/evict", vendorId)
@@ -44,7 +44,7 @@ public class ProductCatalogAdminClient {
     @Retry(name = "productService")
     @CircuitBreaker(name = "productService", fallbackMethod = "fallbackDeactivateAllByVendor")
     public void deactivateAllByVendor(UUID vendorId, String internalAuth) {
-        RestClient rc = lbRestClientBuilder.build();
+        RestClient rc = restClient;
         try {
             rc.post()
                     .uri("http://product-service/internal/products/vendors/{vendorId}/deactivate-all", vendorId)

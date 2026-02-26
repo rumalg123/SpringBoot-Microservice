@@ -28,7 +28,7 @@ public class VendorClient {
             new ParameterizedTypeReference<>() {};
 
     @Qualifier("loadBalancedRestClientBuilder")
-    private final RestClient.Builder lbRestClientBuilder;
+    private final RestClient restClient;
     private final CircuitBreakerFactory<?, ?> circuitBreakerFactory;
     private final RetryRegistry retryRegistry;
 
@@ -37,7 +37,7 @@ public class VendorClient {
             CircuitBreakerFactory<?, ?> circuitBreakerFactory,
             RetryRegistry retryRegistry
     ) {
-        this.lbRestClientBuilder = lbRestClientBuilder;
+        this.restClient = lbRestClientBuilder.build();
         this.circuitBreakerFactory = circuitBreakerFactory;
         this.retryRegistry = retryRegistry;
     }
@@ -80,7 +80,7 @@ public class VendorClient {
 
     public void delete(UUID id, String internalAuth, String userSub, String userRoles) {
         runVendorVoid(() -> {
-            RestClient rc = lbRestClientBuilder.build();
+            RestClient rc = restClient;
             try {
                 applyActorHeaders(rc.delete()
                         .uri(buildUri("/admin/vendors/" + id))
@@ -147,7 +147,7 @@ public class VendorClient {
 
     public Map<String, Object> restore(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles, String idempotencyKey) {
         return runVendorCall(() -> {
-            RestClient rc = lbRestClientBuilder.build();
+            RestClient rc = restClient;
             try {
                 RestClient.RequestBodySpec spec = rc.post().uri(buildUri("/admin/vendors/" + id + "/restore"));
                 RestClient.RequestHeadersSpec<?> headersSpec = applyIdempotencyHeader(
@@ -202,7 +202,7 @@ public class VendorClient {
 
     public void confirmDelete(UUID vendorId, Map<String, Object> request, String internalAuth, String userSub, String userRoles, String idempotencyKey) {
         runVendorVoid(() -> {
-            RestClient rc = lbRestClientBuilder.build();
+            RestClient rc = restClient;
             try {
                 RestClient.RequestBodySpec spec = rc.post().uri(buildUri("/admin/vendors/" + vendorId + "/confirm-delete"));
                 RestClient.RequestHeadersSpec<?> headersSpec = applyIdempotencyHeader(
@@ -242,7 +242,7 @@ public class VendorClient {
 
     public void removeVendorUser(UUID vendorId, UUID membershipId, String internalAuth) {
         runVendorVoid(() -> {
-            RestClient rc = lbRestClientBuilder.build();
+            RestClient rc = restClient;
             try {
                 rc.delete()
                         .uri(buildUri("/admin/vendors/" + vendorId + "/users/" + membershipId))
@@ -274,7 +274,7 @@ public class VendorClient {
 
     private List<Map<String, Object>> getList(String path, String internalAuth) {
         return runVendorCall(() -> {
-            RestClient rc = lbRestClientBuilder.build();
+            RestClient rc = restClient;
             try {
                 List<Map<String, Object>> response = rc.get()
                         .uri(buildUri(path))
@@ -297,7 +297,7 @@ public class VendorClient {
 
     private Map<String, Object> getMap(String path, String internalAuth) {
         return runVendorCall(() -> {
-            RestClient rc = lbRestClientBuilder.build();
+            RestClient rc = restClient;
             try {
                 Map<String, Object> response = rc.get()
                         .uri(buildUri(path))
@@ -328,7 +328,7 @@ public class VendorClient {
 
     private Map<String, Object> jsonRequest(String method, String path, Map<String, Object> request, String internalAuth, String userSub, String userRoles, String idempotencyKey) {
         return runVendorCall(() -> {
-            RestClient rc = lbRestClientBuilder.build();
+            RestClient rc = restClient;
             try {
                 RestClient.RequestBodySpec spec = switch (method) {
                     case "POST" -> rc.post().uri(buildUri(path));
@@ -367,7 +367,7 @@ public class VendorClient {
 
     private Map<String, Object> postNoBody(String path, String internalAuth, String userSub, String userRoles, String idempotencyKey) {
         return runVendorCall(() -> {
-            RestClient rc = lbRestClientBuilder.build();
+            RestClient rc = restClient;
             try {
                 Map<String, Object> response = applyIdempotencyHeader(
                                 applyActorHeaders(rc.post()

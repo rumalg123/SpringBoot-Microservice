@@ -6,12 +6,15 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
 public interface PosterVariantRepository extends JpaRepository<PosterVariant, UUID> {
 
     List<PosterVariant> findByPosterIdOrderByCreatedAtAsc(UUID posterId);
+
+    List<PosterVariant> findByPosterIdInOrderByCreatedAtAsc(Collection<UUID> posterIds);
 
     List<PosterVariant> findByPosterIdAndActiveTrueOrderByCreatedAtAsc(UUID posterId);
 

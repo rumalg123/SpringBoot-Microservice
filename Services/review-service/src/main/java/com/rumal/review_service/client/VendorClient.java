@@ -21,13 +21,13 @@ public class VendorClient {
 
     private static final Logger log = LoggerFactory.getLogger(VendorClient.class);
 
-    private final RestClient.Builder lbRestClientBuilder;
+    private final RestClient restClient;
     private final String internalSharedSecret;
 
     public VendorClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder,
             @Value("${internal.auth.shared-secret:}") String internalSharedSecret) {
-        this.lbRestClientBuilder = lbRestClientBuilder;
+        this.restClient = lbRestClientBuilder.build();
         this.internalSharedSecret = internalSharedSecret;
     }
 
@@ -35,7 +35,7 @@ public class VendorClient {
     @CircuitBreaker(name = "vendorService", fallbackMethod = "fallbackGetVendorIdByKeycloakSub")
     @SuppressWarnings("unchecked")
     public UUID getVendorIdByKeycloakSub(String keycloakSub) {
-        RestClient rc = lbRestClientBuilder.build();
+        RestClient rc = restClient;
         try {
             Map<String, Object> response = rc.get()
                     .uri("http://vendor-service/internal/vendors/keycloak/{keycloakSub}", keycloakSub)

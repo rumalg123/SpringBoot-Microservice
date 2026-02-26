@@ -1,5 +1,6 @@
 package com.rumal.promotion_service.controller;
 
+import com.rumal.promotion_service.client.CustomerClient;
 import com.rumal.promotion_service.dto.CouponUsageResponse;
 import com.rumal.promotion_service.security.InternalRequestVerifier;
 import com.rumal.promotion_service.service.CustomerPromotionService;
@@ -22,6 +23,7 @@ public class CustomerPromotionController {
 
     private final CustomerPromotionService customerPromotionService;
     private final InternalRequestVerifier internalRequestVerifier;
+    private final CustomerClient customerClient;
 
     @GetMapping("/coupon-usage")
     public Page<CouponUsageResponse> couponUsage(
@@ -30,7 +32,7 @@ public class CustomerPromotionController {
             @PageableDefault(size = 20, sort = "committedAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         internalRequestVerifier.verify(internalAuth);
-        UUID customerId = UUID.fromString(userSub);
+        UUID customerId = customerClient.getCustomerByKeycloakId(userSub).id();
         return customerPromotionService.getUsageHistory(customerId, pageable);
     }
 }

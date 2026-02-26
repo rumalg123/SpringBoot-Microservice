@@ -11,6 +11,9 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -18,9 +21,10 @@ import java.util.UUID;
 
 public interface PromotionCampaignRepository extends JpaRepository<PromotionCampaign, UUID>, JpaSpecificationExecutor<PromotionCampaign> {
 
-    List<PromotionCampaign> findByLifecycleStatusAndApprovalStatusIn(
+    Page<PromotionCampaign> findByLifecycleStatusAndApprovalStatusIn(
             PromotionLifecycleStatus lifecycleStatus,
-            Collection<PromotionApprovalStatus> approvalStatuses
+            Collection<PromotionApprovalStatus> approvalStatuses,
+            Pageable pageable
     );
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

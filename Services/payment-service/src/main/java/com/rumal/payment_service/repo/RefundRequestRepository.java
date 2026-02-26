@@ -5,6 +5,7 @@ import com.rumal.payment_service.entity.RefundStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -27,12 +28,15 @@ public interface RefundRequestRepository extends JpaRepository<RefundRequest, UU
     @Query("SELECT r FROM RefundRequest r WHERE r.vendorOrderId = :vendorOrderId AND r.status NOT IN :terminalStatuses")
     Optional<RefundRequest> findByVendorOrderIdAndStatusNotInForUpdate(@Param("vendorOrderId") UUID vendorOrderId, @Param("terminalStatuses") List<RefundStatus> terminalStatuses);
 
+    @EntityGraph(attributePaths = "payment")
     Page<RefundRequest> findByCustomerKeycloakId(String customerKeycloakId, Pageable pageable);
 
+    @EntityGraph(attributePaths = "payment")
     @Query("SELECT r FROM RefundRequest r WHERE r.vendorId = :vendorId " +
             "AND (:status IS NULL OR r.status = :status)")
     Page<RefundRequest> findByVendorFiltered(UUID vendorId, RefundStatus status, Pageable pageable);
 
+    @EntityGraph(attributePaths = "payment")
     @Query("SELECT r FROM RefundRequest r WHERE (:vendorId IS NULL OR r.vendorId = :vendorId) " +
             "AND (:status IS NULL OR r.status = :status)")
     Page<RefundRequest> findAllFiltered(UUID vendorId, RefundStatus status, Pageable pageable);

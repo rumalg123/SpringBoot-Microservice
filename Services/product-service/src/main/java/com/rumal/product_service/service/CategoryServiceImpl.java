@@ -30,8 +30,10 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -164,7 +166,8 @@ public class CategoryServiceImpl implements CategoryService {
         } else {
             categories = categoryRepository.findByDeletedFalseOrderByNameAsc();
         }
-        return categories.stream().map(this::toResponse).toList();
+        Map<UUID, List<CategoryAttribute>> attrs = batchFetchAttributes(categories);
+        return categories.stream().map(c -> toResponse(c, attrs.getOrDefault(c.getId(), List.of()))).toList();
     }
 
     @Override
@@ -177,21 +180,24 @@ public class CategoryServiceImpl implements CategoryService {
         } else {
             categories = categoryRepository.findByDeletedFalseOrderByNameAsc(pageable);
         }
-        return categories.map(this::toResponse);
+        Map<UUID, List<CategoryAttribute>> attrs = batchFetchAttributes(categories.getContent());
+        return categories.map(c -> toResponse(c, attrs.getOrDefault(c.getId(), List.of())));
     }
 
     @Override
     public Page<CategoryResponse> listDeletedPaged(Pageable pageable) {
-        return categoryRepository.findByDeletedTrueOrderByUpdatedAtDesc(pageable)
-                .map(this::toResponse);
+        Page<Category> page = categoryRepository.findByDeletedTrueOrderByUpdatedAtDesc(pageable);
+        Map<UUID, List<CategoryAttribute>> attrs = batchFetchAttributes(page.getContent());
+        return page.map(c -> toResponse(c, attrs.getOrDefault(c.getId(), List.of())));
     }
 
     @Override
     @Cacheable(cacheNames = "deletedCategoriesList", key = "'deleted'")
     public List<CategoryResponse> listDeleted() {
-        return categoryRepository.findByDeletedTrueOrderByUpdatedAtDesc()
-                .stream()
-                .map(this::toResponse)
+        List<Category> categories = categoryRepository.findByDeletedTrueOrderByUpdatedAtDesc();
+        Map<UUID, List<CategoryAttribute>> attrs = batchFetchAttributes(categories);
+        return categories.stream()
+                .map(c -> toResponse(c, attrs.getOrDefault(c.getId(), List.of())))
                 .toList();
     }
 
@@ -337,9 +343,12 @@ public class CategoryServiceImpl implements CategoryService {
     }
 
     private CategoryResponse toResponse(Category category) {
-        List<CategoryAttributeResponse> attributes = categoryAttributeRepository
-                .findByCategoryIdOrderByDisplayOrderAsc(category.getId())
-                .stream()
+        return toResponse(category, categoryAttributeRepository
+                .findByCategoryIdOrderByDisplayOrderAsc(category.getId()));
+    }
+
+    private CategoryResponse toResponse(Category category, List<CategoryAttribute> attributes) {
+        List<CategoryAttributeResponse> attributeResponses = attributes.stream()
                 .map(this::toCategoryAttributeResponse)
                 .toList();
         return new CategoryResponse(
@@ -353,12 +362,20 @@ public class CategoryServiceImpl implements CategoryService {
                 category.getDepth(),
                 category.getPath(),
                 category.getDisplayOrder(),
-                attributes,
+                attributeResponses,
                 category.isDeleted(),
                 category.getDeletedAt(),
                 category.getCreatedAt(),
                 category.getUpdatedAt()
         );
+    }
+
+    private Map<UUID, List<CategoryAttribute>> batchFetchAttributes(List<Category> categories) {
+        if (categories.isEmpty()) return Map.of();
+        Set<UUID> ids = categories.stream().map(Category::getId).collect(Collectors.toSet());
+        return categoryAttributeRepository.findByCategoryIdInOrderByDisplayOrderAsc(ids)
+                .stream()
+                .collect(Collectors.groupingBy(CategoryAttribute::getCategoryId));
     }
 
     private CategoryAttributeResponse toCategoryAttributeResponse(CategoryAttribute attr) {

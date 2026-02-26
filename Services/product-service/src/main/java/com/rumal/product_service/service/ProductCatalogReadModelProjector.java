@@ -25,8 +25,11 @@ import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -86,8 +89,18 @@ public class ProductCatalogReadModelProjector {
         Page<Product> page;
         do {
             page = productRepository.findAll(PageRequest.of(pageNumber, pageSize, Sort.by("createdAt")));
+
+            // Batch-fetch vendor names for this page
+            Set<UUID> vendorIds = page.getContent().stream()
+                    .map(Product::getVendorId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+            Map<UUID, VendorOperationalStateResponse> vendorStates = vendorIds.isEmpty()
+                    ? Map.of()
+                    : fetchVendorStatesBatch(vendorIds);
+
             List<ProductCatalogRead> rows = page.getContent().stream()
-                    .map(product -> toReadRow(product, parentIdsWithChildren))
+                    .map(product -> toReadRow(product, parentIdsWithChildren, vendorStates))
                     .toList();
             productCatalogReadRepository.saveAll(rows);
             totalProcessed += rows.size();
@@ -100,6 +113,10 @@ public class ProductCatalogReadModelProjector {
     }
 
     private ProductCatalogRead toReadRow(Product product, Set<UUID> parentIdsWithChildren) {
+        return toReadRow(product, parentIdsWithChildren, null);
+    }
+
+    private ProductCatalogRead toReadRow(Product product, Set<UUID> parentIdsWithChildren, Map<UUID, VendorOperationalStateResponse> vendorStatesCache) {
         Set<Category> categories = product.getCategories() == null
                 ? Set.of()
                 : product.getCategories();
@@ -133,7 +150,9 @@ public class ProductCatalogReadModelProjector {
         boolean hasActiveVariationChild = product.getProductType() == ProductType.PARENT
                 && hasActiveVariationChild(product.getId(), parentIdsWithChildren);
 
-        String vendorName = resolveVendorName(product.getVendorId());
+        String vendorName = vendorStatesCache != null
+                ? resolveVendorNameFromCache(product.getVendorId(), vendorStatesCache)
+                : resolveVendorName(product.getVendorId());
 
         return ProductCatalogRead.builder()
                 .id(product.getId())
@@ -189,6 +208,26 @@ public class ProductCatalogReadModelProjector {
 
     private BigDecimal resolveSellingPrice(Product product) {
         return product.getDiscountedPrice() != null ? product.getDiscountedPrice() : product.getRegularPrice();
+    }
+
+    private Map<UUID, VendorOperationalStateResponse> fetchVendorStatesBatch(Set<UUID> vendorIds) {
+        if (vendorIds == null || vendorIds.isEmpty() || !hasText(internalAuthSharedSecret)) {
+            return Map.of();
+        }
+        try {
+            return vendorOperationalStateClient.getStates(vendorIds, internalAuthSharedSecret);
+        } catch (Exception ex) {
+            log.warn("Failed to batch-fetch vendor states: {}", ex.getMessage());
+            return Map.of();
+        }
+    }
+
+    private String resolveVendorNameFromCache(UUID vendorId, Map<UUID, VendorOperationalStateResponse> cache) {
+        if (vendorId == null) {
+            return null;
+        }
+        VendorOperationalStateResponse state = cache.get(vendorId);
+        return state != null ? state.vendorName() : null;
     }
 
     private String resolveVendorName(UUID vendorId) {

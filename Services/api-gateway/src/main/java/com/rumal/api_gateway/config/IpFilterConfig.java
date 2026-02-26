@@ -14,7 +14,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
-import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Arrays;
@@ -29,15 +28,21 @@ public class IpFilterConfig implements GlobalFilter, Ordered {
     private final Set<String> blockedIps;
     private final Set<String> allowedIps;
     private final boolean allowlistEnabled;
+    private final TrustedProxyResolver trustedProxyResolver;
 
     public IpFilterConfig(
             @Value("${gateway.ip-filter.blocked:}") String blockedIps,
             @Value("${gateway.ip-filter.allowed:}") String allowedIps,
-            @Value("${gateway.ip-filter.allowlist-enabled:false}") boolean allowlistEnabled
+            @Value("${gateway.ip-filter.allowlist-enabled:false}") boolean allowlistEnabled,
+            TrustedProxyResolver trustedProxyResolver
     ) {
         this.blockedIps = parseIpSet(blockedIps);
         this.allowedIps = parseIpSet(allowedIps);
         this.allowlistEnabled = allowlistEnabled;
+        this.trustedProxyResolver = trustedProxyResolver;
+        if (allowlistEnabled && this.allowedIps.isEmpty()) {
+            log.warn("IP allowlist enabled but no IPs configured — blocking all traffic");
+        }
     }
 
     @Override
@@ -54,7 +59,7 @@ public class IpFilterConfig implements GlobalFilter, Ordered {
             return writeForbidden(exchange);
         }
 
-        if (allowlistEnabled && !allowedIps.isEmpty() && !allowedIps.contains(clientIp)) {
+        if (allowlistEnabled && (allowedIps.isEmpty() || !allowedIps.contains(clientIp))) {
             log.warn("IP not in allowlist IP={} path={}", clientIp, exchange.getRequest().getPath().value());
             return writeForbidden(exchange);
         }
@@ -64,7 +69,7 @@ public class IpFilterConfig implements GlobalFilter, Ordered {
 
     private Mono<Void> writeForbidden(ServerWebExchange exchange) {
         String body = "{\"timestamp\":\"" + Instant.now() + "\"," +
-                "\"path\":\"" + exchange.getRequest().getPath().value() + "\"," +
+                "\"path\":\"" + escapeJson(exchange.getRequest().getPath().value()) + "\"," +
                 "\"status\":403," +
                 "\"error\":\"Forbidden\"," +
                 "\"message\":\"Access denied\"}";
@@ -75,20 +80,14 @@ public class IpFilterConfig implements GlobalFilter, Ordered {
         return exchange.getResponse().writeWith(Mono.just(dataBuffer));
     }
 
+    private static String escapeJson(String value) {
+        if (value == null) return "";
+        return value.replace("\\", "\\\\").replace("\"", "\\\"")
+                .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
+    }
+
     private String resolveClientIp(ServerWebExchange exchange) {
-        String cfIp = exchange.getRequest().getHeaders().getFirst("CF-Connecting-IP");
-        if (cfIp != null && !cfIp.isBlank()) {
-            return cfIp.trim();
-        }
-        String xff = exchange.getRequest().getHeaders().getFirst("X-Forwarded-For");
-        if (xff != null && !xff.isBlank()) {
-            return xff.split(",")[0].trim();
-        }
-        InetSocketAddress remoteAddress = exchange.getRequest().getRemoteAddress();
-        if (remoteAddress != null && remoteAddress.getAddress() != null) {
-            return remoteAddress.getAddress().getHostAddress();
-        }
-        return "unknown";
+        return trustedProxyResolver.resolveClientIp(exchange);
     }
 
     private Set<String> parseIpSet(String csv) {

@@ -41,7 +41,7 @@ public class OrderClient {
     private static final ParameterizedTypeReference<List<VendorOrderStatusAuditResponse>> VENDOR_ORDER_STATUS_AUDIT_LIST_TYPE =
             new ParameterizedTypeReference<>() {};
 
-    private final RestClient.Builder lbRestClientBuilder;
+    private final RestClient restClient;
     private final ObjectMapper objectMapper;
     private final CircuitBreakerFactory<?, ?> circuitBreakerFactory;
     private final RetryRegistry retryRegistry;
@@ -52,7 +52,7 @@ public class OrderClient {
             CircuitBreakerFactory<?, ?> circuitBreakerFactory,
             RetryRegistry retryRegistry
     ) {
-        this.lbRestClientBuilder = lbRestClientBuilder;
+        this.restClient = lbRestClientBuilder.build();
         this.objectMapper = objectMapper;
         this.circuitBreakerFactory = circuitBreakerFactory;
         this.retryRegistry = retryRegistry;
@@ -64,7 +64,7 @@ public class OrderClient {
             int page, int size, List<String> sort, String internalAuth
     ) {
         return runOrderCall(() -> {
-            RestClient rc = lbRestClientBuilder.build();
+            RestClient rc = restClient;
             try {
                 Map<String, Object> rawResponse = rc.get()
                         .uri(uriBuilder -> buildListOrdersUri(uriBuilder, customerId, customerEmail, vendorId, status, createdAfter, createdBefore, page, size, sort))
@@ -95,7 +95,7 @@ public class OrderClient {
             String idempotencyKey
     ) {
         return runOrderCall(() -> {
-            RestClient rc = lbRestClientBuilder.build();
+            RestClient rc = restClient;
             try {
                 RestClient.RequestBodySpec req = rc.patch()
                         .uri("http://order-service/orders/{id}/status", orderId)
@@ -118,7 +118,7 @@ public class OrderClient {
 
     public OrderResponse updateOrderNote(UUID orderId, UpdateOrderNoteRequest body, String internalAuth, String idempotencyKey) {
         return runOrderCall(() -> {
-            RestClient rc = lbRestClientBuilder.build();
+            RestClient rc = restClient;
             try {
                 RestClient.RequestBodySpec req = rc.patch()
                         .uri("http://order-service/orders/{id}/note", orderId)
@@ -135,7 +135,7 @@ public class OrderClient {
 
     public List<OrderStatusAuditResponse> getOrderStatusHistory(UUID orderId, String internalAuth) {
         return runOrderCall(() -> {
-            RestClient rc = lbRestClientBuilder.build();
+            RestClient rc = restClient;
             try {
                 List<OrderStatusAuditResponse> rows = rc.get()
                         .uri("http://order-service/orders/{id}/status-history", orderId)
@@ -151,7 +151,7 @@ public class OrderClient {
 
     public List<VendorOrderResponse> getVendorOrders(UUID orderId, String internalAuth) {
         return runOrderCall(() -> {
-            RestClient rc = lbRestClientBuilder.build();
+            RestClient rc = restClient;
             try {
                 List<VendorOrderResponse> rows = rc.get()
                         .uri("http://order-service/orders/{id}/vendor-orders", orderId)
@@ -167,7 +167,7 @@ public class OrderClient {
 
     public VendorOrderResponse getVendorOrder(UUID vendorOrderId, String internalAuth) {
         return runOrderCall(() -> {
-            RestClient rc = lbRestClientBuilder.build();
+            RestClient rc = restClient;
             try {
                 return rc.get()
                         .uri("http://order-service/orders/vendor-orders/{id}", vendorOrderId)
@@ -193,7 +193,7 @@ public class OrderClient {
             String idempotencyKey
     ) {
         return runOrderCall(() -> {
-            RestClient rc = lbRestClientBuilder.build();
+            RestClient rc = restClient;
             try {
                 RestClient.RequestBodySpec req = rc.patch()
                         .uri("http://order-service/orders/vendor-orders/{id}/status", vendorOrderId)
@@ -216,7 +216,7 @@ public class OrderClient {
 
     public List<VendorOrderStatusAuditResponse> getVendorOrderStatusHistory(UUID vendorOrderId, String internalAuth) {
         return runOrderCall(() -> {
-            RestClient rc = lbRestClientBuilder.build();
+            RestClient rc = restClient;
             try {
                 List<VendorOrderStatusAuditResponse> rows = rc.get()
                         .uri("http://order-service/orders/vendor-orders/{id}/status-history", vendorOrderId)
@@ -232,7 +232,7 @@ public class OrderClient {
 
     public String exportOrdersCsv(String status, String createdAfter, String createdBefore, String internalAuth) {
         return runOrderCall(() -> {
-            RestClient rc = lbRestClientBuilder.build();
+            RestClient rc = restClient;
             try {
                 return rc.get()
                         .uri(uriBuilder -> {
@@ -263,7 +263,7 @@ public class OrderClient {
 
     public Set<UUID> getOrderVendorIds(UUID orderId, String internalAuth) {
         return runOrderCall(() -> {
-            RestClient rc = lbRestClientBuilder.build();
+            RestClient rc = restClient;
             try {
                 Map<String, Object> raw = rc.get()
                         .uri("http://order-service/orders/{id}/details", orderId)

@@ -78,6 +78,7 @@ public interface AccessService {
     // Session management
     ActiveSessionResponse registerSession(RegisterSessionRequest request);
     List<ActiveSessionResponse> listSessionsByKeycloakId(String keycloakId);
+    org.springframework.data.domain.Page<ActiveSessionResponse> listSessionsByKeycloakId(String keycloakId, org.springframework.data.domain.Pageable pageable);
     void revokeSession(UUID sessionId);
     void revokeAllSessions(String keycloakId);
 

@@ -42,7 +42,7 @@ public class CouponReservationService {
     @Value("${coupon.reservation.max-ttl-seconds:1800}")
     private int maxReservationTtlSeconds;
 
-    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 20)
     public CouponReservationResponse reserve(CreateCouponReservationRequest request) {
         validateReservationRequest(request);
 
@@ -102,7 +102,7 @@ public class CouponReservationService {
         return toResponse(couponReservationRepository.save(reservation), quote);
     }
 
-    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 20)
     public CouponReservationResponse commit(UUID reservationId, CommitCouponReservationRequest request) {
         CouponReservation reservation = couponReservationRepository.findByIdForUpdate(reservationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Coupon reservation not found: " + reservationId));
@@ -128,7 +128,7 @@ public class CouponReservationService {
         return toResponse(couponReservationRepository.save(reservation), null);
     }
 
-    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 20)
     public CouponReservationResponse release(UUID reservationId, ReleaseCouponReservationRequest request) {
         CouponReservation reservation = couponReservationRepository.findByIdForUpdate(reservationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Coupon reservation not found: " + reservationId));

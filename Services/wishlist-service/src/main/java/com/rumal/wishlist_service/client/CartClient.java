@@ -18,21 +18,21 @@ import java.util.UUID;
 @Component
 public class CartClient {
 
-    private final RestClient.Builder lbRestClientBuilder;
+    private final RestClient restClient;
     private final String internalAuthSecret;
 
     public CartClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder,
             @Value("${internal.auth.shared-secret:}") String internalAuthSecret
     ) {
-        this.lbRestClientBuilder = lbRestClientBuilder;
+        this.restClient = lbRestClientBuilder.build();
         this.internalAuthSecret = internalAuthSecret;
     }
 
     @Retry(name = "cartService")
     @CircuitBreaker(name = "cartService", fallbackMethod = "addItemFallback")
     public void addItemToCart(String keycloakId, UUID productId, int quantity) {
-        RestClient client = lbRestClientBuilder.build();
+        RestClient client = restClient;
         try {
             client.post()
                     .uri("http://cart-service/cart/me/items")

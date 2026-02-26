@@ -15,16 +15,16 @@ import java.util.UUID;
 @Component
 public class OrderLifecycleClient {
 
-    private final RestClient.Builder lbRestClientBuilder;
+    private final RestClient restClient;
 
     public OrderLifecycleClient(@Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder) {
-        this.lbRestClientBuilder = lbRestClientBuilder;
+        this.restClient = lbRestClientBuilder.build();
     }
 
     @Retry(name = "orderService")
     @CircuitBreaker(name = "orderService", fallbackMethod = "fallbackGetVendorDeletionCheck")
     public VendorOrderDeletionCheckResponse getVendorDeletionCheck(UUID vendorId, int refundHoldDays, String internalAuth) {
-        RestClient rc = lbRestClientBuilder.build();
+        RestClient rc = restClient;
         try {
             VendorOrderDeletionCheckResponse body = rc.get()
                     .uri("http://order-service/internal/orders/vendors/{vendorId}/deletion-check?refundHoldDays={refundHoldDays}",

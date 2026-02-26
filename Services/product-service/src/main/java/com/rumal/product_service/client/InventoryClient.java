@@ -24,14 +24,14 @@ public class InventoryClient {
     private static final ParameterizedTypeReference<List<StockAvailabilitySummary>> SUMMARY_LIST_TYPE =
             new ParameterizedTypeReference<>() {};
 
-    private final RestClient.Builder lbRestClientBuilder;
+    private final RestClient restClient;
     private final String internalSharedSecret;
 
     public InventoryClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder,
             @Value("${internal.auth.shared-secret:}") String internalSharedSecret
     ) {
-        this.lbRestClientBuilder = lbRestClientBuilder;
+        this.restClient = lbRestClientBuilder.build();
         this.internalSharedSecret = internalSharedSecret == null ? "" : internalSharedSecret.trim();
     }
 
@@ -39,7 +39,7 @@ public class InventoryClient {
     @CircuitBreaker(name = "inventoryService", fallbackMethod = "fallbackGetStockSummary")
     public StockAvailabilitySummary getStockSummary(UUID productId) {
         try {
-            return lbRestClientBuilder.build()
+            return restClient
                     .get()
                     .uri("http://inventory-service/internal/inventory/products/{productId}/stock-summary", productId)
                     .header("X-Internal-Auth", internalSharedSecret)
@@ -55,7 +55,7 @@ public class InventoryClient {
     @CircuitBreaker(name = "inventoryService", fallbackMethod = "fallbackGetBatchStockSummary")
     public List<StockAvailabilitySummary> getBatchStockSummary(List<UUID> productIds) {
         try {
-            List<StockAvailabilitySummary> result = lbRestClientBuilder.build()
+            List<StockAvailabilitySummary> result = restClient
                     .post()
                     .uri("http://inventory-service/internal/inventory/products/stock-summary/batch")
                     .header("X-Internal-Auth", internalSharedSecret)

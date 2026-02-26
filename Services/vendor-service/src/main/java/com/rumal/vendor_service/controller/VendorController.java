@@ -1,7 +1,7 @@
 package com.rumal.vendor_service.controller;
 
+import com.rumal.vendor_service.dto.PublicVendorResponse;
 import com.rumal.vendor_service.dto.SlugAvailabilityResponse;
-import com.rumal.vendor_service.dto.VendorResponse;
 import com.rumal.vendor_service.service.VendorService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -23,7 +23,7 @@ public class VendorController {
     private final VendorService vendorService;
 
     @GetMapping
-    public Page<VendorResponse> listActive(
+    public Page<PublicVendorResponse> listActive(
             @RequestParam(required = false) String category,
             @PageableDefault(size = 20, sort = "name") Pageable pageable
     ) {
@@ -39,7 +39,7 @@ public class VendorController {
     }
 
     @GetMapping("/{idOrSlug}")
-    public VendorResponse getByIdOrSlug(@PathVariable String idOrSlug) {
-        return vendorService.getByIdOrSlug(idOrSlug);
+    public PublicVendorResponse getByIdOrSlug(@PathVariable String idOrSlug) {
+        return vendorService.getPublicByIdOrSlug(idOrSlug);
     }
 }

@@ -135,6 +135,9 @@ public class Product {
     @Builder.Default
     private List<ProductVariationAttribute> variations = new ArrayList<>();
 
+    @Column(name = "variation_signature", length = 1000)
+    private String variationSignature;
+
     @Column(length = 80, unique = true, nullable = false)
     private String sku;
 

@@ -16,22 +16,25 @@ public class AudienceValidator implements OAuth2TokenValidator<Jwt> {
 
     public AudienceValidator(String audienceConfig, boolean acceptAzpAsAudience) {
         if (!StringUtils.hasText(audienceConfig)) {
-            this.requiredAudiences = List.of();
-        } else {
-            this.requiredAudiences = Arrays.stream(audienceConfig.split(","))
-                    .map(String::trim)
-                    .filter(StringUtils::hasText)
-                    .distinct()
-                    .toList();
+            throw new IllegalArgumentException(
+                    "keycloak.audience must be configured. "
+                    + "Set the KEYCLOAK_AUDIENCE environment variable to your Keycloak client ID(s).");
+        }
+        this.requiredAudiences = Arrays.stream(audienceConfig.split(","))
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .distinct()
+                .toList();
+        if (this.requiredAudiences.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "keycloak.audience resolved to an empty list after parsing. "
+                    + "Provide at least one valid audience value.");
         }
         this.acceptAzpAsAudience = acceptAzpAsAudience;
     }
 
     @Override
     public OAuth2TokenValidatorResult validate(Jwt jwt) {
-        if (requiredAudiences.isEmpty()) {
-            return OAuth2TokenValidatorResult.success();
-        }
 
         if (jwt.getAudience().stream().anyMatch(requiredAudiences::contains)) {
             return OAuth2TokenValidatorResult.success();

@@ -1,6 +1,7 @@
 package com.rumal.personalization_service.controller;
 
 import com.rumal.personalization_service.dto.RecordEventRequest;
+import com.rumal.personalization_service.security.InternalRequestVerifier;
 import com.rumal.personalization_service.service.EventService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -16,14 +17,17 @@ import java.util.UUID;
 public class EventController {
 
     private final EventService eventService;
+    private final InternalRequestVerifier internalRequestVerifier;
 
     @PostMapping
     @ResponseStatus(HttpStatus.ACCEPTED)
     public void recordEvent(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-Session-Id", required = false) String sessionId,
             @Valid @RequestBody RecordEventRequest request
     ) {
+        internalRequestVerifier.verify(internalAuth);
         UUID userId = parseUuidOrNull(userSub);
         if (userId == null && (sessionId == null || sessionId.isBlank())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Either X-User-Sub or X-Session-Id header is required");

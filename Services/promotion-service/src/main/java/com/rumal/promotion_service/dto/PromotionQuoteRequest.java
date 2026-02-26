@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.UUID;
 
 public record PromotionQuoteRequest(
-        @NotEmpty List<@Valid PromotionQuoteLineRequest> lines,
+        @NotEmpty @Size(max = 200) List<@Valid PromotionQuoteLineRequest> lines,
         @DecimalMin(value = "0.00", message = "shippingAmount cannot be negative") BigDecimal shippingAmount,
         UUID customerId,
         @Size(max = 40) String customerSegment,

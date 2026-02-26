@@ -38,10 +38,12 @@ public class AdminMutationIdempotencyFilter extends AbstractRedisServletIdempote
         }
         if ("PATCH".equalsIgnoreCase(method)) {
             return path.matches("^/admin/orders/[^/]+/status$")
-                    || path.matches("^/admin/orders/vendor-orders/[^/]+/status$");
+                    || path.matches("^/admin/orders/vendor-orders/[^/]+/status$")
+                    || path.matches("^/admin/orders/[^/]+/note$");
         }
         if ("POST".equalsIgnoreCase(method)) {
-            return path.matches("^/admin/vendors/[^/]+/(stop-orders|resume-orders|delete-request|confirm-delete|restore)$")
+            return path.matches("^/admin/orders/bulk-status-update$")
+                    || path.matches("^/admin/vendors/[^/]+/(stop-orders|resume-orders|delete-request|confirm-delete|restore)$")
                     || path.matches("^/admin/vendors/[^/]+/users/onboard$")
                     || path.matches("^/admin/vendors/[^/]+/users$")
                     || path.matches("^/admin/posters(/.*)?$")

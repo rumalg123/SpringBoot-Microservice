@@ -25,6 +25,7 @@ import java.util.regex.Pattern;
 public class PosterImageStorageServiceImpl implements PosterImageStorageService {
 
     private static final int MAX_IMAGES_PER_REQUEST = 10;
+    private static final long MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of("jpg", "jpeg", "png", "webp");
     private static final Pattern KEY_PATTERN = Pattern.compile("^(posters/)?[A-Za-z0-9-]+\\.(jpg|jpeg|png|webp)$");
 
@@ -74,6 +75,14 @@ public class PosterImageStorageServiceImpl implements PosterImageStorageService 
         List<String> uploaded = new ArrayList<>();
         for (int i = 0; i < files.size(); i++) {
             MultipartFile file = files.get(i);
+            if (file.getSize() > MAX_FILE_SIZE_BYTES) {
+                throw new ValidationException("Image file exceeds maximum size of 5 MB");
+            }
+            try {
+                javax.imageio.ImageIO.read(file.getInputStream());
+            } catch (IOException ex) {
+                throw new ValidationException("File is not a valid image");
+            }
             String preferredKey = keys != null && keys.size() > i ? keys.get(i) : null;
             String ext = extractExtension(file.getOriginalFilename());
             String key = preferredKey == null || preferredKey.isBlank()

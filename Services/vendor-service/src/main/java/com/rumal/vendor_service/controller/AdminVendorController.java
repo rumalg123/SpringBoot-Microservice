@@ -61,12 +61,13 @@ public class AdminVendorController {
     }
 
     @GetMapping("/{id}/lifecycle-audit")
-    public List<VendorLifecycleAuditResponse> listLifecycleAudit(
+    public Page<VendorLifecycleAuditResponse> listLifecycleAudit(
             @RequestHeader(INTERNAL_HEADER) String internalAuth,
-            @PathVariable UUID id
+            @PathVariable UUID id,
+            @PageableDefault(size = 50, sort = "createdAt", direction = org.springframework.data.domain.Sort.Direction.DESC) Pageable pageable
     ) {
         internalRequestVerifier.verify(internalAuth);
-        return vendorService.listLifecycleAudit(id);
+        return vendorService.listLifecycleAudit(id, pageable);
     }
 
     @GetMapping("/{id}/deletion-eligibility")
@@ -126,7 +127,7 @@ public class AdminVendorController {
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID id,
-            @RequestBody(required = false) VendorLifecycleActionRequest request
+            @Valid @RequestBody(required = false) VendorLifecycleActionRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
         return vendorService.requestDelete(id, request == null ? null : request.reason(), userSub, userRoles);
@@ -137,7 +138,7 @@ public class AdminVendorController {
             @RequestHeader(INTERNAL_HEADER) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
-            @RequestBody(required = false) VendorLifecycleActionRequest request,
+            @Valid @RequestBody(required = false) VendorLifecycleActionRequest request,
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
@@ -149,7 +150,7 @@ public class AdminVendorController {
             @RequestHeader(INTERNAL_HEADER) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
-            @RequestBody(required = false) VendorLifecycleActionRequest request,
+            @Valid @RequestBody(required = false) VendorLifecycleActionRequest request,
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
@@ -161,7 +162,7 @@ public class AdminVendorController {
             @RequestHeader(INTERNAL_HEADER) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
-            @RequestBody(required = false) VendorLifecycleActionRequest request,
+            @Valid @RequestBody(required = false) VendorLifecycleActionRequest request,
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
@@ -174,7 +175,7 @@ public class AdminVendorController {
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID id,
-            @RequestBody(required = false) VendorLifecycleActionRequest request
+            @Valid @RequestBody(required = false) VendorLifecycleActionRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
         vendorService.confirmDelete(id, request == null ? null : request.reason(), userSub, userRoles);

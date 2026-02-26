@@ -21,16 +21,16 @@ public class AccessClient {
     private static final ParameterizedTypeReference<List<VendorStaffAccessLookupResponse>> VENDOR_ACCESS_LIST_TYPE =
             new ParameterizedTypeReference<>() {};
 
-    private final RestClient.Builder lbRestClientBuilder;
+    private final RestClient restClient;
 
     public AccessClient(@Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder) {
-        this.lbRestClientBuilder = lbRestClientBuilder;
+        this.restClient = lbRestClientBuilder.build();
     }
 
     @Retry(name = "accessService")
     @CircuitBreaker(name = "accessService", fallbackMethod = "fallbackGetPlatformAccessByKeycloakUser")
     public PlatformAccessLookupResponse getPlatformAccessByKeycloakUser(String keycloakUserId, String internalAuth) {
-        RestClient rc = lbRestClientBuilder.build();
+        RestClient rc = restClient;
         try {
             PlatformAccessLookupResponse response = rc.get()
                     .uri(buildUri("/internal/access/platform/by-keycloak/" + keycloakUserId))
@@ -48,7 +48,7 @@ public class AccessClient {
     @Retry(name = "accessService")
     @CircuitBreaker(name = "accessService", fallbackMethod = "fallbackListVendorStaffAccessByKeycloakUser")
     public List<VendorStaffAccessLookupResponse> listVendorStaffAccessByKeycloakUser(String keycloakUserId, String internalAuth) {
-        RestClient rc = lbRestClientBuilder.build();
+        RestClient rc = restClient;
         try {
             List<VendorStaffAccessLookupResponse> response = rc.get()
                     .uri(buildUri("/internal/access/vendors/by-keycloak/" + keycloakUserId))

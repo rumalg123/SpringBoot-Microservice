@@ -9,6 +9,8 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
 @Service
 @RequiredArgsConstructor
@@ -19,10 +21,11 @@ public class CartAnalyticsService {
     private final CartItemRepository cartItemRepository;
 
     public CartPlatformSummary getPlatformSummary() {
+        Instant since = Instant.now().minus(30, ChronoUnit.DAYS);
         long activeCarts = cartRepository.countActiveCarts();
-        long cartItems = cartItemRepository.countActiveCartItems();
-        long savedForLater = cartItemRepository.countSavedForLaterItems();
-        BigDecimal avgValue = cartItemRepository.avgCartItemValue();
+        long cartItems = cartItemRepository.countActiveCartItems(since);
+        long savedForLater = cartItemRepository.countSavedForLaterItems(since);
+        BigDecimal avgValue = cartItemRepository.avgCartItemValue(since);
         double avgItems = activeCarts > 0 ? (double) cartItems / activeCarts : 0.0;
 
         return new CartPlatformSummary(activeCarts, cartItems, savedForLater,

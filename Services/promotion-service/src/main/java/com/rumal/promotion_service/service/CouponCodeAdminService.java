@@ -45,7 +45,7 @@ public class CouponCodeAdminService {
         PromotionCampaign promotion = requirePromotion(promotionId);
 
         String normalizedCode = normalizeCode(request.code());
-        if (couponCodeRepository.existsByCodeIgnoreCase(normalizedCode)) {
+        if (couponCodeRepository.existsByCode(normalizedCode)) {
             throw new ValidationException("Coupon code already exists");
         }
 
@@ -99,7 +99,7 @@ public class CouponCodeAdminService {
         int maxRetries = 3;
         for (int attempt = 0; attempt < maxRetries; attempt++) {
             String code = prefix + "-" + randomAlphanumeric(8);
-            if (!couponCodeRepository.existsByCodeIgnoreCase(code)) {
+            if (!couponCodeRepository.existsByCode(code)) {
                 return code;
             }
         }

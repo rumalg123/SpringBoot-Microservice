@@ -19,11 +19,11 @@ public class FallbackController {
         String path = originalPath != null ? originalPath : exchange.getRequest().getPath().value();
 
         String body = "{\"timestamp\":\"" + Instant.now() + "\"," +
-                "\"path\":\"" + path + "\"," +
+                "\"path\":\"" + escapeJson(path) + "\"," +
                 "\"status\":503," +
                 "\"error\":\"Service Unavailable\"," +
                 "\"message\":\"The downstream service is temporarily unavailable. Please try again later.\"," +
-                "\"requestId\":\"" + (requestId != null ? requestId : "") + "\"}";
+                "\"requestId\":\"" + escapeJson(requestId) + "\"}";
 
         exchange.getResponse().setStatusCode(HttpStatus.SERVICE_UNAVAILABLE);
         exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
@@ -31,5 +31,11 @@ public class FallbackController {
         var dataBuffer = exchange.getResponse().bufferFactory()
                 .wrap(body.getBytes(java.nio.charset.StandardCharsets.UTF_8));
         return exchange.getResponse().writeWith(Mono.just(dataBuffer));
+    }
+
+    private static String escapeJson(String value) {
+        if (value == null) return "";
+        return value.replace("\\", "\\\\").replace("\"", "\\\"")
+                .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
     }
 }

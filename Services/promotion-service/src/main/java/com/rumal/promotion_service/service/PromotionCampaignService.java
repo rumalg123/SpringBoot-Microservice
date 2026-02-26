@@ -46,7 +46,14 @@ public class PromotionCampaignService {
 
     private final PromotionCampaignRepository promotionCampaignRepository;
 
-    @Cacheable(cacheNames = "promotionAdminList")
+    @Cacheable(cacheNames = "promotionAdminList",
+            key = "'list-P' + #pageable.pageNumber + '-S' + #pageable.pageSize + '-SO' + #pageable.sort"
+                    + " + '-q' + (#q == null ? '' : #q)"
+                    + " + '-v' + (#vendorId == null ? '' : #vendorId)"
+                    + " + '-ls' + (#lifecycleStatus == null ? '' : #lifecycleStatus.name())"
+                    + " + '-as' + (#approvalStatus == null ? '' : #approvalStatus.name())"
+                    + " + '-sc' + (#scopeType == null ? '' : #scopeType.name())"
+                    + " + '-bt' + (#benefitType == null ? '' : #benefitType.name())")
     @Transactional(readOnly = true)
     public Page<PromotionResponse> list(
             Pageable pageable,

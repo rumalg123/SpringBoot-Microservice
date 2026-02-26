@@ -19,6 +19,7 @@ import java.util.UUID;
 public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpecificationExecutor<Product> {
     List<Product> findByParentProductIdAndDeletedFalseAndActiveTrue(UUID parentProductId);
     boolean existsByParentProductIdAndDeletedFalseAndActiveTrueAndProductType(UUID parentProductId, ProductType productType);
+    boolean existsByParentProductIdAndDeletedFalseAndActiveTrueAndVariationSignatureAndIdNot(UUID parentProductId, String variationSignature, UUID excludeId);
     Optional<Product> findBySlug(String slug);
     boolean existsBySlug(String slug);
     boolean existsBySlugAndIdNot(String slug, UUID id);

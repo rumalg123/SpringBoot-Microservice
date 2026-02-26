@@ -19,6 +19,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
@@ -85,14 +88,19 @@ public class PromotionQuoteService {
         String customerSegment = request.customerSegment() == null ? null : request.customerSegment().trim();
 
         Map<UUID, PromotionCandidate> candidatesById = new LinkedHashMap<>();
-        promotionCampaignRepository.findByLifecycleStatusAndApprovalStatusIn(
-                        PromotionLifecycleStatus.ACTIVE,
-                        List.of(PromotionApprovalStatus.NOT_REQUIRED, PromotionApprovalStatus.APPROVED)
-                ).stream()
-                .filter(p -> withinWindow(p, pricedAt))
-                .filter(p -> matchesSegment(p, customerSegment))
-                .filter(p -> withinFlashSaleWindow(p, pricedAt))
-                .forEach(p -> candidatesById.put(p.getId(), new PromotionCandidate(p, false, null)));
+        List<PromotionApprovalStatus> eligibleStatuses = List.of(PromotionApprovalStatus.NOT_REQUIRED, PromotionApprovalStatus.APPROVED);
+        int pageNum = 0;
+        Page<PromotionCampaign> promoPage;
+        do {
+            promoPage = promotionCampaignRepository.findByLifecycleStatusAndApprovalStatusIn(
+                    PromotionLifecycleStatus.ACTIVE, eligibleStatuses, PageRequest.of(pageNum, 200));
+            promoPage.getContent().stream()
+                    .filter(p -> withinWindow(p, pricedAt))
+                    .filter(p -> matchesSegment(p, customerSegment))
+                    .filter(p -> withinFlashSaleWindow(p, pricedAt))
+                    .forEach(p -> candidatesById.put(p.getId(), new PromotionCandidate(p, false, null)));
+            pageNum++;
+        } while (promoPage.hasNext());
         if (couponPromotion != null && couponPromotion.getId() != null) {
             candidatesById.put(couponPromotion.getId(), new PromotionCandidate(couponPromotion, true, request.couponCode().trim()));
         }
@@ -600,11 +608,6 @@ public class PromotionQuoteService {
             return normalized;
         }
         return minMoney(normalized, normalizeMoney(cap));
-    }
-
-    private boolean isApprovalEligible(PromotionCampaign promotion) {
-        PromotionApprovalStatus status = promotion.getApprovalStatus();
-        return status == PromotionApprovalStatus.NOT_REQUIRED || status == PromotionApprovalStatus.APPROVED;
     }
 
     private boolean withinWindow(PromotionCampaign promotion, Instant now) {

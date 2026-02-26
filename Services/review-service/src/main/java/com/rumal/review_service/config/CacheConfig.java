@@ -35,7 +35,6 @@ public class CacheConfig implements CachingConfigurer {
             @Value("${cache.review-by-id-ttl:120s}") Duration reviewByIdTtl,
             @Value("${cache.reviews-by-product-ttl:60s}") Duration reviewsByProductTtl,
             @Value("${cache.review-summary-ttl:300s}") Duration reviewSummaryTtl,
-            @Value("${cache.admin-reviews-list-ttl:45s}") Duration adminReviewsListTtl,
             @Value("${cache.key-prefix:rs:v1::}") String cacheKeyPrefix
     ) {
         ObjectMapper cacheObjectMapper = objectMapper.copy();
@@ -58,8 +57,7 @@ public class CacheConfig implements CachingConfigurer {
                 .withInitialCacheConfigurations(Map.of(
                         "reviewById", defaultConfig.entryTtl(reviewByIdTtl),
                         "reviewsByProduct", defaultConfig.entryTtl(reviewsByProductTtl),
-                        "reviewSummary", defaultConfig.entryTtl(reviewSummaryTtl),
-                        "adminReviewsList", defaultConfig.entryTtl(adminReviewsListTtl)
+                        "reviewSummary", defaultConfig.entryTtl(reviewSummaryTtl)
                 ))
                 .build();
     }

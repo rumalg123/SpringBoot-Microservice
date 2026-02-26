@@ -5,6 +5,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
@@ -27,6 +28,9 @@ import java.util.UUID;
         name = "carts",
         uniqueConstraints = {
                 @UniqueConstraint(name = "uk_cart_keycloak_id", columnNames = "keycloak_id")
+        },
+        indexes = {
+                @Index(name = "idx_carts_last_activity", columnList = "last_activity_at")
         }
 )
 @Getter

@@ -3,12 +3,15 @@ package com.rumal.customer_service.controller;
 import com.rumal.customer_service.dto.analytics.*;
 import com.rumal.customer_service.security.InternalRequestVerifier;
 import com.rumal.customer_service.service.CustomerAnalyticsService;
+import jakarta.validation.constraints.Max;
 import lombok.RequiredArgsConstructor;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.UUID;
 
+@Validated
 @RestController
 @RequestMapping("/internal/customers/analytics")
 @RequiredArgsConstructor
@@ -27,7 +30,7 @@ public class InternalCustomerAnalyticsController {
     @GetMapping("/platform/growth-trend")
     public List<MonthlyGrowthBucket> growthTrend(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
-            @RequestParam(defaultValue = "12") int months) {
+            @RequestParam(defaultValue = "12") @Max(120) int months) {
         internalRequestVerifier.verify(internalAuth);
         return customerAnalyticsService.getGrowthTrend(months);
     }

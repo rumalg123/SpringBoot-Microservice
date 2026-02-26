@@ -15,6 +15,7 @@ import com.rumal.vendor_service.dto.VendorDeletionEligibilityResponse;
 import com.rumal.vendor_service.dto.VendorOperationalStateResponse;
 import com.rumal.vendor_service.dto.VendorOrderDeletionCheckResponse;
 import com.rumal.vendor_service.dto.VendorPayoutConfigResponse;
+import com.rumal.vendor_service.dto.PublicVendorResponse;
 import com.rumal.vendor_service.dto.VendorResponse;
 import com.rumal.vendor_service.dto.VendorUserResponse;
 import com.rumal.vendor_service.entity.Vendor;
@@ -108,6 +109,15 @@ public class VendorServiceImpl implements VendorService {
     }
 
     @Override
+    public PublicVendorResponse getPublicByIdOrSlug(String idOrSlug) {
+        Vendor vendor = findByIdOrSlug(idOrSlug);
+        if (!isStorefrontVisible(vendor)) {
+            throw new ResourceNotFoundException("Vendor not found: " + idOrSlug);
+        }
+        return toPublicVendorResponse(vendor);
+    }
+
+    @Override
     public VendorResponse getByIdOrSlug(String idOrSlug) {
         Vendor vendor = findByIdOrSlug(idOrSlug);
         if (!isStorefrontVisible(vendor)) {
@@ -123,39 +133,13 @@ public class VendorServiceImpl implements VendorService {
     }
 
     @Override
-    public List<VendorResponse> listPublicActive() {
-        return listPublicActive(null);
-    }
-
-    @Override
-    public List<VendorResponse> listPublicActive(String category) {
+    public Page<PublicVendorResponse> listPublicActive(String category, Pageable pageable) {
         if (StringUtils.hasText(category)) {
-            return vendorRepository.findActiveVendorsByCategory(VendorStatus.ACTIVE, category.trim())
-                    .stream()
-                    .filter(Vendor::isAcceptingOrders)
-                    .map(this::toVendorResponse)
-                    .toList();
+            return vendorRepository.findActiveAcceptingVendorsByCategory(VendorStatus.ACTIVE, category.trim(), pageable)
+                    .map(this::toPublicVendorResponse);
         }
-        return vendorRepository.findByDeletedFalseAndActiveTrueAndStatusOrderByNameAsc(VendorStatus.ACTIVE)
-                .stream()
-                .filter(Vendor::isAcceptingOrders)
-                .map(this::toVendorResponse)
-                .toList();
-    }
-
-    @Override
-    public Page<VendorResponse> listPublicActive(String category, Pageable pageable) {
-        if (StringUtils.hasText(category)) {
-            return vendorRepository.findActiveVendorsByCategory(VendorStatus.ACTIVE, category.trim(), pageable)
-                    .map(this::toVendorResponse);
-        }
-        return vendorRepository.findByDeletedFalseAndActiveTrueAndStatusOrderByNameAsc(VendorStatus.ACTIVE, pageable)
-                .map(this::toVendorResponse);
-    }
-
-    @Override
-    public List<VendorResponse> listAllNonDeleted() {
-        return vendorRepository.findByDeletedFalseOrderByNameAsc().stream().map(this::toVendorResponse).toList();
+        return vendorRepository.findByDeletedFalseAndActiveTrueAndAcceptingOrdersTrueAndStatusOrderByNameAsc(VendorStatus.ACTIVE, pageable)
+                .map(this::toPublicVendorResponse);
     }
 
     @Override
@@ -164,23 +148,16 @@ public class VendorServiceImpl implements VendorService {
     }
 
     @Override
-    public List<VendorResponse> listDeleted() {
-        return vendorRepository.findByDeletedTrueOrderByUpdatedAtDesc().stream().map(this::toVendorResponse).toList();
-    }
-
-    @Override
     public Page<VendorResponse> listDeleted(Pageable pageable) {
         return vendorRepository.findByDeletedTrueOrderByUpdatedAtDesc(pageable).map(this::toVendorResponse);
     }
 
     @Override
-    public List<VendorLifecycleAuditResponse> listLifecycleAudit(UUID id) {
+    public Page<VendorLifecycleAuditResponse> listLifecycleAudit(UUID id, Pageable pageable) {
         vendorRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Vendor not found: " + id));
-        return vendorLifecycleAuditRepository.findByVendorIdOrderByCreatedAtDesc(id)
-                .stream()
-                .map(this::toVendorLifecycleAuditResponse)
-                .toList();
+        return vendorLifecycleAuditRepository.findByVendorIdOrderByCreatedAtDesc(id, pageable)
+                .map(this::toVendorLifecycleAuditResponse);
     }
 
     @Override
@@ -221,10 +198,10 @@ public class VendorServiceImpl implements VendorService {
     }
 
     @Override
-    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    @CacheEvict(cacheNames = "vendorOperationalState", key = "#id")
     public void softDelete(UUID id, String reason, String actorSub, String actorRoles) {
-        // Keep method for backward compatibility with internal callers, but enforce two-step semantics.
-        confirmDelete(id, reason, actorSub, actorRoles);
+        // Delegate through self-proxy so @Transactional(NOT_SUPPORTED) on confirmDelete is respected.
+        self.confirmDelete(id, reason, actorSub, actorRoles);
     }
 
     @Override
@@ -394,6 +371,13 @@ public class VendorServiceImpl implements VendorService {
     }
 
     @Override
+    public Page<VendorUserResponse> listVendorUsers(UUID vendorId, Pageable pageable) {
+        getNonDeletedVendor(vendorId);
+        return vendorUserRepository.findByVendorIdOrderByRoleAscCreatedAtAsc(vendorId, pageable)
+                .map(this::toVendorUserResponse);
+    }
+
+    @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public VendorUserResponse addVendorUser(UUID vendorId, UpsertVendorUserRequest request) {
         Vendor vendor = getNonDeletedVendor(vendorId);
@@ -435,7 +419,7 @@ public class VendorServiceImpl implements VendorService {
     public List<VendorAccessMembershipResponse> listAccessibleVendorMembershipsByKeycloakUser(String keycloakUserId) {
         String normalized = normalizeRequired(keycloakUserId, "keycloakUserId", 120);
         return vendorUserRepository
-                .findByKeycloakUserIdIgnoreCaseAndActiveTrueAndVendorDeletedFalseAndVendorActiveTrueOrderByCreatedAtAsc(normalized)
+                .findAccessibleMembershipsByKeycloakUser(normalized)
                 .stream()
                 .map(user -> new VendorAccessMembershipResponse(
                         user.getVendor().getId(),
@@ -615,6 +599,32 @@ public class VendorServiceImpl implements VendorService {
         return base + suffixPart;
     }
 
+    private PublicVendorResponse toPublicVendorResponse(Vendor v) {
+        return new PublicVendorResponse(
+                v.getId(),
+                v.getName(),
+                v.getSlug(),
+                v.getSupportEmail(),
+                v.getLogoImage(),
+                v.getBannerImage(),
+                v.getWebsiteUrl(),
+                v.getDescription(),
+                v.isAcceptingOrders(),
+                v.getAverageRating(),
+                v.getTotalRatings(),
+                v.getTotalOrdersCompleted(),
+                v.getReturnPolicy(),
+                v.getShippingPolicy(),
+                v.getProcessingTimeDays(),
+                v.isAcceptsReturns(),
+                v.getReturnWindowDays(),
+                v.getFreeShippingThreshold(),
+                v.getPrimaryCategory(),
+                v.getSpecializations() != null ? Set.copyOf(v.getSpecializations()) : Set.of(),
+                v.getCreatedAt()
+        );
+    }
+
     private VendorResponse toVendorResponse(Vendor v) {
         return new VendorResponse(
                 v.getId(),
@@ -770,7 +780,7 @@ public class VendorServiceImpl implements VendorService {
     private Vendor resolveVendorForKeycloakUser(String keycloakUserId, UUID vendorIdHint) {
         String normalized = normalizeRequired(keycloakUserId, "keycloakUserId", 120);
         List<VendorUser> memberships = vendorUserRepository
-                .findByKeycloakUserIdIgnoreCaseAndActiveTrueAndVendorDeletedFalseAndVendorActiveTrueOrderByCreatedAtAsc(normalized);
+                .findAccessibleMembershipsByKeycloakUser(normalized);
         if (memberships.isEmpty()) {
             throw new ResourceNotFoundException("No active vendor membership found for user");
         }

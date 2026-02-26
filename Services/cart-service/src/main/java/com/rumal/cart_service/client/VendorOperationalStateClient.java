@@ -21,14 +21,14 @@ public class VendorOperationalStateClient {
 
     private static final Logger log = LoggerFactory.getLogger(VendorOperationalStateClient.class);
 
-    private final RestClient.Builder lbRestClientBuilder;
+    private final RestClient restClient;
     private final String internalAuthSharedSecret;
 
     public VendorOperationalStateClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder,
             @Value("${internal.auth.shared-secret:}") String internalAuthSharedSecret
     ) {
-        this.lbRestClientBuilder = lbRestClientBuilder;
+        this.restClient = lbRestClientBuilder.build();
         this.internalAuthSharedSecret = internalAuthSharedSecret == null ? "" : internalAuthSharedSecret.trim();
     }
 
@@ -36,7 +36,7 @@ public class VendorOperationalStateClient {
     @CircuitBreaker(name = "vendorService", fallbackMethod = "fallbackGetState")
     public VendorOperationalStateResponse getState(UUID vendorId) {
         try {
-            return lbRestClientBuilder.build()
+            return restClient
                     .get()
                     .uri("http://vendor-service/internal/vendors/access/operational-state/{vendorId}", vendorId)
                     .header("X-Internal-Auth", internalAuthSharedSecret)

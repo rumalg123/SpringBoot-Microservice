@@ -23,14 +23,14 @@ public class CustomerClient {
     private static final ParameterizedTypeReference<List<CustomerAddressSummary>> ADDRESS_LIST_TYPE =
             new ParameterizedTypeReference<>() {};
 
-    private final RestClient.Builder lbRestClientBuilder;
+    private final RestClient restClient;
     private final String internalSharedSecret;
 
     public CustomerClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder,
             @Value("${internal.auth.shared-secret:}") String internalSharedSecret
     ) {
-        this.lbRestClientBuilder = lbRestClientBuilder;
+        this.restClient = lbRestClientBuilder.build();
         this.internalSharedSecret = internalSharedSecret;
     }
 
@@ -38,7 +38,7 @@ public class CustomerClient {
     @CircuitBreaker(name = "customerService", fallbackMethod = "getCustomerFallback")
     public CustomerSummary getCustomerByKeycloakId(String keycloakId) {
         try {
-            return lbRestClientBuilder.build()
+            return restClient
                     .get()
                     .uri("http://customer-service/customers/me")
                     .header("X-User-Sub", keycloakId)
@@ -60,7 +60,7 @@ public class CustomerClient {
     @CircuitBreaker(name = "customerService", fallbackMethod = "getAddressesFallback")
     public List<CustomerAddressSummary> getCustomerAddresses(String keycloakId) {
         try {
-            return lbRestClientBuilder.build()
+            return restClient
                     .get()
                     .uri("http://customer-service/customers/me/addresses")
                     .header("X-User-Sub", keycloakId)

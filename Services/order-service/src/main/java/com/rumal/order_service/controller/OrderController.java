@@ -273,12 +273,10 @@ public class OrderController {
             HttpServletResponse response
     ) {
         internalRequestVerifier.verify(internalAuth);
-        String csv = orderService.exportOrdersCsv(status, createdAfter, createdBefore);
         response.setContentType("text/csv");
         response.setHeader("Content-Disposition", "attachment; filename=orders-export.csv");
         try {
-            response.getWriter().write(csv);
-            response.getWriter().flush();
+            orderService.exportOrdersCsv(status, createdAfter, createdBefore, response.getWriter());
         } catch (java.io.IOException e) {
             throw new RuntimeException("Failed to write CSV export", e);
         }

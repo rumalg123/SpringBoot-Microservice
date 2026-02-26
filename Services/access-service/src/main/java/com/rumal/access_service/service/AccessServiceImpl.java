@@ -57,6 +57,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -275,6 +276,7 @@ public class AccessServiceImpl implements AccessService {
         }
         entity.setDeleted(false);
         entity.setDeletedAt(null);
+        entity.setActive(true);
         PlatformStaffAccess saved = platformStaffAccessRepository.save(entity);
         recordPlatformAudit(saved, AccessChangeAction.RESTORED, actorSub, actorRoles, reason);
         String keycloakUserId = saved.getKeycloakUserId();
@@ -444,6 +446,7 @@ public class AccessServiceImpl implements AccessService {
         }
         entity.setDeleted(false);
         entity.setDeletedAt(null);
+        entity.setActive(true);
         VendorStaffAccess saved = vendorStaffAccessRepository.save(entity);
         recordVendorAudit(saved, AccessChangeAction.RESTORED, actorSub, actorRoles, reason);
         String keycloakUserId = saved.getKeycloakUserId();
@@ -874,6 +877,13 @@ public class AccessServiceImpl implements AccessService {
     }
 
     @Override
+    public Page<ActiveSessionResponse> listSessionsByKeycloakId(String keycloakId, Pageable pageable) {
+        String normalized = normalizeRequired(keycloakId, "keycloakId", 120);
+        return activeSessionRepository.findByKeycloakIdOrderByLastActivityAtDesc(normalized, pageable)
+                .map(this::toActiveSessionResponse);
+    }
+
+    @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public void revokeSession(UUID sessionId) {
         if (!activeSessionRepository.existsById(sessionId)) {
@@ -985,27 +995,45 @@ public class AccessServiceImpl implements AccessService {
     // ── Expiry Processing ──────────────────────────────────────────────
 
     @Override
-    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 30)
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 60)
     public int deactivateExpiredAccess() {
         Instant now = Instant.now();
         int count = 0;
+        Pageable batch = PageRequest.of(0, 100);
 
-        List<PlatformStaffAccess> expiredPlatform = platformStaffAccessRepository
-                .findByActiveTrueAndDeletedFalseAndAccessExpiresAtBefore(now);
-        expiredPlatform.forEach(staff -> staff.setActive(false));
-        platformStaffAccessRepository.saveAll(expiredPlatform);
-        count += expiredPlatform.size();
+        List<String> platformUserIds = new ArrayList<>();
+        Page<PlatformStaffAccess> platformPage;
+        do {
+            platformPage = platformStaffAccessRepository
+                    .findByActiveTrueAndDeletedFalseAndAccessExpiresAtBefore(now, batch);
+            platformPage.forEach(staff -> {
+                staff.setActive(false);
+                platformUserIds.add(staff.getKeycloakUserId());
+            });
+            platformStaffAccessRepository.saveAll(platformPage.getContent());
+            count += platformPage.getNumberOfElements();
+        } while (platformPage.hasNext());
 
-        List<VendorStaffAccess> expiredVendor = vendorStaffAccessRepository
-                .findByActiveTrueAndDeletedFalseAndAccessExpiresAtBefore(now);
-        expiredVendor.forEach(staff -> staff.setActive(false));
-        vendorStaffAccessRepository.saveAll(expiredVendor);
-        count += expiredVendor.size();
+        List<String> vendorUserIds = new ArrayList<>();
+        Page<VendorStaffAccess> vendorPage;
+        do {
+            vendorPage = vendorStaffAccessRepository
+                    .findByActiveTrueAndDeletedFalseAndAccessExpiresAtBefore(now, batch);
+            vendorPage.forEach(staff -> {
+                staff.setActive(false);
+                vendorUserIds.add(staff.getKeycloakUserId());
+            });
+            vendorStaffAccessRepository.saveAll(vendorPage.getContent());
+            count += vendorPage.getNumberOfElements();
+        } while (vendorPage.hasNext());
 
-        List<ApiKey> expiredKeys = apiKeyRepository.findByActiveTrueAndExpiresAtBefore(now);
-        expiredKeys.forEach(key -> key.setActive(false));
-        apiKeyRepository.saveAll(expiredKeys);
-        count += expiredKeys.size();
+        Page<ApiKey> keyPage;
+        do {
+            keyPage = apiKeyRepository.findByActiveTrueAndExpiresAtBefore(now, batch);
+            keyPage.forEach(key -> key.setActive(false));
+            apiKeyRepository.saveAll(keyPage.getContent());
+            count += keyPage.getNumberOfElements();
+        } while (keyPage.hasNext());
 
         if (count > 0) {
             log.info("Deactivated {} expired access records", count);
@@ -1013,8 +1041,8 @@ public class AccessServiceImpl implements AccessService {
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                expiredPlatform.forEach(staff -> evictPlatformAccessLookup(staff.getKeycloakUserId()));
-                expiredVendor.forEach(staff -> evictVendorAccessLookup(staff.getKeycloakUserId()));
+                platformUserIds.forEach(uid -> evictPlatformAccessLookup(uid));
+                vendorUserIds.forEach(uid -> evictVendorAccessLookup(uid));
             }
         });
         return count;

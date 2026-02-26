@@ -16,7 +16,7 @@ public class CacheConfig {
 
     @Bean
     public CacheManager cacheManager(
-            @Value("${cache.posters-by-placement-ttl:60s}") Duration postersTtl
+            @Value("${cache.posters-by-placement-ttl:15s}") Duration postersTtl
     ) {
         Duration ttl = postersTtl == null || postersTtl.isNegative() || postersTtl.isZero()
                 ? Duration.ofSeconds(60)

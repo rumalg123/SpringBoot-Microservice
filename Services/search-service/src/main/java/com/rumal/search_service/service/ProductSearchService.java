@@ -24,11 +24,21 @@ import java.util.*;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class ProductSearchService {
 
     private final ElasticsearchOperations elasticsearchOperations;
     private final PopularSearchService popularSearchService;
+    private final Duration queryTimeout;
+
+    public ProductSearchService(
+            ElasticsearchOperations elasticsearchOperations,
+            PopularSearchService popularSearchService,
+            @org.springframework.beans.factory.annotation.Value("${search.query.timeout-seconds:10}") int timeoutSeconds
+    ) {
+        this.elasticsearchOperations = elasticsearchOperations;
+        this.popularSearchService = popularSearchService;
+        this.queryTimeout = Duration.ofSeconds(timeoutSeconds);
+    }
 
     @Cacheable(value = "searchResults", key = "#request.q() + '-' + #request.page() + '-' + #request.size() + '-' + #request.sortBy() + '-' + #request.category() + '-' + #request.mainCategory() + '-' + #request.subCategory() + '-' + #request.brand() + '-' + #request.vendorId() + '-' + #request.minPrice() + '-' + #request.maxPrice()")
     public SearchResponse search(SearchRequest request) {
@@ -85,7 +95,7 @@ public class ProductSearchService {
         // Pagination
         queryBuilder.withPageable(PageRequest.of(request.page(), request.size()));
 
-        queryBuilder.withTimeout(Duration.ofSeconds(10));
+        queryBuilder.withTimeout(queryTimeout);
         NativeQuery query = queryBuilder.build();
         SearchHits<ProductDocument> searchHits = elasticsearchOperations.search(query, ProductDocument.class);
 

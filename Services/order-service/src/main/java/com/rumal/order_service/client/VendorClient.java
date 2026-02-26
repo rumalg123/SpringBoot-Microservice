@@ -19,26 +19,25 @@ import java.util.UUID;
 @Component
 public class VendorClient {
 
-    private final RestClient.Builder lbRestClientBuilder;
+    private final RestClient restClient;
     private final String internalAuthSecret;
 
     public VendorClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder,
             @Value("${internal.auth.shared-secret:}") String internalAuthSecret
     ) {
-        this.lbRestClientBuilder = lbRestClientBuilder;
+        this.restClient = lbRestClientBuilder.build();
         this.internalAuthSecret = internalAuthSecret;
     }
 
     @Retry(name = "vendorService")
     @CircuitBreaker(name = "vendorService", fallbackMethod = "vendorFallback")
     public VendorSummaryForOrder getVendorForUser(String userSub, UUID vendorIdHint) {
-        RestClient rc = lbRestClientBuilder.build();
         try {
             String uri = vendorIdHint != null
                     ? "http://vendor-service/vendors/me?vendorId=" + vendorIdHint
                     : "http://vendor-service/vendors/me";
-            return rc.get()
+            return restClient.get()
                     .uri(uri)
                     .header("X-User-Sub", userSub)
                     .header("X-Internal-Auth", internalAuthSecret)

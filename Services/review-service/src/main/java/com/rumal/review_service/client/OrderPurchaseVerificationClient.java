@@ -20,20 +20,20 @@ public class OrderPurchaseVerificationClient {
 
     private static final Logger log = LoggerFactory.getLogger(OrderPurchaseVerificationClient.class);
 
-    private final RestClient.Builder lbRestClientBuilder;
+    private final RestClient restClient;
     private final String internalSharedSecret;
 
     public OrderPurchaseVerificationClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder,
             @Value("${internal.auth.shared-secret:}") String internalSharedSecret) {
-        this.lbRestClientBuilder = lbRestClientBuilder;
+        this.restClient = lbRestClientBuilder.build();
         this.internalSharedSecret = internalSharedSecret;
     }
 
     @Retry(name = "orderService")
     @CircuitBreaker(name = "orderService", fallbackMethod = "fallbackCheckPurchase")
     public CustomerProductPurchaseCheckResponse checkPurchase(UUID customerId, UUID productId) {
-        RestClient rc = lbRestClientBuilder.build();
+        RestClient rc = restClient;
         try {
             return rc.get()
                     .uri("http://order-service/internal/orders/customers/{customerId}/products/{productId}/purchased",

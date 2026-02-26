@@ -34,7 +34,7 @@ public class PosterClient {
             new ParameterizedTypeReference<>() {};
 
     @Qualifier("loadBalancedRestClientBuilder")
-    private final RestClient.Builder lbRestClientBuilder;
+    private final RestClient restClient;
     private final CircuitBreakerFactory<?, ?> circuitBreakerFactory;
     private final RetryRegistry retryRegistry;
 
@@ -43,7 +43,7 @@ public class PosterClient {
             CircuitBreakerFactory<?, ?> circuitBreakerFactory,
             RetryRegistry retryRegistry
     ) {
-        this.lbRestClientBuilder = lbRestClientBuilder;
+        this.restClient = lbRestClientBuilder.build();
         this.circuitBreakerFactory = circuitBreakerFactory;
         this.retryRegistry = retryRegistry;
     }
@@ -66,7 +66,7 @@ public class PosterClient {
 
     public void delete(UUID id, String internalAuth) {
         runPosterVoid(() -> {
-            RestClient rc = lbRestClientBuilder.build();
+            RestClient rc = restClient;
             try {
                 rc.delete()
                         .uri(buildUri("/admin/posters/" + id))
@@ -83,7 +83,7 @@ public class PosterClient {
 
     public Map<String, Object> restore(UUID id, String internalAuth) {
         return runPosterCall(() -> {
-            RestClient rc = lbRestClientBuilder.build();
+            RestClient rc = restClient;
             try {
                 Map<String, Object> body = rc.post()
                         .uri(buildUri("/admin/posters/" + id + "/restore"))
@@ -108,7 +108,7 @@ public class PosterClient {
 
     public Map<String, Object> uploadImages(List<MultipartFile> files, List<String> keys, String internalAuth) {
         return runPosterCall(() -> {
-            RestClient rc = lbRestClientBuilder.build();
+            RestClient rc = restClient;
             try {
                 MultiValueMap<String, Object> parts = new LinkedMultiValueMap<>();
                 for (MultipartFile file : files) {
@@ -166,7 +166,7 @@ public class PosterClient {
 
     private Map<String, Object> getMap(String path, String internalAuth) {
         return runPosterCall(() -> {
-            RestClient rc = lbRestClientBuilder.build();
+            RestClient rc = restClient;
             try {
                 Map<String, Object> response = rc.get()
                         .uri(buildUri(path))
@@ -187,7 +187,7 @@ public class PosterClient {
 
     private List<Map<String, Object>> getList(String path, String internalAuth) {
         return runPosterCall(() -> {
-            RestClient rc = lbRestClientBuilder.build();
+            RestClient rc = restClient;
             try {
                 List<Map<String, Object>> response = rc.get()
                         .uri(buildUri(path))
@@ -208,7 +208,7 @@ public class PosterClient {
 
     private Map<String, Object> jsonRequest(String method, String path, Map<String, Object> request, String internalAuth) {
         return runPosterCall(() -> {
-            RestClient rc = lbRestClientBuilder.build();
+            RestClient rc = restClient;
             try {
                 RestClient.RequestBodySpec spec = switch (method) {
                     case "POST" -> rc.post().uri(buildUri(path));

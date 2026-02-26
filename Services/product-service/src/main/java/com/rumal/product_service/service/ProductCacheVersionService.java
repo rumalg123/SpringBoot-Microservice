@@ -3,9 +3,12 @@ package com.rumal.product_service.service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.CacheManager;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+
+import java.util.UUID;
 
 @Service
 public class ProductCacheVersionService {
@@ -14,13 +17,16 @@ public class ProductCacheVersionService {
     private static final String DEFAULT_VERSION = "0";
 
     private final StringRedisTemplate redisTemplate;
+    private final CacheManager cacheManager;
     private final String keyPrefix;
 
     public ProductCacheVersionService(
             StringRedisTemplate redisTemplate,
+            CacheManager cacheManager,
             @Value("${cache.version-key-prefix:ps:cachever:v1::}") String keyPrefix
     ) {
         this.redisTemplate = redisTemplate;
+        this.cacheManager = cacheManager;
         this.keyPrefix = StringUtils.hasText(keyPrefix) ? keyPrefix : "ps:cachever:v1::";
     }
 
@@ -38,8 +44,22 @@ public class ProductCacheVersionService {
 
     public void bumpAllProductReadCaches() {
         bump("productById");
+        bumpListCaches();
+    }
+
+    public void bumpListCaches() {
         bump("productsList");
         bump("deletedProductsList");
+    }
+
+    public void evictProductById(UUID productId, String slug) {
+        var cache = cacheManager.getCache("productById");
+        if (cache == null) return;
+        String version = productByIdVersion();
+        cache.evict(version + "::id::" + productId);
+        if (StringUtils.hasText(slug)) {
+            cache.evict(version + "::slug::" + slug);
+        }
     }
 
     private String getVersion(String bucket) {

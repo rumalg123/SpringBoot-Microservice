@@ -21,7 +21,6 @@ public class ProductAnalyticsClient {
 
     private static final String BASE_URL = "http://product-service/internal/products/analytics";
 
-    private final RestClient.Builder lbRestClientBuilder;
     private final RestClient restClient;
     private final CircuitBreakerFactory<?, ?> circuitBreakerFactory;
     private final RetryRegistry retryRegistry;
@@ -33,7 +32,6 @@ public class ProductAnalyticsClient {
             RetryRegistry retryRegistry,
             @Value("${internal.auth.shared-secret:}") String internalAuth
     ) {
-        this.lbRestClientBuilder = lbRestClientBuilder;
         this.restClient = lbRestClientBuilder.build();
         this.circuitBreakerFactory = circuitBreakerFactory;
         this.retryRegistry = retryRegistry;

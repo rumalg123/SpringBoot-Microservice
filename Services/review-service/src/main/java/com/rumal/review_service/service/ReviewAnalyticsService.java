@@ -22,6 +22,7 @@ public class ReviewAnalyticsService {
     private final VendorReplyRepository vendorReplyRepository;
 
     public ReviewPlatformSummary getPlatformSummary() {
+        long total = reviewRepository.countTotalReviews();
         long active = reviewRepository.countActiveReviews();
         double avgRating = reviewRepository.avgActiveRating();
         long verified = reviewRepository.countVerifiedPurchaseReviews();
@@ -33,7 +34,7 @@ public class ReviewAnalyticsService {
 
         double verifiedPercent = active > 0 ? (double) verified / active * 100.0 : 0.0;
 
-        return new ReviewPlatformSummary(active, active,
+        return new ReviewPlatformSummary(total, active,
             Math.round(avgRating * 100.0) / 100.0,
             Math.round(verifiedPercent * 100.0) / 100.0,
             reported, thisMonth);

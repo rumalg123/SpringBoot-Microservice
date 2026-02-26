@@ -20,4 +20,5 @@ public interface PlatformStaffAccessRepository extends JpaRepository<PlatformSta
     boolean existsByKeycloakUserIdIgnoreCase(String keycloakUserId);
     boolean existsByKeycloakUserIdIgnoreCaseAndIdNot(String keycloakUserId, UUID id);
     List<PlatformStaffAccess> findByActiveTrueAndDeletedFalseAndAccessExpiresAtBefore(Instant now);
+    Page<PlatformStaffAccess> findByActiveTrueAndDeletedFalseAndAccessExpiresAtBefore(Instant now, Pageable pageable);
 }

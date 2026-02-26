@@ -38,10 +38,12 @@ public class ProductIndexService {
 
     public ReindexResponse fullReindex() {
         log.info("Starting full product reindex");
+        Instant reindexStart = Instant.now();
         long start = System.currentTimeMillis();
         long totalIndexed = 0;
         int page = 0;
         boolean hasMore = true;
+        boolean hadErrors = false;
 
         while (hasMore) {
             try {
@@ -62,14 +64,27 @@ public class ProductIndexService {
                 }
             } catch (Exception e) {
                 log.error("Error during full reindex at page {}: {}", page, e.getMessage(), e);
+                hadErrors = true;
                 break;
+            }
+        }
+
+        if (!hadErrors && totalIndexed > 0) {
+            try {
+                long deleted = productSearchRepository.deleteByUpdatedAtBefore(reindexStart);
+                if (deleted > 0) {
+                    log.info("Removed {} stale products from search index", deleted);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to remove stale products: {}", e.getMessage());
             }
         }
 
         long duration = System.currentTimeMillis() - start;
         updateLastSyncTime();
-        log.info("Full reindex completed: {} products in {}ms", totalIndexed, duration);
-        return new ReindexResponse(totalIndexed, duration, "COMPLETED");
+        String status = hadErrors ? "PARTIAL_FAILURE" : "COMPLETED";
+        log.info("Full reindex {}: {} products in {}ms", status, totalIndexed, duration);
+        return new ReindexResponse(totalIndexed, duration, status);
     }
 
     @Scheduled(cron = "${search.sync.incremental-sync-cron:0 */5 * * * *}")

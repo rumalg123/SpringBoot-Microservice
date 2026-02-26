@@ -31,6 +31,9 @@ public interface ReviewRepository extends JpaRepository<Review, UUID>, JpaSpecif
     @Query("SELECT COUNT(r) FROM Review r WHERE r.deleted = false AND r.active = true")
     long countActiveReviews();
 
+    @Query("SELECT COUNT(r) FROM Review r WHERE r.deleted = false")
+    long countTotalReviews();
+
     @Query("SELECT COALESCE(AVG(CAST(r.rating AS double)), 0) FROM Review r WHERE r.deleted = false AND r.active = true")
     double avgActiveRating();
 

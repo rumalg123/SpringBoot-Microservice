@@ -19,6 +19,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import jakarta.persistence.Version;
+import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -61,6 +62,7 @@ public class PlatformStaffAccess {
     @CollectionTable(name = "platform_staff_permissions", joinColumns = @JoinColumn(name = "staff_access_id"))
     @Column(name = "permission_code", nullable = false, length = 80)
     @Enumerated(EnumType.STRING)
+    @BatchSize(size = 50)
     @Builder.Default
     private Set<PlatformPermission> permissions = new LinkedHashSet<>();
 

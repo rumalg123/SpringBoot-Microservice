@@ -6,7 +6,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -18,6 +20,9 @@ public interface WishlistItemRepository extends JpaRepository<WishlistItem, UUID
     Page<WishlistItem> findByKeycloakId(String keycloakId, Pageable pageable);
 
     List<WishlistItem> findByCollectionOrderByCreatedAtDesc(WishlistCollection collection);
+
+    @Query("SELECT i FROM WishlistItem i WHERE i.collection.id IN :collectionIds ORDER BY i.createdAt DESC")
+    List<WishlistItem> findByCollectionIdInOrderByCreatedAtDesc(@Param("collectionIds") Collection<UUID> collectionIds);
 
     Optional<WishlistItem> findByIdAndKeycloakId(UUID id, String keycloakId);
 

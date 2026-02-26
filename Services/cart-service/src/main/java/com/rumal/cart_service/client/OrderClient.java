@@ -32,14 +32,14 @@ public class OrderClient {
     private static final Logger log = LoggerFactory.getLogger(OrderClient.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    private final RestClient.Builder lbRestClientBuilder;
+    private final RestClient restClient;
     private final String internalSharedSecret;
 
     public OrderClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder,
             @Value("${internal.auth.shared-secret:}") String internalSharedSecret
     ) {
-        this.lbRestClientBuilder = lbRestClientBuilder;
+        this.restClient = lbRestClientBuilder.build();
         this.internalSharedSecret = internalSharedSecret;
     }
 
@@ -53,7 +53,7 @@ public class OrderClient {
             PromotionCheckoutPricingRequest promotionPricing,
             String idempotencyKey
     ) {
-        RestClient rc = lbRestClientBuilder.build();
+        RestClient rc = restClient;
         CreateMyOrderRequest request = new CreateMyOrderRequest(items, shippingAddressId, billingAddressId, promotionPricing);
 
         try {

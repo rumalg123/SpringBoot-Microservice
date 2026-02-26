@@ -19,24 +19,23 @@ import java.util.UUID;
 @Component
 public class CustomerClient {
 
-    private final RestClient.Builder lbRestClientBuilder;
+    private final RestClient restClient;
     private final String internalSharedSecret;
 
     public CustomerClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder,
             @Value("${internal.auth.shared-secret:}") String internalSharedSecret
     ) {
-        this.lbRestClientBuilder = lbRestClientBuilder;
+        this.restClient = lbRestClientBuilder.build();
         this.internalSharedSecret = internalSharedSecret;
     }
 
     @Retry(name = "customerService")
     @CircuitBreaker(name = "customerService", fallbackMethod = "customerFallback")
     public void assertCustomerExists(UUID customerId) {
-        RestClient rc = lbRestClientBuilder.build();
 
         try {
-            rc.get()
+            restClient.get()
                     .uri("http://customer-service/customers/{id}", customerId)
                     .retrieve()
                     .toBodilessEntity();
@@ -54,10 +53,9 @@ public class CustomerClient {
     @Retry(name = "customerService")
     @CircuitBreaker(name = "customerService", fallbackMethod = "customerFallbackGetCustomer")
     public CustomerSummary getCustomer(UUID customerId) {
-        RestClient rc = lbRestClientBuilder.build();
 
         try {
-            return rc.get()
+            return restClient.get()
                     .uri("http://customer-service/customers/{id}", customerId)
                     .retrieve()
                     .body(CustomerSummary.class);
@@ -74,10 +72,9 @@ public class CustomerClient {
     @Retry(name = "customerService")
     @CircuitBreaker(name = "customerService", fallbackMethod = "customerFallbackGetCustomerByKeycloak")
     public CustomerSummary getCustomerByKeycloakId(String keycloakId) {
-        RestClient rc = lbRestClientBuilder.build();
 
         try {
-            return rc.get()
+            return restClient.get()
                     .uri("http://customer-service/customers/me")
                     .header("X-User-Sub", keycloakId)
                     .header("X-User-Email-Verified", "true")
@@ -97,11 +94,10 @@ public class CustomerClient {
     @Retry(name = "customerService")
     @CircuitBreaker(name = "customerService", fallbackMethod = "customerFallbackGetCustomerByEmail")
     public CustomerSummary getCustomerByEmail(String email) {
-        RestClient rc = lbRestClientBuilder.build();
         String normalizedEmail = email == null ? "" : email.trim().toLowerCase();
 
         try {
-            return rc.get()
+            return restClient.get()
                     .uri("http://customer-service/customers/by-email?email={email}", normalizedEmail)
                     .retrieve()
                     .body(CustomerSummary.class);
@@ -118,9 +114,8 @@ public class CustomerClient {
     @Retry(name = "customerService")
     @CircuitBreaker(name = "customerService", fallbackMethod = "customerFallbackGetCustomerAddress")
     public CustomerAddressSummary getCustomerAddress(UUID customerId, UUID addressId) {
-        RestClient rc = lbRestClientBuilder.build();
         try {
-            return rc.get()
+            return restClient.get()
                     .uri("http://customer-service/customers/{customerId}/addresses/{addressId}", customerId, addressId)
                     .retrieve()
                     .body(CustomerAddressSummary.class);

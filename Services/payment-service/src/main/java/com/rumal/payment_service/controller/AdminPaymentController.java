@@ -20,7 +20,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -56,14 +55,15 @@ public class AdminPaymentController {
     }
 
     @GetMapping("/{id}/audit")
-    public List<PaymentAuditResponse> getAuditTrail(
+    public Page<PaymentAuditResponse> getAuditTrail(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
-            @PathVariable UUID id
+            @PathVariable UUID id,
+            @PageableDefault(size = 50, sort = "createdAt") Pageable pageable
     ) {
         internalRequestVerifier.verify(internalAuth);
         requireUserSub(userSub);
-        return paymentService.getAuditTrail(id);
+        return paymentService.getAuditTrail(id, pageable);
     }
 
     @PostMapping("/{id}/verify")

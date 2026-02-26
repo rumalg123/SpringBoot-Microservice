@@ -170,7 +170,7 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
     private Mono<Void> writeTooManyRequests(ServerWebExchange exchange, String policyId) {
         String requestId = exchange.getRequest().getHeaders().getFirst(RequestIdFilter.REQUEST_ID_HEADER);
         String body = "{\"timestamp\":\"" + Instant.now() + "\"," +
-                "\"path\":\"" + exchange.getRequest().getPath().value() + "\"," +
+                "\"path\":\"" + escapeJson(exchange.getRequest().getPath().value()) + "\"," +
                 "\"status\":429," +
                 "\"error\":\"Too Many Requests\"," +
                 "\"message\":\"Rate limit exceeded\"," +
@@ -209,7 +209,7 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
     private Mono<Void> writeRateLimitServiceUnavailable(ServerWebExchange exchange, String policyId) {
         String requestId = exchange.getRequest().getHeaders().getFirst(RequestIdFilter.REQUEST_ID_HEADER);
         String body = "{\"timestamp\":\"" + Instant.now() + "\"," +
-                "\"path\":\"" + exchange.getRequest().getPath().value() + "\"," +
+                "\"path\":\"" + escapeJson(exchange.getRequest().getPath().value()) + "\"," +
                 "\"status\":503," +
                 "\"error\":\"Service Unavailable\"," +
                 "\"message\":\"Rate limiting service unavailable\"," +

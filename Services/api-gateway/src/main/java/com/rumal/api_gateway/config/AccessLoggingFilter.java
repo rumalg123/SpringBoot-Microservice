@@ -20,6 +20,11 @@ import java.time.Instant;
 public class AccessLoggingFilter implements GlobalFilter, Ordered {
 
     private static final Logger log = LoggerFactory.getLogger(AccessLoggingFilter.class);
+    private final TrustedProxyResolver trustedProxyResolver;
+
+    public AccessLoggingFilter(TrustedProxyResolver trustedProxyResolver) {
+        this.trustedProxyResolver = trustedProxyResolver;
+    }
 
     @Override
     @NonNull
@@ -58,19 +63,7 @@ public class AccessLoggingFilter implements GlobalFilter, Ordered {
     }
 
     private String resolveClientIp(ServerWebExchange exchange) {
-        String cfIp = exchange.getRequest().getHeaders().getFirst("CF-Connecting-IP");
-        if (cfIp != null && !cfIp.isBlank()) {
-            return cfIp.trim();
-        }
-        String xff = exchange.getRequest().getHeaders().getFirst("X-Forwarded-For");
-        if (xff != null && !xff.isBlank()) {
-            return xff.split(",")[0].trim();
-        }
-        var remoteAddress = exchange.getRequest().getRemoteAddress();
-        if (remoteAddress != null && remoteAddress.getAddress() != null) {
-            return remoteAddress.getAddress().getHostAddress();
-        }
-        return "unknown";
+        return trustedProxyResolver.resolveClientIp(exchange);
     }
 
     @Override

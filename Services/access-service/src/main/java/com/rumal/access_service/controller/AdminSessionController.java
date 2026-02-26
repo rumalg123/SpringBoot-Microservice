@@ -17,7 +17,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 import java.util.UUID;
 
 @RestController
@@ -40,12 +42,13 @@ public class AdminSessionController {
     }
 
     @GetMapping("/by-keycloak/{keycloakId}")
-    public List<ActiveSessionResponse> listByKeycloakId(
+    public Page<ActiveSessionResponse> listByKeycloakId(
             @RequestHeader(INTERNAL_HEADER) String internalAuth,
-            @PathVariable String keycloakId
+            @PathVariable String keycloakId,
+            Pageable pageable
     ) {
         internalRequestVerifier.verify(internalAuth);
-        return accessService.listSessionsByKeycloakId(keycloakId);
+        return accessService.listSessionsByKeycloakId(keycloakId, pageable);
     }
 
     @DeleteMapping("/{sessionId}")

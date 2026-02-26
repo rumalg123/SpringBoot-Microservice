@@ -1,6 +1,8 @@
 package com.rumal.access_service.repo;
 
 import com.rumal.access_service.entity.ApiKey;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.Instant;
@@ -13,4 +15,5 @@ public interface ApiKeyRepository extends JpaRepository<ApiKey, UUID> {
     List<ApiKey> findByKeycloakIdOrderByCreatedAtDesc(String keycloakId);
     Optional<ApiKey> findByKeyHashAndActiveTrue(String keyHash);
     List<ApiKey> findByActiveTrueAndExpiresAtBefore(Instant now);
+    Page<ApiKey> findByActiveTrueAndExpiresAtBefore(Instant now, Pageable pageable);
 }

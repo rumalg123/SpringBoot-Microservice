@@ -11,16 +11,21 @@ import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
 
+import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Service
 public class KeycloakManagementService {
+
+    private static final Duration TOKEN_REFRESH_MARGIN = Duration.ofSeconds(30);
 
     private final WebClient webClient;
     private final String realm;
     private final String adminRealm;
     private final String adminClientId;
     private final String adminClientSecret;
+    private final AtomicReference<Mono<String>> cachedTokenMono = new AtomicReference<>();
 
     public KeycloakManagementService(
             WebClient.Builder webClientBuilder,
@@ -65,6 +70,24 @@ public class KeycloakManagementService {
     }
 
     private Mono<String> getAccessToken() {
+        Mono<String> cached = cachedTokenMono.get();
+        if (cached != null) {
+            return cached;
+        }
+        return refreshToken();
+    }
+
+    private Mono<String> refreshToken() {
+        Mono<String> tokenMono = fetchAccessToken()
+                .cache(token -> TOKEN_REFRESH_MARGIN.multipliedBy(2),
+                        error -> Duration.ZERO,
+                        () -> Duration.ZERO)
+                .doOnError(e -> cachedTokenMono.set(null));
+        cachedTokenMono.set(tokenMono);
+        return tokenMono;
+    }
+
+    private Mono<String> fetchAccessToken() {
         return webClient.post()
                 .uri("/realms/{realm}/protocol/openid-connect/token", adminRealm)
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)
@@ -79,12 +102,19 @@ public class KeycloakManagementService {
                                         HttpStatus.BAD_GATEWAY,
                                         "Keycloak token request failed: " + body))))
                 .bodyToMono(KeycloakAccessTokenResponse.class)
-                .map(KeycloakAccessTokenResponse::accessToken)
-                .filter(StringUtils::hasText)
-                .switchIfEmpty(Mono.error(new ResponseStatusException(
-                        HttpStatus.BAD_GATEWAY,
-                        "Keycloak access token is empty"
-                )));
+                .flatMap(resp -> {
+                    String token = resp.accessToken();
+                    if (!StringUtils.hasText(token)) {
+                        return Mono.error(new ResponseStatusException(
+                                HttpStatus.BAD_GATEWAY, "Keycloak access token is empty"));
+                    }
+                    long ttlSeconds = resp.expiresIn() > 0 ? resp.expiresIn() : 300;
+                    Duration cacheDuration = Duration.ofSeconds(Math.max(1, ttlSeconds - TOKEN_REFRESH_MARGIN.getSeconds()));
+                    Mono<String> cachedMono = Mono.just(token)
+                            .cache(cacheDuration);
+                    cachedTokenMono.set(cachedMono);
+                    return Mono.just(token);
+                });
     }
 
     private String resolveBaseUrlFromIssuer(String issuerUri) {
@@ -102,9 +132,12 @@ public class KeycloakManagementService {
         return normalized.substring(0, realmsSegmentIndex);
     }
 
-    private record KeycloakAccessTokenResponse(String access_token) {
+    private record KeycloakAccessTokenResponse(String access_token, long expires_in) {
         private String accessToken() {
             return access_token;
+        }
+        private long expiresIn() {
+            return expires_in;
         }
     }
 }

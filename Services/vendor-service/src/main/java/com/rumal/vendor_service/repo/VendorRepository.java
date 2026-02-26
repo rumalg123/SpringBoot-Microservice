@@ -22,18 +22,10 @@ public interface VendorRepository extends JpaRepository<Vendor, UUID> {
     Optional<Vendor> findBySlug(String slug);
     boolean existsBySlug(String slug);
     boolean existsBySlugAndIdNot(String slug, UUID id);
-    List<Vendor> findByDeletedFalseOrderByNameAsc();
-    List<Vendor> findByDeletedTrueOrderByUpdatedAtDesc();
-    List<Vendor> findByDeletedFalseAndActiveTrueAndStatusOrderByNameAsc(VendorStatus status);
-
     Page<Vendor> findByDeletedFalseOrderByNameAsc(Pageable pageable);
     Page<Vendor> findByDeletedTrueOrderByUpdatedAtDesc(Pageable pageable);
     Page<Vendor> findByDeletedFalseAndActiveTrueAndStatusOrderByNameAsc(VendorStatus status, Pageable pageable);
-
-    @Query("SELECT DISTINCT v FROM Vendor v LEFT JOIN v.specializations s " +
-           "WHERE v.deleted = false AND v.active = true AND v.status = :status " +
-           "AND (v.primaryCategory = :category OR s = :category)")
-    List<Vendor> findActiveVendorsByCategory(@Param("status") VendorStatus status, @Param("category") String category);
+    Page<Vendor> findByDeletedFalseAndActiveTrueAndAcceptingOrdersTrueAndStatusOrderByNameAsc(VendorStatus status, Pageable pageable);
 
     @Query(value = "SELECT DISTINCT v FROM Vendor v LEFT JOIN v.specializations s " +
            "WHERE v.deleted = false AND v.active = true AND v.status = :status " +
@@ -42,6 +34,14 @@ public interface VendorRepository extends JpaRepository<Vendor, UUID> {
            "WHERE v.deleted = false AND v.active = true AND v.status = :status " +
            "AND (v.primaryCategory = :category OR s = :category)")
     Page<Vendor> findActiveVendorsByCategory(@Param("status") VendorStatus status, @Param("category") String category, Pageable pageable);
+
+    @Query(value = "SELECT DISTINCT v FROM Vendor v LEFT JOIN v.specializations s " +
+           "WHERE v.deleted = false AND v.active = true AND v.acceptingOrders = true AND v.status = :status " +
+           "AND (v.primaryCategory = :category OR s = :category)",
+           countQuery = "SELECT COUNT(DISTINCT v) FROM Vendor v LEFT JOIN v.specializations s " +
+           "WHERE v.deleted = false AND v.active = true AND v.acceptingOrders = true AND v.status = :status " +
+           "AND (v.primaryCategory = :category OR s = :category)")
+    Page<Vendor> findActiveAcceptingVendorsByCategory(@Param("status") VendorStatus status, @Param("category") String category, Pageable pageable);
 
     // --- Analytics queries ---
 

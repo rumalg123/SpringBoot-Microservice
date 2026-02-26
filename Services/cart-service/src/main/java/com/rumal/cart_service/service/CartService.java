@@ -37,6 +37,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
@@ -85,38 +86,44 @@ public class CartService {
         String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
         int quantityToAdd = sanitizeQuantity(request.quantity());
         ProductDetails product = resolvePurchasableProduct(request.productId());
-        return transactionTemplate.execute(status -> {
-            Cart cart = cartRepository.findWithItemsByKeycloakIdForUpdate(normalizedKeycloakId)
-                    .orElseGet(() -> {
-                        Cart created = Cart.builder()
-                                .keycloakId(normalizedKeycloakId)
-                                .build();
-                        created.setItems(new java.util.ArrayList<>());
-                        return created;
-                    });
+        for (int attempt = 0; ; attempt++) {
+            try {
+                return transactionTemplate.execute(status -> {
+                    Cart cart = cartRepository.findWithItemsByKeycloakIdForUpdate(normalizedKeycloakId)
+                            .orElseGet(() -> {
+                                Cart created = Cart.builder()
+                                        .keycloakId(normalizedKeycloakId)
+                                        .build();
+                                created.setItems(new java.util.ArrayList<>());
+                                return created;
+                            });
 
-            CartItem existing = cart.getItems().stream()
-                    .filter(item -> item.getProductId().equals(product.id()))
-                    .findFirst()
-                    .orElse(null);
+                    CartItem existing = cart.getItems().stream()
+                            .filter(item -> item.getProductId().equals(product.id()))
+                            .findFirst()
+                            .orElse(null);
 
-            if (existing == null) {
-                if (cart.getItems().size() >= MAX_DISTINCT_CART_ITEMS) {
-                    throw new ValidationException("Cart cannot contain more than " + MAX_DISTINCT_CART_ITEMS + " distinct items");
-                }
-                CartItem created = buildCartItem(cart, product, quantityToAdd);
-                cart.getItems().add(created);
-            } else {
-                int mergedQuantity = sanitizeQuantity(existing.getQuantity() + quantityToAdd);
-                existing.setQuantity(mergedQuantity);
-                refreshCartItemSnapshot(existing, product);
-                existing.setLineTotal(calculateLineTotal(existing.getUnitPrice(), existing.getQuantity()));
+                    if (existing == null) {
+                        if (cart.getItems().size() >= MAX_DISTINCT_CART_ITEMS) {
+                            throw new ValidationException("Cart cannot contain more than " + MAX_DISTINCT_CART_ITEMS + " distinct items");
+                        }
+                        CartItem created = buildCartItem(cart, product, quantityToAdd);
+                        cart.getItems().add(created);
+                    } else {
+                        int mergedQuantity = sanitizeQuantity(existing.getQuantity() + quantityToAdd);
+                        existing.setQuantity(mergedQuantity);
+                        refreshCartItemSnapshot(existing, product);
+                        existing.setLineTotal(calculateLineTotal(existing.getUnitPrice(), existing.getQuantity()));
+                    }
+
+                    cart.setLastActivityAt(Instant.now());
+                    Cart saved = cartRepository.save(cart);
+                    return toResponse(saved);
+                });
+            } catch (DataIntegrityViolationException e) {
+                if (attempt > 0) throw e;
             }
-
-            cart.setLastActivityAt(Instant.now());
-            Cart saved = cartRepository.save(cart);
-            return toResponse(saved);
-        });
+        }
     }
 
     @Caching(evict = {
@@ -743,20 +750,28 @@ public class CartService {
     @Caching(evict = {
             @CacheEvict(cacheNames = "cartByKeycloak", key = "#keycloakId == null ? '' : #keycloakId.trim()")
     })
-    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 10)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public CartResponse updateNote(String keycloakId, UpdateCartNoteRequest request) {
         String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
-        Cart cart = cartRepository.findWithItemsByKeycloakIdForUpdate(normalizedKeycloakId)
-                .orElseGet(() -> {
-                    Cart created = Cart.builder()
-                            .keycloakId(normalizedKeycloakId)
-                            .build();
-                    created.setItems(new java.util.ArrayList<>());
-                    return created;
+        for (int attempt = 0; ; attempt++) {
+            try {
+                return transactionTemplate.execute(status -> {
+                    Cart cart = cartRepository.findWithItemsByKeycloakIdForUpdate(normalizedKeycloakId)
+                            .orElseGet(() -> {
+                                Cart created = Cart.builder()
+                                        .keycloakId(normalizedKeycloakId)
+                                        .build();
+                                created.setItems(new java.util.ArrayList<>());
+                                return created;
+                            });
+                    cart.setNote(request.note() != null ? request.note().trim() : null);
+                    cart.setLastActivityAt(Instant.now());
+                    return toResponse(cartRepository.save(cart));
                 });
-        cart.setNote(request.note() != null ? request.note().trim() : null);
-        cart.setLastActivityAt(Instant.now());
-        return toResponse(cartRepository.save(cart));
+            } catch (DataIntegrityViolationException e) {
+                if (attempt > 0) throw e;
+            }
+        }
     }
 
     private String serializeCategoryIds(List<UUID> categoryIds) {

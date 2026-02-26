@@ -336,6 +336,7 @@ public class CustomerServiceImpl implements CustomerService {
     private CustomerResponse toResponse(Customer c) {
         return new CustomerResponse(
                 c.getId(),
+                c.getKeycloakId(),
                 c.getName(),
                 c.getEmail(),
                 c.getPhone(),

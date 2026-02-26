@@ -25,6 +25,10 @@ public interface CartRepository extends JpaRepository<Cart, UUID> {
     @Query("delete from Cart c where c.lastActivityAt < :cutoff")
     int deleteExpiredCarts(@Param("cutoff") Instant cutoff);
 
+    @Modifying
+    @Query(value = "DELETE FROM carts WHERE id IN (SELECT id FROM carts WHERE last_activity_at < :cutoff LIMIT :batchSize)", nativeQuery = true)
+    int deleteExpiredCartsBatch(@Param("cutoff") Instant cutoff, @Param("batchSize") int batchSize);
+
     // --- Analytics queries ---
 
     @Query("SELECT COUNT(c) FROM Cart c WHERE c.items IS NOT EMPTY")

@@ -92,7 +92,7 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
-        if (!enabled || !isMutatingRequest(exchange) || isMultipartRequest(exchange)) {
+        if (!enabled || !isMutatingRequest(exchange) || shouldSkipBodyBuffering(exchange)) {
             return chain.filter(exchange);
         }
 
@@ -269,7 +269,7 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
             byte[] responseBody
     ) {
         int status = statusCode == null ? HttpStatus.OK.value() : statusCode.value();
-        if (status >= 500) {
+        if (status >= 400) {
             return redisTemplate.delete(redisKey).then();
         }
 
@@ -322,7 +322,7 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
     private Mono<Void> writeJsonError(ServerWebExchange exchange, HttpStatus status, String message, String idempotencyStatus) {
         String requestId = exchange.getRequest().getHeaders().getFirst(RequestIdFilter.REQUEST_ID_HEADER);
         String body = "{\"timestamp\":\"" + Instant.now() + "\"," +
-                "\"path\":\"" + exchange.getRequest().getPath().value() + "\"," +
+                "\"path\":\"" + escapeJson(exchange.getRequest().getPath().value()) + "\"," +
                 "\"status\":" + status.value() + "," +
                 "\"error\":\"" + status.getReasonPhrase() + "\"," +
                 "\"message\":\"" + escapeJson(message) + "\"," +
@@ -378,7 +378,22 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
 
     private boolean isMultipartRequest(ServerWebExchange exchange) {
         MediaType contentType = exchange.getRequest().getHeaders().getContentType();
-        return contentType != null && MediaType.MULTIPART_FORM_DATA.isCompatibleWith(contentType);
+        if (contentType == null) {
+            return false;
+        }
+        return MediaType.MULTIPART_FORM_DATA.isCompatibleWith(contentType);
+    }
+
+    private boolean shouldSkipBodyBuffering(ServerWebExchange exchange) {
+        MediaType contentType = exchange.getRequest().getHeaders().getContentType();
+        if (contentType == null) {
+            return false;
+        }
+        return MediaType.MULTIPART_FORM_DATA.isCompatibleWith(contentType)
+                || MediaType.APPLICATION_OCTET_STREAM.isCompatibleWith(contentType)
+                || contentType.getType().equals("image")
+                || contentType.getType().equals("video")
+                || contentType.getType().equals("audio");
     }
 
     private boolean isProtectedMutation(ServerWebExchange exchange) {

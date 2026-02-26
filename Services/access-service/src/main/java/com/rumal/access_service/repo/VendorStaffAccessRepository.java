@@ -24,4 +24,5 @@ public interface VendorStaffAccessRepository extends JpaRepository<VendorStaffAc
     boolean existsByVendorIdAndKeycloakUserIdIgnoreCaseAndIdNot(UUID vendorId, String keycloakUserId, UUID id);
     List<VendorStaffAccess> findByKeycloakUserIdIgnoreCaseAndActiveTrueAndDeletedFalseOrderByVendorIdAsc(String keycloakUserId);
     List<VendorStaffAccess> findByActiveTrueAndDeletedFalseAndAccessExpiresAtBefore(Instant now);
+    Page<VendorStaffAccess> findByActiveTrueAndDeletedFalseAndAccessExpiresAtBefore(Instant now, Pageable pageable);
 }

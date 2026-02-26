@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -105,6 +106,7 @@ public class AdminBankAccountController {
     }
 
     @PostMapping("/{id}/set-primary")
+    @Transactional
     public VendorBankAccountResponse setPrimary(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
@@ -114,10 +116,7 @@ public class AdminBankAccountController {
         requireUserSub(userSub);
         VendorBankAccount account = bankAccountRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Bank account not found: " + id));
-        // Unset previous primary for this vendor
-        bankAccountRepository.findByVendorIdAndActiveTrue(account.getVendorId())
-                .stream().filter(VendorBankAccount::isPrimary)
-                .forEach(a -> { a.setPrimary(false); bankAccountRepository.save(a); });
+        bankAccountRepository.unsetPrimaryForVendor(account.getVendorId());
         account.setPrimary(true);
         return toResponse(bankAccountRepository.save(account));
     }

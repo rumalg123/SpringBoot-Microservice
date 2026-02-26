@@ -21,14 +21,14 @@ import java.util.UUID;
 @Component
 public class PromotionClient {
 
-    private final RestClient.Builder lbRestClientBuilder;
+    private final RestClient restClient;
     private final String internalSharedSecret;
 
     public PromotionClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder,
             @Value("${internal.auth.shared-secret:}") String internalSharedSecret
     ) {
-        this.lbRestClientBuilder = lbRestClientBuilder;
+        this.restClient = lbRestClientBuilder.build();
         this.internalSharedSecret = internalSharedSecret == null ? "" : internalSharedSecret.trim();
     }
 
@@ -36,7 +36,7 @@ public class PromotionClient {
     @CircuitBreaker(name = "promotionService", fallbackMethod = "promotionFallbackQuote")
     public PromotionQuoteResponse quote(PromotionQuoteRequest request) {
         try {
-            return lbRestClientBuilder.build()
+            return restClient
                     .post()
                     .uri("http://promotion-service/internal/promotions/quote")
                     .header("X-Internal-Auth", internalSharedSecret)
@@ -60,7 +60,7 @@ public class PromotionClient {
     @CircuitBreaker(name = "promotionService", fallbackMethod = "promotionFallbackReserve")
     public CouponReservationResponse reserveCoupon(CreateCouponReservationRequest request) {
         try {
-            return lbRestClientBuilder.build()
+            return restClient
                     .post()
                     .uri("http://promotion-service/internal/promotions/reservations")
                     .header("X-Internal-Auth", internalSharedSecret)
@@ -84,7 +84,7 @@ public class PromotionClient {
     @CircuitBreaker(name = "promotionService", fallbackMethod = "promotionFallbackRelease")
     public CouponReservationResponse releaseCouponReservation(UUID reservationId, String reason) {
         try {
-            return lbRestClientBuilder.build()
+            return restClient
                     .post()
                     .uri("http://promotion-service/internal/promotions/reservations/{reservationId}/release", reservationId)
                     .header("X-Internal-Auth", internalSharedSecret)

@@ -17,16 +17,16 @@ import java.util.UUID;
 @Component
 public class ProductClient {
 
-    private final RestClient.Builder lbRestClientBuilder;
+    private final RestClient restClient;
 
     public ProductClient(@Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder) {
-        this.lbRestClientBuilder = lbRestClientBuilder;
+        this.restClient = lbRestClientBuilder.build();
     }
 
     @Retry(name = "productService")
     @CircuitBreaker(name = "productService", fallbackMethod = "productFallbackGetById")
     public ProductDetails getById(UUID productId) {
-        RestClient rc = lbRestClientBuilder.build();
+        RestClient rc = restClient;
         try {
             return rc.get()
                     .uri("http://product-service/products/{id}", productId)

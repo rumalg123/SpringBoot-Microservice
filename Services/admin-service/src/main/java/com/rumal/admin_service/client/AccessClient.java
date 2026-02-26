@@ -27,7 +27,7 @@ public class AccessClient {
     private static final ParameterizedTypeReference<Map<String, Object>> MAP_TYPE =
             new ParameterizedTypeReference<>() {};
 
-    private final RestClient.Builder lbRestClientBuilder;
+    private final RestClient restClient;
     private final CircuitBreakerFactory<?, ?> circuitBreakerFactory;
     private final RetryRegistry retryRegistry;
 
@@ -36,7 +36,7 @@ public class AccessClient {
             CircuitBreakerFactory<?, ?> circuitBreakerFactory,
             RetryRegistry retryRegistry
     ) {
-        this.lbRestClientBuilder = lbRestClientBuilder;
+        this.restClient = lbRestClientBuilder.build();
         this.circuitBreakerFactory = circuitBreakerFactory;
         this.retryRegistry = retryRegistry;
     }
@@ -210,7 +210,7 @@ public class AccessClient {
 
     private List<Map<String, Object>> getList(String path, String internalAuth) {
         return runAccessCall(() -> {
-            RestClient rc = lbRestClientBuilder.build();
+            RestClient rc = restClient;
             try {
                 List<Map<String, Object>> response = rc.get().uri(buildUri(path))
                         .header("X-Internal-Auth", internalAuth)
@@ -226,7 +226,7 @@ public class AccessClient {
 
     private Map<String, Object> getMap(String path, String internalAuth) {
         return runAccessCall(() -> {
-            RestClient rc = lbRestClientBuilder.build();
+            RestClient rc = restClient;
             try {
                 Map<String, Object> response = rc.get().uri(buildUri(path))
                         .header("X-Internal-Auth", internalAuth)
@@ -249,7 +249,7 @@ public class AccessClient {
 
     private Map<String, Object> jsonRequest(String method, String path, Map<String, Object> request, String internalAuth, String userSub, String userRoles, String actionReason) {
         return runAccessCall(() -> {
-            RestClient rc = lbRestClientBuilder.build();
+            RestClient rc = restClient;
             try {
                 RestClient.RequestBodySpec spec = switch (method) {
                     case "POST" -> rc.post().uri(buildUri(path));
@@ -279,7 +279,7 @@ public class AccessClient {
 
     private void deleteNoContent(String path, String internalAuth, String userSub, String userRoles, String actionReason) {
         runAccessVoid(() -> {
-            RestClient rc = lbRestClientBuilder.build();
+            RestClient rc = restClient;
             try {
                 applyActorHeaders(rc.delete().uri(buildUri(path)).header("X-Internal-Auth", internalAuth), userSub, userRoles, actionReason)
                         .retrieve().toBodilessEntity();
@@ -297,7 +297,7 @@ public class AccessClient {
 
     private Map<String, Object> postNoBody(String path, String internalAuth, String userSub, String userRoles, String actionReason) {
         return runAccessCall(() -> {
-            RestClient rc = lbRestClientBuilder.build();
+            RestClient rc = restClient;
             try {
                 Map<String, Object> response = applyActorHeaders(rc.post().uri(buildUri(path))
                         .header("X-Internal-Auth", internalAuth), userSub, userRoles, actionReason)

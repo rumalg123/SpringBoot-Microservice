@@ -138,7 +138,7 @@ public class AdminOrderController {
             @Valid @RequestBody BulkUpdateOrderStatusRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
-        adminActorScopeService.assertHasRole(userSub, userRoles, "super_admin", "platform_staff");
+        adminActorScopeService.assertCanManageOrders(userSub, userRoles, internalAuth);
         BulkOperationResult result = adminOrderService.bulkUpdateOrderStatus(
                 request.orderIds(), request.status(), internalAuth, userSub, userRoles);
         auditService.log(userSub, userRoles, "BULK_UPDATE_ORDER_STATUS", "ORDER",
@@ -170,7 +170,7 @@ public class AdminOrderController {
             HttpServletResponse response
     ) {
         internalRequestVerifier.verify(internalAuth);
-        adminActorScopeService.assertHasRole(userSub, userRoles, "super_admin", "platform_staff");
+        adminActorScopeService.assertCanReadOrders(userSub, userRoles, internalAuth);
         String csv = adminOrderService.exportOrdersCsv(status, createdAfter, createdBefore, internalAuth);
         response.setContentType("text/csv");
         response.setHeader("Content-Disposition", "attachment; filename=orders-export.csv");

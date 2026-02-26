@@ -318,9 +318,18 @@ public class PaymentService {
     // ── Query Methods ──────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
-    public PaymentResponse getPaymentById(UUID paymentId) {
+    public PaymentResponse getPaymentById(UUID paymentId, String keycloakId) {
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment not found: " + paymentId));
+        assertPaymentOwnership(payment, keycloakId);
+        return toPaymentResponse(payment);
+    }
+
+    @Transactional(readOnly = true)
+    public PaymentResponse getPaymentByOrder(UUID orderId, String keycloakId) {
+        Payment payment = paymentRepository.findTopByOrderIdOrderByCreatedAtDesc(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Payment not found for order: " + orderId));
+        assertPaymentOwnership(payment, keycloakId);
         return toPaymentResponse(payment);
     }
 
@@ -329,6 +338,12 @@ public class PaymentService {
         Payment payment = paymentRepository.findTopByOrderIdOrderByCreatedAtDesc(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment not found for order: " + orderId));
         return toPaymentResponse(payment);
+    }
+
+    private void assertPaymentOwnership(Payment payment, String keycloakId) {
+        if (!keycloakId.equals(payment.getCustomerKeycloakId())) {
+            throw new ResourceNotFoundException("Payment not found");
+        }
     }
 
     @Transactional(readOnly = true)
@@ -370,11 +385,9 @@ public class PaymentService {
     // ── Audit Trail ────────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
-    public List<PaymentAuditResponse> getAuditTrail(UUID paymentId) {
-        return auditRepository.findByPaymentIdOrderByCreatedAtAsc(paymentId)
-                .stream()
-                .map(this::toAuditResponse)
-                .toList();
+    public Page<PaymentAuditResponse> getAuditTrail(UUID paymentId, Pageable pageable) {
+        return auditRepository.findByPaymentIdOrderByCreatedAtAsc(paymentId, pageable)
+                .map(this::toAuditResponse);
     }
 
     // ── Private Helpers ────────────────────────────────────────────────

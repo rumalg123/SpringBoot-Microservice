@@ -22,14 +22,14 @@ import java.util.UUID;
 @Component
 public class OrderClient {
 
-    private final RestClient.Builder lbRestClientBuilder;
+    private final RestClient restClient;
     private final String internalSharedSecret;
 
     public OrderClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder,
             @Value("${internal.auth.shared-secret:}") String internalSharedSecret
     ) {
-        this.lbRestClientBuilder = lbRestClientBuilder;
+        this.restClient = lbRestClientBuilder.build();
         this.internalSharedSecret = internalSharedSecret;
     }
 
@@ -37,7 +37,7 @@ public class OrderClient {
     @CircuitBreaker(name = "orderService", fallbackMethod = "getOrderFallback")
     public OrderSummary getOrder(UUID orderId) {
         try {
-            return lbRestClientBuilder.build()
+            return restClient
                     .get()
                     .uri("http://order-service/orders/{id}", orderId)
                     .header("X-Internal-Auth", internalSharedSecret)
@@ -64,7 +64,7 @@ public class OrderClient {
                 body.put("paymentGatewayRef", paymentGatewayRef);
             }
 
-            lbRestClientBuilder.build()
+            restClient
                     .patch()
                     .uri("http://order-service/orders/{id}/payment", orderId)
                     .header("X-Internal-Auth", internalSharedSecret)
@@ -92,7 +92,7 @@ public class OrderClient {
                 body.put("reason", reason);
             }
 
-            lbRestClientBuilder.build()
+            restClient
                     .patch()
                     .uri("http://order-service/orders/{id}/status", orderId)
                     .header("X-Internal-Auth", internalSharedSecret)
@@ -114,7 +114,7 @@ public class OrderClient {
     @CircuitBreaker(name = "orderService", fallbackMethod = "getVendorOrderFallback")
     public VendorOrderSummary getVendorOrder(UUID orderId, UUID vendorOrderId) {
         try {
-            return lbRestClientBuilder.build()
+            return restClient
                     .get()
                     .uri("http://order-service/orders/{orderId}/vendor-orders/{vendorOrderId}", orderId, vendorOrderId)
                     .header("X-Internal-Auth", internalSharedSecret)
@@ -140,7 +140,7 @@ public class OrderClient {
                 body.put("reason", reason);
             }
 
-            lbRestClientBuilder.build()
+            restClient
                     .patch()
                     .uri("http://order-service/orders/{orderId}/vendor-orders/{vendorOrderId}/status", orderId, vendorOrderId)
                     .header("X-Internal-Auth", internalSharedSecret)

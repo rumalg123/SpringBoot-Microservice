@@ -20,7 +20,6 @@ public class PaymentAnalyticsClient {
 
     private static final String BASE_URL = "http://payment-service/internal/payments/analytics";
 
-    private final RestClient.Builder lbRestClientBuilder;
     private final RestClient restClient;
     private final CircuitBreakerFactory<?, ?> circuitBreakerFactory;
     private final RetryRegistry retryRegistry;
@@ -32,7 +31,6 @@ public class PaymentAnalyticsClient {
             RetryRegistry retryRegistry,
             @Value("${internal.auth.shared-secret:}") String internalAuth
     ) {
-        this.lbRestClientBuilder = lbRestClientBuilder;
         this.restClient = lbRestClientBuilder.build();
         this.circuitBreakerFactory = circuitBreakerFactory;
         this.retryRegistry = retryRegistry;

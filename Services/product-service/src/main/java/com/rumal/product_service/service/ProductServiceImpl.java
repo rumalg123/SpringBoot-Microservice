@@ -379,7 +379,8 @@ public class ProductServiceImpl implements ProductService {
         if (parentId != null) {
             productCatalogReadModelProjector.refreshParentVariationFlag(parentId);
         }
-        productCacheVersionService.bumpAllProductReadCaches();
+        productCacheVersionService.evictProductById(saved.getId(), saved.getSlug());
+        productCacheVersionService.bumpListCaches();
         return toResponse(saved);
     }
 
@@ -395,7 +396,8 @@ public class ProductServiceImpl implements ProductService {
         if (saved.getParentProductId() != null) {
             productCatalogReadModelProjector.refreshParentVariationFlag(saved.getParentProductId());
         }
-        productCacheVersionService.bumpAllProductReadCaches();
+        productCacheVersionService.evictProductById(saved.getId(), saved.getSlug());
+        productCacheVersionService.bumpListCaches();
     }
 
     @Override
@@ -414,7 +416,8 @@ public class ProductServiceImpl implements ProductService {
         if (saved.getParentProductId() != null) {
             productCatalogReadModelProjector.refreshParentVariationFlag(saved.getParentProductId());
         }
-        productCacheVersionService.bumpAllProductReadCaches();
+        productCacheVersionService.evictProductById(saved.getId(), saved.getSlug());
+        productCacheVersionService.bumpListCaches();
         return toResponse(saved);
     }
 
@@ -455,7 +458,8 @@ public class ProductServiceImpl implements ProductService {
         product.setRejectionReason(null);
         Product saved = productRepository.save(product);
         productCatalogReadModelProjector.upsert(saved);
-        productCacheVersionService.bumpAllProductReadCaches();
+        productCacheVersionService.evictProductById(saved.getId(), saved.getSlug());
+        productCacheVersionService.bumpListCaches();
         return toResponse(saved);
     }
 
@@ -469,7 +473,8 @@ public class ProductServiceImpl implements ProductService {
         product.setApprovalStatus(ApprovalStatus.APPROVED);
         Product saved = productRepository.save(product);
         productCatalogReadModelProjector.upsert(saved);
-        productCacheVersionService.bumpAllProductReadCaches();
+        productCacheVersionService.evictProductById(saved.getId(), saved.getSlug());
+        productCacheVersionService.bumpListCaches();
         return toResponse(saved);
     }
 
@@ -484,7 +489,8 @@ public class ProductServiceImpl implements ProductService {
         product.setRejectionReason(reason);
         Product saved = productRepository.save(product);
         productCatalogReadModelProjector.upsert(saved);
-        productCacheVersionService.bumpAllProductReadCaches();
+        productCacheVersionService.evictProductById(saved.getId(), saved.getSlug());
+        productCacheVersionService.bumpListCaches();
         return toResponse(saved);
     }
 
@@ -1279,11 +1285,10 @@ public class ProductServiceImpl implements ProductService {
         }
 
         String candidateSignature = buildVariationSignature(parentNames, variation);
-        boolean duplicateExists = productRepository.findByParentProductIdAndDeletedFalseAndActiveTrue(parent.getId())
-                .stream()
-                .filter(existing -> existing.getProductType() == ProductType.VARIATION)
-                .filter(existing -> !Objects.equals(existing.getId(), variation.getId()))
-                .anyMatch(existing -> buildVariationSignature(parentNames, existing).equals(candidateSignature));
+        variation.setVariationSignature(candidateSignature);
+        UUID excludeId = variation.getId() != null ? variation.getId() : new UUID(0, 0);
+        boolean duplicateExists = productRepository.existsByParentProductIdAndDeletedFalseAndActiveTrueAndVariationSignatureAndIdNot(
+                parent.getId(), candidateSignature, excludeId);
         if (duplicateExists) {
             throw new ValidationException("Variation with the same attribute values already exists for this parent product");
         }

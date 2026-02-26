@@ -19,14 +19,14 @@ public class VendorOperationalStateClient {
     private static final ParameterizedTypeReference<List<VendorOperationalStateResponse>> LIST_TYPE =
             new ParameterizedTypeReference<>() {};
 
-    private final RestClient.Builder lbRestClientBuilder;
+    private final RestClient restClient;
     private final String internalAuthSharedSecret;
 
     public VendorOperationalStateClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder,
             @Value("${internal.auth.shared-secret:}") String internalAuthSharedSecret
     ) {
-        this.lbRestClientBuilder = lbRestClientBuilder;
+        this.restClient = lbRestClientBuilder.build();
         this.internalAuthSharedSecret = internalAuthSharedSecret == null ? "" : internalAuthSharedSecret.trim();
     }
 
@@ -41,7 +41,7 @@ public class VendorOperationalStateClient {
             return Map.of();
         }
         try {
-            List<VendorOperationalStateResponse> rows = lbRestClientBuilder.build()
+            List<VendorOperationalStateResponse> rows = restClient
                     .post()
                     .uri("http://vendor-service/internal/vendors/access/operational-state/batch")
                     .header("X-Internal-Auth", internalAuthSharedSecret)

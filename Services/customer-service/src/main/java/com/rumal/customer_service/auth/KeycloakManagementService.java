@@ -11,6 +11,9 @@ import org.keycloak.admin.client.KeycloakBuilder;
 import org.keycloak.admin.client.resource.UsersResource;
 import org.keycloak.representations.idm.CredentialRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
+import jakarta.annotation.PreDestroy;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -21,11 +24,8 @@ import java.util.concurrent.TimeUnit;
 @Service
 public class KeycloakManagementService {
 
-    private final String serverUrl;
     private final String realm;
-    private final String adminRealm;
-    private final String clientId;
-    private final String clientSecret;
+    private final Keycloak keycloakClient;
 
     public KeycloakManagementService(
             @Value("${keycloak.issuer-uri}") String issuerUri,
@@ -34,19 +34,37 @@ public class KeycloakManagementService {
             @Value("${keycloak.admin.client-id}") String clientId,
             @Value("${keycloak.admin.client-secret}") String clientSecret
     ) {
-        this.serverUrl = resolveBaseUrlFromIssuer(issuerUri);
+        String serverUrl = resolveBaseUrlFromIssuer(issuerUri);
         this.realm = realm;
-        this.adminRealm = adminRealm;
-        this.clientId = clientId;
-        this.clientSecret = clientSecret;
-        if (!StringUtils.hasText(this.clientId) || !StringUtils.hasText(this.clientSecret)) {
+        if (!StringUtils.hasText(clientId) || !StringUtils.hasText(clientSecret)) {
             throw new IllegalStateException("KEYCLOAK_ADMIN_CLIENT_ID and KEYCLOAK_ADMIN_CLIENT_SECRET must be configured");
         }
+        this.keycloakClient = KeycloakBuilder.builder()
+                .serverUrl(serverUrl)
+                .realm(adminRealm)
+                .clientId(clientId)
+                .clientSecret(clientSecret)
+                .grantType(OAuth2Constants.CLIENT_CREDENTIALS)
+                .resteasyClient(
+                        ((ResteasyClientBuilder) ResteasyClientBuilder.newBuilder())
+                                .connectTimeout(5, TimeUnit.SECONDS)
+                                .readTimeout(10, TimeUnit.SECONDS)
+                                .connectionPoolSize(10)
+                                .build()
+                )
+                .build();
     }
 
+    @PreDestroy
+    void close() {
+        keycloakClient.close();
+    }
+
+    @Retry(name = "keycloak")
+    @CircuitBreaker(name = "keycloak")
     public String createUser(String email, String password, String name) {
         String normalizedEmail = email.trim().toLowerCase();
-        try (Keycloak keycloak = newAdminClient()) {
+        try {
             UserRepresentation user = new UserRepresentation();
             user.setUsername(normalizedEmail);
             user.setEmail(normalizedEmail);
@@ -62,7 +80,7 @@ public class KeycloakManagementService {
             credential.setTemporary(false);
             user.setCredentials(List.of(credential));
 
-            try (Response response = keycloak.realm(realm).users().create(user)) {
+            try (Response response = keycloakClient.realm(realm).users().create(user)) {
                 int status = response.getStatus();
                 if (status == Response.Status.CREATED.getStatusCode()) {
                     String userId = extractUserIdFromLocation(response.getHeaderString("Location"));
@@ -85,10 +103,12 @@ public class KeycloakManagementService {
         }
     }
 
+    @Retry(name = "keycloak")
+    @CircuitBreaker(name = "keycloak")
     public String getUserIdByEmail(String email) {
         String normalizedEmail = email.trim().toLowerCase();
-        try (Keycloak keycloak = newAdminClient()) {
-            UsersResource usersResource = keycloak.realm(realm).users();
+        try {
+            UsersResource usersResource = keycloakClient.realm(realm).users();
             List<UserRepresentation> users = usersResource.searchByEmail(normalizedEmail, true);
             if (users == null || users.isEmpty()) {
                 throw new KeycloakRequestException("Keycloak user not found for email: " + normalizedEmail);
@@ -108,9 +128,11 @@ public class KeycloakManagementService {
         }
     }
 
+    @Retry(name = "keycloak")
+    @CircuitBreaker(name = "keycloak")
     public KeycloakUser getUserById(String userId) {
-        try (Keycloak keycloak = newAdminClient()) {
-            UserRepresentation user = keycloak.realm(realm).users().get(userId).toRepresentation();
+        try {
+            UserRepresentation user = keycloakClient.realm(realm).users().get(userId).toRepresentation();
             if (user == null || !StringUtils.hasText(user.getId())) {
                 throw new KeycloakRequestException("Keycloak user not found for id: " + userId);
             }
@@ -136,13 +158,15 @@ public class KeycloakManagementService {
         updateUserNames(userId, parts.firstName(), parts.lastName());
     }
 
+    @Retry(name = "keycloak")
+    @CircuitBreaker(name = "keycloak")
     public void setUserEnabled(String userId, boolean enabled) {
         if (!StringUtils.hasText(userId)) {
             throw new KeycloakRequestException("Keycloak user id is required");
         }
 
-        try (Keycloak keycloak = newAdminClient()) {
-            var userResource = keycloak.realm(realm).users().get(userId);
+        try {
+            var userResource = keycloakClient.realm(realm).users().get(userId);
             UserRepresentation user = userResource.toRepresentation();
             if (user == null || !StringUtils.hasText(user.getId())) {
                 throw new KeycloakRequestException("Keycloak user not found for id: " + userId);
@@ -156,6 +180,8 @@ public class KeycloakManagementService {
         }
     }
 
+    @Retry(name = "keycloak")
+    @CircuitBreaker(name = "keycloak")
     public void updateUserNames(String userId, String firstName, String lastName) {
         if (!StringUtils.hasText(userId)) {
             throw new KeycloakRequestException("Keycloak user id is required");
@@ -170,8 +196,8 @@ public class KeycloakManagementService {
         String normalizedFirstName = firstName.trim();
         String normalizedLastName = lastName.trim();
 
-        try (Keycloak keycloak = newAdminClient()) {
-            var userResource = keycloak.realm(realm).users().get(userId);
+        try {
+            var userResource = keycloakClient.realm(realm).users().get(userId);
             UserRepresentation user = userResource.toRepresentation();
             if (user == null || !StringUtils.hasText(user.getId())) {
                 throw new KeycloakRequestException("Keycloak user not found for id: " + userId);
@@ -184,23 +210,6 @@ public class KeycloakManagementService {
         } catch (WebApplicationException ex) {
             throw new KeycloakRequestException("Keycloak user update failed: " + ex.getMessage(), ex);
         }
-    }
-
-    private Keycloak newAdminClient() {
-        return KeycloakBuilder.builder()
-                .serverUrl(serverUrl)
-                .realm(adminRealm)
-                .clientId(clientId)
-                .clientSecret(clientSecret)
-                .grantType(OAuth2Constants.CLIENT_CREDENTIALS)
-                .resteasyClient(
-                        ((ResteasyClientBuilder) ResteasyClientBuilder.newBuilder())
-                                .connectTimeout(5, TimeUnit.SECONDS)
-                                .readTimeout(10, TimeUnit.SECONDS)
-                                .connectionPoolSize(5)
-                                .build()
-                )
-                .build();
     }
 
     private String readResponseBody(Response response) {

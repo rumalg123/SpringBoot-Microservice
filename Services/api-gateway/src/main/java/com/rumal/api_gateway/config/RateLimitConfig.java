@@ -1,7 +1,6 @@
 package com.rumal.api_gateway.config;
 
 import org.springframework.cloud.gateway.filter.ratelimit.KeyResolver;
-import org.springframework.cloud.gateway.filter.ratelimit.RateLimiter;
 import org.springframework.cloud.gateway.filter.ratelimit.RedisRateLimiter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -10,23 +9,36 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.server.ServerWebExchange;
 
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.util.Arrays;
+import java.net.UnknownHostException;
+import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 @Configuration
 public class RateLimitConfig {
 
-    private final Set<String> trustedProxyIps;
+    private final Set<String> trustedProxyExactIps;
+    private final List<CidrRange> trustedProxyCidrs;
 
     public RateLimitConfig(
             @Value("${RATE_LIMIT_TRUSTED_PROXY_IPS:127.0.0.1,::1}") String trustedProxyIps
     ) {
-        this.trustedProxyIps = Arrays.stream(trustedProxyIps.split(","))
-                .map(String::trim)
-                .filter(s -> !s.isBlank())
-                .collect(Collectors.toSet());
+        Set<String> exactIps = new java.util.HashSet<>();
+        List<CidrRange> cidrs = new java.util.ArrayList<>();
+
+        for (String entry : trustedProxyIps.split(",")) {
+            String trimmed = entry.trim();
+            if (trimmed.isBlank()) continue;
+            if (trimmed.contains("/")) {
+                CidrRange range = CidrRange.parse(trimmed);
+                if (range != null) cidrs.add(range);
+            } else {
+                exactIps.add(trimmed);
+            }
+        }
+        this.trustedProxyExactIps = Set.copyOf(exactIps);
+        this.trustedProxyCidrs = List.copyOf(cidrs);
     }
 
     @Bean
@@ -324,6 +336,47 @@ public class RateLimitConfig {
     }
 
     private boolean isTrustedProxy(String remoteIp) {
-        return trustedProxyIps.contains(remoteIp);
+        if (trustedProxyExactIps.contains(remoteIp)) {
+            return true;
+        }
+        if (trustedProxyCidrs.isEmpty()) {
+            return false;
+        }
+        try {
+            InetAddress addr = InetAddress.getByName(remoteIp);
+            byte[] addrBytes = addr.getAddress();
+            for (CidrRange cidr : trustedProxyCidrs) {
+                if (cidr.contains(addrBytes)) return true;
+            }
+        } catch (UnknownHostException ignored) {
+        }
+        return false;
+    }
+
+    private record CidrRange(byte[] network, int prefixLength) {
+        static CidrRange parse(String cidr) {
+            try {
+                String[] parts = cidr.split("/");
+                InetAddress addr = InetAddress.getByName(parts[0].trim());
+                int prefix = Integer.parseInt(parts[1].trim());
+                return new CidrRange(addr.getAddress(), prefix);
+            } catch (Exception e) {
+                return null;
+            }
+        }
+
+        boolean contains(byte[] address) {
+            if (address.length != network.length) return false;
+            int fullBytes = prefixLength / 8;
+            int remainingBits = prefixLength % 8;
+            for (int i = 0; i < fullBytes; i++) {
+                if (address[i] != network[i]) return false;
+            }
+            if (remainingBits > 0 && fullBytes < network.length) {
+                int mask = (0xFF << (8 - remainingBits)) & 0xFF;
+                if ((address[fullBytes] & mask) != (network[fullBytes] & mask)) return false;
+            }
+            return true;
+        }
     }
 }

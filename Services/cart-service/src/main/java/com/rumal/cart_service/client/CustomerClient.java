@@ -18,14 +18,14 @@ import java.util.UUID;
 @Component
 public class CustomerClient {
 
-    private final RestClient.Builder lbRestClientBuilder;
+    private final RestClient restClient;
     private final String internalSharedSecret;
 
     public CustomerClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder,
             @Value("${internal.auth.shared-secret:}") String internalSharedSecret
     ) {
-        this.lbRestClientBuilder = lbRestClientBuilder;
+        this.restClient = lbRestClientBuilder.build();
         this.internalSharedSecret = internalSharedSecret == null ? "" : internalSharedSecret.trim();
     }
 
@@ -33,7 +33,7 @@ public class CustomerClient {
     @CircuitBreaker(name = "customerService", fallbackMethod = "customerFallbackGetCustomerByKeycloak")
     public CustomerSummary getCustomerByKeycloakId(String keycloakId) {
         try {
-            return lbRestClientBuilder.build()
+            return restClient
                     .get()
                     .uri("http://customer-service/customers/me")
                     .header("X-User-Sub", keycloakId)
@@ -53,7 +53,7 @@ public class CustomerClient {
     @CircuitBreaker(name = "customerService", fallbackMethod = "customerFallbackGetCustomerAddress")
     public CustomerAddressSummary getCustomerAddress(UUID customerId, UUID addressId) {
         try {
-            return lbRestClientBuilder.build()
+            return restClient
                     .get()
                     .uri("http://customer-service/customers/{customerId}/addresses/{addressId}", customerId, addressId)
                     .header("X-Internal-Auth", internalSharedSecret)

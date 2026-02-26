@@ -20,7 +20,6 @@ import java.util.function.Supplier;
 @Component
 public class OrderAnalyticsClient {
 
-    private final RestClient.Builder lbRestClientBuilder;
     private final RestClient restClient;
     private final CircuitBreakerFactory<?, ?> circuitBreakerFactory;
     private final RetryRegistry retryRegistry;
@@ -32,7 +31,6 @@ public class OrderAnalyticsClient {
             RetryRegistry retryRegistry,
             @Value("${internal.auth.shared-secret:}") String internalAuth
     ) {
-        this.lbRestClientBuilder = lbRestClientBuilder;
         this.restClient = lbRestClientBuilder.build();
         this.circuitBreakerFactory = circuitBreakerFactory;
         this.retryRegistry = retryRegistry;

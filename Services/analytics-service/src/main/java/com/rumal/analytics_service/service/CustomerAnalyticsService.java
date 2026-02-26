@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
 
 @Slf4j
 @Service
@@ -20,12 +21,13 @@ public class CustomerAnalyticsService {
 
     private final OrderAnalyticsClient orderClient;
     private final CustomerAnalyticsClient customerClient;
+    private final ExecutorService analyticsExecutor;
 
     @Cacheable(cacheNames = "customerInsights", key = "#customerId")
     public CustomerInsightsResponse getCustomerInsights(UUID customerId) {
-        var orderSummaryFuture = CompletableFuture.supplyAsync(() -> safeCall(() -> orderClient.getCustomerSummary(customerId), null));
-        var spendingTrendFuture = CompletableFuture.supplyAsync(() -> safeCall(() -> orderClient.getCustomerSpendingTrend(customerId, 12), List.<MonthlySpendBucket>of()));
-        var profileFuture = CompletableFuture.supplyAsync(() -> safeCall(() -> customerClient.getProfileSummary(customerId), null));
+        var orderSummaryFuture = CompletableFuture.supplyAsync(() -> safeCall(() -> orderClient.getCustomerSummary(customerId), null), analyticsExecutor);
+        var spendingTrendFuture = CompletableFuture.supplyAsync(() -> safeCall(() -> orderClient.getCustomerSpendingTrend(customerId, 12), List.<MonthlySpendBucket>of()), analyticsExecutor);
+        var profileFuture = CompletableFuture.supplyAsync(() -> safeCall(() -> customerClient.getProfileSummary(customerId), null), analyticsExecutor);
 
         CompletableFuture.allOf(orderSummaryFuture, spendingTrendFuture, profileFuture).join();
 

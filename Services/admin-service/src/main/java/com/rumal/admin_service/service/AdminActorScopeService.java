@@ -111,6 +111,20 @@ public class AdminActorScopeService {
         throw new UnauthorizedException("Caller does not have required role(s)");
     }
 
+    public void assertCanReadOrders(String userSub, String userRolesHeader, String internalAuth) {
+        Set<String> roles = parseRoles(userRolesHeader);
+        if (roles.contains("super_admin")) {
+            return;
+        }
+        if (!roles.contains("platform_staff")) {
+            throw new UnauthorizedException("Caller does not have order read access");
+        }
+        Set<String> platformPermissions = resolvePlatformPermissionsForUser(userSub, internalAuth);
+        if (!platformPermissions.contains(PLATFORM_ORDERS_READ) && !platformPermissions.contains(PLATFORM_ORDERS_MANAGE)) {
+            throw new UnauthorizedException("platform_staff does not have order read permission");
+        }
+    }
+
     public void assertCanManageOrders(String userSub, String userRolesHeader, String internalAuth) {
         Set<String> roles = parseRoles(userRolesHeader);
         if (roles.contains("super_admin")) {

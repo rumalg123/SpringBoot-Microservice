@@ -21,20 +21,20 @@ public class CustomerClient {
 
     private static final Logger log = LoggerFactory.getLogger(CustomerClient.class);
 
-    private final RestClient.Builder lbRestClientBuilder;
+    private final RestClient restClient;
     private final String internalSharedSecret;
 
     public CustomerClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder,
             @Value("${internal.auth.shared-secret:}") String internalSharedSecret) {
-        this.lbRestClientBuilder = lbRestClientBuilder;
+        this.restClient = lbRestClientBuilder.build();
         this.internalSharedSecret = internalSharedSecret;
     }
 
     @Retry(name = "customerService")
     @CircuitBreaker(name = "customerService", fallbackMethod = "fallbackGetByKeycloakId")
     public CustomerSummary getByKeycloakId(String keycloakId) {
-        RestClient rc = lbRestClientBuilder.build();
+        RestClient rc = restClient;
         try {
             return rc.get()
                     .uri("http://customer-service/internal/customers/keycloak/{keycloakId}", keycloakId)

@@ -28,8 +28,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,7 +36,9 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -152,8 +152,14 @@ public class WishlistService {
         String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
         List<WishlistCollection> collections = wishlistCollectionRepository
                 .findByKeycloakIdOrderByCreatedAtAsc(normalizedKeycloakId);
+        if (collections.isEmpty()) return List.of();
+        Map<UUID, List<WishlistItem>> itemsByCollection = wishlistItemRepository
+                .findByCollectionIdInOrderByCreatedAtDesc(
+                        collections.stream().map(WishlistCollection::getId).toList())
+                .stream()
+                .collect(Collectors.groupingBy(item -> item.getCollection().getId()));
         return collections.stream()
-                .map(this::toCollectionResponse)
+                .map(c -> toCollectionResponse(c, itemsByCollection.getOrDefault(c.getId(), List.of())))
                 .toList();
     }
 
@@ -391,7 +397,10 @@ public class WishlistService {
     }
 
     private WishlistCollectionResponse toCollectionResponse(WishlistCollection collection) {
-        List<WishlistItem> items = wishlistItemRepository.findByCollectionOrderByCreatedAtDesc(collection);
+        return toCollectionResponse(collection, wishlistItemRepository.findByCollectionOrderByCreatedAtDesc(collection));
+    }
+
+    private WishlistCollectionResponse toCollectionResponse(WishlistCollection collection, List<WishlistItem> items) {
         List<WishlistItemResponse> itemResponses = items.stream()
                 .map(this::toItemResponse)
                 .toList();

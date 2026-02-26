@@ -9,16 +9,18 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 @Component
 public class RequestIdFilter implements GlobalFilter, Ordered {
 
     public static final String REQUEST_ID_HEADER = "X-Request-Id";
+    private static final Pattern REQUEST_ID_PATTERN = Pattern.compile("^[a-zA-Z0-9\\-_.:]{1,128}$");
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         String requestId = exchange.getRequest().getHeaders().getFirst(REQUEST_ID_HEADER);
-        if (requestId == null || requestId.isBlank()) {
+        if (requestId == null || requestId.isBlank() || !REQUEST_ID_PATTERN.matcher(requestId).matches()) {
             requestId = UUID.randomUUID().toString();
         }
 

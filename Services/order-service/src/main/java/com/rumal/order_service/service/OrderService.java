@@ -62,8 +62,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
@@ -120,6 +118,7 @@ public class OrderService {
     private final OrderAggregationProperties props;
     private final OrderCacheVersionService orderCacheVersionService;
     private final TransactionTemplate transactionTemplate;
+    private final OutboxService outboxService;
 
     @org.springframework.beans.factory.annotation.Value("${order.expiry.ttl:30m}")
     private java.time.Duration orderExpiryTtl;
@@ -288,15 +287,7 @@ public class OrderService {
                 "status_update",
                 auditNote
         );
-        final Order savedOrder = saved;
-        final OrderStatus finalStatus = status;
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                maybeReleaseCouponReservationForFinalStatus(savedOrder, finalStatus);
-                maybeHandleInventoryForStatusTransition(savedOrder, finalStatus);
-            }
-        });
+        enqueueCompensationEvents(saved, status);
         evictOrderCachesAfterStatusMutation();
         return toResponse(saved);
     }
@@ -358,15 +349,7 @@ public class OrderService {
                     "vendor_order_aggregate_sync",
                     "Order aggregate status synchronized from vendor order statuses"
             );
-            final Order finalSavedOrder = savedOrder;
-            final OrderStatus finalNextAggregate = nextAggregate;
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    maybeReleaseCouponReservationForFinalStatus(finalSavedOrder, finalNextAggregate);
-                    maybeHandleInventoryForStatusTransition(finalSavedOrder, finalNextAggregate);
-                }
-            });
+            enqueueCompensationEvents(savedOrder, nextAggregate);
         }
         evictOrderCachesAfterStatusMutation();
         return toVendorOrderResponse(savedVendorOrder);
@@ -976,6 +959,26 @@ public class OrderService {
         }
     }
 
+    private void enqueueCompensationEvents(Order order, OrderStatus nextStatus) {
+        if (order == null || nextStatus == null) return;
+
+        // Coupon reservation release for final statuses
+        if ((nextStatus == OrderStatus.CANCELLED || nextStatus == OrderStatus.REFUNDED)
+                && order.getCouponReservationId() != null) {
+            outboxService.enqueue("Order", order.getId(), "RELEASE_COUPON_RESERVATION",
+                    Map.of("reservationId", order.getCouponReservationId().toString(),
+                            "reason", "order_" + nextStatus.name().toLowerCase(Locale.ROOT)));
+        }
+
+        // Inventory reservation management
+        if (nextStatus == OrderStatus.CONFIRMED) {
+            outboxService.enqueue("Order", order.getId(), "CONFIRM_INVENTORY_RESERVATION", Map.of());
+        } else if (nextStatus == OrderStatus.CANCELLED || nextStatus == OrderStatus.PAYMENT_FAILED) {
+            outboxService.enqueue("Order", order.getId(), "RELEASE_INVENTORY_RESERVATION",
+                    Map.of("reason", "order_" + nextStatus.name().toLowerCase(Locale.ROOT)));
+        }
+    }
+
     private String safePromotionReleaseReason(String reason) {
         String normalized = trimToNull(reason);
         if (normalized == null) {
@@ -1328,14 +1331,7 @@ public class OrderService {
             }
         }
 
-        final Order savedOrder = saved;
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                maybeReleaseCouponReservationForFinalStatus(savedOrder, OrderStatus.CANCELLED);
-                maybeHandleInventoryForStatusTransition(savedOrder, OrderStatus.CANCELLED);
-            }
-        });
+        enqueueCompensationEvents(saved, OrderStatus.CANCELLED);
         evictOrderCachesAfterStatusMutation();
         return toResponse(saved);
     }
@@ -1505,45 +1501,66 @@ public class OrderService {
 
     // ── CSV export ──────────────────────────────────────────────
 
-    public String exportOrdersCsv(OrderStatus status, Instant createdAfter, Instant createdBefore) {
-        StringBuilder csv = new StringBuilder();
-        csv.append("orderId,customerKeycloakId,customerEmail,status,grandTotal,currency,createdAt,updatedAt,itemCount\n");
+    public void exportOrdersCsv(OrderStatus status, Instant createdAfter, Instant createdBefore, java.io.Writer writer) {
+        try {
+            writer.write("orderId,customerKeycloakId,customerEmail,status,grandTotal,currency,createdAt,updatedAt,itemCount\n");
 
-        int page = 0;
-        int pageSize = 500;
-        Page<Order> orderPage;
-        do {
-            orderPage = orderRepository.findAll(
-                    OrderSpecifications.withFilters(null, null, status, createdAfter, createdBefore),
-                    PageRequest.of(page, pageSize)
-            );
-            for (Order order : orderPage.getContent()) {
-                CustomerSummary customer = null;
-                try {
-                    customer = customerClient.getCustomer(order.getCustomerId());
-                } catch (Exception ex) {
-                    log.warn("Failed to fetch customer for CSV export, orderId={}", order.getId(), ex);
+            int page = 0;
+            int pageSize = 500;
+            Page<Order> orderPage;
+            do {
+                orderPage = orderRepository.findAll(
+                        OrderSpecifications.withFilters(null, null, status, createdAfter, createdBefore),
+                        PageRequest.of(page, pageSize)
+                );
+
+                // Batch customer lookup: collect unique IDs per page
+                java.util.Map<UUID, CustomerSummary> customerCache = new java.util.HashMap<>();
+                for (Order order : orderPage.getContent()) {
+                    UUID custId = order.getCustomerId();
+                    if (custId != null && !customerCache.containsKey(custId)) {
+                        try {
+                            customerCache.put(custId, customerClient.getCustomer(custId));
+                        } catch (Exception ex) {
+                            log.warn("Failed to fetch customer for CSV export, customerId={}", custId, ex);
+                            customerCache.put(custId, null);
+                        }
+                    }
                 }
 
-                csv.append(escapeCsvField(order.getId().toString())).append(',');
-                csv.append(escapeCsvField(order.getCustomerId().toString())).append(',');
-                csv.append(escapeCsvField(customer != null ? customer.email() : "")).append(',');
-                csv.append(escapeCsvField(order.getStatus() != null ? order.getStatus().name() : "")).append(',');
-                csv.append(normalizeMoney(order.getOrderTotal()).toPlainString()).append(',');
-                csv.append(escapeCsvField(order.getCurrency())).append(',');
-                csv.append(escapeCsvField(order.getCreatedAt() != null ? order.getCreatedAt().toString() : "")).append(',');
-                csv.append(escapeCsvField(order.getUpdatedAt() != null ? order.getUpdatedAt().toString() : "")).append(',');
-                csv.append(order.getItemCount());
-                csv.append('\n');
-            }
-            page++;
-        } while (orderPage.hasNext());
+                StringBuilder batch = new StringBuilder();
+                for (Order order : orderPage.getContent()) {
+                    CustomerSummary customer = order.getCustomerId() != null ? customerCache.get(order.getCustomerId()) : null;
 
-        return csv.toString();
+                    batch.append(escapeCsvField(order.getId().toString())).append(',');
+                    batch.append(escapeCsvField(order.getCustomerId() != null ? order.getCustomerId().toString() : "")).append(',');
+                    batch.append(escapeCsvField(customer != null ? customer.email() : "")).append(',');
+                    batch.append(escapeCsvField(order.getStatus() != null ? order.getStatus().name() : "")).append(',');
+                    batch.append(normalizeMoney(order.getOrderTotal()).toPlainString()).append(',');
+                    batch.append(escapeCsvField(order.getCurrency())).append(',');
+                    batch.append(escapeCsvField(order.getCreatedAt() != null ? order.getCreatedAt().toString() : "")).append(',');
+                    batch.append(escapeCsvField(order.getUpdatedAt() != null ? order.getUpdatedAt().toString() : "")).append(',');
+                    batch.append(order.getItemCount());
+                    batch.append('\n');
+                }
+                writer.write(batch.toString());
+                writer.flush();
+                page++;
+            } while (orderPage.hasNext());
+        } catch (java.io.IOException e) {
+            throw new RuntimeException("Failed to write CSV export", e);
+        }
     }
 
     private String escapeCsvField(String value) {
         if (value == null) return "";
+        // CSV injection protection: prefix dangerous leading characters
+        if (!value.isEmpty()) {
+            char first = value.charAt(0);
+            if (first == '=' || first == '+' || first == '-' || first == '@' || first == '\t' || first == '\r') {
+                value = "'" + value;
+            }
+        }
         if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
             return "\"" + value.replace("\"", "\"\"") + "\"";
         }

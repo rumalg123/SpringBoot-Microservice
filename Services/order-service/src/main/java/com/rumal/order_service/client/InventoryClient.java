@@ -26,14 +26,14 @@ public class InventoryClient {
     private static final ParameterizedTypeReference<List<StockCheckResult>> CHECK_RESULT_LIST =
             new ParameterizedTypeReference<>() {};
 
-    private final RestClient.Builder lbRestClientBuilder;
+    private final RestClient restClient;
     private final String internalSharedSecret;
 
     public InventoryClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder,
             @Value("${internal.auth.shared-secret:}") String internalSharedSecret
     ) {
-        this.lbRestClientBuilder = lbRestClientBuilder;
+        this.restClient = lbRestClientBuilder.build();
         this.internalSharedSecret = internalSharedSecret == null ? "" : internalSharedSecret.trim();
     }
 
@@ -41,7 +41,7 @@ public class InventoryClient {
     @CircuitBreaker(name = "inventoryService", fallbackMethod = "fallbackCheckAvailability")
     public List<StockCheckResult> checkAvailability(List<StockCheckRequest> requests) {
         try {
-            List<StockCheckResult> result = lbRestClientBuilder.build()
+            List<StockCheckResult> result = restClient
                     .post()
                     .uri("http://inventory-service/internal/inventory/check")
                     .header("X-Internal-Auth", internalSharedSecret)
@@ -58,7 +58,7 @@ public class InventoryClient {
     @CircuitBreaker(name = "inventoryService", fallbackMethod = "fallbackReserveStock")
     public StockReservationResponse reserveStock(UUID orderId, List<StockCheckRequest> items, Instant expiresAt) {
         try {
-            return lbRestClientBuilder.build()
+            return restClient
                     .post()
                     .uri("http://inventory-service/internal/inventory/reserve")
                     .header("X-Internal-Auth", internalSharedSecret)
@@ -78,7 +78,7 @@ public class InventoryClient {
     @CircuitBreaker(name = "inventoryService", fallbackMethod = "fallbackConfirmReservation")
     public void confirmReservation(UUID orderId) {
         try {
-            lbRestClientBuilder.build()
+            restClient
                     .post()
                     .uri("http://inventory-service/internal/inventory/reservations/{orderId}/confirm", orderId)
                     .header("X-Internal-Auth", internalSharedSecret)
@@ -93,7 +93,7 @@ public class InventoryClient {
     @CircuitBreaker(name = "inventoryService", fallbackMethod = "fallbackReleaseReservation")
     public void releaseReservation(UUID orderId, String reason) {
         try {
-            lbRestClientBuilder.build()
+            restClient
                     .post()
                     .uri("http://inventory-service/internal/inventory/reservations/{orderId}/release", orderId)
                     .header("X-Internal-Auth", internalSharedSecret)

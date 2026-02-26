@@ -2,6 +2,8 @@ package com.rumal.payment_service.service;
 
 import com.rumal.payment_service.config.PayHereProperties;
 import com.rumal.payment_service.exception.PayHereApiException;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
@@ -100,6 +102,8 @@ public class PayHereClient {
      *
      * Returns the response body as a Map.
      */
+    @Retry(name = "payHereService")
+    @CircuitBreaker(name = "payHereService")
     @SuppressWarnings("unchecked")
     public Map<String, Object> refund(String payherePaymentId, BigDecimal amount, String description) {
         String token = getAccessToken();
@@ -136,6 +140,8 @@ public class PayHereClient {
      * GET {baseUrl}/merchant/v1/payment/search?order_id={orderId}
      * Authorization: Bearer {accessToken}
      */
+    @Retry(name = "payHereService")
+    @CircuitBreaker(name = "payHereService")
     @SuppressWarnings("unchecked")
     public Map<String, Object> retrievePayment(String orderId) {
         String token = getAccessToken();

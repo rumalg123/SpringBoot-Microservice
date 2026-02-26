@@ -4,14 +4,17 @@ import com.rumal.personalization_service.client.dto.ProductSummary;
 import com.rumal.personalization_service.service.RecentlyViewedService;
 import com.rumal.personalization_service.service.RecommendationService;
 import com.rumal.personalization_service.service.TrendingService;
+import jakarta.validation.constraints.Max;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.UUID;
 
+@Validated
 @RestController
 @RequestMapping("/personalization")
 @RequiredArgsConstructor
@@ -25,7 +28,7 @@ public class PersonalizationController {
     public List<ProductSummary> getRecommended(
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-Session-Id", required = false) String sessionId,
-            @RequestParam(defaultValue = "20") int limit
+            @RequestParam(defaultValue = "20") @Max(100) int limit
     ) {
         UUID userId = parseUuidOrNull(userSub);
         if (userId != null) {
@@ -41,7 +44,7 @@ public class PersonalizationController {
     public List<ProductSummary> getRecentlyViewed(
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-Session-Id", required = false) String sessionId,
-            @RequestParam(defaultValue = "20") int limit
+            @RequestParam(defaultValue = "20") @Max(100) int limit
     ) {
         UUID userId = parseUuidOrNull(userSub);
         if (userId == null && (sessionId == null || sessionId.isBlank())) {

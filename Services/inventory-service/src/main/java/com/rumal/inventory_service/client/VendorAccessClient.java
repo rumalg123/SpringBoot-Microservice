@@ -20,16 +20,16 @@ public class VendorAccessClient {
     private static final ParameterizedTypeReference<List<VendorAccessMembershipResponse>> LIST_TYPE =
             new ParameterizedTypeReference<>() {};
 
-    private final RestClient.Builder lbRestClientBuilder;
+    private final RestClient restClient;
 
     public VendorAccessClient(@Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder) {
-        this.lbRestClientBuilder = lbRestClientBuilder;
+        this.restClient = lbRestClientBuilder.build();
     }
 
     @Retry(name = "vendorService")
     @CircuitBreaker(name = "vendorService", fallbackMethod = "fallbackListAccessibleVendorsByKeycloakUser")
     public List<VendorAccessMembershipResponse> listAccessibleVendorsByKeycloakUser(String keycloakUserId, String internalAuth) {
-        RestClient rc = lbRestClientBuilder.build();
+        RestClient rc = restClient;
         try {
             List<VendorAccessMembershipResponse> response = rc.get()
                     .uri(buildUri("/internal/vendors/access/by-keycloak/" + keycloakUserId))

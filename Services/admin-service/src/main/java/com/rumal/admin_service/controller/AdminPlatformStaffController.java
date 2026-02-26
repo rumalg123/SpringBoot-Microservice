@@ -2,6 +2,7 @@ package com.rumal.admin_service.controller;
 
 import com.rumal.admin_service.security.InternalRequestVerifier;
 import com.rumal.admin_service.service.AdminAccessService;
+import com.rumal.admin_service.service.AdminActorScopeService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -28,16 +29,27 @@ public class AdminPlatformStaffController {
 
     private final AdminAccessService adminAccessService;
     private final InternalRequestVerifier internalRequestVerifier;
+    private final AdminActorScopeService adminActorScopeService;
 
     @GetMapping
-    public List<Map<String, Object>> listAll(@RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth) {
+    public List<Map<String, Object>> listAll(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles
+    ) {
         internalRequestVerifier.verify(internalAuth);
+        adminActorScopeService.assertHasRole(userSub, userRoles, "super_admin");
         return adminAccessService.listPlatformStaff(internalAuth);
     }
 
     @GetMapping("/deleted")
-    public List<Map<String, Object>> listDeleted(@RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth) {
+    public List<Map<String, Object>> listDeleted(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles
+    ) {
         internalRequestVerifier.verify(internalAuth);
+        adminActorScopeService.assertHasRole(userSub, userRoles, "super_admin");
         return adminAccessService.listDeletedPlatformStaff(internalAuth);
     }
 
@@ -51,6 +63,7 @@ public class AdminPlatformStaffController {
             @RequestBody @NotNull Map<String, Object> request
     ) {
         internalRequestVerifier.verify(internalAuth);
+        adminActorScopeService.assertHasRole(userSub, userRoles, "super_admin");
         return adminAccessService.createPlatformStaff(request, internalAuth, userSub, userRoles, actionReason);
     }
 
@@ -64,6 +77,7 @@ public class AdminPlatformStaffController {
             @RequestBody @NotNull Map<String, Object> request
     ) {
         internalRequestVerifier.verify(internalAuth);
+        adminActorScopeService.assertHasRole(userSub, userRoles, "super_admin");
         return adminAccessService.updatePlatformStaff(id, request, internalAuth, userSub, userRoles, actionReason);
     }
 
@@ -77,6 +91,7 @@ public class AdminPlatformStaffController {
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
+        adminActorScopeService.assertHasRole(userSub, userRoles, "super_admin");
         adminAccessService.deletePlatformStaff(id, internalAuth, userSub, userRoles, actionReason);
     }
 
@@ -89,6 +104,7 @@ public class AdminPlatformStaffController {
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
+        adminActorScopeService.assertHasRole(userSub, userRoles, "super_admin");
         return adminAccessService.restorePlatformStaff(id, internalAuth, userSub, userRoles, actionReason);
     }
 }

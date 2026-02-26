@@ -20,14 +20,14 @@ import java.util.UUID;
 @Component
 public class PromotionClient {
 
-    private final RestClient.Builder lbRestClientBuilder;
+    private final RestClient restClient;
     private final String internalSharedSecret;
 
     public PromotionClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder,
             @Value("${internal.auth.shared-secret:}") String internalSharedSecret
     ) {
-        this.lbRestClientBuilder = lbRestClientBuilder;
+        this.restClient = lbRestClientBuilder.build();
         this.internalSharedSecret = internalSharedSecret == null ? "" : internalSharedSecret.trim();
     }
 
@@ -35,7 +35,7 @@ public class PromotionClient {
     @CircuitBreaker(name = "promotionService", fallbackMethod = "promotionFallbackCommit")
     public CouponReservationResponse commitCouponReservation(UUID reservationId, UUID orderId) {
         try {
-            return lbRestClientBuilder.build()
+            return restClient
                     .post()
                     .uri("http://promotion-service/internal/promotions/reservations/{reservationId}/commit", reservationId)
                     .header("X-Internal-Auth", internalSharedSecret)
@@ -61,7 +61,7 @@ public class PromotionClient {
     @CircuitBreaker(name = "promotionService", fallbackMethod = "promotionFallbackRelease")
     public CouponReservationResponse releaseCouponReservation(UUID reservationId, String reason) {
         try {
-            return lbRestClientBuilder.build()
+            return restClient
                     .post()
                     .uri("http://promotion-service/internal/promotions/reservations/{reservationId}/release", reservationId)
                     .header("X-Internal-Auth", internalSharedSecret)
@@ -97,7 +97,7 @@ public class PromotionClient {
 
     private String resolveErrorMessage(HttpClientErrorException ex, String fallback) {
         String body = ex.getResponseBodyAsString();
-        if (body == null || body.isBlank()) {
+        if (body.isBlank()) {
             return fallback;
         }
         int messageIndex = body.indexOf("\"message\"");

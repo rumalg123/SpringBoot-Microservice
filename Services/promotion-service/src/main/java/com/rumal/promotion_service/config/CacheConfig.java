@@ -35,7 +35,6 @@ public class CacheConfig implements CachingConfigurer {
             ObjectMapper objectMapper,
             @Value("${cache.promotion-by-id-ttl:120s}") Duration promotionByIdTtl,
             @Value("${cache.promotion-admin-list-ttl:45s}") Duration promotionAdminListTtl,
-            @Value("${cache.quote-preview-ttl:30s}") Duration quotePreviewTtl,
             @Value("${cache.public-promotion-list-ttl:90s}") Duration publicPromotionListTtl,
             @Value("${cache.public-promotion-by-id-ttl:120s}") Duration publicPromotionByIdTtl,
             @Value("${cache.key-prefix:promo:v1::}") String cacheKeyPrefix
@@ -60,7 +59,6 @@ public class CacheConfig implements CachingConfigurer {
                 .withInitialCacheConfigurations(Map.of(
                         "promotionById", defaultConfig.entryTtl(promotionByIdTtl),
                         "promotionAdminList", defaultConfig.entryTtl(promotionAdminListTtl),
-                        "promotionQuotePreview", defaultConfig.entryTtl(quotePreviewTtl),
                         "publicPromotionList", defaultConfig.entryTtl(publicPromotionListTtl),
                         "publicPromotionById", defaultConfig.entryTtl(publicPromotionByIdTtl)
                 ))

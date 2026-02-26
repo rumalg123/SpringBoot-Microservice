@@ -12,6 +12,7 @@ import com.rumal.vendor_service.dto.VendorLifecycleAuditResponse;
 import com.rumal.vendor_service.dto.VendorDeletionEligibilityResponse;
 import com.rumal.vendor_service.dto.VendorOperationalStateResponse;
 import com.rumal.vendor_service.dto.VendorPayoutConfigResponse;
+import com.rumal.vendor_service.dto.PublicVendorResponse;
 import com.rumal.vendor_service.dto.VendorResponse;
 import com.rumal.vendor_service.dto.VendorUserResponse;
 
@@ -24,16 +25,13 @@ import java.util.UUID;
 public interface VendorService {
     VendorResponse create(UpsertVendorRequest request);
     VendorResponse update(UUID id, UpsertVendorRequest request);
+    PublicVendorResponse getPublicByIdOrSlug(String idOrSlug);
     VendorResponse getByIdOrSlug(String idOrSlug);
     VendorResponse getAdminById(UUID id);
-    List<VendorResponse> listPublicActive();
-    List<VendorResponse> listPublicActive(String category);
-    Page<VendorResponse> listPublicActive(String category, Pageable pageable);
-    List<VendorResponse> listAllNonDeleted();
+    Page<PublicVendorResponse> listPublicActive(String category, Pageable pageable);
     Page<VendorResponse> listAllNonDeleted(Pageable pageable);
-    List<VendorResponse> listDeleted();
     Page<VendorResponse> listDeleted(Pageable pageable);
-    List<VendorLifecycleAuditResponse> listLifecycleAudit(UUID id);
+    Page<VendorLifecycleAuditResponse> listLifecycleAudit(UUID id, Pageable pageable);
     VendorDeletionEligibilityResponse getDeletionEligibility(UUID id);
     void softDelete(UUID id);
     void softDelete(UUID id, String reason, String actorSub, String actorRoles);
@@ -48,6 +46,7 @@ public interface VendorService {
     boolean isSlugAvailable(String slug, UUID excludeId);
 
     List<VendorUserResponse> listVendorUsers(UUID vendorId);
+    Page<VendorUserResponse> listVendorUsers(UUID vendorId, Pageable pageable);
     VendorUserResponse addVendorUser(UUID vendorId, UpsertVendorUserRequest request);
     VendorUserResponse updateVendorUser(UUID vendorId, UUID membershipId, UpsertVendorUserRequest request);
     void removeVendorUser(UUID vendorId, UUID membershipId);
