@@ -47,6 +47,7 @@ spring:
                   - Authorization
                   - X-Requested-With
                   - Idempotency-Key
+                  - X-Session-Id
                   - Accept
                   - Origin
                 exposed-headers:
