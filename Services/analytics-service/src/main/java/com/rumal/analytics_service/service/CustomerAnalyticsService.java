@@ -40,7 +40,7 @@ public class CustomerAnalyticsService {
         try {
             return action.get();
         } catch (Exception e) {
-            log.warn("Customer analytics downstream call failed: {}", e.getMessage());
+            log.warn("Customer analytics downstream call failed: {}", e.getMessage(), e);
             return fallback;
         }
     }

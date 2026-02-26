@@ -283,6 +283,22 @@ public class RateLimitConfig {
     }
 
     @Bean
+    public RedisRateLimiter paymentMeRateLimiter(
+            @Value("${RATE_LIMIT_PAYMENT_ME_REPLENISH:8}") int replenishRate,
+            @Value("${RATE_LIMIT_PAYMENT_ME_BURST:16}") int burstCapacity
+    ) {
+        return redisRateLimiter(replenishRate, burstCapacity);
+    }
+
+    @Bean
+    public RedisRateLimiter paymentMeWriteRateLimiter(
+            @Value("${RATE_LIMIT_PAYMENT_ME_WRITE_REPLENISH:4}") int replenishRate,
+            @Value("${RATE_LIMIT_PAYMENT_ME_WRITE_BURST:8}") int burstCapacity
+    ) {
+        return redisRateLimiter(replenishRate, burstCapacity);
+    }
+
+    @Bean
     @Primary
     public KeyResolver userOrIpKeyResolver() {
         return exchange -> exchange.getPrincipal()

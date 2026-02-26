@@ -16,6 +16,8 @@ public record AdminCapabilitiesResponse(
         boolean canManageAdminProducts,
         boolean canManageAdminCategories,
         boolean canManageAdminPosters,
-        boolean canManageAdminVendors
+        boolean canManageAdminVendors,
+        boolean canManageAdminPromotions,
+        boolean canManageAdminReviews
 ) {
 }

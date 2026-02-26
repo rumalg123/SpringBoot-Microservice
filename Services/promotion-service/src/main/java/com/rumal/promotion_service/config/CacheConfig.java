@@ -34,8 +34,8 @@ public class CacheConfig implements CachingConfigurer {
             RedisConnectionFactory redisConnectionFactory,
             ObjectMapper objectMapper,
             @Value("${cache.promotion-by-id-ttl:120s}") Duration promotionByIdTtl,
-            @Value("${cache.promotion-admin-list-ttl:45s}") Duration promotionAdminListTtl,
-            @Value("${cache.public-promotion-list-ttl:90s}") Duration publicPromotionListTtl,
+            @Value("${cache.promotion-admin-list-ttl:20s}") Duration promotionAdminListTtl,
+            @Value("${cache.public-promotion-list-ttl:30s}") Duration publicPromotionListTtl,
             @Value("${cache.public-promotion-by-id-ttl:120s}") Duration publicPromotionByIdTtl,
             @Value("${cache.key-prefix:promo:v1::}") String cacheKeyPrefix
     ) {

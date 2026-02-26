@@ -83,6 +83,7 @@ public class SecurityConfig {
                         .pathMatchers("/admin/vendors/**", "/admin/platform-staff/**").access(this::hasSuperAdminAccess)
                         .pathMatchers("/admin/vendor-staff/**", "/admin/keycloak/users/**", "/admin/access-audit/**").access(this::hasSuperAdminOrVendorAdminAccess)
                         .pathMatchers("/admin/posters/**", "/admin/categories/**").access(this::hasSuperAdminOrPlatformStaffAccess)
+                        .pathMatchers("/admin/api-keys/**", "/admin/sessions/**").access(this::hasSuperAdminAccess)
                         .pathMatchers("/admin/orders/**", "/admin/vendor-orders/**", "/admin/products/**", "/admin/promotions/**", "/admin/payments/**", "/admin/inventory/**").access(this::hasAnyScopedAdminAccess)
                         .pathMatchers("/admin/me/**").access(this::hasAnyScopedAdminAccess)
                         .pathMatchers("/admin/**").access(this::hasSuperAdminAccess)
@@ -144,10 +145,10 @@ public class SecurityConfig {
                 .cast(JwtAuthenticationToken.class)
                 .map(JwtAuthenticationToken::getToken)
                 .map(jwt -> (AuthorizationResult) new AuthorizationDecision(
-                        hasRole(jwt, "super_admin")
+                        isEmailVerified(jwt) && (hasRole(jwt, "super_admin")
                                 || hasRole(jwt, "platform_staff")
                                 || hasRole(jwt, "vendor_admin")
-                                || hasRole(jwt, "vendor_staff")
+                                || hasRole(jwt, "vendor_staff"))
                 ))
                 .defaultIfEmpty(new AuthorizationDecision(false));
     }

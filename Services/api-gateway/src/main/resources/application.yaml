@@ -261,6 +261,24 @@ spring:
                   args:
                     name: adminService
                     fallbackUri: forward:/fallback/unavailable
+            - id: admin-api-keys
+              uri: lb://access-service
+              predicates:
+                - Path=/admin/api-keys,/admin/api-keys/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: accessService
+                    fallbackUri: forward:/fallback/unavailable
+            - id: admin-sessions
+              uri: lb://access-service
+              predicates:
+                - Path=/admin/sessions,/admin/sessions/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: accessService
+                    fallbackUri: forward:/fallback/unavailable
             - id: admin-permission-groups
               uri: lb://access-service
               predicates:
@@ -268,7 +286,7 @@ spring:
               filters:
                 - name: CircuitBreaker
                   args:
-                    name: adminService
+                    name: accessService
                     fallbackUri: forward:/fallback/unavailable
             - id: admin-promotions
               uri: lb://promotion-service
@@ -570,6 +588,8 @@ resilience4j:
         base-config: default
       searchService:
         base-config: default
+      accessService:
+        base-config: default
   timelimiter:
     configs:
       default:
@@ -604,6 +624,8 @@ resilience4j:
       personalizationService:
         base-config: default
       searchService:
+        base-config: default
+      accessService:
         base-config: default
 
 logging:

@@ -35,9 +35,7 @@ public interface AccessService {
             Integer limit
     );
 
-    List<PlatformStaffAccessResponse> listPlatformStaff();
     Page<PlatformStaffAccessResponse> listPlatformStaff(Pageable pageable);
-    List<PlatformStaffAccessResponse> listDeletedPlatformStaff();
     Page<PlatformStaffAccessResponse> listDeletedPlatformStaff(Pageable pageable);
     PlatformStaffAccessResponse getPlatformStaffById(UUID id);
     PlatformStaffAccessResponse createPlatformStaff(UpsertPlatformStaffAccessRequest request);
@@ -50,11 +48,8 @@ public interface AccessService {
     PlatformStaffAccessResponse restorePlatformStaff(UUID id, String actorSub, String actorRoles, String reason);
     PlatformAccessLookupResponse getPlatformAccessByKeycloakUser(String keycloakUserId);
 
-    List<VendorStaffAccessResponse> listVendorStaff(UUID vendorId);
     Page<VendorStaffAccessResponse> listVendorStaff(UUID vendorId, Pageable pageable);
-    List<VendorStaffAccessResponse> listAllVendorStaff();
     Page<VendorStaffAccessResponse> listAllVendorStaff(Pageable pageable);
-    List<VendorStaffAccessResponse> listDeletedVendorStaff();
     Page<VendorStaffAccessResponse> listDeletedVendorStaff(Pageable pageable);
     VendorStaffAccessResponse getVendorStaffById(UUID id);
     VendorStaffAccessResponse createVendorStaff(UpsertVendorStaffAccessRequest request);
@@ -68,7 +63,6 @@ public interface AccessService {
     List<VendorStaffAccessLookupResponse> listVendorStaffAccessByKeycloakUser(String keycloakUserId);
 
     // Permission groups
-    List<PermissionGroupResponse> listPermissionGroups(PermissionGroupScope scope);
     Page<PermissionGroupResponse> listPermissionGroups(PermissionGroupScope scope, Pageable pageable);
     PermissionGroupResponse getPermissionGroupById(UUID id);
     PermissionGroupResponse createPermissionGroup(UpsertPermissionGroupRequest request);
@@ -77,14 +71,13 @@ public interface AccessService {
 
     // Session management
     ActiveSessionResponse registerSession(RegisterSessionRequest request);
-    List<ActiveSessionResponse> listSessionsByKeycloakId(String keycloakId);
-    org.springframework.data.domain.Page<ActiveSessionResponse> listSessionsByKeycloakId(String keycloakId, org.springframework.data.domain.Pageable pageable);
+    Page<ActiveSessionResponse> listSessionsByKeycloakId(String keycloakId, Pageable pageable);
     void revokeSession(UUID sessionId);
     void revokeAllSessions(String keycloakId);
 
     // API key management
     CreateApiKeyResponse createApiKey(CreateApiKeyRequest request);
-    List<ApiKeyResponse> listApiKeys(String keycloakId);
+    Page<ApiKeyResponse> listApiKeys(String keycloakId, Pageable pageable);
     void deleteApiKey(UUID id);
 
     // Expiry processing

@@ -10,6 +10,7 @@ import PermissionChecklist from "@/app/components/admin/access/PermissionCheckli
 import AdminPageShell from "@/app/components/ui/AdminPageShell";
 import { useAuthSession } from "@/lib/authSession";
 import { getErrorMessage } from "@/lib/error";
+import { normalizePage, type PagedResponse } from "@/lib/types/pagination";
 
 type PlatformStaffRow = {
   id: string;
@@ -60,28 +61,37 @@ export default function AdminPlatformStaffPage() {
   const [auditTargetRow, setAuditTargetRow] = useState<PlatformStaffRow | null>(null);
   const [accessAuditReloadKey, setAccessAuditReloadKey] = useState(0);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [page, setPage] = useState(0);
+  const [deletedPage, setDeletedPage] = useState(0);
+  const PAGE_SIZE = 25;
 
   const ready = session.status === "ready" && session.isAuthenticated;
 
-  const { data: rows = [], isLoading: loading } = useQuery({
-    queryKey: ["admin-platform-staff"],
+  const { data: staffPage, isLoading: loading } = useQuery({
+    queryKey: ["admin-platform-staff", page],
     queryFn: async () => {
-      const res = await session.apiClient!.get("/admin/platform-staff");
-      const raw = res.data as { content?: PlatformStaffRow[] };
-      return raw.content || [];
+      const params = new URLSearchParams({ page: String(page), size: String(PAGE_SIZE) });
+      const res = await session.apiClient!.get(`/admin/platform-staff?${params.toString()}`);
+      return normalizePage(res.data as PagedResponse<PlatformStaffRow>);
     },
     enabled: ready && !!session.apiClient,
   });
 
-  const { data: deletedRows = [], isLoading: loadingDeleted } = useQuery({
-    queryKey: ["admin-platform-staff-deleted"],
+  const rows = staffPage?.content ?? [];
+  const totalPages = staffPage?.totalPages ?? 0;
+
+  const { data: deletedStaffPage, isLoading: loadingDeleted } = useQuery({
+    queryKey: ["admin-platform-staff-deleted", deletedPage],
     queryFn: async () => {
-      const res = await session.apiClient!.get("/admin/platform-staff/deleted");
-      const raw = res.data as { content?: PlatformStaffRow[] };
-      return raw.content || [];
+      const params = new URLSearchParams({ page: String(deletedPage), size: String(PAGE_SIZE) });
+      const res = await session.apiClient!.get(`/admin/platform-staff/deleted?${params.toString()}`);
+      return normalizePage(res.data as PagedResponse<PlatformStaffRow>);
     },
     enabled: ready && !!session.apiClient && showDeleted,
   });
+
+  const deletedRows = deletedStaffPage?.content ?? [];
+  const deletedTotalPages = deletedStaffPage?.totalPages ?? 0;
 
   const activeRows = useMemo(
     () => [...rows].sort((a, b) => `${a.email}`.localeCompare(`${b.email}`)),
@@ -89,6 +99,8 @@ export default function AdminPlatformStaffPage() {
   );
 
   const invalidateAll = () => {
+    setPage(0);
+    setDeletedPage(0);
     void queryClient.invalidateQueries({ queryKey: ["admin-platform-staff"] });
     void queryClient.invalidateQueries({ queryKey: ["admin-platform-staff-deleted"] });
     setAccessAuditReloadKey((n) => n + 1);
@@ -274,8 +286,8 @@ export default function AdminPlatformStaffPage() {
                 </p>
               </div>
               <div className="flex gap-2">
-                <button type="button" className="btn-ghost" onClick={() => setShowDeleted(false)} disabled={!showDeleted}>Active</button>
-                <button type="button" className="btn-ghost" onClick={() => setShowDeleted(true)} disabled={showDeleted || listBusy}>Deleted</button>
+                <button type="button" className="btn-ghost" onClick={() => { setShowDeleted(false); }} disabled={!showDeleted}>Active</button>
+                <button type="button" className="btn-ghost" onClick={() => { setShowDeleted(true); }} disabled={showDeleted || listBusy}>Deleted</button>
               </div>
             </div>
 
@@ -355,6 +367,37 @@ export default function AdminPlatformStaffPage() {
                 ))}
               </div>
             )}
+
+            {/* Pagination */}
+            {(() => {
+              const currentPage = showDeleted ? deletedPage : page;
+              const currentTotalPages = showDeleted ? deletedTotalPages : totalPages;
+              const setCurrentPage = showDeleted ? setDeletedPage : setPage;
+              if (currentTotalPages <= 1) return null;
+              return (
+                <div className="flex items-center justify-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+                    disabled={currentPage <= 0 || listBusy}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold border border-line ${currentPage <= 0 ? "text-[rgba(255,255,255,0.35)] cursor-not-allowed opacity-50" : "text-ink cursor-pointer bg-[rgba(255,255,255,0.04)]"}`}
+                  >
+                    Previous
+                  </button>
+                  <span className="text-xs text-[rgba(255,255,255,0.6)]">
+                    Page {currentPage + 1} of {currentTotalPages}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((p) => p + 1)}
+                    disabled={currentPage >= currentTotalPages - 1 || listBusy}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold border border-line ${currentPage >= currentTotalPages - 1 ? "text-[rgba(255,255,255,0.35)] cursor-not-allowed opacity-50" : "text-ink cursor-pointer bg-[rgba(255,255,255,0.04)]"}`}
+                  >
+                    Next
+                  </button>
+                </div>
+              );
+            })()}
 
             <AccessAuditPanel
               apiClient={session.apiClient}

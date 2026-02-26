@@ -6,6 +6,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuthSession } from "../../../lib/authSession";
 import AdminPageShell from "../../components/ui/AdminPageShell";
 import TableSkeleton from "../../components/ui/TableSkeleton";
+import { normalizePage, type PagedResponse } from "@/lib/types/pagination";
 
 type ApiKey = {
   id: string;
@@ -32,17 +33,23 @@ export default function AdminApiKeysPage() {
   const [newExpiry, setNewExpiry] = useState("");
   const [rawKeyRevealed, setRawKeyRevealed] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 25;
 
   const keycloakId = (profile?.sub as string) || "";
 
-  const { data: keys = [], isLoading: loading, refetch } = useQuery({
-    queryKey: ["admin-api-keys", keycloakId],
+  const { data: keysPage, isLoading: loading, refetch } = useQuery({
+    queryKey: ["admin-api-keys", keycloakId, page],
     queryFn: async () => {
-      const res = await apiClient!.get(`/admin/api-keys/by-keycloak/${keycloakId}`);
-      return (res.data as ApiKey[]) || [];
+      const params = new URLSearchParams({ page: String(page), size: String(PAGE_SIZE) });
+      const res = await apiClient!.get(`/admin/api-keys/by-keycloak/${keycloakId}?${params.toString()}`);
+      return normalizePage(res.data as PagedResponse<ApiKey>);
     },
     enabled: sessionStatus === "ready" && !!apiClient && !!keycloakId,
   });
+
+  const keys = keysPage?.content ?? [];
+  const totalPages = keysPage?.totalPages ?? 0;
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -63,6 +70,7 @@ export default function AdminApiKeysPage() {
       setNewName("");
       setNewPermissions("");
       setNewExpiry("");
+      setPage(0);
       void refetch();
       toast.success("API key created");
     },
@@ -109,6 +117,13 @@ export default function AdminApiKeysPage() {
 
   if (sessionStatus === "loading" || sessionStatus === "idle") {
     return <div className="min-h-screen bg-bg grid place-items-center"><p className="text-muted">Loading...</p></div>;
+  }
+  if (!session.isSuperAdmin) {
+    return (
+      <AdminPageShell title="API Keys" breadcrumbs={[{ label: "Admin", href: "/admin/dashboard" }, { label: "API Keys" }]}>
+        <p className="text-center text-muted py-20">You do not have permission to manage API keys.</p>
+      </AdminPageShell>
+    );
   }
 
   return (
@@ -212,6 +227,7 @@ export default function AdminApiKeysPage() {
             <p className="text-muted text-[0.9rem]">No API keys found. Create one to get started.</p>
           </div>
         ) : (
+          <>
           <div className="rounded-[14px] overflow-hidden border border-line-bright">
             <table className="w-full border-collapse">
               <thead>
@@ -255,6 +271,32 @@ export default function AdminApiKeysPage() {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex justify-center gap-2 mt-4">
+              <button
+                type="button"
+                disabled={page === 0 || loading}
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                className={`px-3.5 py-1.5 rounded-sm text-sm font-semibold bg-[var(--card)] border border-line-bright ${page === 0 ? "text-muted cursor-default" : "text-white cursor-pointer"}`}
+              >
+                Previous
+              </button>
+              <span className="px-3 py-1.5 text-sm text-muted">
+                {page + 1} / {totalPages}
+              </span>
+              <button
+                type="button"
+                disabled={page >= totalPages - 1 || loading}
+                onClick={() => setPage((p) => p + 1)}
+                className={`px-3.5 py-1.5 rounded-sm text-sm font-semibold bg-[var(--card)] border border-line-bright ${page >= totalPages - 1 ? "text-muted cursor-default" : "text-white cursor-pointer"}`}
+              >
+                Next
+              </button>
+            </div>
+          )}
+          </>
         )}
     </AdminPageShell>
   );

@@ -19,6 +19,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 
 import java.util.UUID;
 
@@ -45,7 +47,7 @@ public class AdminSessionController {
     public Page<ActiveSessionResponse> listByKeycloakId(
             @RequestHeader(INTERNAL_HEADER) String internalAuth,
             @PathVariable String keycloakId,
-            Pageable pageable
+            @PageableDefault(size = 25, sort = "lastActivityAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         internalRequestVerifier.verify(internalAuth);
         return accessService.listSessionsByKeycloakId(keycloakId, pageable);

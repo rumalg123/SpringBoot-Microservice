@@ -5,9 +5,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import ConfirmModal from "../../components/ConfirmModal";
 import AdminPageShell from "../../components/ui/AdminPageShell";
-import PosterFormPanel from "../../components/posters/admin/PosterFormPanel";
-import PosterVariantsSection from "../../components/posters/admin/PosterVariantsSection";
-import PosterAnalyticsSummary from "../../components/posters/admin/PosterAnalyticsSummary";
+import PosterFormPanel from "../../components/admin/posters/PosterForm";
+import PosterVariantsSection from "../../components/admin/posters/PosterVariantManager";
+import PosterAnalyticsSummary from "../../components/admin/posters/PosterAnalyticsPanel";
 import PosterListPanel from "../../components/posters/admin/PosterListPanel";
 import {
   type Poster,

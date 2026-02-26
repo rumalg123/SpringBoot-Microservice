@@ -128,14 +128,14 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Cacheable(cacheNames = "productById", key = "@productCacheVersionService.productByIdVersion() + '::id::' + #id")
     public ProductResponse getById(UUID id) {
-        Product product = getActiveEntityById(id);
+        Product product = getActiveEntityByIdWithDetails(id);
         return toPublicResponse(product);
     }
 
     @Override
     @Cacheable(cacheNames = "productById", key = "@productCacheVersionService.productByIdVersion() + '::slug::' + #slug")
     public ProductResponse getBySlug(String slug) {
-        Product product = getActiveEntityBySlug(slug);
+        Product product = getActiveEntityBySlugWithDetails(slug);
         return toPublicResponse(product);
     }
 
@@ -778,12 +778,28 @@ public class ProductServiceImpl implements ProductService {
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + id));
     }
 
+    private Product getActiveEntityByIdWithDetails(UUID id) {
+        return productRepository.findByIdWithDetails(id)
+                .filter(product -> !product.isDeleted())
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + id));
+    }
+
     private Product getActiveEntityBySlug(String slug) {
         String normalizedSlug = normalizeRequestedSlug(slug);
         if (normalizedSlug.isEmpty()) {
             throw new ResourceNotFoundException("Product not found: " + slug);
         }
         return productRepository.findBySlug(normalizedSlug)
+                .filter(product -> !product.isDeleted())
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + slug));
+    }
+
+    private Product getActiveEntityBySlugWithDetails(String slug) {
+        String normalizedSlug = normalizeRequestedSlug(slug);
+        if (normalizedSlug.isEmpty()) {
+            throw new ResourceNotFoundException("Product not found: " + slug);
+        }
+        return productRepository.findBySlugWithDetails(normalizedSlug)
                 .filter(product -> !product.isDeleted())
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + slug));
     }

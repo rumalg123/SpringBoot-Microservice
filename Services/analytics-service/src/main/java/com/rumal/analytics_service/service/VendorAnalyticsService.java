@@ -51,7 +51,7 @@ public class VendorAnalyticsService {
         try {
             return action.get();
         } catch (Exception e) {
-            log.warn("Vendor analytics downstream call failed: {}", e.getMessage());
+            log.warn("Vendor analytics downstream call failed: {}", e.getMessage(), e);
             return fallback;
         }
     }

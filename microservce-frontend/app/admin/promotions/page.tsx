@@ -8,6 +8,7 @@ import PromotionForm from "../../components/admin/promotions/PromotionForm";
 import PromotionDetailPanel from "../../components/admin/promotions/PromotionDetailPanel";
 import PromotionsList from "../../components/admin/promotions/PromotionsList";
 import { useAuthSession } from "../../../lib/authSession";
+import { getErrorMessage } from "../../../lib/error";
 import type {
   Promotion,
   CouponCode,
@@ -35,20 +36,6 @@ function toIsoOrNull(v: string) {
   if (!t) return null;
   const d = new Date(t);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
-}
-
-function getApiErrorMessage(err: unknown, fallback: string) {
-  if (typeof err === "object" && err !== null) {
-    const maybe = err as { message?: string; response?: { data?: { message?: string; error?: string } | string } };
-    const rd = maybe.response?.data;
-    if (typeof rd === "string" && rd.trim()) return rd.trim();
-    if (rd && typeof rd === "object") {
-      if (typeof rd.message === "string" && rd.message.trim()) return rd.message.trim();
-      if (typeof rd.error === "string" && rd.error.trim()) return rd.error.trim();
-    }
-    if (typeof maybe.message === "string" && maybe.message.trim()) return maybe.message.trim();
-  }
-  return fallback;
 }
 
 /* ───── component ───── */
@@ -172,7 +159,7 @@ export default function AdminPromotionsPage() {
       void queryClient.invalidateQueries({ queryKey: ["admin-promotions"] });
     },
     onError: (e, { action }) => {
-      toast.error(getApiErrorMessage(e, `Failed to ${action}.`));
+      toast.error(getErrorMessage(e));
     },
     onSettled: () => {
       setWorkflowBusy(false);
@@ -200,7 +187,7 @@ export default function AdminPromotionsPage() {
       void queryClient.invalidateQueries({ queryKey: ["admin-promotions"] });
     },
     onError: (err) => {
-      toast.error(getApiErrorMessage(err, "Save failed"));
+      toast.error(getErrorMessage(err));
     },
     onSettled: () => {
       setSubmitting(false);
@@ -218,7 +205,7 @@ export default function AdminPromotionsPage() {
       void queryClient.invalidateQueries({ queryKey: ["admin-promotions", selected?.id, "coupons"] });
     },
     onError: (err) => {
-      toast.error(getApiErrorMessage(err, "Failed to create coupon"));
+      toast.error(getErrorMessage(err));
     },
     onSettled: () => {
       setCouponSubmitting(false);
@@ -304,7 +291,7 @@ export default function AdminPromotionsPage() {
 
       submitMutation.mutate(payload);
     } catch (err) {
-      toast.error(getApiErrorMessage(err, "Save failed"));
+      toast.error(getErrorMessage(err));
       setSubmitting(false);
     }
   };
@@ -328,7 +315,7 @@ export default function AdminPromotionsPage() {
       };
       createCouponMutation.mutate(payload);
     } catch (err) {
-      toast.error(getApiErrorMessage(err, "Failed to create coupon"));
+      toast.error(getErrorMessage(err));
       setCouponSubmitting(false);
     }
   };
@@ -355,6 +342,13 @@ export default function AdminPromotionsPage() {
     return <div className="min-h-screen bg-bg grid place-items-center"><div className="spinner-lg" /></div>;
   }
   if (!session.isAuthenticated) return null;
+  if (!session.canManageAdminPromotions) {
+    return (
+      <AdminPageShell title="Promotions" breadcrumbs={[{ label: "Admin", href: "/admin/dashboard" }, { label: "Promotions" }]}>
+        <p className="text-center text-muted py-20">You do not have permission to manage promotions.</p>
+      </AdminPageShell>
+    );
+  }
 
   return (
     <AdminPageShell

@@ -155,18 +155,8 @@ public class AccessServiceImpl implements AccessService {
     }
 
     @Override
-    public List<PlatformStaffAccessResponse> listPlatformStaff() {
-        return platformStaffAccessRepository.findByDeletedFalseOrderByEmailAsc().stream().map(this::toPlatformStaffResponse).toList();
-    }
-
-    @Override
     public Page<PlatformStaffAccessResponse> listPlatformStaff(Pageable pageable) {
         return platformStaffAccessRepository.findByDeletedFalse(pageable).map(this::toPlatformStaffResponse);
-    }
-
-    @Override
-    public List<PlatformStaffAccessResponse> listDeletedPlatformStaff() {
-        return platformStaffAccessRepository.findByDeletedTrueOrderByUpdatedAtDesc().stream().map(this::toPlatformStaffResponse).toList();
     }
 
     @Override
@@ -309,14 +299,6 @@ public class AccessServiceImpl implements AccessService {
     }
 
     @Override
-    public List<VendorStaffAccessResponse> listVendorStaff(UUID vendorId) {
-        if (vendorId == null) {
-            return listAllVendorStaff();
-        }
-        return vendorStaffAccessRepository.findByVendorIdAndDeletedFalseOrderByEmailAsc(vendorId).stream().map(this::toVendorStaffResponse).toList();
-    }
-
-    @Override
     public Page<VendorStaffAccessResponse> listVendorStaff(UUID vendorId, Pageable pageable) {
         if (vendorId == null) {
             return listAllVendorStaff(pageable);
@@ -325,18 +307,8 @@ public class AccessServiceImpl implements AccessService {
     }
 
     @Override
-    public List<VendorStaffAccessResponse> listAllVendorStaff() {
-        return vendorStaffAccessRepository.findByDeletedFalseOrderByVendorIdAscEmailAsc().stream().map(this::toVendorStaffResponse).toList();
-    }
-
-    @Override
     public Page<VendorStaffAccessResponse> listAllVendorStaff(Pageable pageable) {
         return vendorStaffAccessRepository.findByDeletedFalse(pageable).map(this::toVendorStaffResponse);
-    }
-
-    @Override
-    public List<VendorStaffAccessResponse> listDeletedVendorStaff() {
-        return vendorStaffAccessRepository.findByDeletedTrueOrderByUpdatedAtDesc().stream().map(this::toVendorStaffResponse).toList();
     }
 
     @Override
@@ -769,14 +741,6 @@ public class AccessServiceImpl implements AccessService {
     // ── Permission Groups ──────────────────────────────────────────────
 
     @Override
-    public List<PermissionGroupResponse> listPermissionGroups(PermissionGroupScope scope) {
-        List<PermissionGroup> groups = scope != null
-                ? permissionGroupRepository.findByScopeOrderByNameAsc(scope)
-                : permissionGroupRepository.findAllByOrderByNameAsc();
-        return groups.stream().map(this::toPermissionGroupResponse).toList();
-    }
-
-    @Override
     public Page<PermissionGroupResponse> listPermissionGroups(PermissionGroupScope scope, Pageable pageable) {
         Page<PermissionGroup> groups = scope != null
                 ? permissionGroupRepository.findByScope(scope, pageable)
@@ -870,13 +834,6 @@ public class AccessServiceImpl implements AccessService {
     }
 
     @Override
-    public List<ActiveSessionResponse> listSessionsByKeycloakId(String keycloakId) {
-        String normalized = normalizeRequired(keycloakId, "keycloakId", 120);
-        return activeSessionRepository.findByKeycloakIdOrderByLastActivityAtDesc(normalized)
-                .stream().map(this::toActiveSessionResponse).toList();
-    }
-
-    @Override
     public Page<ActiveSessionResponse> listSessionsByKeycloakId(String keycloakId, Pageable pageable) {
         String normalized = normalizeRequired(keycloakId, "keycloakId", 120);
         return activeSessionRepository.findByKeycloakIdOrderByLastActivityAtDesc(normalized, pageable)
@@ -944,10 +901,10 @@ public class AccessServiceImpl implements AccessService {
     }
 
     @Override
-    public List<ApiKeyResponse> listApiKeys(String keycloakId) {
+    public Page<ApiKeyResponse> listApiKeys(String keycloakId, Pageable pageable) {
         String normalized = normalizeRequired(keycloakId, "keycloakId", 120);
-        return apiKeyRepository.findByKeycloakIdOrderByCreatedAtDesc(normalized)
-                .stream().map(this::toApiKeyResponse).toList();
+        return apiKeyRepository.findByKeycloakId(normalized, pageable)
+                .map(this::toApiKeyResponse);
     }
 
     @Override

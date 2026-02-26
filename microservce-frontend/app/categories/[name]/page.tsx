@@ -8,17 +8,16 @@ import toast from "react-hot-toast";
 import AppNav from "../../components/AppNav";
 import CategoryMenu from "../../components/CategoryMenu";
 import Footer from "../../components/Footer";
-import Pagination from "../../components/Pagination";
 import CatalogToolbar from "../../components/catalog/CatalogToolbar";
 import { API_BASE } from "../../../lib/constants";
-import CatalogFiltersSidebar from "../../components/catalog/CatalogFiltersSidebar";
+import CategoryFilterSidebar from "../../components/categories/CategoryFilterSidebar";
+import CategoryProductGrid from "../../components/categories/CategoryProductGrid";
 import PosterSlot from "../../components/posters/PosterSlot";
 import { useAuthSession } from "../../../lib/authSession";
 import { emitWishlistUpdate } from "../../../lib/navEvents";
 import { money, calcDiscount } from "../../../lib/format";
 import { resolveImageUrl } from "../../../lib/image";
 import { useWishlistToggle } from "../../../lib/hooks/useWishlistToggle";
-import ProductCard from "../../components/catalog/ProductCard";
 import ProductCardSkeleton from "../../components/catalog/ProductCardSkeleton";
 import type { ProductSummary, PagedResponse } from "../../../lib/types";
 import type { WishlistItem, WishlistResponse } from "../../../lib/types/wishlist";
@@ -317,6 +316,7 @@ export default function CategoryProductsPage() {
         setProducts([]);
         setTotalPages(1);
         setStatus("Failed to load products.");
+        toast.error("Failed to load products. Please try again.");
       } finally {
         if (!signal.aborted) setProductsLoading(false);
       }
@@ -472,14 +472,14 @@ export default function CategoryProductsPage() {
         <header className="sticky top-0 z-50 border-b border-[rgba(0,212,255,0.1)] bg-header-bg backdrop-blur-[12px]">
           <div className="mx-auto flex max-w-[1280px] items-center justify-between px-4 py-3">
             <Link href="/" className="flex items-center gap-2.5 no-underline">
-              <span className="grid h-8 w-8 place-items-center rounded-[8px] bg-[linear-gradient(135deg,#00d4ff,#7c3aed)]">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <span className="grid h-8 w-8 place-items-center rounded-[8px] bg-[var(--gradient-brand)]">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" /><line x1="3" y1="6" x2="21" y2="6" /><path d="M16 10a4 4 0 0 1-8 0" />
                 </svg>
               </span>
               <span className="font-[Syne,sans-serif] text-[1.1rem] font-extrabold text-white">Rumal Store</span>
             </Link>
-            <Link href="/" className="rounded-[8px] bg-[linear-gradient(135deg,#00d4ff,#7c3aed)] px-5 py-2 text-sm font-bold text-white no-underline">
+            <Link href="/" className="rounded-[8px] bg-[var(--gradient-brand)] px-5 py-2 text-sm font-bold text-white no-underline">
               Sign In
             </Link>
           </div>
@@ -530,7 +530,7 @@ export default function CategoryProductsPage() {
             />
 
             <div className="grid gap-5 lg:grid-cols-[300px,1fr]">
-              <CatalogFiltersSidebar
+              <CategoryFilterSidebar
                 parents={parents}
                 subsByParent={subsByParent}
                 selectedParentNames={selectedParentNames}
@@ -554,43 +554,19 @@ export default function CategoryProductsPage() {
                 onToggleParentExpanded={toggleParentExpanded}
               />
 
-              <section>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
-                  {products.map((p, idx) => (
-                    <ProductCard
-                      key={p.id}
-                      product={p}
-                      index={idx}
-                      showWishlist={isAuthenticated}
-                      isWishlisted={isWishlisted(p.id)}
-                      wishlistBusy={isWishlistBusy(p.id)}
-                      onWishlistToggle={(e) => { void toggleWishlist(e, p.id); }}
-                    />
-                  ))}
-                </div>
-
-                {products.length === 0 && !productsLoading && (
-                  <div className="empty-state mt-6">
-                    <div className="empty-state-icon">Search</div>
-                    <p className="empty-state-title">No products found</p>
-                    <p className="empty-state-desc">Try adjusting your search and filters</p>
-                    <button
-                      disabled={busy}
-                      onClick={resetToRouteDefaults}
-                      className="btn-primary inline-block px-6 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      Reset Filters
-                    </button>
-                  </div>
-                )}
-
-                <Pagination
-                  currentPage={page}
-                  totalPages={totalPages}
-                  onPageChange={setPage}
-                  disabled={busy}
-                />
-              </section>
+              <CategoryProductGrid
+                products={products}
+                productsLoading={productsLoading}
+                busy={busy}
+                page={page}
+                totalPages={totalPages}
+                isAuthenticated={isAuthenticated}
+                isWishlisted={isWishlisted}
+                isWishlistBusy={isWishlistBusy}
+                onWishlistToggle={(e, id) => { void toggleWishlist(e, id); }}
+                onPageChange={setPage}
+                onResetFilters={resetToRouteDefaults}
+              />
             </div>
           </>
         )}

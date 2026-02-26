@@ -100,6 +100,13 @@ export default function AdminSessionsPage() {
   if (sessionStatus === "loading" || sessionStatus === "idle") {
     return <div className="min-h-screen bg-bg grid place-items-center"><p className="text-muted">Loading...</p></div>;
   }
+  if (!session.isSuperAdmin) {
+    return (
+      <AdminPageShell title="Active Sessions" breadcrumbs={[{ label: "Admin", href: "/admin/dashboard" }, { label: "Sessions" }]}>
+        <p className="text-center text-muted py-20">You do not have permission to manage sessions.</p>
+      </AdminPageShell>
+    );
+  }
 
   return (
     <AdminPageShell

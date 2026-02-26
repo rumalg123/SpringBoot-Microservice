@@ -296,6 +296,8 @@ export function useAuthSession() {
   const [canManageAdminCategories, setCanManageAdminCategories] = useState(false);
   const [canManageAdminPosters, setCanManageAdminPosters] = useState(false);
   const [canManageAdminVendors, setCanManageAdminVendors] = useState(false);
+  const [canManageAdminPromotions, setCanManageAdminPromotions] = useState(false);
+  const [canManageAdminReviews, setCanManageAdminReviews] = useState(false);
   const [hasCustomerRole, setHasCustomerRole] = useState(false);
   const [emailVerified, setEmailVerified] = useState<boolean | null>(null);
   const customerBootstrapDoneRef = useRef(false);
@@ -393,6 +395,8 @@ export function useAuthSession() {
           let manageCategories = superAdmin;
           let managePosters = superAdmin;
           let manageVendors = superAdmin;
+          let managePromotions = superAdmin || platformStaff || vendorAdmin || vendorStaff;
+          let manageReviews = superAdmin || platformStaff;
 
           if (anyAdmin && keycloak.token) {
             try {
@@ -409,6 +413,8 @@ export function useAuthSession() {
                 manageCategories = Boolean(capabilities.canManageAdminCategories);
                 managePosters = Boolean(capabilities.canManageAdminPosters);
                 manageVendors = Boolean(capabilities.canManageAdminVendors);
+                managePromotions = Boolean(capabilities.canManageAdminPromotions);
+                manageReviews = Boolean(capabilities.canManageAdminReviews);
               }
             } catch {
               // Keep coarse-role fallback if capabilities endpoint is unavailable.
@@ -426,6 +432,8 @@ export function useAuthSession() {
           setCanManageAdminCategories(manageCategories);
           setCanManageAdminPosters(managePosters);
           setCanManageAdminVendors(manageVendors);
+          setCanManageAdminPromotions(managePromotions);
+          setCanManageAdminReviews(manageReviews);
           setHasCustomerRole(customerRole);
           setEmailVerified(resolveEmailVerified(parsedClaims, userProfile, env.claimsNamespace));
         } else {
@@ -440,6 +448,8 @@ export function useAuthSession() {
           setCanManageAdminCategories(false);
           setCanManageAdminPosters(false);
           setCanManageAdminVendors(false);
+          setCanManageAdminPromotions(false);
+          setCanManageAdminReviews(false);
           setHasCustomerRole(false);
           setEmailVerified(null);
         }
@@ -606,6 +616,8 @@ export function useAuthSession() {
     canManageAdminCategories,
     canManageAdminPosters,
     canManageAdminVendors,
+    canManageAdminPromotions,
+    canManageAdminReviews,
     hasCustomerRole,
     emailVerified,
     profile,

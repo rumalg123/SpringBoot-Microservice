@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import AdminPageShell from "../../components/ui/AdminPageShell";
-import StatusBadge from "../../components/ui/StatusBadge";
 import ConfirmModal from "../../components/ConfirmModal";
+import PermissionGroupForm from "../../components/admin/permission-groups/PermissionGroupForm";
+import PermissionGroupTable from "../../components/admin/permission-groups/PermissionGroupTable";
 import { useAuthSession } from "../../../lib/authSession";
 import { getErrorMessage } from "../../../lib/error";
 
@@ -43,26 +44,6 @@ const EMPTY_FORM: FormState = {
   scope: "PLATFORM",
   permissionsText: "",
 };
-
-const SCOPE_COLORS: Record<string, { bg: string; border: string; color: string }> = {
-  PLATFORM: { bg: "var(--brand-soft)", border: "var(--line-bright)", color: "var(--brand)" },
-  VENDOR: { bg: "var(--accent-soft)", border: "rgba(124,58,237,0.3)", color: "var(--accent)" },
-};
-
-/* ───── helpers ───── */
-
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  } catch {
-    return iso;
-  }
-}
 
 /* ───── page component ───── */
 
@@ -227,7 +208,7 @@ export default function AdminPermissionGroupsPage() {
           { label: "Permission Groups" },
         ]}
       >
-        <div className="bg-[rgba(255,255,255,0.03)] border border-line rounded-lg py-12 px-6 text-center">
+        <div className="bg-surface border border-line rounded-lg py-12 px-6 text-center">
           <p className="text-[1.1rem] font-bold text-ink mb-2">
             Unauthorized
           </p>
@@ -238,13 +219,6 @@ export default function AdminPermissionGroupsPage() {
       </AdminPageShell>
     );
   }
-
-  /* ── scope filter tabs ── */
-  const scopeOptions: { label: string; value: ScopeFilter }[] = [
-    { label: "All", value: "ALL" },
-    { label: "Platform", value: "PLATFORM" },
-    { label: "Vendor", value: "VENDOR" },
-  ];
 
   return (
     <AdminPageShell
@@ -257,259 +231,39 @@ export default function AdminPermissionGroupsPage() {
         <button
           type="button"
           onClick={openCreate}
-          className="inline-flex items-center gap-1.5 py-2 px-[18px] rounded-[12px] text-sm font-bold border border-[rgba(0,212,255,0.25)] bg-brand-soft text-ink cursor-pointer transition-opacity duration-150"
+          className="inline-flex items-center gap-1.5 py-2 px-[18px] rounded-xl text-sm font-bold border border-brand-soft bg-brand-soft text-ink cursor-pointer transition-opacity duration-150"
         >
           + Add Permission Group
         </button>
       }
     >
-      {/* ───── Create / Edit Form ───── */}
+      {/* Create / Edit Form */}
       {formOpen && (
-        <section className="bg-[rgba(255,255,255,0.03)] border border-line rounded-lg p-6 mb-6">
-          <h2 className="text-lg font-bold text-ink mb-1">
-            {editing ? "Edit Permission Group" : "Create Permission Group"}
-          </h2>
-          <p className="text-[0.75rem] text-muted mb-5">
-            {editing
-              ? "Update the permission group details below."
-              : "Define a new permission group with a name, scope, and list of permissions."}
-          </p>
-
-          <div className="grid gap-4 max-w-[560px]">
-            {/* Name */}
-            <label className="block">
-              <span className="block text-[0.72rem] font-bold uppercase tracking-[0.06em] text-muted mb-1.5">
-                Name
-              </span>
-              <input
-                type="text"
-                value={form.name}
-                onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))}
-                placeholder="e.g. Order Managers"
-                disabled={saving}
-                className="w-full py-2.5 px-3.5 rounded-[12px] border border-line bg-[rgba(255,255,255,0.03)] text-ink text-base outline-none"
-              />
-            </label>
-
-            {/* Description */}
-            <label className="block">
-              <span className="block text-[0.72rem] font-bold uppercase tracking-[0.06em] text-muted mb-1.5">
-                Description
-              </span>
-              <textarea
-                value={form.description}
-                onChange={(e) => setForm((s) => ({ ...s, description: e.target.value }))}
-                placeholder="Optional description of this group"
-                rows={2}
-                disabled={saving}
-                className="w-full py-2.5 px-3.5 rounded-[12px] border border-line bg-[rgba(255,255,255,0.03)] text-ink text-base resize-y outline-none"
-              />
-            </label>
-
-            {/* Scope radio */}
-            <fieldset className="border-none m-0 p-0">
-              <legend className="text-[0.72rem] font-bold uppercase tracking-[0.06em] text-muted mb-2">
-                Scope
-              </legend>
-              <div className="flex gap-4">
-                {(["PLATFORM", "VENDOR"] as const).map((s) => (
-                  <label
-                    key={s}
-                    className="flex items-center gap-1.5 cursor-pointer text-[0.82rem] text-ink"
-                  >
-                    <input
-                      type="radio"
-                      name="scope"
-                      value={s}
-                      checked={form.scope === s}
-                      onChange={() => setForm((f) => ({ ...f, scope: s }))}
-                      disabled={saving}
-                      style={{ accentColor: "var(--brand)" }}
-                    />
-                    {s}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-
-            {/* Permissions textarea */}
-            <label className="block">
-              <span className="block text-[0.72rem] font-bold uppercase tracking-[0.06em] text-muted mb-1.5">
-                Permissions (one per line)
-              </span>
-              <textarea
-                value={form.permissionsText}
-                onChange={(e) => setForm((s) => ({ ...s, permissionsText: e.target.value }))}
-                placeholder={"platform.orders.manage\nplatform.products.read\nplatform.categories.manage"}
-                rows={6}
-                disabled={saving}
-                className="w-full py-2.5 px-3.5 rounded-[12px] border border-line bg-[rgba(255,255,255,0.03)] text-ink text-[0.82rem] font-mono resize-y outline-none leading-[1.7]"
-              />
-            </label>
-          </div>
-
-          {/* Save / Cancel */}
-          <div className="flex gap-2.5 mt-5">
-            <button
-              type="button"
-              onClick={() => { void save(); }}
-              disabled={saving}
-              className="btn-brand py-[9px] px-[22px] rounded-[12px] text-[0.82rem] font-bold"
-              style={{
-                cursor: saving ? "not-allowed" : "pointer",
-                opacity: saving ? 0.6 : 1,
-              }}
-            >
-              {saving ? "Saving..." : editing ? "Update Group" : "Create Group"}
-            </button>
-            <button
-              type="button"
-              onClick={closeForm}
-              disabled={saving}
-              className="btn-ghost py-[9px] px-[18px] rounded-[12px] text-[0.82rem] font-semibold cursor-pointer"
-            >
-              Cancel
-            </button>
-          </div>
-        </section>
+        <PermissionGroupForm
+          form={form}
+          editing={Boolean(editing)}
+          saving={saving}
+          onFormChange={setForm}
+          onSave={save}
+          onCancel={closeForm}
+        />
       )}
 
-      {/* ───── Scope Filter Tabs ───── */}
-      <div className="flex gap-1.5 mb-[18px] flex-wrap">
-        {scopeOptions.map((opt) => {
-          const active = scopeFilter === opt.value;
-          return (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => setScopeFilter(opt.value)}
-              className={`py-1.5 px-4 rounded-md text-[0.78rem] font-bold cursor-pointer transition-all duration-150 ${active ? "border border-brand bg-brand-soft text-brand" : "border border-line bg-transparent text-muted"}`}
-            >
-              {opt.label}
-            </button>
-          );
-        })}
-        <span className="ml-auto flex items-center text-[0.75rem] text-muted">
-          {totalElements} group{totalElements !== 1 ? "s" : ""}
-        </span>
-      </div>
+      {/* Table with filters and pagination */}
+      <PermissionGroupTable
+        groups={groups}
+        loading={loading}
+        totalPages={totalPages}
+        totalElements={totalElements}
+        page={page}
+        scopeFilter={scopeFilter}
+        onScopeFilterChange={setScopeFilter}
+        onEdit={openEdit}
+        onDelete={setDeleteTarget}
+        onPageChange={goToPage}
+      />
 
-      {/* ───── Table ───── */}
-      <div className="bg-[rgba(255,255,255,0.03)] border border-line rounded-lg overflow-auto">
-        <table className="w-full border-collapse">
-          <thead>
-            <tr>
-              {["Name", "Scope", "Permissions", "Created", "Actions"].map((h) => (
-                <th
-                  key={h}
-                  className="bg-surface-2 text-muted text-[0.72rem] uppercase tracking-[0.05em] py-3 px-3.5 text-left font-bold whitespace-nowrap"
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td
-                  colSpan={5}
-                  className="py-10 px-3.5 text-center text-[0.82rem] text-muted"
-                >
-                  Loading...
-                </td>
-              </tr>
-            ) : groups.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={5}
-                  className="py-10 px-3.5 text-center text-[0.82rem] text-muted"
-                >
-                  No permission groups found.
-                </td>
-              </tr>
-            ) : (
-              groups.map((g) => (
-                <tr key={g.id}>
-                  {/* Name */}
-                  <td className="text-[0.82rem] text-ink py-3 px-3.5 border-b border-line font-semibold">
-                    <div>{g.name}</div>
-                    {g.description && (
-                      <div className="text-[0.72rem] text-muted mt-0.5 max-w-[260px] overflow-hidden text-ellipsis whitespace-nowrap">
-                        {g.description}
-                      </div>
-                    )}
-                  </td>
-
-                  {/* Scope */}
-                  <td className="text-[0.82rem] text-ink py-3 px-3.5 border-b border-line">
-                    <StatusBadge value={g.scope} colorMap={SCOPE_COLORS} />
-                  </td>
-
-                  {/* Permissions count */}
-                  <td className="text-[0.82rem] text-ink py-3 px-3.5 border-b border-line">
-                    <span className="inline-block py-0.5 px-2.5 rounded-full text-[0.72rem] font-bold bg-[rgba(255,255,255,0.06)] border border-line text-ink">
-                      {g.permissions.length}
-                    </span>
-                  </td>
-
-                  {/* Created */}
-                  <td className="text-[0.82rem] text-ink py-3 px-3.5 border-b border-line whitespace-nowrap">
-                    {formatDate(g.createdAt)}
-                  </td>
-
-                  {/* Actions */}
-                  <td className="text-[0.82rem] text-ink py-3 px-3.5 border-b border-line whitespace-nowrap">
-                    <div className="flex gap-1.5">
-                      <button
-                        type="button"
-                        className="btn-ghost text-[0.78rem] py-1 px-3 rounded-[8px] cursor-pointer"
-                        onClick={() => openEdit(g)}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-ghost text-[0.78rem] py-1 px-3 rounded-[8px] text-[#f87171] cursor-pointer"
-                        onClick={() => setDeleteTarget(g)}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* ───── Pagination ───── */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-3 mt-5">
-          <button
-            type="button"
-            onClick={() => goToPage(page - 1)}
-            disabled={page <= 0 || loading}
-            className={`py-[7px] px-4 rounded-md text-[0.78rem] font-semibold border border-line transition-opacity duration-150 ${page <= 0 ? "bg-transparent text-muted cursor-not-allowed opacity-50" : "bg-[rgba(255,255,255,0.04)] text-ink cursor-pointer opacity-100"}`}
-          >
-            Prev
-          </button>
-          <span className="text-[0.78rem] text-muted">
-            Page {page + 1} of {totalPages}
-          </span>
-          <button
-            type="button"
-            onClick={() => goToPage(page + 1)}
-            disabled={page >= totalPages - 1 || loading}
-            className={`py-[7px] px-4 rounded-md text-[0.78rem] font-semibold border border-line transition-opacity duration-150 ${page >= totalPages - 1 ? "bg-transparent text-muted cursor-not-allowed opacity-50" : "bg-[rgba(255,255,255,0.04)] text-ink cursor-pointer opacity-100"}`}
-          >
-            Next
-          </button>
-        </div>
-      )}
-
-      {/* ───── Delete Confirmation ───── */}
+      {/* Delete Confirmation */}
       <ConfirmModal
         open={Boolean(deleteTarget)}
         title="Delete Permission Group"

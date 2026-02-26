@@ -23,6 +23,8 @@ public class AdminActorScopeService {
     public static final String PLATFORM_ORDERS_READ = "platform.orders.read";
     public static final String PLATFORM_ORDERS_MANAGE = "platform.orders.manage";
     public static final String PLATFORM_POSTERS_MANAGE = "platform.posters.manage";
+    public static final String PLATFORM_PROMOTIONS_MANAGE = "platform.promotions.manage";
+    public static final String PLATFORM_REVIEWS_MANAGE = "platform.reviews.manage";
 
     public static final String VENDOR_PRODUCTS_MANAGE = "vendor.products.manage";
     public static final String VENDOR_ORDERS_READ = "vendor.orders.read";
@@ -322,7 +324,7 @@ public class AdminActorScopeService {
         boolean vendorStaff = roles.contains("vendor_staff");
 
         Set<String> platformPermissions = superAdmin
-                ? Set.of(PLATFORM_PRODUCTS_MANAGE, PLATFORM_CATEGORIES_MANAGE, PLATFORM_ORDERS_READ, PLATFORM_ORDERS_MANAGE, PLATFORM_POSTERS_MANAGE)
+                ? Set.of(PLATFORM_PRODUCTS_MANAGE, PLATFORM_CATEGORIES_MANAGE, PLATFORM_ORDERS_READ, PLATFORM_ORDERS_MANAGE, PLATFORM_POSTERS_MANAGE, PLATFORM_PROMOTIONS_MANAGE, PLATFORM_REVIEWS_MANAGE)
                 : (platformStaff ? resolvePlatformPermissionsForUser(userSub, internalAuth) : Set.of());
 
         List<Map<String, Object>> vendorMemberships = (superAdmin || vendorAdmin) && StringUtils.hasText(userSub)
@@ -339,6 +341,9 @@ public class AdminActorScopeService {
                 || platformPermissions.contains(PLATFORM_PRODUCTS_MANAGE);
         boolean canManageCategories = superAdmin || platformPermissions.contains(PLATFORM_CATEGORIES_MANAGE);
         boolean canManagePosters = superAdmin || platformPermissions.contains(PLATFORM_POSTERS_MANAGE);
+        boolean canManagePromotions = superAdmin || vendorAdmin || vendorStaff
+                || platformPermissions.contains(PLATFORM_PROMOTIONS_MANAGE);
+        boolean canManageReviews = superAdmin || platformPermissions.contains(PLATFORM_REVIEWS_MANAGE);
 
         return new AdminCapabilitiesResponse(
                 superAdmin,
@@ -352,7 +357,9 @@ public class AdminActorScopeService {
                 canManageProducts,
                 canManageCategories,
                 canManagePosters,
-                superAdmin
+                superAdmin,
+                canManagePromotions,
+                canManageReviews
         );
     }
 

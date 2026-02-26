@@ -143,7 +143,7 @@ export default function AdminReviewsPage() {
   const stars = (rating: number) => "★".repeat(rating) + "☆".repeat(5 - rating);
 
   const reasonLabel: Record<string, string> = { SPAM: "Spam", INAPPROPRIATE: "Inappropriate", FAKE: "Fake", OFF_TOPIC: "Off Topic", OTHER: "Other" };
-  const statusColor: Record<string, string> = { PENDING: "var(--warning, #f59e0b)", REVIEWED: "var(--success)", DISMISSED: "var(--muted)" };
+  const statusColorClass: Record<string, string> = { PENDING: "text-warning", REVIEWED: "text-success", DISMISSED: "text-muted" };
 
   if (sessionStatus === "loading" || sessionStatus === "idle") {
     return (
@@ -152,11 +152,18 @@ export default function AdminReviewsPage() {
       </div>
     );
   }
+  if (!session.canManageAdminReviews) {
+    return (
+      <AdminPageShell title="Reviews" breadcrumbs={[{ label: "Admin", href: "/admin/dashboard" }, { label: "Reviews" }]}>
+        <p className="text-center text-muted py-20">You do not have permission to manage reviews.</p>
+      </AdminPageShell>
+    );
+  }
 
   const tabClass = (t: Tab) =>
     `px-5 py-2.5 rounded-t-md border border-line-bright text-sm font-bold cursor-pointer -mb-px ${
       tab === t
-        ? "bg-[rgba(17,17,40,0.7)] text-white border-b-transparent"
+        ? "bg-surface text-white border-b-transparent"
         : "bg-transparent text-muted"
     }`;
 
@@ -176,7 +183,7 @@ export default function AdminReviewsPage() {
           </button>
         </div>
 
-        <div className="bg-[rgba(17,17,40,0.7)] backdrop-blur-[16px] border border-line-bright rounded-[0_16px_16px_16px] p-6">
+        <div className="bg-surface backdrop-blur-[16px] border border-line-bright rounded-[0_16px_16px_16px] p-6">
 
           {/* ── REVIEWS TAB ── */}
           {tab === "reviews" && (
@@ -215,12 +222,12 @@ export default function AdminReviewsPage() {
               ) : (
                 <div className="flex flex-col gap-3">
                   {reviews.map((review) => (
-                    <div key={review.id} className={`border border-line-bright rounded-lg px-5 py-4 ${review.active ? "bg-transparent" : "bg-[rgba(255,0,0,0.03)]"}`}>
+                    <div key={review.id} className={`border border-line-bright rounded-lg px-5 py-4 ${review.active ? "bg-transparent" : "bg-danger-soft"}`}>
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1 flex-wrap">
                             <span className="text-brand-glow text-sm">{stars(review.rating)}</span>
-                            <span className={`text-xs px-2 py-0.5 rounded-sm font-bold ${review.active ? "bg-success-soft text-success" : "bg-[rgba(239,68,68,0.1)] text-[var(--error)]"}`}>
+                            <span className={`text-xs px-2 py-0.5 rounded-sm font-bold ${review.active ? "bg-success-soft text-success" : "bg-danger-soft text-danger"}`}>
                               {review.active ? "Active" : "Inactive"}
                             </span>
                             {review.verifiedPurchase && (
@@ -239,14 +246,14 @@ export default function AdminReviewsPage() {
                           <button
                             onClick={() => toggleActiveMutation.mutate({ reviewId: review.id, currentlyActive: review.active })}
                             disabled={togglingId === review.id}
-                            className={`px-3 py-1 rounded-sm text-xs font-bold border border-line-bright ${togglingId === review.id ? "cursor-not-allowed opacity-50" : "cursor-pointer"} ${review.active ? "bg-[rgba(239,68,68,0.08)] text-[var(--error)]" : "bg-success-soft text-success"}`}
+                            className={`px-3 py-1 rounded-sm text-xs font-bold border border-line-bright ${togglingId === review.id ? "cursor-not-allowed opacity-50" : "cursor-pointer"} ${review.active ? "bg-danger-soft text-danger" : "bg-success-soft text-success"}`}
                           >
                             {togglingId === review.id ? "..." : review.active ? "Deactivate" : "Activate"}
                           </button>
                           <button
                             onClick={() => deleteReviewMutation.mutate(review.id)}
                             disabled={deletingId === review.id}
-                            className={`px-3 py-1 rounded-sm text-xs font-bold border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] text-[var(--error)] ${deletingId === review.id ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
+                            className={`px-3 py-1 rounded-sm text-xs font-bold border border-danger-soft bg-danger-soft text-danger ${deletingId === review.id ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
                           >
                             {deletingId === review.id ? "Deleting..." : "Delete"}
                           </button>
@@ -319,10 +326,10 @@ export default function AdminReviewsPage() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                            <span className="text-xs font-bold px-2 py-0.5 rounded-sm bg-[rgba(239,68,68,0.1)] text-[var(--error)]">
+                            <span className="text-xs font-bold px-2 py-0.5 rounded-sm bg-danger-soft text-danger">
                               {reasonLabel[report.reason] || report.reason}
                             </span>
-                            <span className="text-xs font-bold px-2 py-0.5 rounded-sm border border-line-bright" style={{ color: statusColor[report.status] || "var(--muted)" }}>
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded-sm border border-line-bright ${statusColorClass[report.status] || "text-muted"}`}>
                               {report.status}
                             </span>
                           </div>

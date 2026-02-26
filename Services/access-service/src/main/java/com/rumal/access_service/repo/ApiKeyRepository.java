@@ -13,6 +13,7 @@ import java.util.UUID;
 public interface ApiKeyRepository extends JpaRepository<ApiKey, UUID> {
     List<ApiKey> findByKeycloakIdAndActiveTrueOrderByCreatedAtDesc(String keycloakId);
     List<ApiKey> findByKeycloakIdOrderByCreatedAtDesc(String keycloakId);
+    Page<ApiKey> findByKeycloakId(String keycloakId, Pageable pageable);
     Optional<ApiKey> findByKeyHashAndActiveTrue(String keyHash);
     List<ApiKey> findByActiveTrueAndExpiresAtBefore(Instant now);
     Page<ApiKey> findByActiveTrueAndExpiresAtBefore(Instant now, Pageable pageable);

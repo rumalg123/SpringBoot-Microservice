@@ -40,7 +40,7 @@ public class SessionService {
         try {
             recentlyViewedService.mergeAnonymousToUser(userId, sessionId);
         } catch (Exception e) {
-            log.warn("Failed to merge recently-viewed Redis data for session {}: {}", sessionId, e.getMessage());
+            log.error("Failed to merge recently-viewed for session {}", sessionId, e);
         }
 
         session.setUserId(userId);

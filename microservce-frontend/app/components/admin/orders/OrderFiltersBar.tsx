@@ -18,9 +18,9 @@ export default function OrderFiltersBar({
   return (
     <>
       <div className="mb-3 flex flex-wrap items-center gap-2.5">
-        <div className="relative flex min-w-[260px] flex-1 items-center overflow-hidden rounded-md border border-[rgba(0,212,255,0.15)] bg-[rgba(0,212,255,0.04)]">
+        <div className="relative flex min-w-[260px] flex-1 items-center overflow-hidden rounded-md border border-brand-soft bg-brand-soft">
           <span className="shrink-0 px-3 text-muted">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
             </svg>
           </span>

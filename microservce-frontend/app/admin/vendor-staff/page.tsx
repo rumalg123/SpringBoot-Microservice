@@ -10,6 +10,7 @@ import PermissionChecklist from "@/app/components/admin/access/PermissionCheckli
 import AdminPageShell from "@/app/components/ui/AdminPageShell";
 import { useAuthSession } from "@/lib/authSession";
 import { getErrorMessage } from "@/lib/error";
+import { normalizePage, type PagedResponse } from "@/lib/types/pagination";
 
 type VendorOption = {
   id: string;
@@ -71,6 +72,9 @@ export default function AdminVendorStaffPage() {
   const [accessAuditReloadKey, setAccessAuditReloadKey] = useState(0);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [vendorFilterId, setVendorFilterId] = useState("");
+  const [page, setPage] = useState(0);
+  const [deletedPage, setDeletedPage] = useState(0);
+  const PAGE_SIZE = 25;
 
   const ready = session.status === "ready" && session.isAuthenticated;
   const canManagePage = session.isSuperAdmin || session.isVendorAdmin;
@@ -119,34 +123,40 @@ export default function AdminVendorStaffPage() {
   const vendorSelectionRequired = session.isVendorAdmin && multipleVendorOptions && !vendorFilterId.trim();
 
   // --- Active vendor staff query ---
-  const { data: rows = [], isLoading: loading } = useQuery({
-    queryKey: ["admin-vendor-staff", vendorFilterId],
+  const { data: staffPage, isLoading: loading } = useQuery({
+    queryKey: ["admin-vendor-staff", vendorFilterId, page],
     queryFn: async () => {
-      const params = new URLSearchParams();
+      const params = new URLSearchParams({ page: String(page), size: String(PAGE_SIZE) });
       const effectiveVendorId = vendorFilterId.trim();
       if (effectiveVendorId) params.set("vendorId", effectiveVendorId);
-      const res = await session.apiClient!.get(`/admin/vendor-staff${params.toString() ? `?${params.toString()}` : ""}`);
-      const raw = res.data as { content?: VendorStaffRow[] };
-      return raw.content || [];
+      const res = await session.apiClient!.get(`/admin/vendor-staff?${params.toString()}`);
+      return normalizePage(res.data as PagedResponse<VendorStaffRow>);
     },
     enabled: ready && !!session.apiClient && canManagePage && !vendorSelectionRequired,
   });
 
+  const rows = staffPage?.content ?? [];
+  const totalPages = staffPage?.totalPages ?? 0;
+
   // --- Deleted vendor staff query ---
-  const { data: deletedRows = [], isLoading: loadingDeleted } = useQuery({
-    queryKey: ["admin-vendor-staff-deleted", vendorFilterId],
+  const { data: deletedStaffPage, isLoading: loadingDeleted } = useQuery({
+    queryKey: ["admin-vendor-staff-deleted", vendorFilterId, deletedPage],
     queryFn: async () => {
-      const params = new URLSearchParams();
+      const params = new URLSearchParams({ page: String(deletedPage), size: String(PAGE_SIZE) });
       const effectiveVendorId = vendorFilterId.trim();
       if (effectiveVendorId) params.set("vendorId", effectiveVendorId);
-      const res = await session.apiClient!.get(`/admin/vendor-staff/deleted${params.toString() ? `?${params.toString()}` : ""}`);
-      const raw = res.data as { content?: VendorStaffRow[] };
-      return raw.content || [];
+      const res = await session.apiClient!.get(`/admin/vendor-staff/deleted?${params.toString()}`);
+      return normalizePage(res.data as PagedResponse<VendorStaffRow>);
     },
     enabled: ready && !!session.apiClient && canManagePage && showDeleted && !vendorSelectionRequired,
   });
 
+  const deletedRows = deletedStaffPage?.content ?? [];
+  const deletedTotalPages = deletedStaffPage?.totalPages ?? 0;
+
   const invalidateAll = () => {
+    setPage(0);
+    setDeletedPage(0);
     void queryClient.invalidateQueries({ queryKey: ["admin-vendor-staff"] });
     void queryClient.invalidateQueries({ queryKey: ["admin-vendor-staff-deleted"] });
     setAccessAuditReloadKey((n) => n + 1);
@@ -362,6 +372,8 @@ export default function AdminVendorStaffPage() {
                 value={vendorFilterId}
                 onChange={(e) => {
                   setVendorFilterId(e.target.value);
+                  setPage(0);
+                  setDeletedPage(0);
                 }}
                 disabled={vendorsLoading || (session.isVendorAdmin && vendors.length === 1)}
                 className="w-full rounded-xl px-3 py-2 bg-surface-2 border border-line text-ink"
@@ -448,6 +460,37 @@ export default function AdminVendorStaffPage() {
                 ))}
               </div>
             )}
+
+            {/* Pagination */}
+            {(() => {
+              const currentPage = showDeleted ? deletedPage : page;
+              const currentTotalPages = showDeleted ? deletedTotalPages : totalPages;
+              const setCurrentPage = showDeleted ? setDeletedPage : setPage;
+              if (currentTotalPages <= 1) return null;
+              return (
+                <div className="flex items-center justify-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+                    disabled={currentPage <= 0 || listBusy}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold border border-line ${currentPage <= 0 ? "text-[rgba(255,255,255,0.35)] cursor-not-allowed opacity-50" : "text-ink cursor-pointer bg-[rgba(255,255,255,0.04)]"}`}
+                  >
+                    Previous
+                  </button>
+                  <span className="text-xs text-[rgba(255,255,255,0.6)]">
+                    Page {currentPage + 1} of {currentTotalPages}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((p) => p + 1)}
+                    disabled={currentPage >= currentTotalPages - 1 || listBusy}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold border border-line ${currentPage >= currentTotalPages - 1 ? "text-[rgba(255,255,255,0.35)] cursor-not-allowed opacity-50" : "text-ink cursor-pointer bg-[rgba(255,255,255,0.04)]"}`}
+                  >
+                    Next
+                  </button>
+                </div>
+              );
+            })()}
 
             <AccessAuditPanel
               apiClient={session.apiClient}

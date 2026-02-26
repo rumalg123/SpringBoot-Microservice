@@ -2,6 +2,7 @@ package com.rumal.product_service.repo;
 
 import com.rumal.product_service.entity.Product;
 import com.rumal.product_service.entity.ProductType;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Modifying;
@@ -17,6 +18,15 @@ import java.util.Set;
 import java.util.UUID;
 
 public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpecificationExecutor<Product> {
+
+    @EntityGraph(attributePaths = {"categories", "variations", "images"})
+    @Query("select p from Product p where p.id = :id")
+    Optional<Product> findByIdWithDetails(@Param("id") UUID id);
+
+    @EntityGraph(attributePaths = {"categories", "variations", "images"})
+    @Query("select p from Product p where p.slug = :slug")
+    Optional<Product> findBySlugWithDetails(@Param("slug") String slug);
+
     List<Product> findByParentProductIdAndDeletedFalseAndActiveTrue(UUID parentProductId);
     boolean existsByParentProductIdAndDeletedFalseAndActiveTrueAndProductType(UUID parentProductId, ProductType productType);
     boolean existsByParentProductIdAndDeletedFalseAndActiveTrueAndVariationSignatureAndIdNot(UUID parentProductId, String variationSignature, UUID excludeId);

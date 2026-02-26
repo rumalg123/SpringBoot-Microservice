@@ -8,10 +8,10 @@ import toast from "react-hot-toast";
 import AppNav from "../components/AppNav";
 import CategoryMenu from "../components/CategoryMenu";
 import Footer from "../components/Footer";
-import Pagination from "../components/Pagination";
 import CatalogToolbar from "../components/catalog/CatalogToolbar";
 import { API_BASE } from "../../lib/constants";
-import CatalogFiltersSidebar from "../components/catalog/CatalogFiltersSidebar";
+import ProductFilterPanel from "../components/products/ProductFilterPanel";
+import ProductSearchResults from "../components/products/ProductSearchResults";
 import { useAuthSession } from "../../lib/authSession";
 import { money, calcDiscount } from "../../lib/format";
 import { resolveImageUrl } from "../../lib/image";
@@ -20,8 +20,6 @@ import type { Category } from "../../lib/types/category";
 import type { SortKey } from "../../lib/types/product";
 import { PAGE_SIZE_SMALL as PAGE_SIZE, AGGREGATE_PAGE_SIZE, AGGREGATE_MAX_PAGES } from "../../lib/constants";
 import { useWishlistToggle } from "../../lib/hooks/useWishlistToggle";
-import ProductCard from "../components/catalog/ProductCard";
-import ProductCardSkeleton from "../components/catalog/ProductCardSkeleton";
 
 
 function parsePrice(value: string): number | null {
@@ -412,7 +410,7 @@ function ProductsPageContent() {
         {/* Sidebar + Grid Layout */}
         <div className="grid items-start gap-5" style={{ gridTemplateColumns: "260px 1fr" }}>
           {/* Left Filter Sidebar */}
-          <CatalogFiltersSidebar
+          <ProductFilterPanel
             parents={parents}
             subsByParent={subsByParent}
             selectedParentNames={selectedParentNames}
@@ -435,52 +433,18 @@ function ProductsPageContent() {
           />
 
           {/* Product Grid */}
-          <section>
-            {/* Loading skeletons */}
-            {productsLoading && (
-              <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
-                <ProductCardSkeleton count={6} />
-              </div>
-            )}
-
-            {!productsLoading && (
-              <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
-                {products.map((p, idx) => (
-                  <ProductCard
-                    key={p.id}
-                    product={p}
-                    index={idx}
-                    showWishlist={isAuthenticated}
-                    isWishlisted={isWishlisted(p.id)}
-                    wishlistBusy={isWishlistBusy(p.id)}
-                    onWishlistToggle={(e) => { void toggleWishlist(e, p.id); }}
-                  />
-                ))}
-              </div>
-            )}
-
-            {/* Empty state */}
-            {products.length === 0 && !productsLoading && (
-              <div className="empty-state mt-6">
-                <div className="empty-state-icon">
-                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
-                  </svg>
-                </div>
-                <p className="empty-state-title">No products found</p>
-                <p className="empty-state-desc">Try adjusting your search or filter criteria</p>
-                <button
-                  disabled={productsLoading}
-                  onClick={clearAllFilters}
-                  className="btn-primary mt-2"
-                >
-                  Clear All Filters
-                </button>
-              </div>
-            )}
-
-            <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} disabled={productsLoading} />
-          </section>
+          <ProductSearchResults
+            products={products}
+            productsLoading={productsLoading}
+            page={page}
+            totalPages={totalPages}
+            isAuthenticated={isAuthenticated}
+            isWishlisted={isWishlisted}
+            isWishlistBusy={isWishlistBusy}
+            onWishlistToggle={(e, id) => { void toggleWishlist(e, id); }}
+            onPageChange={setPage}
+            onClearFilters={clearAllFilters}
+          />
         </div>
       </main>
 

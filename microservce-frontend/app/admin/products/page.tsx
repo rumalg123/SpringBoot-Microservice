@@ -1,31 +1,22 @@
 ﻿"use client";
 
-import { ChangeEvent, DragEvent, FormEvent, KeyboardEvent, WheelEvent, useEffect, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, KeyboardEvent, WheelEvent, useEffect, useState } from "react";
 import Image from "next/image";
 import toast from "react-hot-toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import ConfirmModal from "../../components/ConfirmModal";
 import { resolveImageUrl } from "../../../lib/image";
-import ExportButton from "../../components/ui/ExportButton";
 import AdminPageShell from "../../components/ui/AdminPageShell";
 import CategoryOperationsPanel from "../../components/admin/products/CategoryOperationsPanel";
 import ProductCatalogPanel from "../../components/admin/products/ProductCatalogPanel";
 import ProductEditorPanel from "../../components/admin/products/ProductEditorPanel";
+import CSVImportExport from "../../components/admin/products/CSVImportExport";
+import BulkActionsToolbar from "../../components/admin/products/BulkActionsToolbar";
+import BulkPriceUpdateModal from "../../components/admin/products/BulkPriceUpdateModal";
+import BulkCategoryReassignModal from "../../components/admin/products/BulkCategoryReassignModal";
 import { useAuthSession } from "../../../lib/authSession";
 
-type BulkOperationResult = {
-  totalRequested: number;
-  successCount: number;
-  failureCount: number;
-  errors: string[];
-};
-
-type ImportResult = {
-  totalRows: number;
-  successCount: number;
-  failureCount: number;
-  errors: string[];
-};
+import type { BulkOperationResult } from "../../components/admin/products/types";
 
 type ProductType = "SINGLE" | "PARENT" | "VARIATION";
 
@@ -298,17 +289,10 @@ export default function AdminProductsPage() {
 
   /* ---- Bulk operations & import/export state ---- */
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
-  const [importingCsv, setImportingCsv] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
-  const [bulkPriceUpdating, setBulkPriceUpdating] = useState(false);
-  const [bulkReassigning, setBulkReassigning] = useState(false);
   const [showBulkPriceModal, setShowBulkPriceModal] = useState(false);
   const [showBulkCategoryModal, setShowBulkCategoryModal] = useState(false);
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
-  const [bulkRegularPrice, setBulkRegularPrice] = useState("");
-  const [bulkDiscountedPrice, setBulkDiscountedPrice] = useState("");
-  const [bulkTargetCategoryId, setBulkTargetCategoryId] = useState("");
-  const importFileRef = useRef<HTMLInputElement>(null);
 
   /* ---- Approval workflow state ---- */
   const [approvingProductId, setApprovingProductId] = useState<string | null>(null);
@@ -1218,42 +1202,6 @@ export default function AdminProductsPage() {
     }
   };
 
-  /* ---- CSV Import handler ---- */
-  const handleCsvImport = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !session.apiClient) return;
-    setImportingCsv(true);
-    setStatus("Importing products from CSV...");
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await session.apiClient.post("/admin/products/import", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      const result = res.data as ImportResult;
-      const successMsg = `Import complete: ${result.successCount}/${result.totalRows} succeeded`;
-      if (result.failureCount > 0) {
-        toast.error(`${successMsg}, ${result.failureCount} failed`);
-        if (result.errors?.length) {
-          result.errors.slice(0, 5).forEach((err) => toast.error(err, { duration: 6000 }));
-        }
-      } else {
-        toast.success(successMsg);
-      }
-      setStatus(successMsg);
-      setPage(0);
-      setDeletedPageIndex(0);
-      reloadAllProducts();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "CSV import failed";
-      setStatus(message);
-      toast.error(message);
-    } finally {
-      setImportingCsv(false);
-      if (importFileRef.current) importFileRef.current.value = "";
-    }
-  };
-
   /* ---- Bulk Delete handler ---- */
   const handleBulkDelete = async () => {
     if (!session.apiClient || selectedProductIds.length === 0) return;
@@ -1283,93 +1231,6 @@ export default function AdminProductsPage() {
     } finally {
       setBulkDeleting(false);
       setShowBulkDeleteConfirm(false);
-    }
-  };
-
-  /* ---- Bulk Price Update handler ---- */
-  const handleBulkPriceUpdate = async () => {
-    if (!session.apiClient || selectedProductIds.length === 0) return;
-    const regularPrice = Number(bulkRegularPrice);
-    if (!Number.isFinite(regularPrice) || regularPrice <= 0) {
-      toast.error("Regular price must be greater than 0");
-      return;
-    }
-    const discountedPrice = bulkDiscountedPrice.trim() ? Number(bulkDiscountedPrice) : undefined;
-    if (discountedPrice !== undefined && (!Number.isFinite(discountedPrice) || discountedPrice < 0)) {
-      toast.error("Discounted price must be 0 or greater");
-      return;
-    }
-    if (discountedPrice !== undefined && discountedPrice > regularPrice) {
-      toast.error("Discounted price cannot exceed regular price");
-      return;
-    }
-    setBulkPriceUpdating(true);
-    setStatus(`Updating prices for ${selectedProductIds.length} product(s)...`);
-    try {
-      const items = selectedProductIds.map((productId) => ({
-        productId,
-        regularPrice,
-        ...(discountedPrice !== undefined ? { discountedPrice } : {}),
-      }));
-      const res = await session.apiClient.post("/admin/products/bulk-price-update", { items });
-      const result = res.data as BulkOperationResult;
-      const msg = `Price update: ${result.successCount}/${result.totalRequested} succeeded`;
-      if (result.failureCount > 0) {
-        toast.error(`${msg}, ${result.failureCount} failed`);
-        result.errors?.slice(0, 5).forEach((err) => toast.error(err, { duration: 6000 }));
-      } else {
-        toast.success(msg);
-      }
-      setStatus(msg);
-      setSelectedProductIds([]);
-      setShowBulkPriceModal(false);
-      setBulkRegularPrice("");
-      setBulkDiscountedPrice("");
-      reloadActiveProducts();
-      reloadDeletedProducts();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Bulk price update failed";
-      setStatus(message);
-      toast.error(message);
-    } finally {
-      setBulkPriceUpdating(false);
-    }
-  };
-
-  /* ---- Bulk Category Reassign handler ---- */
-  const handleBulkCategoryReassign = async () => {
-    if (!session.apiClient || selectedProductIds.length === 0) return;
-    if (!bulkTargetCategoryId.trim()) {
-      toast.error("Select a target category");
-      return;
-    }
-    setBulkReassigning(true);
-    setStatus(`Reassigning ${selectedProductIds.length} product(s) to category...`);
-    try {
-      const res = await session.apiClient.post("/admin/products/bulk-category-reassign", {
-        productIds: selectedProductIds,
-        targetCategoryId: bulkTargetCategoryId.trim(),
-      });
-      const result = res.data as BulkOperationResult;
-      const msg = `Category reassign: ${result.successCount}/${result.totalRequested} succeeded`;
-      if (result.failureCount > 0) {
-        toast.error(`${msg}, ${result.failureCount} failed`);
-        result.errors?.slice(0, 5).forEach((err) => toast.error(err, { duration: 6000 }));
-      } else {
-        toast.success(msg);
-      }
-      setStatus(msg);
-      setSelectedProductIds([]);
-      setShowBulkCategoryModal(false);
-      setBulkTargetCategoryId("");
-      reloadActiveProducts();
-      reloadDeletedProducts();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Bulk category reassign failed";
-      setStatus(message);
-      toast.error(message);
-    } finally {
-      setBulkReassigning(false);
     }
   };
 
@@ -1494,6 +1355,13 @@ export default function AdminProductsPage() {
       </div>
     );
   }
+  if (!session.canManageAdminProducts) {
+    return (
+      <AdminPageShell title="Products" breadcrumbs={[{ label: "Admin", href: "/admin/dashboard" }, { label: "Products" }]}>
+        <p className="text-center text-muted py-20">You do not have permission to manage products.</p>
+      </AdminPageShell>
+    );
+  }
 
   const rows = showDeleted ? deletedPage?.content || [] : activePage?.content || [];
   const pageInfo = showDeleted ? deletedPage : activePage;
@@ -1520,7 +1388,7 @@ export default function AdminProductsPage() {
       ? "Discounted price cannot be greater than regular price."
       : null;
   const listLoading = showDeleted ? loadingDeletedList : loadingActiveList;
-  const bulkOperationBusy = bulkDeleting || bulkPriceUpdating || bulkReassigning || importingCsv;
+  const bulkOperationBusy = bulkDeleting;
   const productMutationBusy = savingProduct || creatingQueuedVariationBatch || uploadingImages;
   const productRowActionBusy = Boolean(loadingProductId) || confirmLoading || Boolean(restoringProductId) || listLoading;
   const categoryMutationBusy = savingCategory || confirmLoading || Boolean(restoringCategoryId);
@@ -1560,82 +1428,26 @@ export default function AdminProductsPage() {
         title="Admin Products"
         breadcrumbs={[{ label: "Admin", href: "/admin/dashboard" }, { label: "Products" }]}
       >
-        <section className="animate-rise space-y-4 rounded-xl p-5 bg-[rgba(17,17,40,0.7)] border border-[rgba(0,212,255,0.1)] backdrop-blur-[16px]">
+        <section className="animate-rise space-y-4 rounded-xl p-5 bg-surface border border-[var(--brand-soft)] backdrop-blur-[16px]">
           {/* ---- Import / Export Toolbar ---- */}
-          <div className="flex flex-wrap items-center gap-2.5 mb-1">
-            <ExportButton
-              apiClient={session.apiClient}
-              endpoint="/admin/products/export"
-              filename={`products-export-${new Date().toISOString().slice(0, 10)}.csv`}
-              label="Export CSV"
-              params={{ format: "csv" }}
-            />
-
-            <input
-              ref={importFileRef}
-              type="file"
-              accept=".csv,text/csv"
-              onChange={(e) => { void handleCsvImport(e); }}
-              className="hidden"
-            />
-            <button
-              type="button"
-              onClick={() => importFileRef.current?.click()}
-              disabled={importingCsv || !session.apiClient}
-              className="btn-outline text-sm px-3.5 py-[7px] inline-flex items-center gap-1.5"
-            >
-              {importingCsv ? (
-                <span className="inline-block w-3.5 h-3.5 border-2 border-brand border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              )}
-              Import CSV
-            </button>
-          </div>
+          <CSVImportExport
+            apiClient={session.apiClient}
+            onImportComplete={() => { setPage(0); setDeletedPageIndex(0); reloadAllProducts(); }}
+          />
 
           {/* ---- Bulk Actions Bar (when products selected) ---- */}
           {selectedProductIds.length > 0 && !showDeleted && (
-            <div className="flex flex-wrap items-center gap-2.5 px-3.5 py-2.5 rounded-lg bg-brand-soft border border-[rgba(0,212,255,0.18)]">
-              <span className="text-sm font-semibold text-brand">
-                {selectedProductIds.length} selected
-              </span>
-
-              <button
-                type="button"
-                onClick={() => setShowBulkDeleteConfirm(true)}
-                disabled={bulkOperationBusy}
-                className={`text-sm px-3 py-1.5 rounded-sm border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] text-[#f87171] ${bulkOperationBusy ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
-              >
-                {bulkDeleting ? "Deleting..." : "Bulk Delete"}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => { setBulkRegularPrice(""); setBulkDiscountedPrice(""); setShowBulkPriceModal(true); }}
-                disabled={bulkOperationBusy}
-                className={`text-sm px-3 py-1.5 rounded-sm border border-[rgba(0,212,255,0.2)] bg-brand-soft text-ink-light ${bulkOperationBusy ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
-              >
-                {bulkPriceUpdating ? "Updating..." : "Bulk Price Update"}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => { setBulkTargetCategoryId(""); setShowBulkCategoryModal(true); }}
-                disabled={bulkOperationBusy}
-                className={`text-sm px-3 py-1.5 rounded-sm border border-accent-soft bg-accent-soft text-[#a78bfa] ${bulkOperationBusy ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
-              >
-                {bulkReassigning ? "Reassigning..." : "Bulk Reassign Category"}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setSelectedProductIds([])}
-                disabled={bulkOperationBusy}
-                className="text-xs px-2.5 py-1 rounded-sm border border-line bg-transparent text-muted cursor-pointer ml-auto"
-              >
-                Clear selection
-              </button>
-            </div>
+            <BulkActionsToolbar
+              selectedCount={selectedProductIds.length}
+              bulkOperationBusy={bulkOperationBusy}
+              bulkDeleting={bulkDeleting}
+              bulkPriceUpdating={false}
+              bulkReassigning={false}
+              onBulkDelete={() => setShowBulkDeleteConfirm(true)}
+              onBulkPriceUpdate={() => setShowBulkPriceModal(true)}
+              onBulkCategoryReassign={() => setShowBulkCategoryModal(true)}
+              onClearSelection={() => setSelectedProductIds([])}
+            />
           )}
 
           <div className="grid gap-6 lg:grid-cols-[1.1fr,0.9fr]">
@@ -1874,145 +1686,23 @@ export default function AdminProductsPage() {
       />
 
       {/* ---- Bulk Price Update Modal ---- */}
-      {showBulkPriceModal && (
-        <div
-          className="fixed inset-0 z-[1000] grid place-items-center bg-[rgba(0,0,0,0.6)] backdrop-blur-[4px]"
-          onClick={() => { if (!bulkPriceUpdating) setShowBulkPriceModal(false); }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="bg-surface border border-line rounded-lg px-7 py-6 w-full max-w-[420px] text-ink"
-          >
-            <h3 className="text-lg font-bold mb-1 text-ink">
-              Bulk Price Update
-            </h3>
-            <p className="text-sm text-muted mb-4">
-              Update prices for {selectedProductIds.length} selected product(s).
-            </p>
-
-            <label className="block text-sm font-semibold text-ink-light mb-1">
-              Regular Price *
-            </label>
-            <input
-              type="number"
-              min="0.01"
-              step="0.01"
-              value={bulkRegularPrice}
-              onChange={(e) => setBulkRegularPrice(e.target.value)}
-              placeholder="e.g. 29.99"
-              className="form-input w-full mb-3"
-            />
-
-            <label className="block text-sm font-semibold text-ink-light mb-1">
-              Discounted Price (optional)
-            </label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={bulkDiscountedPrice}
-              onChange={(e) => setBulkDiscountedPrice(e.target.value)}
-              placeholder="Leave blank to keep unchanged"
-              className="form-input w-full mb-5"
-            />
-
-            <div className="flex justify-end gap-2.5">
-              <button
-                type="button"
-                onClick={() => setShowBulkPriceModal(false)}
-                disabled={bulkPriceUpdating}
-                className="btn-outline text-base px-4 py-2"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => { void handleBulkPriceUpdate(); }}
-                disabled={bulkPriceUpdating || !bulkRegularPrice.trim()}
-                className="btn-primary text-base px-4 py-2 inline-flex items-center gap-1.5"
-              >
-                {bulkPriceUpdating && (
-                  <span className="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                )}
-                {bulkPriceUpdating ? "Updating..." : "Update Prices"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <BulkPriceUpdateModal
+        open={showBulkPriceModal}
+        selectedProductIds={selectedProductIds}
+        apiClient={session.apiClient}
+        onClose={() => setShowBulkPriceModal(false)}
+        onComplete={() => { setSelectedProductIds([]); setShowBulkPriceModal(false); reloadActiveProducts(); reloadDeletedProducts(); }}
+      />
 
       {/* ---- Bulk Category Reassign Modal ---- */}
-      {showBulkCategoryModal && (
-        <div
-          className="fixed inset-0 z-[1000] grid place-items-center bg-[rgba(0,0,0,0.6)] backdrop-blur-[4px]"
-          onClick={() => { if (!bulkReassigning) setShowBulkCategoryModal(false); }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="bg-surface border border-line rounded-lg px-7 py-6 w-full max-w-[420px] text-ink"
-          >
-            <h3 className="text-lg font-bold mb-1 text-ink">
-              Bulk Reassign Category
-            </h3>
-            <p className="text-sm text-muted mb-4">
-              Reassign {selectedProductIds.length} selected product(s) to a new category.
-            </p>
-
-            <label className="block text-sm font-semibold text-ink-light mb-1">
-              Target Category *
-            </label>
-            <select
-              value={bulkTargetCategoryId}
-              onChange={(e) => setBulkTargetCategoryId(e.target.value)}
-              className="form-select w-full mb-5"
-            >
-              <option value="">-- Select a category --</option>
-              {categories.filter((c) => c.type === "PARENT").length > 0 && (
-                <optgroup label="Main Categories">
-                  {categories
-                    .filter((c) => c.type === "PARENT")
-                    .sort((a, b) => a.name.localeCompare(b.name))
-                    .map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                </optgroup>
-              )}
-              {categories.filter((c) => c.type === "SUB").length > 0 && (
-                <optgroup label="Sub Categories">
-                  {categories
-                    .filter((c) => c.type === "SUB")
-                    .sort((a, b) => a.name.localeCompare(b.name))
-                    .map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                </optgroup>
-              )}
-            </select>
-
-            <div className="flex justify-end gap-2.5">
-              <button
-                type="button"
-                onClick={() => setShowBulkCategoryModal(false)}
-                disabled={bulkReassigning}
-                className="btn-outline text-base px-4 py-2"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => { void handleBulkCategoryReassign(); }}
-                disabled={bulkReassigning || !bulkTargetCategoryId.trim()}
-                className="btn-primary text-base px-4 py-2 inline-flex items-center gap-1.5"
-              >
-                {bulkReassigning && (
-                  <span className="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                )}
-                {bulkReassigning ? "Reassigning..." : "Reassign Category"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <BulkCategoryReassignModal
+        open={showBulkCategoryModal}
+        selectedProductIds={selectedProductIds}
+        categories={categories}
+        apiClient={session.apiClient}
+        onClose={() => setShowBulkCategoryModal(false)}
+        onComplete={() => { setSelectedProductIds([]); setShowBulkCategoryModal(false); reloadActiveProducts(); reloadDeletedProducts(); }}
+      />
 
       {/* ---- Reject Product Modal ---- */}
       <ConfirmModal

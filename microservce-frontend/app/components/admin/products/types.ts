@@ -212,6 +212,22 @@ export type VariationRowsEditorProps = {
   preventNumberInputArrows: ProductEditorPanelHelpers["preventNumberInputArrows"];
 };
 
+export type ApprovalStatus = "NOT_REQUIRED" | "DRAFT" | "PENDING" | "PENDING_REVIEW" | "APPROVED" | "REJECTED";
+
+export type BulkOperationResult = {
+  totalRequested: number;
+  successCount: number;
+  failureCount: number;
+  errors: string[];
+};
+
+export type ImportResult = {
+  totalRows: number;
+  successCount: number;
+  failureCount: number;
+  errors: string[];
+};
+
 export type VariationParentSelectorPanelProps = ProductEditorPanelProps;
 
 export type VendorSelectorFieldProps = {
