@@ -48,9 +48,11 @@ export default function OrderHistoryCard({
       <div className="flex flex-wrap items-start justify-between gap-[10px]">
         <div className="flex-1">
           <p className="font-bold text-white text-[0.9rem] m-0">{order.item}</p>
-          <p className="mt-1 font-mono text-[0.65rem] text-muted-2">
-            Order #{order.id.slice(0, 8).toUpperCase()}
-          </p>
+          {order.orderNumber && (
+            <p className="mt-1 text-[0.65rem] text-muted-2">
+              Order {order.orderNumber}
+            </p>
+          )}
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span className="text-[0.72rem] font-bold px-[10px] py-[3px] rounded-full border" style={{ background: sc.bg, borderColor: sc.border, color: sc.color }}>
               {order.status || "PLACED"}

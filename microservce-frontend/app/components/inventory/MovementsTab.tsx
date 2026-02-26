@@ -68,19 +68,21 @@ export default function MovementsTab({ apiClient, apiPrefix, isAdmin = false }: 
     }, width: "8%"},
     { key: "quantityBefore", header: "Before", width: "7%", render: (v) => String(v) },
     { key: "quantityAfter", header: "After", width: "7%", render: (v) => String(v) },
-    { key: "productId", header: "Product", render: (v) => {
-      const s = String(v || "");
-      return <span title={s} className="text-[0.75rem] font-mono">#{s.slice(0, 8).toUpperCase()}</span>;
+    { key: "productId", header: "Product", render: (_, row) => {
+      const m = row as unknown as StockMovement;
+      const label = m.productName || m.productSku || "—";
+      return <span title={m.productName || m.productId} className="text-[0.75rem]">{label}</span>;
     }},
     { key: "referenceType", header: "Reference", render: (_, row) => {
       const m = row as unknown as StockMovement;
       if (!m.referenceType) return "-";
-      const refId = m.referenceId ? `#${m.referenceId.slice(0, 8).toUpperCase()}` : "";
-      return <span className="text-[0.75rem]">{m.referenceType}{refId ? `: ${refId}` : ""}</span>;
+      return <span className="text-[0.75rem]">{m.referenceType}</span>;
     }},
     { key: "actorType", header: "Actor", render: (_, row) => {
       const m = row as unknown as StockMovement;
-      return m.actorType ? <span className="text-[0.75rem]">{m.actorType}{m.actorId ? ` (#${m.actorId.slice(0, 8).toUpperCase()})` : ""}</span> : "-";
+      if (!m.actorType) return "-";
+      const label = m.actorName || m.actorType;
+      return <span className="text-[0.75rem]">{label}</span>;
     }},
     { key: "note", header: "Note", render: (v) => {
       const s = String(v || "");

@@ -1,7 +1,8 @@
 "use client";
 
 import { getAllowedNextStatuses, canTransitionOrderStatus, getStatusChip, ORDER_STATUSES } from "./orderStatus";
-import { VendorOrder } from "./types";
+import type { VendorOrder } from "./types";
+import { money } from "../../../../lib/format";
 
 type Props = {
   orderId: string | null;
@@ -39,7 +40,7 @@ export default function VendorOrdersPanel({
       <div className="flex items-center justify-between gap-2.5">
         <div>
           <p className="m-0 text-base font-bold text-[#ddd6fe]">Vendor Orders</p>
-          <p className="mt-1 font-mono text-[0.7rem] text-muted">{orderId}</p>
+          <p className="mt-1 text-[0.7rem] text-muted">{rows.length} vendor order{rows.length !== 1 ? "s" : ""}</p>
         </div>
         <div className="flex gap-2">
           <button
@@ -77,8 +78,8 @@ export default function VendorOrdersPanel({
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="grid gap-[3px]">
-                  <span className="font-mono text-xs text-[#c8c8e8]">{row.id}</span>
-                  <span className="font-mono text-[0.68rem] text-muted">vendor: {row.vendorId}</span>
+                  <span className="text-xs font-semibold text-[#c8c8e8]">{row.vendorName || "Vendor"}</span>
+                  <span className="text-[0.68rem] text-muted">{money(row.orderTotal)} · {row.itemCount} item{row.itemCount !== 1 ? "s" : ""}</span>
                 </div>
                 <span
                   className="rounded-full px-2.5 py-0.5 text-[0.7rem] font-extrabold"
@@ -93,8 +94,6 @@ export default function VendorOrdersPanel({
               </div>
               <div className="mt-1.5 flex flex-wrap gap-2.5 text-[0.7rem] text-muted">
                 <span>Qty: {row.quantity}</span>
-                <span>Items: {row.itemCount}</span>
-                <span>Total: ${Number(row.orderTotal ?? 0).toFixed(2)}</span>
                 <span>{new Date(row.createdAt).toLocaleString()}</span>
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-2">

@@ -89,7 +89,7 @@ export default function CouponUsageTab({
                         href={`/orders/${entry.orderId}`}
                         className="text-brand underline font-mono text-[0.78rem]"
                       >
-                        {entry.orderId.length > 12 ? `${entry.orderId.slice(0, 12)}...` : entry.orderId}
+                        {entry.orderItem || "View Order"}
                       </Link>
                     </td>
                     <td className="px-[14px] py-3 text-muted text-[0.78rem]">

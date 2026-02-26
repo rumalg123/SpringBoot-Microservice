@@ -12,17 +12,19 @@ type Payment = {
   id: string; orderId: string; customerId: string; amount: number; currency: string;
   status: string; paymentMethod: string; cardNoMasked: string | null;
   payherePaymentId: string | null; paidAt: string | null; createdAt: string;
+  customerName?: string; customerEmail?: string;
 };
 type RefundRequest = {
   id: string; paymentId: string; orderId: string; vendorOrderId: string | null; vendorId: string | null;
   customerId: string; refundAmount: number; currency: string; customerReason: string | null;
   vendorResponseNote: string | null; adminNote: string | null; status: string;
-  createdAt: string;
+  createdAt: string; customerName?: string; customerEmail?: string;
 };
 type Payout = {
   id: string; vendorId: string; payoutAmount: number; platformFee: number; currency: string;
   status: string; referenceNumber: string | null; adminNote: string | null;
   approvedAt: string | null; completedAt: string | null; createdAt: string;
+  vendorName?: string;
 };
 type Paged<T> = { content: T[]; totalPages: number; totalElements: number };
 type Tab = "payments" | "refunds" | "payouts";
@@ -182,12 +184,12 @@ export default function AdminPaymentsPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full border-collapse text-[0.82rem]">
                     <thead><tr className="border-b border-line-bright">
-                      {["Order", "Amount", "Method", "Status", "Paid At", "Created"].map((h) => <th key={h} className="py-2 px-3 text-left text-muted font-semibold text-[0.72rem] uppercase">{h}</th>)}
+                      {["Customer", "Amount", "Method", "Status", "Paid At", "Created"].map((h) => <th key={h} className="py-2 px-3 text-left text-muted font-semibold text-[0.72rem] uppercase">{h}</th>)}
                     </tr></thead>
                     <tbody>
                       {payments.map((p) => (
                         <tr key={p.id} className="border-b border-line">
-                          <td className="py-2.5 px-3 text-ink-light font-mono" title={p.orderId}>#{p.orderId.slice(0, 8).toUpperCase()}</td>
+                          <td className="py-2.5 px-3 text-ink-light">{p.customerName || p.customerEmail || "—"}</td>
                           <td className="py-2.5 px-3 text-white font-semibold">{money(p.amount)}</td>
                           <td className="py-2.5 px-3 text-ink-light">{p.paymentMethod || "—"}</td>
                           <td className="py-2.5 px-3">{statusBadge(p.status)}</td>
@@ -224,7 +226,7 @@ export default function AdminPaymentsPage() {
                         <div>
                           <div className="flex items-center gap-2 mb-1.5">{statusBadge(r.status)}<span className="text-[0.78rem] text-white font-semibold">{money(r.refundAmount)}</span></div>
                           {r.customerReason && <p className="mb-1 text-[0.82rem] text-ink-light">Reason: {r.customerReason}</p>}
-                          <p className="text-[0.72rem] text-muted-2">Order <span className="font-mono">#{r.orderId.slice(0, 8).toUpperCase()}</span> · {new Date(r.createdAt).toLocaleDateString()}</p>
+                          <p className="text-[0.72rem] text-muted-2">{r.customerName || r.customerEmail || "Customer"} · {new Date(r.createdAt).toLocaleDateString()}</p>
                           {r.adminNote && <p className="mt-1 text-[0.78rem] text-brand italic">Admin: {r.adminNote}</p>}
                         </div>
                         {["ESCALATED_TO_ADMIN", "REQUESTED"].includes(r.status) && finalizingId !== r.id && (
@@ -277,7 +279,7 @@ export default function AdminPaymentsPage() {
                     <tbody>
                       {payouts.map((p) => (
                         <tr key={p.id} className="border-b border-line">
-                          <td className="py-2.5 px-3 text-ink-light font-mono" title={p.vendorId}>#{p.vendorId.slice(0, 8).toUpperCase()}</td>
+                          <td className="py-2.5 px-3 text-ink-light">{p.vendorName || "—"}</td>
                           <td className="py-2.5 px-3 text-white font-semibold">{money(p.payoutAmount)}</td>
                           <td className="py-2.5 px-3 text-muted">{money(p.platformFee)}</td>
                           <td className="py-2.5 px-3">{statusBadge(p.status)}</td>

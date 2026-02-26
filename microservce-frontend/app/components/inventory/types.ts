@@ -23,6 +23,7 @@ export type Warehouse = {
 export type StockItem = {
   id: string;
   productId: string;
+  productName?: string;
   vendorId: string;
   warehouseId: string;
   warehouseName: string;
@@ -41,7 +42,10 @@ export type StockMovement = {
   id: string;
   stockItemId: string;
   productId: string;
+  productName?: string;
+  productSku?: string;
   warehouseId: string;
+  warehouseName?: string;
   movementType: string;
   quantityChange: number;
   quantityBefore: number;
@@ -50,6 +54,7 @@ export type StockMovement = {
   referenceId: string | null;
   actorType: string | null;
   actorId: string | null;
+  actorName?: string;
   note: string | null;
   createdAt: string;
 };
@@ -58,8 +63,11 @@ export type StockReservation = {
   id: string;
   orderId: string;
   productId: string;
+  productName?: string;
+  productSku?: string;
   stockItemId: string;
   warehouseId: string;
+  warehouseName?: string;
   quantityReserved: number;
   status: string;
   reservedAt: string;

@@ -179,9 +179,10 @@ export default function StockTab({ apiClient, apiPrefix, isAdmin = false, vendor
 
   const columns: Column<StockItem>[] = [
     { key: "sku", header: "SKU", render: (v) => String(v || "-"), width: "12%" },
-    { key: "productId", header: "Product", render: (v) => {
-      const s = String(v || "");
-      return <span title={s} className="text-[0.75rem] font-mono">#{s.slice(0, 8).toUpperCase()}</span>;
+    { key: "productId", header: "Product", render: (_, row) => {
+      const item = row as unknown as StockItem;
+      const label = item.productName || item.sku || "—";
+      return <span title={item.productName || item.productId} className="text-[0.75rem]">{label}</span>;
     }},
     { key: "warehouseName", header: "Warehouse" },
     { key: "quantityOnHand", header: "On Hand", width: "8%", render: (v) => <span className="font-bold">{String(v)}</span> },

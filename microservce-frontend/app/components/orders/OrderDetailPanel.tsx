@@ -46,7 +46,7 @@ export default function OrderDetailPanel({
             </span>
           )}
         </div>
-        <p className="font-mono text-[0.65rem] text-muted-2 mb-1">Order #{detail.id.slice(0, 8).toUpperCase()}</p>
+        {detail.orderNumber && <p className="text-[0.65rem] text-muted-2 mb-1">Order {detail.orderNumber}</p>}
         <p className="text-[0.78rem] text-muted m-0">
           Placed:{" "}
           <span className="text-ink-light font-semibold">

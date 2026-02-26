@@ -27,6 +27,7 @@ export type OrderItem = {
 
 export type Order = {
   id: string;
+  orderNumber?: string;
   customerId: string;
   item: string;
   quantity: number;
@@ -64,6 +65,7 @@ export type CustomerSummary = {
 
 export type OrderDetail = {
   id: string;
+  orderNumber?: string;
   customerId: string;
   item: string;
   quantity: number;
@@ -115,6 +117,7 @@ export type VendorOrder = {
   id: string;
   orderId: string;
   vendorId: string;
+  vendorName?: string;
   status: string;
   itemCount: number;
   quantity: number;

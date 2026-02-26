@@ -3,6 +3,8 @@
 export type AdminOrder = {
   id: string;
   customerId: string;
+  customerName?: string;
+  customerEmail?: string;
   item: string;
   quantity: number;
   itemCount: number;
@@ -39,6 +41,7 @@ export type VendorOrder = {
   id: string;
   orderId: string;
   vendorId: string;
+  vendorName?: string;
   status: string;
   itemCount: number;
   quantity: number;

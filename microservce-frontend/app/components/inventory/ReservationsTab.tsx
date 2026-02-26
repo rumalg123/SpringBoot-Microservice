@@ -58,12 +58,13 @@ export default function ReservationsTab({ apiClient, apiPrefix }: Props) {
   const columns: Column<StockReservation>[] = [
     { key: "status", header: "Status", render: (v) => <StatusBadge value={String(v)} colorMap={RESERVATION_STATUS_COLORS} /> },
     { key: "orderId", header: "Order", render: (v) => {
-      const s = String(v || "");
-      return <span title={s} className="text-[0.75rem] font-mono">#{s.slice(0, 8).toUpperCase()}</span>;
+      const s = String(v || "—");
+      return <span className="text-[0.75rem]">{s}</span>;
     }},
-    { key: "productId", header: "Product", render: (v) => {
-      const s = String(v || "");
-      return <span title={s} className="text-[0.75rem] font-mono">#{s.slice(0, 8).toUpperCase()}</span>;
+    { key: "productId", header: "Product", render: (_, row) => {
+      const r = row as unknown as StockReservation;
+      const label = r.productName || r.productSku || "—";
+      return <span title={r.productName || r.productId} className="text-[0.75rem]">{label}</span>;
     }},
     { key: "quantityReserved", header: "Qty Reserved", width: "9%", render: (v) => <span className="font-bold">{String(v)}</span> },
     { key: "reservedAt", header: "Reserved At", render: (v) => v ? new Date(String(v)).toLocaleString() : "-" },

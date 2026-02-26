@@ -96,6 +96,7 @@ export type CouponUsageEntry = {
   promotionName: string;
   discountAmount: number;
   orderId: string;
+  orderItem?: string;
   committedAt: string;
 };
 
