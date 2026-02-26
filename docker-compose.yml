@@ -287,8 +287,10 @@ services:
     build:
       context: ./Services/search-service
     depends_on:
-      - discovery-server
-      - redis
+      discovery-server:
+        condition: service_started
+      redis:
+        condition: service_started
       elasticsearch:
         condition: service_healthy
     env_file:
