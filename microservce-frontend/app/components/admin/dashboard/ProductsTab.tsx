@@ -52,7 +52,7 @@ export default function ProductsTab({ topProducts }: ProductsTabProps) {
               {productTab === "revenue" && topProducts.byRevenue?.map((p, i) => (
                 <tr key={p.productId}>
                   <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-ink">{i + 1}</td>
-                  <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-ink">{p.productName || p.productId}</td>
+                  <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-ink">{p.productName || "Unnamed Product"}</td>
                   <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-ink">{num(p.quantitySold)}</td>
                   <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-right font-semibold text-brand">{money(p.totalRevenue)}</td>
                 </tr>
@@ -60,21 +60,21 @@ export default function ProductsTab({ topProducts }: ProductsTabProps) {
               {productTab === "views" && topProducts.byViews?.map((p, i) => (
                 <tr key={p.id}>
                   <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-ink">{i + 1}</td>
-                  <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-ink">{p.name || p.id}</td>
+                  <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-ink">{p.name || "Unnamed Product"}</td>
                   <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-right font-semibold text-ink">{num(p.viewCount)}</td>
                 </tr>
               ))}
               {productTab === "sold" && topProducts.bySold?.map((p, i) => (
                 <tr key={p.id}>
                   <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-ink">{i + 1}</td>
-                  <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-ink">{p.name || p.id}</td>
+                  <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-ink">{p.name || "Unnamed Product"}</td>
                   <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-right font-semibold text-ink">{num(p.soldCount)}</td>
                 </tr>
               ))}
               {productTab === "wishlisted" && topProducts.byWishlisted?.map((p, i) => (
                 <tr key={p.productId}>
                   <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-ink">{i + 1}</td>
-                  <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-ink">{p.productName || p.productId}</td>
+                  <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-ink">{p.productName || "Unnamed Product"}</td>
                   <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-right font-semibold text-ink">{num(p.wishlistCount)}</td>
                 </tr>
               ))}

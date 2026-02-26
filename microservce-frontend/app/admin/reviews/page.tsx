@@ -329,7 +329,7 @@ export default function AdminReviewsPage() {
                             </p>
                           )}
                           <p className="text-xs text-muted-2">
-                            Review ID: {report.reviewId.slice(0, 8)}... · Reported {new Date(report.createdAt).toLocaleDateString()}
+                            Review <span className="font-mono">#{report.reviewId.slice(0, 8).toUpperCase()}</span> · Reported {new Date(report.createdAt).toLocaleDateString()}
                           </p>
                           {report.adminNotes && (
                             <p className="mt-1.5 text-sm text-brand italic">

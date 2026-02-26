@@ -46,7 +46,7 @@ export default function OrderDetailPanel({
             </span>
           )}
         </div>
-        <p className="font-mono text-[0.65rem] text-muted-2 mb-1">{detail.id}</p>
+        <p className="font-mono text-[0.65rem] text-muted-2 mb-1">Order #{detail.id.slice(0, 8).toUpperCase()}</p>
         <p className="text-[0.78rem] text-muted m-0">
           Placed:{" "}
           <span className="text-ink-light font-semibold">
@@ -168,17 +168,19 @@ export default function OrderDetailPanel({
         <table className="w-full border-collapse text-[0.78rem]">
           <thead>
             <tr className="bg-brand-soft">
-              {["Item", "Qty", "Row ID"].map((h) => (
-                <th key={h} className="px-3 py-2 text-left font-bold text-muted text-[0.65rem] uppercase tracking-[0.08em]">{h}</th>
+              {["#", "Item", "Qty", "Unit Price", "Total"].map((h) => (
+                <th key={h} className={`px-3 py-2 text-left font-bold text-muted text-[0.65rem] uppercase tracking-[0.08em] ${h === "Unit Price" || h === "Total" ? "text-right" : ""}`}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {detail.items?.map((row, idx) => (
               <tr key={row.id || `${row.item}-${idx}`} className="border-t border-brand-soft">
+                <td className="px-3 py-2 text-muted-2">{idx + 1}</td>
                 <td className="px-3 py-2 text-ink-light">{row.item}</td>
                 <td className="px-3 py-2 text-brand font-bold">{row.quantity}</td>
-                <td className="px-3 py-2 font-mono text-[0.6rem] text-muted-2">{row.id || "—"}</td>
+                <td className="px-3 py-2 text-right text-ink-light">{money(row.unitPrice)}</td>
+                <td className="px-3 py-2 text-right font-semibold text-ink-light">{money(row.lineTotal)}</td>
               </tr>
             ))}
           </tbody>

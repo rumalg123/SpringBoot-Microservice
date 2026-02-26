@@ -53,13 +53,14 @@ export default function ProfilePage() {
   const [activityLogPage, setActivityLogPage] = useState(0);
   const [couponUsagePage, setCouponUsagePage] = useState(0);
 
-  /* ── React Query: Customer Profile ── */
-  const { data: customer } = useCustomerProfile(apiClient);
-  const updateProfileMutation = useUpdateProfile(apiClient);
+  /* ── React Query: Customer Profile (skip for admin — no customer record) ── */
+  const customerApi = canViewAdmin ? null : apiClient;
+  const { data: customer } = useCustomerProfile(customerApi);
+  const updateProfileMutation = useUpdateProfile(customerApi);
   const initialNameParts = splitDisplayName(customer?.name || "");
 
-  /* ── React Query: Addresses ── */
-  const { data: addresses = [], isLoading: addressLoading } = useAddresses(apiClient);
+  /* ── React Query: Addresses (skip for admin) ── */
+  const { data: addresses = [], isLoading: addressLoading } = useAddresses(customerApi);
   const saveAddressMutation = useSaveAddress(apiClient);
   const deleteAddressMutation = useDeleteAddress(apiClient);
   const setDefaultAddressMutation = useSetDefaultAddress(apiClient);

@@ -187,7 +187,7 @@ export default function AdminPaymentsPage() {
                     <tbody>
                       {payments.map((p) => (
                         <tr key={p.id} className="border-b border-line">
-                          <td className="py-2.5 px-3 text-ink-light">{p.orderId.slice(0, 8)}...</td>
+                          <td className="py-2.5 px-3 text-ink-light font-mono" title={p.orderId}>#{p.orderId.slice(0, 8).toUpperCase()}</td>
                           <td className="py-2.5 px-3 text-white font-semibold">{money(p.amount)}</td>
                           <td className="py-2.5 px-3 text-ink-light">{p.paymentMethod || "—"}</td>
                           <td className="py-2.5 px-3">{statusBadge(p.status)}</td>
@@ -224,7 +224,7 @@ export default function AdminPaymentsPage() {
                         <div>
                           <div className="flex items-center gap-2 mb-1.5">{statusBadge(r.status)}<span className="text-[0.78rem] text-white font-semibold">{money(r.refundAmount)}</span></div>
                           {r.customerReason && <p className="mb-1 text-[0.82rem] text-ink-light">Reason: {r.customerReason}</p>}
-                          <p className="text-[0.72rem] text-muted-2">Order: {r.orderId.slice(0, 8)}... · {new Date(r.createdAt).toLocaleDateString()}</p>
+                          <p className="text-[0.72rem] text-muted-2">Order <span className="font-mono">#{r.orderId.slice(0, 8).toUpperCase()}</span> · {new Date(r.createdAt).toLocaleDateString()}</p>
                           {r.adminNote && <p className="mt-1 text-[0.78rem] text-brand italic">Admin: {r.adminNote}</p>}
                         </div>
                         {["ESCALATED_TO_ADMIN", "REQUESTED"].includes(r.status) && finalizingId !== r.id && (
@@ -277,7 +277,7 @@ export default function AdminPaymentsPage() {
                     <tbody>
                       {payouts.map((p) => (
                         <tr key={p.id} className="border-b border-line">
-                          <td className="py-2.5 px-3 text-ink-light">{p.vendorId.slice(0, 8)}...</td>
+                          <td className="py-2.5 px-3 text-ink-light font-mono" title={p.vendorId}>#{p.vendorId.slice(0, 8).toUpperCase()}</td>
                           <td className="py-2.5 px-3 text-white font-semibold">{money(p.payoutAmount)}</td>
                           <td className="py-2.5 px-3 text-muted">{money(p.platformFee)}</td>
                           <td className="py-2.5 px-3">{statusBadge(p.status)}</td>

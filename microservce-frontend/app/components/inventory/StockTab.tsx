@@ -165,8 +165,8 @@ export default function StockTab({ apiClient, apiPrefix, isAdmin = false, vendor
 
   /* ── Columns & filters ── */
   const filterDefs: FilterDef[] = [
-    ...(isAdmin ? [{ key: "vendorId", label: "Vendor ID", type: "text" as const, placeholder: "Filter by vendor..." }] : []),
-    { key: "productId", label: "Product ID", type: "text" as const, placeholder: "Filter by product..." },
+    ...(isAdmin ? [{ key: "vendorId", label: "Vendor", type: "text" as const, placeholder: "Filter by vendor..." }] : []),
+    { key: "productId", label: "Product", type: "text" as const, placeholder: "Filter by product..." },
     { key: "sku", label: "SKU", type: "text" as const, placeholder: "Filter by SKU..." },
     { key: "stockStatus", label: "Status", type: "select" as const, options: [
       { label: "In Stock", value: "IN_STOCK" },
@@ -181,7 +181,7 @@ export default function StockTab({ apiClient, apiPrefix, isAdmin = false, vendor
     { key: "sku", header: "SKU", render: (v) => String(v || "-"), width: "12%" },
     { key: "productId", header: "Product", render: (v) => {
       const s = String(v || "");
-      return <span title={s} className="text-[0.75rem] font-mono">{s.slice(0, 8)}...</span>;
+      return <span title={s} className="text-[0.75rem] font-mono">#{s.slice(0, 8).toUpperCase()}</span>;
     }},
     { key: "warehouseName", header: "Warehouse" },
     { key: "quantityOnHand", header: "On Hand", width: "8%", render: (v) => <span className="font-bold">{String(v)}</span> },

@@ -54,10 +54,11 @@ export default function CustomerInsightsPage() {
   const [loading, setLoading] = useState(true);
   const [customerId, setCustomerId] = useState<string | null>(null);
   const api = session.apiClient;
+  const isAdmin = session.canViewAdmin;
 
   // Get customer ID from /customers/me
   useEffect(() => {
-    if (!api || !session.isAuthenticated) return;
+    if (!api || !session.isAuthenticated || isAdmin) return;
     let cancelled = false;
     (async () => {
       try {
@@ -68,11 +69,11 @@ export default function CustomerInsightsPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [api, session.isAuthenticated]);
+  }, [api, session.isAuthenticated, isAdmin]);
 
   // Fetch insights
   useEffect(() => {
-    if (!api || !customerId) return;
+    if (!api || !customerId || isAdmin) return;
     let cancelled = false;
     (async () => {
       setLoading(true);
@@ -86,7 +87,7 @@ export default function CustomerInsightsPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [api, customerId]);
+  }, [api, customerId, isAdmin]);
 
   const o = data?.orderSummary;
   const p = data?.profile;
@@ -119,13 +120,19 @@ export default function CustomerInsightsPage() {
             My Insights
           </h1>
 
-          {loading && (
+          {isAdmin && (
+            <div className="flex min-h-[200px] items-center justify-center">
+              <p className="text-[0.9rem] text-muted">Insights are not available for admin accounts. Switch to a customer account to view shopping insights.</p>
+            </div>
+          )}
+
+          {!isAdmin && loading && (
             <div className="grid gap-3.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))" }}>
               {Array.from({ length: 4 }).map((_, i) => <div key={i} className="skeleton h-[100px] rounded-lg border border-line bg-[rgba(255,255,255,0.02)] p-5" />)}
             </div>
           )}
 
-          {!loading && data && (
+          {!isAdmin && !loading && data && (
             <>
               {/* Loyalty card */}
               {p && (
@@ -186,7 +193,7 @@ export default function CustomerInsightsPage() {
             </>
           )}
 
-          {!loading && !data && (
+          {!isAdmin && !loading && !data && (
             <div className="flex min-h-[200px] items-center justify-center">
               <p className="text-[0.9rem] text-muted">No insights data available yet. Start shopping to see your insights!</p>
             </div>

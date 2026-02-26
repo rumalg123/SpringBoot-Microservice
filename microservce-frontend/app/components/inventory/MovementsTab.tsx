@@ -55,8 +55,8 @@ export default function MovementsTab({ apiClient, apiPrefix, isAdmin = false }: 
       { label: "Adjustment", value: "ADJUSTMENT" },
       { label: "Bulk Import", value: "BULK_IMPORT" },
     ]},
-    { key: "productId", label: "Product ID", type: "text" as const, placeholder: "Filter by product..." },
-    ...(isAdmin ? [{ key: "warehouseId", label: "Warehouse ID", type: "text" as const, placeholder: "Filter by warehouse..." }] : []),
+    { key: "productId", label: "Product", type: "text" as const, placeholder: "Filter by product..." },
+    ...(isAdmin ? [{ key: "warehouseId", label: "Warehouse", type: "text" as const, placeholder: "Filter by warehouse..." }] : []),
   ];
 
   const columns: Column<StockMovement>[] = [
@@ -70,17 +70,17 @@ export default function MovementsTab({ apiClient, apiPrefix, isAdmin = false }: 
     { key: "quantityAfter", header: "After", width: "7%", render: (v) => String(v) },
     { key: "productId", header: "Product", render: (v) => {
       const s = String(v || "");
-      return <span title={s} className="text-[0.75rem] font-mono">{s.slice(0, 8)}...</span>;
+      return <span title={s} className="text-[0.75rem] font-mono">#{s.slice(0, 8).toUpperCase()}</span>;
     }},
     { key: "referenceType", header: "Reference", render: (_, row) => {
       const m = row as unknown as StockMovement;
       if (!m.referenceType) return "-";
-      const refId = m.referenceId ? m.referenceId.slice(0, 8) + "..." : "";
+      const refId = m.referenceId ? `#${m.referenceId.slice(0, 8).toUpperCase()}` : "";
       return <span className="text-[0.75rem]">{m.referenceType}{refId ? `: ${refId}` : ""}</span>;
     }},
     { key: "actorType", header: "Actor", render: (_, row) => {
       const m = row as unknown as StockMovement;
-      return m.actorType ? <span className="text-[0.75rem]">{m.actorType}{m.actorId ? ` (${m.actorId.slice(0, 12)})` : ""}</span> : "-";
+      return m.actorType ? <span className="text-[0.75rem]">{m.actorType}{m.actorId ? ` (#${m.actorId.slice(0, 8).toUpperCase()})` : ""}</span> : "-";
     }},
     { key: "note", header: "Note", render: (v) => {
       const s = String(v || "");

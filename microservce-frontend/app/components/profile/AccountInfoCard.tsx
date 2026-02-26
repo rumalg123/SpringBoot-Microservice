@@ -87,12 +87,11 @@ export default function AccountInfoCard({
 
             {[
               { label: "Email", value: customer?.email || "\u2014" },
-              { label: "Customer ID", value: customer?.id || "\u2014", mono: true },
               { label: "Member Since", value: customer?.createdAt ? new Date(customer.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : "\u2014" },
-            ].map(({ label, value, mono }) => (
+            ].map(({ label, value }) => (
               <div key={label} className="rounded-md bg-brand-soft border border-brand-soft px-[14px] py-[10px]">
                 <p className="text-[0.65rem] text-muted uppercase tracking-[0.08em] mb-[3px]">{label}</p>
-                <p className={`text-[0.82rem] font-bold text-ink-light break-all m-0 ${mono ? "font-mono" : ""}`}>{value}</p>
+                <p className="text-[0.82rem] font-bold text-ink-light break-all m-0">{value}</p>
               </div>
             ))}
           </div>

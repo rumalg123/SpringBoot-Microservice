@@ -51,19 +51,19 @@ export default function ReservationsTab({ apiClient, apiPrefix }: Props) {
       { label: "Released", value: "RELEASED" },
       { label: "Expired", value: "EXPIRED" },
     ]},
-    { key: "orderId", label: "Order ID", type: "text" as const, placeholder: "Filter by order..." },
-    { key: "productId", label: "Product ID", type: "text" as const, placeholder: "Filter by product..." },
+    { key: "orderId", label: "Order", type: "text" as const, placeholder: "Filter by order..." },
+    { key: "productId", label: "Product", type: "text" as const, placeholder: "Filter by product..." },
   ];
 
   const columns: Column<StockReservation>[] = [
     { key: "status", header: "Status", render: (v) => <StatusBadge value={String(v)} colorMap={RESERVATION_STATUS_COLORS} /> },
     { key: "orderId", header: "Order", render: (v) => {
       const s = String(v || "");
-      return <span title={s} className="text-[0.75rem] font-mono">{s.slice(0, 8)}...</span>;
+      return <span title={s} className="text-[0.75rem] font-mono">#{s.slice(0, 8).toUpperCase()}</span>;
     }},
     { key: "productId", header: "Product", render: (v) => {
       const s = String(v || "");
-      return <span title={s} className="text-[0.75rem] font-mono">{s.slice(0, 8)}...</span>;
+      return <span title={s} className="text-[0.75rem] font-mono">#{s.slice(0, 8).toUpperCase()}</span>;
     }},
     { key: "quantityReserved", header: "Qty Reserved", width: "9%", render: (v) => <span className="font-bold">{String(v)}</span> },
     { key: "reservedAt", header: "Reserved At", render: (v) => v ? new Date(String(v)).toLocaleString() : "-" },
