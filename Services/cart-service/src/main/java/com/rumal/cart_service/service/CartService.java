@@ -609,14 +609,14 @@ public class CartService {
         if (!StringUtils.hasText(incomingKey)) {
             return null;
         }
-        return "cart-checkout::" + incomingKey.trim();
+        return "cart-checkout_" + incomingKey.trim();
     }
 
     private String downstreamPromotionReservationKey(String incomingKey) {
         if (!StringUtils.hasText(incomingKey)) {
             return null;
         }
-        return "cart-coupon-reserve::" + incomingKey.trim();
+        return "cart-coupon-reserve_" + incomingKey.trim();
     }
 
     private PromotionQuoteRequest buildPromotionQuoteRequest(

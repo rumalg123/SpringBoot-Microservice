@@ -72,7 +72,7 @@ export default function CheckoutSidebar({
           />
           <button
             onClick={onApplyCoupon}
-            disabled={busy || cart.items.length === 0}
+            disabled={busy || cart.items.length === 0 || !couponCode.trim()}
             className="btn-outline px-3.5 py-[9px] text-[0.78rem] whitespace-nowrap"
           >
             {previewing ? <span className="spinner-sm" /> : "Apply"}

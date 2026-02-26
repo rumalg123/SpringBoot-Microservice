@@ -42,6 +42,9 @@ public class VendorOrder {
     @Column(name = "vendor_id", nullable = false)
     private UUID vendorId;
 
+    @Column(name = "vendor_name", length = 200)
+    private String vendorName;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
     private OrderStatus status;

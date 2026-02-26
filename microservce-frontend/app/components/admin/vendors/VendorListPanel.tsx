@@ -291,8 +291,19 @@ export default function VendorListPanel({
             )}
             {!isLoadingCurrent && rows.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-3 py-5 text-center text-sm text-[var(--muted)]">
-                  {emptyMessage}
+                <td colSpan={4}>
+                  <div className="empty-state">
+                    <div className="empty-state-icon">
+                      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                        <circle cx="9" cy="7" r="4" />
+                        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                      </svg>
+                    </div>
+                    <p className="empty-state-title">{emptyMessage}</p>
+                    <p className="empty-state-desc">Try adjusting your filters or search query.</p>
+                  </div>
                 </td>
               </tr>
             )}

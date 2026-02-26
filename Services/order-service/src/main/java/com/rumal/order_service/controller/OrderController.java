@@ -278,7 +278,7 @@ public class OrderController {
         try {
             orderService.exportOrdersCsv(status, createdAfter, createdBefore, response.getWriter());
         } catch (java.io.IOException e) {
-            throw new RuntimeException("Failed to write CSV export", e);
+            throw new com.rumal.order_service.exception.CsvExportException("Failed to write CSV export", e);
         }
     }
 

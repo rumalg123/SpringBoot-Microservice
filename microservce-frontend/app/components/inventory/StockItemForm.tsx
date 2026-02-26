@@ -1,6 +1,8 @@
 "use client";
 
+import type { AxiosInstance } from "axios";
 import FormField from "../ui/FormField";
+import SearchableSelect from "../ui/SearchableSelect";
 import type { StockItemFormData } from "./types";
 import type { Warehouse } from "./types";
 
@@ -12,9 +14,10 @@ type Props = {
   onSave: () => void;
   onCancel: () => void;
   showVendorId?: boolean;
+  apiClient: AxiosInstance | null;
 };
 
-export default function StockItemForm({ form, onChange, warehouses, saving, onSave, onCancel, showVendorId = false }: Props) {
+export default function StockItemForm({ form, onChange, warehouses, saving, onSave, onCancel, showVendorId = false, apiClient }: Props) {
   const isEdit = Boolean(form.id);
 
   return (
@@ -23,13 +26,41 @@ export default function StockItemForm({ form, onChange, warehouses, saving, onSa
         {isEdit ? "Edit Stock Item" : "New Stock Item"}
       </h3>
 
-      <FormField label="Product ID" htmlFor="si-product" required>
-        <input id="si-product" value={form.productId} onChange={(e) => onChange({ productId: e.target.value })} className="form-input w-full" placeholder="Product UUID" disabled={isEdit} />
+      <FormField label="Product" htmlFor="si-product" required>
+        {isEdit ? (
+          <input value={form.productId} className="form-input w-full" disabled />
+        ) : (
+          <SearchableSelect
+            apiClient={apiClient}
+            endpoint="/admin/products"
+            searchParam="q"
+            labelField="name"
+            valueField="id"
+            placeholder="Search products by name or SKU..."
+            value={form.productId}
+            onChange={(value) => onChange({ productId: value })}
+            disabled={isEdit}
+          />
+        )}
       </FormField>
 
       {showVendorId && (
-        <FormField label="Vendor ID" htmlFor="si-vendor" required>
-          <input id="si-vendor" value={form.vendorId} onChange={(e) => onChange({ vendorId: e.target.value })} className="form-input w-full" placeholder="Vendor UUID" disabled={isEdit} />
+        <FormField label="Vendor" htmlFor="si-vendor" required>
+          {isEdit ? (
+            <input value={form.vendorId} className="form-input w-full" disabled />
+          ) : (
+            <SearchableSelect
+              apiClient={apiClient}
+              endpoint="/admin/vendors"
+              searchParam="q"
+              labelField="name"
+              valueField="id"
+              placeholder="Search vendors by name..."
+              value={form.vendorId}
+              onChange={(value) => onChange({ vendorId: value })}
+              disabled={isEdit}
+            />
+          )}
         </FormField>
       )}
 

@@ -57,30 +57,30 @@ export default function ProfilePage() {
   const [activityLogPage, setActivityLogPage] = useState(0);
   const [couponUsagePage, setCouponUsagePage] = useState(0);
 
-  /* ── React Query: Customer Profile (skip for admin — no customer record) ── */
-  const customerApi = canViewAdmin ? null : apiClient;
+  /* ── React Query: Customer Profile ── */
+  const customerApi = apiClient;
   const { data: customer } = useCustomerProfile(customerApi);
   const updateProfileMutation = useUpdateProfile(customerApi);
   const initialNameParts = splitDisplayName(customer?.name || "");
 
-  /* ── React Query: Addresses (skip for admin) ── */
+  /* ── React Query: Addresses ── */
   const { data: addresses = [], isLoading: addressLoading } = useAddresses(customerApi);
   const saveAddressMutation = useSaveAddress(apiClient);
   const deleteAddressMutation = useDeleteAddress(apiClient);
   const setDefaultAddressMutation = useSetDefaultAddress(apiClient);
 
   /* ── React Query: Communication Preferences ── */
-  const { data: commPrefs, isLoading: commPrefsLoading } = useCommunicationPrefs(apiClient, activeTab === "preferences" && !canViewAdmin);
+  const { data: commPrefs, isLoading: commPrefsLoading } = useCommunicationPrefs(apiClient, activeTab === "preferences");
   const updateCommPrefMutation = useUpdateCommPref(apiClient);
 
   /* ── React Query: Linked Accounts ── */
-  const { data: linkedAccounts, isLoading: linkedAccountsLoading } = useLinkedAccounts(apiClient, activeTab === "preferences" && !canViewAdmin);
+  const { data: linkedAccounts, isLoading: linkedAccountsLoading } = useLinkedAccounts(apiClient, activeTab === "preferences");
 
   /* ── React Query: Activity Log ── */
-  const { data: activityLogData, isLoading: activityLogLoading } = useActivityLog(apiClient, activityLogPage, activeTab === "activity" && !canViewAdmin);
+  const { data: activityLogData, isLoading: activityLogLoading } = useActivityLog(apiClient, activityLogPage, activeTab === "activity");
 
   /* ── React Query: Coupon Usage ── */
-  const { data: couponUsageData, isLoading: couponUsageLoading } = useCouponUsage(apiClient, couponUsagePage, activeTab === "coupon-history" && !canViewAdmin);
+  const { data: couponUsageData, isLoading: couponUsageLoading } = useCouponUsage(apiClient, couponUsagePage, activeTab === "coupon-history");
 
   const resetAddressForm = () => setAddressForm(emptyAddressForm);
 
@@ -106,6 +106,7 @@ export default function ProfilePage() {
         toast.success(addressForm.id ? "Address updated" : "Address added");
         resetAddressForm();
         setStatus("Address book updated.");
+        window.dispatchEvent(new Event("addresses-updated"));
       },
       onError: (err) => {
         const message = err instanceof Error ? err.message : "Failed to save address";
@@ -122,6 +123,7 @@ export default function ProfilePage() {
         toast.success("Address deleted");
         if (addressForm.id === addressId) resetAddressForm();
         setStatus("Address deleted.");
+        window.dispatchEvent(new Event("addresses-updated"));
       },
       onError: (err) => {
         const message = err instanceof Error ? err.message : "Failed to delete address";
@@ -142,6 +144,7 @@ export default function ProfilePage() {
       onSuccess: () => {
         toast.success(type === "shipping" ? "Default shipping address updated" : "Default billing address updated");
         setStatus("Address defaults updated.");
+        window.dispatchEvent(new Event("addresses-updated"));
       },
       onError: (err) => {
         const message = err instanceof Error ? err.message : "Failed to set default address";
@@ -179,10 +182,9 @@ export default function ProfilePage() {
   useEffect(() => {
     if (sessionStatus !== "ready") return;
     if (!isAuthenticated) { router.replace("/"); return; }
-    if (canViewAdmin) return;
     if (!apiClient) return;
     void ensureCustomer();
-  }, [router, sessionStatus, isAuthenticated, canViewAdmin, apiClient, ensureCustomer]);
+  }, [router, sessionStatus, isAuthenticated, apiClient, ensureCustomer]);
 
   /* ── Sync edit fields from React Query customer data ── */
   useEffect(() => {
@@ -244,14 +246,12 @@ export default function ProfilePage() {
   if (!isAuthenticated) return null;
 
   /* ── Tab definitions ── */
-  const tabs: { key: TabKey; label: string }[] = canViewAdmin
-    ? [{ key: "account", label: "Account" }]
-    : [
-        { key: "account", label: "Account" },
-        { key: "preferences", label: "Preferences" },
-        { key: "activity", label: "Activity" },
-        { key: "coupon-history", label: "Coupon History" },
-      ];
+  const tabs: { key: TabKey; label: string }[] = [
+    { key: "account", label: "Account" },
+    { key: "preferences", label: "Preferences" },
+    { key: "activity", label: "Activity" },
+    { key: "coupon-history", label: "Coupon History" },
+  ];
 
   return (
     <div className="min-h-screen bg-bg">
@@ -362,26 +362,24 @@ export default function ProfilePage() {
               initialNameParts={initialNameParts}
             />
 
-            {!canViewAdmin && (
-              <AddressBook
-                addresses={addresses}
-                addressForm={addressForm}
-                onAddressFormChange={setAddressForm}
-                savingAddress={saveAddressMutation.isPending}
-                onSave={() => { void saveAddress(); }}
-                onReset={resetAddressForm}
-                onStartEdit={startEditAddress}
-                onDelete={(id) => { void deleteAddress(id); }}
-                onSetDefault={(id, type) => { void setDefaultAddressFn(id, type); }}
-                addressLoading={addressLoading}
-                deletingAddressId={deletingAddressId}
-                settingDefaultAddress={settingDefaultAddress}
-                emailVerified={emailVerified}
-              />
-            )}
+            <AddressBook
+              addresses={addresses}
+              addressForm={addressForm}
+              onAddressFormChange={setAddressForm}
+              savingAddress={saveAddressMutation.isPending}
+              onSave={() => { void saveAddress(); }}
+              onReset={resetAddressForm}
+              onStartEdit={startEditAddress}
+              onDelete={(id) => { void deleteAddress(id); }}
+              onSetDefault={(id, type) => { void setDefaultAddressFn(id, type); }}
+              addressLoading={addressLoading}
+              deletingAddressId={deletingAddressId}
+              settingDefaultAddress={settingDefaultAddress}
+              emailVerified={emailVerified}
+            />
 
             <p className="mt-4 text-xs text-muted-2">
-              {canViewAdmin ? "Admin account detected." : status}
+              {status}
             </p>
           </>
         )}

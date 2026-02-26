@@ -147,7 +147,7 @@ export default function AccessAuditPanel({
   const hasNextPage = totalPages > 0 ? page + 1 < totalPages : rows.length >= pageSize;
 
   return (
-    <section className="space-y-3 rounded-2xl border border-line bg-[rgba(255,255,255,0.02)] p-4">
+    <section className="space-y-3 rounded-2xl border border-line bg-surface-2 p-4">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-ink">{title}</h3>
@@ -253,7 +253,7 @@ export default function AccessAuditPanel({
             <div key={row.id} className="rounded-xl border border-white/[0.08] bg-white/[0.015] p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full border border-[rgba(0,212,255,0.2)] px-2 py-0.5 text-[10px] font-semibold text-[rgba(0,212,255,0.9)]">
+                  <span className="rounded-full border border-brand/20 px-2 py-0.5 text-[10px] font-semibold text-brand/90">
                     {row.action}
                   </span>
                   <span className="text-xs text-white/65">
@@ -261,10 +261,10 @@ export default function AccessAuditPanel({
                   </span>
                 </div>
                 <div className="flex flex-wrap gap-2 text-[11px]">
-                  <span className={row.activeAfter ? "text-[#86efac]" : "text-[#fca5a5]"}>
+                  <span className={row.activeAfter ? "text-success" : "text-danger"}>
                     {row.activeAfter ? "Active" : "Inactive"}
                   </span>
-                  <span className={row.deletedAfter ? "text-[#fde68a]" : "text-white/55"}>
+                  <span className={row.deletedAfter ? "text-warning-text" : "text-white/55"}>
                     {row.deletedAfter ? "Deleted" : "Not Deleted"}
                   </span>
                 </div>
@@ -291,7 +291,7 @@ export default function AccessAuditPanel({
                     {row.permissions.map((permission) => (
                       <span
                         key={`${row.id}:${permission}`}
-                        className="rounded-full border border-[rgba(0,212,255,0.15)] px-2 py-0.5 text-[10px] text-[rgba(0,212,255,0.85)]"
+                        className="rounded-full border border-brand/15 px-2 py-0.5 text-[10px] text-brand/85"
                       >
                         {permission}
                       </span>

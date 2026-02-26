@@ -209,6 +209,7 @@ export default function StockTab({ apiClient, apiPrefix, isAdmin = false, vendor
           onSave={handleSave}
           onCancel={() => { setShowForm(false); setForm({ ...EMPTY_STOCK_FORM }); }}
           showVendorId={isAdmin}
+          apiClient={apiClient}
         />
       </div>
     );

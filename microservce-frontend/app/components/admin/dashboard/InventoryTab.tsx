@@ -6,7 +6,7 @@ import {
 } from "recharts";
 import type { InventoryHealthData } from "./types";
 import {
-  CHART_TEXT,
+  COLORS, CHART_TEXT,
   num, ChartTooltip, SkeletonGrid,
 } from "./helpers";
 
@@ -35,7 +35,7 @@ export default function InventoryTab({ invHealth }: InventoryTabProps) {
                 ].filter(d => d.value > 0)}
                 dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} innerRadius={50} paddingAngle={3}
               >
-                <Cell fill="#34d399" /><Cell fill="#fbbf24" /><Cell fill="#f87171" /><Cell fill="#fb923c" />
+                <Cell fill={COLORS[2]} /><Cell fill={COLORS[3]} /><Cell fill={COLORS[4]} /><Cell fill={COLORS[5]} />
               </Pie>
               <Tooltip content={<ChartTooltip />} />
               <Legend wrapperStyle={{ fontSize: "0.78rem", color: CHART_TEXT }} />
@@ -43,7 +43,7 @@ export default function InventoryTab({ invHealth }: InventoryTabProps) {
           </ResponsiveContainer>
           <div className="grid grid-cols-2 gap-4">
             <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Total On Hand</p><p className="mt-2 text-[1.2rem] font-extrabold text-ink">{num(invHealth.summary?.totalQuantityOnHand)}</p></div>
-            <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Reserved</p><p className="mt-2 text-[1.2rem] font-extrabold text-[#7c3aed]">{num(invHealth.summary?.totalQuantityReserved)}</p></div>
+            <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Reserved</p><p className="mt-2 text-[1.2rem] font-extrabold text-accent">{num(invHealth.summary?.totalQuantityReserved)}</p></div>
           </div>
         </div>
       </div>
@@ -64,10 +64,10 @@ export default function InventoryTab({ invHealth }: InventoryTabProps) {
               <tbody>
                 {invHealth.lowStockAlerts.slice(0, 20).map((a, i) => (
                   <tr key={i}>
-                    <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 font-semibold text-ink">{a.sku || a.productId}</td>
-                    <td className={`border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 font-semibold ${a.quantityAvailable === 0 ? "text-danger" : "text-warning-text"}`}>{num(a.quantityAvailable)}</td>
-                    <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-ink">{num(a.lowStockThreshold)}</td>
-                    <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-ink">
+                    <td className="border-b border-line px-3 py-2.5 font-semibold text-ink">{a.sku || a.productId}</td>
+                    <td className={`border-b border-line px-3 py-2.5 font-semibold ${a.quantityAvailable === 0 ? "text-danger" : "text-warning-text"}`}>{num(a.quantityAvailable)}</td>
+                    <td className="border-b border-line px-3 py-2.5 text-ink">{num(a.lowStockThreshold)}</td>
+                    <td className="border-b border-line px-3 py-2.5 text-ink">
                       <span className={`rounded-sm px-2.5 py-[3px] text-xs font-semibold ${a.stockStatus === "OUT_OF_STOCK" ? "bg-danger-soft text-danger" : "bg-warning-soft text-warning-text"}`}>
                         {(a.stockStatus ?? "").replace(/_/g, " ")}
                       </span>

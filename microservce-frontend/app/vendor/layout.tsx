@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuthSession } from "../../lib/authSession";
 import ConnectedAppNav from "../components/ConnectedAppNav";
 import Footer from "../components/Footer";
+import { VendorVerificationProvider } from "../components/vendor/VendorVerificationContext";
 
 export default function VendorLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -37,7 +38,9 @@ export default function VendorLayout({ children }: { children: ReactNode }) {
   return (
     <>
       <ConnectedAppNav />
-      {children}
+      <VendorVerificationProvider>
+        {children}
+      </VendorVerificationProvider>
       <Footer />
     </>
   );

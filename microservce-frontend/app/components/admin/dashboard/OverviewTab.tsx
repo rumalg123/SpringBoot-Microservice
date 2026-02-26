@@ -8,7 +8,7 @@ import type {
   DashboardData, RevenueTrendData,
 } from "./types";
 import {
-  CHART_GRID, CHART_TEXT,
+  COLORS, CHART_GRID, CHART_TEXT,
   num, pct, shortMoney, ChartTooltip,
 } from "./helpers";
 
@@ -49,8 +49,8 @@ export default function OverviewTab({ dash, revenueTrend, periodDays, setPeriodD
               <XAxis dataKey="date" tick={{ fill: CHART_TEXT, fontSize: 11 }} tickFormatter={(v: string) => { const d = new Date(v); return `${d.getMonth() + 1}/${d.getDate()}`; }} />
               <YAxis tick={{ fill: CHART_TEXT, fontSize: 11 }} tickFormatter={(v: number) => shortMoney(v)} />
               <Tooltip content={<ChartTooltip />} />
-              <Line type="monotone" dataKey="revenue" name="Revenue" stroke="#00d4ff" strokeWidth={2.5} dot={false} />
-              <Line type="monotone" dataKey="orderCount" name="Orders" stroke="#7c3aed" strokeWidth={2} dot={false} yAxisId={0} />
+              <Line type="monotone" dataKey="revenue" name="Revenue" stroke={COLORS[0]} strokeWidth={2.5} dot={false} />
+              <Line type="monotone" dataKey="orderCount" name="Orders" stroke={COLORS[1]} strokeWidth={2} dot={false} yAxisId={0} />
             </LineChart>
           </ResponsiveContainer>
         ) : (
@@ -68,7 +68,7 @@ export default function OverviewTab({ dash, revenueTrend, periodDays, setPeriodD
               <XAxis type="number" tick={{ fill: CHART_TEXT, fontSize: 11 }} />
               <YAxis dataKey="status" type="category" width={120} tick={{ fill: CHART_TEXT, fontSize: 11 }} />
               <Tooltip content={<ChartTooltip />} />
-              <Bar dataKey="count" name="Orders" fill="#00d4ff" radius={[0, 6, 6, 0]} barSize={20} />
+              <Bar dataKey="count" name="Orders" fill={COLORS[0]} radius={[0, 6, 6, 0]} barSize={20} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -80,10 +80,10 @@ export default function OverviewTab({ dash, revenueTrend, periodDays, setPeriodD
         <div className="rounded-lg border border-line bg-white/[0.03] px-6 py-5">
           <h3 className="mb-4 text-[0.88rem] font-bold text-ink">Payments</h3>
           <div className="grid grid-cols-2 gap-3">
-            <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Successful</p><p className="mt-2 text-[1.2rem] font-extrabold text-[#34d399]">{num(pay?.successfulPayments)}</p></div>
-            <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Failed</p><p className="mt-2 text-[1.2rem] font-extrabold text-[#f87171]">{num(pay?.failedPayments)}</p></div>
+            <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Successful</p><p className="mt-2 text-[1.2rem] font-extrabold text-success">{num(pay?.successfulPayments)}</p></div>
+            <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Failed</p><p className="mt-2 text-[1.2rem] font-extrabold text-danger">{num(pay?.failedPayments)}</p></div>
             <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Total Amount</p><p className="mt-2 text-[1.1rem] font-extrabold text-ink">{shortMoney(pay?.totalSuccessAmount)}</p></div>
-            <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Refunds</p><p className="mt-2 text-[1.1rem] font-extrabold text-[#fbbf24]">{shortMoney(pay?.totalRefundAmount)}</p></div>
+            <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Refunds</p><p className="mt-2 text-[1.1rem] font-extrabold text-warning-text">{shortMoney(pay?.totalRefundAmount)}</p></div>
           </div>
         </div>
         {/* Reviews */}
@@ -91,7 +91,7 @@ export default function OverviewTab({ dash, revenueTrend, periodDays, setPeriodD
           <h3 className="mb-4 text-[0.88rem] font-bold text-ink">Reviews</h3>
           <div className="grid grid-cols-2 gap-3">
             <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Total Reviews</p><p className="mt-2 text-[1.2rem] font-extrabold text-ink">{num(rev?.totalReviews)}</p></div>
-            <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Avg Rating</p><p className="mt-2 text-[1.2rem] font-extrabold text-[#fbbf24]">{(rev?.avgRating ?? 0).toFixed(1)}</p></div>
+            <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Avg Rating</p><p className="mt-2 text-[1.2rem] font-extrabold text-warning-text">{(rev?.avgRating ?? 0).toFixed(1)}</p></div>
             <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">This Month</p><p className="mt-2 text-[1.1rem] font-extrabold text-ink">{num(rev?.reviewsThisMonth)}</p></div>
             <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Verified %</p><p className="mt-2 text-[1.1rem] font-extrabold text-ink">{pct(rev?.verifiedPurchasePercent)}</p></div>
           </div>
@@ -100,9 +100,9 @@ export default function OverviewTab({ dash, revenueTrend, periodDays, setPeriodD
         <div className="rounded-lg border border-line bg-white/[0.03] px-6 py-5">
           <h3 className="mb-4 text-[0.88rem] font-bold text-ink">Inventory</h3>
           <div className="grid grid-cols-2 gap-3">
-            <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">In Stock</p><p className="mt-2 text-[1.2rem] font-extrabold text-[#34d399]">{num(inv?.inStockCount)}</p></div>
-            <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Low Stock</p><p className="mt-2 text-[1.2rem] font-extrabold text-[#fbbf24]">{num(inv?.lowStockCount)}</p></div>
-            <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Out of Stock</p><p className="mt-2 text-[1.2rem] font-extrabold text-[#f87171]">{num(inv?.outOfStockCount)}</p></div>
+            <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">In Stock</p><p className="mt-2 text-[1.2rem] font-extrabold text-success">{num(inv?.inStockCount)}</p></div>
+            <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Low Stock</p><p className="mt-2 text-[1.2rem] font-extrabold text-warning-text">{num(inv?.lowStockCount)}</p></div>
+            <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Out of Stock</p><p className="mt-2 text-[1.2rem] font-extrabold text-danger">{num(inv?.outOfStockCount)}</p></div>
             <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Total SKUs</p><p className="mt-2 text-[1.1rem] font-extrabold text-ink">{num(inv?.totalSkus)}</p></div>
           </div>
         </div>

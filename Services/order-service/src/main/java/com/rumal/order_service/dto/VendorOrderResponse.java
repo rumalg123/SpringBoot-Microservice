@@ -9,6 +9,7 @@ public record VendorOrderResponse(
         UUID id,
         UUID orderId,
         UUID vendorId,
+        String vendorName,
         String status,
         int itemCount,
         int quantity,

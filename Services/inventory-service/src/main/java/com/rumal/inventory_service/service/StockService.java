@@ -24,6 +24,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
 public class StockService {
 
     private static final Logger log = LoggerFactory.getLogger(StockService.class);
@@ -54,7 +55,7 @@ public class StockService {
 
     // ─── Internal: Reserve Stock ───
 
-    @Transactional(isolation = Isolation.REPEATABLE_READ)
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public StockReservationResponse reserveForOrder(UUID orderId, List<StockCheckRequest> items, Instant expiresAt) {
         List<ReservationItemResponse> reservationItems = new ArrayList<>();
         Instant now = Instant.now();
@@ -128,7 +129,7 @@ public class StockService {
 
     // ─── Internal: Confirm Reservation ───
 
-    @Transactional(isolation = Isolation.REPEATABLE_READ)
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public void confirmReservation(UUID orderId) {
         List<StockReservation> reservations = stockReservationRepository
                 .findByOrderIdAndStatusWithStockItem(orderId, ReservationStatus.RESERVED);
@@ -165,7 +166,7 @@ public class StockService {
 
     // ─── Internal: Release Reservation ───
 
-    @Transactional(isolation = Isolation.REPEATABLE_READ)
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public void releaseReservation(UUID orderId, String reason) {
         List<StockReservation> reservations = stockReservationRepository
                 .findByOrderIdAndStatusWithStockItem(orderId, ReservationStatus.RESERVED);
@@ -236,7 +237,7 @@ public class StockService {
         return toStockItemResponse(findStockItemById(id));
     }
 
-    @Transactional
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public StockItemResponse createStockItem(StockItemCreateRequest request) {
         Warehouse warehouse = warehouseService.findById(request.warehouseId());
 
@@ -271,7 +272,7 @@ public class StockService {
         return toStockItemResponse(stockItem);
     }
 
-    @Transactional
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public StockItemResponse updateStockItem(UUID id, StockItemUpdateRequest request) {
         StockItem stockItem = findStockItemById(id);
 
@@ -283,7 +284,7 @@ public class StockService {
         return toStockItemResponse(stockItemRepository.save(stockItem));
     }
 
-    @Transactional
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public StockItemResponse adjustStock(UUID id, int quantityChange, String reason, String actorType, String actorId) {
         StockItem stockItem = stockItemRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Stock item not found: " + id));
@@ -306,7 +307,7 @@ public class StockService {
         return toStockItemResponse(stockItem);
     }
 
-    @Transactional
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public BulkStockImportResponse bulkImport(List<StockItemCreateRequest> items, String actorType, String actorId) {
         int created = 0;
         int updated = 0;
@@ -399,7 +400,7 @@ public class StockService {
 
     // ─── Expiry (called by scheduler) ───
 
-    @Transactional
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public int expireStaleReservations() {
         Instant now = Instant.now();
         int totalExpired = 0;

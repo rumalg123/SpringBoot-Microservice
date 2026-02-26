@@ -17,6 +17,7 @@ export type PublicPromotion = {
   minimumOrderAmount: number | null;
   maximumDiscountAmount: number | null;
   stackable: boolean;
+  stackingGroup: string | null;
   autoApply: boolean;
   targetProductIds: string[];
   targetCategoryIds: string[];

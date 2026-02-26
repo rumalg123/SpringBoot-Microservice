@@ -49,6 +49,9 @@ public class CategoryServiceImpl implements CategoryService {
     @Value("${category.max-depth:4}")
     private int maxCategoryDepth;
 
+    // Broad cache eviction (allEntries=true) is intentional here: categories are rarely changing
+    // data (admin-only mutations), and their tree structure makes targeted key-based eviction
+    // impractical since a single change can affect multiple list/tree queries.
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     @Caching(evict = {

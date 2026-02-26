@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -49,5 +50,14 @@ public class InternalVendorAccessController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         return vendorService.getOperationalStates(vendorIds);
+    }
+
+    @org.springframework.web.bind.annotation.PostMapping("/names")
+    public Map<UUID, String> getVendorNames(
+            @RequestHeader(INTERNAL_HEADER) String internalAuth,
+            @org.springframework.web.bind.annotation.RequestBody List<UUID> vendorIds
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        return vendorService.getVendorNames(vendorIds);
     }
 }

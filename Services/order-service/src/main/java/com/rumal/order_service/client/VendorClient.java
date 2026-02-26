@@ -14,6 +14,9 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Component
@@ -61,5 +64,26 @@ public class VendorClient {
         if (ex instanceof ResourceNotFoundException rnfe) throw rnfe;
         if (ex instanceof ValidationException ve) throw ve;
         throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
+    }
+
+    @Retry(name = "vendorService")
+    @CircuitBreaker(name = "vendorService", fallbackMethod = "vendorNamesFallback")
+    @SuppressWarnings("unchecked")
+    public Map<UUID, String> getVendorNames(List<UUID> vendorIds) {
+        try {
+            return restClient.post()
+                    .uri("http://vendor-service/internal/vendors/access/names")
+                    .header("X-Internal-Auth", internalAuthSecret)
+                    .body(vendorIds)
+                    .retrieve()
+                    .body(Map.class);
+        } catch (RestClientException ex) {
+            throw new ServiceUnavailableException("Vendor service unavailable: " + ex.getMessage(), ex);
+        }
+    }
+
+    @SuppressWarnings("unused")
+    public Map<UUID, String> vendorNamesFallback(List<UUID> vendorIds, Throwable ex) {
+        return Collections.emptyMap();
     }
 }

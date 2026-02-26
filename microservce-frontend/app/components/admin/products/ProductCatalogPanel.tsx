@@ -1,7 +1,8 @@
 "use client";
 
 import Pagination from "../../Pagination";
-import StatusBadge, { APPROVAL_COLORS } from "../../ui/StatusBadge";
+import ProductFilterForm from "./ProductFilterForm";
+import ProductTableRow from "./ProductTableRow";
 
 type ProductType = "SINGLE" | "PARENT" | "VARIATION";
 type ApprovalStatus = "NOT_REQUIRED" | "DRAFT" | "PENDING" | "PENDING_REVIEW" | "APPROVED" | "REJECTED";
@@ -68,11 +69,9 @@ type Props = {
   productRowActionBusy: boolean;
   loadingProductId: string | null;
   restoringProductId: string | null;
-  /* Selection props (optional) */
   selectedProductIds?: string[];
   onToggleProductSelection?: (id: string) => void;
   onToggleSelectAllCurrentPage?: () => void;
-  /* Callbacks */
   onShowActive: () => void;
   onShowDeleted: () => void;
   onQChange: (value: string) => void;
@@ -90,7 +89,6 @@ type Props = {
   onDeleteProductRequest: (product: ProductSummary) => void;
   onRestoreProduct: (id: string) => void | Promise<void>;
   onPageChange: (page: number) => void | Promise<void>;
-  /* Approval workflow (optional) */
   canApproveReject?: boolean;
   approvingProductId?: string | null;
   rejectingProductId?: string | null;
@@ -100,77 +98,23 @@ type Props = {
   onRejectProductRequest?: (product: ProductSummary) => void;
 };
 
-function money(value: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
-}
-
 export default function ProductCatalogPanel({
-  title,
-  showDeleted,
-  q,
-  sku,
-  category,
-  vendorId,
-  vendorSearch,
-  type,
-  parentCategories,
-  subCategories,
-  vendors,
-  loadingVendors,
-  showVendorFilter = true,
-  rows,
-  pageMeta,
-  currentPage,
-  filtersSubmitting,
-  listLoading,
-  productRowActionBusy,
-  loadingProductId,
-  restoringProductId,
-  selectedProductIds,
-  onToggleProductSelection,
-  onToggleSelectAllCurrentPage,
-  onShowActive,
-  onShowDeleted,
-  onQChange,
-  onSkuChange,
-  onCategoryChange,
-  onVendorIdChange,
-  onVendorSearchChange,
-  onTypeChange,
-  approvalStatus = "",
-  onApprovalStatusChange,
-  activeFilter = "",
-  onActiveFilterChange,
-  onApplyFilters,
-  onEditProduct,
-  onDeleteProductRequest,
-  onRestoreProduct,
-  onPageChange,
-  canApproveReject = false,
-  approvingProductId,
-  rejectingProductId,
-  submitForReviewProductId,
-  onSubmitForReview,
-  onApproveProduct,
-  onRejectProductRequest,
+  title, showDeleted, q, sku, category, vendorId, vendorSearch, type,
+  parentCategories, subCategories, vendors, loadingVendors, showVendorFilter = true,
+  rows, pageMeta, currentPage, filtersSubmitting, listLoading,
+  productRowActionBusy, loadingProductId, restoringProductId,
+  selectedProductIds, onToggleProductSelection, onToggleSelectAllCurrentPage,
+  onShowActive, onShowDeleted,
+  onQChange, onSkuChange, onCategoryChange, onVendorIdChange, onVendorSearchChange, onTypeChange,
+  approvalStatus = "", onApprovalStatusChange, activeFilter = "", onActiveFilterChange,
+  onApplyFilters, onEditProduct, onDeleteProductRequest, onRestoreProduct, onPageChange,
+  canApproveReject = false, approvingProductId, rejectingProductId, submitForReviewProductId,
+  onSubmitForReview, onApproveProduct, onRejectProductRequest,
 }: Props) {
   const selectionEnabled = !showDeleted && Boolean(onToggleProductSelection) && Boolean(onToggleSelectAllCurrentPage);
   const selectedSet = new Set(selectedProductIds || []);
   const allCurrentSelected = selectionEnabled && rows.length > 0 && rows.every((p) => selectedSet.has(p.id));
   const someCurrentSelected = selectionEnabled && rows.some((p) => selectedSet.has(p.id));
-
-  const filteredVendors = vendors
-    .filter((vendor) => !vendor.deleted)
-    .filter((vendor) => {
-      const needle = vendorSearch.trim().toLowerCase();
-      if (!needle) return true;
-      return vendor.name.toLowerCase().includes(needle)
-        || vendor.slug.toLowerCase().includes(needle)
-        || (vendor.contactEmail || "").toLowerCase().includes(needle)
-        || vendor.id.toLowerCase().includes(needle);
-    })
-    .sort((a, b) => a.name.localeCompare(b.name))
-    .slice(0, 100);
 
   const checkboxStyle: React.CSSProperties = {
     width: 16,
@@ -206,114 +150,19 @@ export default function ProductCatalogPanel({
         </div>
       </div>
 
-      <form onSubmit={onApplyFilters} className="mb-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
-        <input
-          value={q}
-          onChange={(e) => onQChange(e.target.value)}
-          placeholder="Search text"
-          className="rounded-xl border border-[var(--line)] bg-surface-2 px-3 py-2 text-sm text-ink"
-        />
-        <input
-          value={sku}
-          onChange={(e) => onSkuChange(e.target.value)}
-          placeholder="SKU"
-          className="rounded-xl border border-[var(--line)] bg-surface-2 px-3 py-2 text-sm text-ink"
-        />
-        <select
-          value={category}
-          onChange={(e) => onCategoryChange(e.target.value)}
-          className="rounded-xl border border-[var(--line)] bg-surface-2 px-3 py-2 text-sm text-ink"
-        >
-          <option value="">All Categories</option>
-          {parentCategories.length > 0 && (
-            <optgroup label="Main Categories">
-              {parentCategories
-                .slice()
-                .sort((a, b) => a.name.localeCompare(b.name))
-                .map((item) => (
-                  <option key={item.id} value={item.name}>
-                    {item.name}
-                  </option>
-                ))}
-            </optgroup>
-          )}
-          {subCategories.length > 0 && (
-            <optgroup label="Sub Categories">
-              {subCategories
-                .slice()
-                .sort((a, b) => a.name.localeCompare(b.name))
-                .map((item) => (
-                  <option key={item.id} value={item.name}>
-                    {item.name}
-                  </option>
-                ))}
-            </optgroup>
-          )}
-        </select>
-        <select
-          value={type}
-          onChange={(e) => onTypeChange(e.target.value as ProductType | "")}
-          className="rounded-xl border border-[var(--line)] bg-surface-2 px-3 py-2 text-sm text-ink"
-        >
-          <option value="">All Types</option>
-          <option value="SINGLE">SINGLE</option>
-          <option value="PARENT">PARENT</option>
-          <option value="VARIATION">VARIATION</option>
-        </select>
-        {onApprovalStatusChange && (
-          <select
-            value={approvalStatus}
-            onChange={(e) => onApprovalStatusChange(e.target.value as ApprovalStatus | "")}
-            className="rounded-xl border border-[var(--line)] bg-surface-2 px-3 py-2 text-sm text-ink"
-          >
-            <option value="">All Approval</option>
-            <option value="NOT_REQUIRED">DRAFT</option>
-            <option value="PENDING">PENDING</option>
-            <option value="APPROVED">APPROVED</option>
-            <option value="REJECTED">REJECTED</option>
-          </select>
-        )}
-        {onActiveFilterChange && (
-          <select
-            value={activeFilter}
-            onChange={(e) => onActiveFilterChange(e.target.value as "" | "true" | "false")}
-            className="rounded-xl border border-[var(--line)] bg-surface-2 px-3 py-2 text-sm text-ink"
-          >
-            <option value="">All Status</option>
-            <option value="true">Active</option>
-            <option value="false">Inactive</option>
-          </select>
-        )}
-        {showVendorFilter && (
-          <>
-            <input
-              value={vendorSearch}
-              onChange={(e) => onVendorSearchChange(e.target.value)}
-              placeholder="Vendor search"
-              className="rounded-xl border border-[var(--line)] bg-surface-2 px-3 py-2 text-sm text-ink"
-            />
-            <select
-              value={vendorId}
-              onChange={(e) => onVendorIdChange(e.target.value)}
-              className="rounded-xl border border-[var(--line)] bg-surface-2 px-3 py-2 text-sm text-ink"
-            >
-              <option value="">{loadingVendors ? "Loading vendors..." : "All Vendors"}</option>
-              {filteredVendors.map((vendor) => (
-                <option key={vendor.id} value={vendor.id}>
-                  {vendor.name} ({vendor.slug})
-                </option>
-              ))}
-            </select>
-          </>
-        )}
-        <button
-          type="submit"
-          disabled={filtersSubmitting || listLoading}
-          className="btn-brand rounded-xl px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {(filtersSubmitting || listLoading) ? "Applying..." : "Apply Filters"}
-        </button>
-      </form>
+      <ProductFilterForm
+        q={q} sku={sku} category={category} type={type}
+        parentCategories={parentCategories} subCategories={subCategories}
+        vendorId={vendorId} vendorSearch={vendorSearch}
+        vendors={vendors} loadingVendors={loadingVendors} showVendorFilter={showVendorFilter}
+        approvalStatus={approvalStatus} activeFilter={activeFilter}
+        filtersSubmitting={filtersSubmitting} listLoading={listLoading}
+        onQChange={onQChange} onSkuChange={onSkuChange} onCategoryChange={onCategoryChange}
+        onTypeChange={onTypeChange} onApprovalStatusChange={onApprovalStatusChange}
+        onActiveFilterChange={onActiveFilterChange}
+        onVendorIdChange={onVendorIdChange} onVendorSearchChange={onVendorSearchChange}
+        onApplyFilters={onApplyFilters}
+      />
 
       <h2 className="mb-3 text-2xl text-[var(--ink)]">{title}</h2>
       <div className="overflow-hidden rounded-2xl border border-[var(--line)] bg-surface">
@@ -353,108 +202,28 @@ export default function ProductCatalogPanel({
               </tr>
             )}
             {rows.map((p) => (
-              <tr
+              <ProductTableRow
                 key={p.id}
-                className={`border-t border-[var(--line)] ${selectionEnabled && selectedSet.has(p.id) ? "bg-[rgba(0,212,255,0.04)]" : ""}`}
-              >
-                {selectionEnabled && (
-                  <td className="px-3 py-2">
-                    <input
-                      type="checkbox"
-                      checked={selectedSet.has(p.id)}
-                      onChange={() => onToggleProductSelection?.(p.id)}
-                      style={checkboxStyle}
-                    />
-                  </td>
-                )}
-                <td className="px-3 py-2">
-                  <p className="font-semibold text-[var(--ink)]">{p.name}</p>
-                  <p className="line-clamp-1 text-xs text-[var(--muted)]">{p.shortDescription}</p>
-                </td>
-                <td className="px-3 py-2 font-mono text-xs text-[var(--muted)]">{p.sku}</td>
-                <td className="text-xs text-[var(--muted)]">
-                  <span className={`type-badge type-badge--${p.productType.toLowerCase()}`}>{p.productType}</span>
-                </td>
-                <td className="px-3 py-2 text-[var(--ink)]">{money(p.sellingPrice)}</td>
-                <td className="px-3 py-2">
-                  {p.approvalStatus ? (
-                    <StatusBadge value={p.approvalStatus} colorMap={APPROVAL_COLORS} />
-                  ) : (
-                    <span className="text-xs text-[var(--muted)]">--</span>
-                  )}
-                </td>
-                <td className="px-3 py-2">
-                  <div className="flex flex-wrap gap-2">
-                    {!showDeleted && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void onEditProduct(p.id);
-                          }}
-                          disabled={productRowActionBusy}
-                          className="rounded-md border border-[var(--line)] bg-surface-2 px-2 py-1 text-xs text-ink-light disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {loadingProductId === p.id ? "Loading..." : "Edit"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onDeleteProductRequest(p)}
-                          disabled={productRowActionBusy}
-                          className="rounded-md border border-red-900/30 bg-red-500/[0.06] px-2 py-1 text-xs text-red-400 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          Delete
-                        </button>
-                        {/* Submit for Review - shown when DRAFT/NOT_REQUIRED or REJECTED */}
-                        {onSubmitForReview && (p.approvalStatus === "NOT_REQUIRED" || p.approvalStatus === "DRAFT" || p.approvalStatus === "REJECTED") && (
-                          <button
-                            type="button"
-                            onClick={() => { void onSubmitForReview(p.id); }}
-                            disabled={productRowActionBusy || submitForReviewProductId === p.id}
-                            className="rounded-md border border-[rgba(0,212,255,0.25)] bg-[rgba(0,212,255,0.06)] px-2 py-1 text-xs text-brand disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            {submitForReviewProductId === p.id ? "Submitting..." : "Submit for Review"}
-                          </button>
-                        )}
-                        {/* Approve - shown when PENDING/PENDING_REVIEW, for platform staff/super admin */}
-                        {canApproveReject && onApproveProduct && (p.approvalStatus === "PENDING" || p.approvalStatus === "PENDING_REVIEW") && (
-                          <button
-                            type="button"
-                            onClick={() => { void onApproveProduct(p.id); }}
-                            disabled={productRowActionBusy || approvingProductId === p.id}
-                            className="rounded-md border border-green-500/30 bg-green-500/[0.08] px-2 py-1 text-xs text-success disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            {approvingProductId === p.id ? "Approving..." : "Approve"}
-                          </button>
-                        )}
-                        {/* Reject - shown when PENDING/PENDING_REVIEW, for platform staff/super admin */}
-                        {canApproveReject && onRejectProductRequest && (p.approvalStatus === "PENDING" || p.approvalStatus === "PENDING_REVIEW") && (
-                          <button
-                            type="button"
-                            onClick={() => onRejectProductRequest(p)}
-                            disabled={productRowActionBusy || rejectingProductId === p.id}
-                            className="rounded-md border border-red-500/25 bg-red-500/[0.06] px-2 py-1 text-xs text-red-400 disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            {rejectingProductId === p.id ? "Rejecting..." : "Reject"}
-                          </button>
-                        )}
-                      </>
-                    )}
-                    {showDeleted && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void onRestoreProduct(p.id);
-                        }}
-                        disabled={productRowActionBusy}
-                        className="rounded-md border border-emerald-900/30 bg-emerald-500/[0.06] px-2 py-1 text-xs text-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {restoringProductId === p.id ? "Restoring..." : "Restore"}
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
+                product={p}
+                selectionEnabled={selectionEnabled}
+                isSelected={selectedSet.has(p.id)}
+                showDeleted={showDeleted}
+                checkboxStyle={checkboxStyle}
+                canApproveReject={canApproveReject}
+                productRowActionBusy={productRowActionBusy}
+                loadingProductId={loadingProductId}
+                restoringProductId={restoringProductId}
+                approvingProductId={approvingProductId}
+                rejectingProductId={rejectingProductId}
+                submitForReviewProductId={submitForReviewProductId}
+                onToggleProductSelection={onToggleProductSelection}
+                onEditProduct={onEditProduct}
+                onDeleteProductRequest={onDeleteProductRequest}
+                onRestoreProduct={onRestoreProduct}
+                onSubmitForReview={onSubmitForReview}
+                onApproveProduct={onApproveProduct}
+                onRejectProductRequest={onRejectProductRequest}
+              />
             ))}
           </tbody>
         </table>

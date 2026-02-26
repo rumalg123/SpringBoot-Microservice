@@ -58,6 +58,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -1026,5 +1028,12 @@ public class VendorServiceImpl implements VendorService {
         }
         Vendor saved = vendorRepository.save(vendor);
         return toVendorResponse(saved);
+    }
+
+    @Override
+    public Map<UUID, String> getVendorNames(List<UUID> vendorIds) {
+        if (vendorIds == null || vendorIds.isEmpty()) return Map.of();
+        return vendorRepository.findAllById(vendorIds).stream()
+                .collect(Collectors.toMap(Vendor::getId, Vendor::getName));
     }
 }

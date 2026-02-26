@@ -2,6 +2,8 @@
 
 import { type ReactNode } from "react";
 import Link from "next/link";
+import VendorVerificationBanner from "../vendor/VendorVerificationBanner";
+import { useVendorVerification } from "../vendor/VendorVerificationContext";
 
 type Crumb = { label: string; href?: string };
 type Props = {
@@ -17,9 +19,15 @@ export default function VendorPageShell({
   actions,
   children,
 }: Props) {
+  const { verificationStatus, loading: verificationLoading } = useVendorVerification();
+
   return (
     <main className="min-h-screen bg-bg text-ink pt-[100px] px-6 pb-12">
       <div className="max-w-[1280px] mx-auto">
+        <VendorVerificationBanner
+          verificationStatus={verificationStatus}
+          loading={verificationLoading}
+        />
         {breadcrumbs.length > 0 && (
           <nav
             aria-label="Breadcrumbs"

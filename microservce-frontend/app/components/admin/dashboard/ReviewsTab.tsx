@@ -6,7 +6,7 @@ import {
 } from "recharts";
 import type { ReviewAnalyticsData } from "./types";
 import {
-  CHART_GRID, CHART_TEXT,
+  COLORS, CHART_GRID, CHART_TEXT,
   num, pct, ChartTooltip, SkeletonGrid,
 } from "./helpers";
 
@@ -26,9 +26,9 @@ export default function ReviewsTab({ reviewData }: ReviewsTabProps) {
         <div className="mb-5 grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-3">
           <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Total</p><p className="mt-2 text-[1.2rem] font-extrabold text-ink">{num(reviewData.summary?.totalReviews)}</p></div>
           <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Active</p><p className="mt-2 text-[1.2rem] font-extrabold text-ink">{num(reviewData.summary?.activeReviews)}</p></div>
-          <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Avg Rating</p><p className="mt-2 text-[1.2rem] font-extrabold text-[#fbbf24]">{(reviewData.summary?.avgRating ?? 0).toFixed(1)}</p></div>
+          <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Avg Rating</p><p className="mt-2 text-[1.2rem] font-extrabold text-warning-text">{(reviewData.summary?.avgRating ?? 0).toFixed(1)}</p></div>
           <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Verified %</p><p className="mt-2 text-[1.2rem] font-extrabold text-ink">{pct(reviewData.summary?.verifiedPurchasePercent)}</p></div>
-          <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Reported</p><p className="mt-2 text-[1.2rem] font-extrabold text-[#f87171]">{num(reviewData.summary?.totalReported)}</p></div>
+          <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Reported</p><p className="mt-2 text-[1.2rem] font-extrabold text-danger">{num(reviewData.summary?.totalReported)}</p></div>
           <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">This Month</p><p className="mt-2 text-[1.2rem] font-extrabold text-brand">{num(reviewData.summary?.reviewsThisMonth)}</p></div>
         </div>
       </div>
@@ -44,7 +44,7 @@ export default function ReviewsTab({ reviewData }: ReviewsTabProps) {
               <Tooltip content={<ChartTooltip />} />
               <Bar dataKey="count" name="Reviews" radius={[6, 6, 0, 0]} barSize={40}>
                 {[5, 4, 3, 2, 1].map((star, i) => (
-                  <Cell key={i} fill={star >= 4 ? "#34d399" : star === 3 ? "#fbbf24" : "#f87171"} />
+                  <Cell key={i} fill={star >= 4 ? COLORS[2] : star === 3 ? COLORS[3] : COLORS[4]} />
                 ))}
               </Bar>
             </BarChart>

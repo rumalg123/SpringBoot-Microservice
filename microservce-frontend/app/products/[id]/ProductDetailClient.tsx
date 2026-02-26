@@ -227,7 +227,7 @@ export default function ProductDetailClient() {
     try {
       await apiClient.post("/cart/me/items", { productId: targetProductId, quantity });
       emitCartUpdate();
-      router.push("/cart");
+      router.push("/cart?buyNow=1");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to proceed to checkout");
       setBuyingNow(false);

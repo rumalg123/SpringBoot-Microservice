@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuthSession } from "../../../lib/authSession";
@@ -22,9 +23,12 @@ import {
 
 export default function VendorSettingsPage() {
   const session = useAuthSession();
+  const searchParams = useSearchParams();
 
   /* tabs */
-  const [activeTab, setActiveTab] = useState<Tab>("profile");
+  const tabParam = searchParams.get("tab");
+  const initialTab: Tab = tabParam === "actions" || tabParam === "payout" ? tabParam : "profile";
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
 
   /* vendor profile (local form state) */
   const [vendor, setVendor] = useState<VendorProfile>(EMPTY_VENDOR);

@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import AppNav from "../components/AppNav";
 import Footer from "../components/Footer";
@@ -24,6 +24,8 @@ import EmptyState from "../components/ui/EmptyState";
 
 export default function CartPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const checkoutRef = useRef<HTMLDivElement>(null);
   const session = useAuthSession();
   const {
     status: sessionStatus, isAuthenticated, canViewAdmin,
@@ -66,6 +68,15 @@ export default function CartPage() {
     if (!isAuthenticated) { router.replace("/"); return; }
     void ensureCustomer();
   }, [sessionStatus, isAuthenticated, router, ensureCustomer]);
+
+  // --- Buy Now: scroll to checkout and clean URL ---
+  useEffect(() => {
+    if (searchParams.get("buyNow") && !cartLoading && cart.items.length > 0) {
+      toast.success("Item added — proceed to checkout below");
+      checkoutRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      router.replace("/cart", { scroll: false });
+    }
+  }, [searchParams, cartLoading, cart.items.length, router]);
 
   // --- Update status based on query state ---
   useEffect(() => {
@@ -152,13 +163,13 @@ export default function CartPage() {
   const clearCart = () => {
     if (!apiClient || busy || cart.items.length === 0) return;
     clearCartMut.mutate(undefined, {
-      onSuccess: () => { toast.success("Cart cleared"); },
+      onSuccess: () => { toast.success("Cart cleared"); setPreview(null); setCouponCode(""); setCouponError(""); },
       onError: (err) => { toast.error(err instanceof Error ? err.message : "Failed to clear cart"); },
     });
   };
 
   const loadPreview = () => {
-    if (!apiClient || cart.items.length === 0) return;
+    if (!apiClient || cart.items.length === 0 || !couponCode.trim()) return;
     setCouponError("");
     checkoutPreviewMut.mutate(
       { couponCode: couponCode.trim() || null, shippingAmount: 0 },
@@ -342,6 +353,7 @@ export default function CartPage() {
           </section>
 
           {/* Checkout Panel */}
+          <div ref={checkoutRef}>
           <CheckoutSidebar
             cart={cart}
             preview={preview}
@@ -367,6 +379,7 @@ export default function CartPage() {
             checkingOut={checkingOut}
             onCheckout={() => { void checkout(); }}
           />
+          </div>
         </div>
 
         {/* Saved for Later */}

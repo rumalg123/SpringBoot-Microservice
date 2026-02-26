@@ -19,8 +19,8 @@ export default function VendorsTab({ vendorBoard }: VendorsTabProps) {
         <>
           <div className="mb-5 grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-3">
             <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Total</p><p className="mt-2 text-[1.2rem] font-extrabold text-ink">{num(vendorBoard.summary?.totalVendors)}</p></div>
-            <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Active</p><p className="mt-2 text-[1.2rem] font-extrabold text-[#34d399]">{num(vendorBoard.summary?.activeVendors)}</p></div>
-            <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Pending</p><p className="mt-2 text-[1.2rem] font-extrabold text-[#fbbf24]">{num(vendorBoard.summary?.pendingVendors)}</p></div>
+            <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Active</p><p className="mt-2 text-[1.2rem] font-extrabold text-success">{num(vendorBoard.summary?.activeVendors)}</p></div>
+            <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Pending</p><p className="mt-2 text-[1.2rem] font-extrabold text-warning-text">{num(vendorBoard.summary?.pendingVendors)}</p></div>
             <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Verified</p><p className="mt-2 text-[1.2rem] font-extrabold text-brand">{num(vendorBoard.summary?.verifiedVendors)}</p></div>
           </div>
           <div className="overflow-x-auto">
@@ -39,16 +39,16 @@ export default function VendorsTab({ vendorBoard }: VendorsTabProps) {
               <tbody>
                 {vendorBoard.leaderboard?.length > 0 ? vendorBoard.leaderboard.map((v, i) => (
                   <tr key={v.id}>
-                    <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-ink">{i + 1}</td>
-                    <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 font-semibold text-ink">{v.name}</td>
-                    <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-ink">{num(v.totalOrdersCompleted)}</td>
-                    <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-[#fbbf24]">{(v.averageRating ?? 0).toFixed(1)}</td>
-                    <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-ink">{pct(v.fulfillmentRate)}</td>
-                    <td className={`border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 ${(v.disputeRate ?? 0) > 5 ? "text-[#f87171]" : "text-ink"}`}>{pct(v.disputeRate)}</td>
-                    <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-ink">{v.verified ? "Yes" : "No"}</td>
+                    <td className="border-b border-line px-3 py-2.5 text-ink">{i + 1}</td>
+                    <td className="border-b border-line px-3 py-2.5 font-semibold text-ink">{v.name}</td>
+                    <td className="border-b border-line px-3 py-2.5 text-ink">{num(v.totalOrdersCompleted)}</td>
+                    <td className="border-b border-line px-3 py-2.5 text-warning-text">{(v.averageRating ?? 0).toFixed(1)}</td>
+                    <td className="border-b border-line px-3 py-2.5 text-ink">{pct(v.fulfillmentRate)}</td>
+                    <td className={`border-b border-line px-3 py-2.5 ${(v.disputeRate ?? 0) > 5 ? "text-danger" : "text-ink"}`}>{pct(v.disputeRate)}</td>
+                    <td className="border-b border-line px-3 py-2.5 text-ink">{v.verified ? "Yes" : "No"}</td>
                   </tr>
                 )) : (
-                  <tr><td colSpan={7} className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-center text-muted">No vendor data.</td></tr>
+                  <tr><td colSpan={7} className="border-b border-line px-3 py-2.5 text-center text-muted">No vendor data.</td></tr>
                 )}
               </tbody>
             </table>

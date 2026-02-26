@@ -152,7 +152,7 @@ export default function ProductSearchBar({
               setSuggestions([]);
               setSearchDropdownOpen(true);
             }}
-            className="mr-2 w-[22px] h-[22px] rounded-full border-none bg-white/10 text-[#aaa] text-[0.65rem] cursor-pointer flex items-center justify-center shrink-0"
+            className="mr-2 w-[22px] h-[22px] rounded-full border-none bg-white/10 text-muted text-[0.65rem] cursor-pointer flex items-center justify-center shrink-0"
             aria-label="Clear search"
           >
             ×
@@ -172,12 +172,12 @@ export default function ProductSearchBar({
           id="search-suggestions-listbox"
           role="listbox"
           aria-live="polite"
-          className="absolute left-0 right-0 z-40 mt-1.5 rounded-xl border border-brand/15 bg-[#111128] shadow-[0_16px_48px_rgba(0,0,0,0.7)] overflow-hidden"
+          className="absolute left-0 right-0 z-40 mt-1.5 rounded-xl border border-brand/15 bg-surface shadow-[0_16px_48px_rgba(0,0,0,0.7)] overflow-hidden"
         >
           {/* Empty state: show popular searches */}
           {searchText.trim().length < 1 && popularSearches.length > 0 && (
             <div className="px-4 py-3">
-              <p className="mb-2 text-xs text-[#6868a0] font-semibold uppercase tracking-wide">
+              <p className="mb-2 text-xs text-muted font-semibold uppercase tracking-wide">
                 Popular Searches
               </p>
               <div className="flex flex-wrap gap-1.5">
@@ -187,7 +187,7 @@ export default function ProductSearchBar({
                     type="button"
                     role="option"
                     onClick={() => openSearchResults(term)}
-                    className="px-3 py-[5px] rounded-2xl border border-brand/[0.12] bg-brand/[0.06] text-[#c0c0e0] text-[0.78rem] cursor-pointer"
+                    className="px-3 py-[5px] rounded-2xl border border-brand/[0.12] bg-brand/[0.06] text-ink-light text-[0.78rem] cursor-pointer"
                   >
                     {term}
                   </button>
@@ -197,7 +197,7 @@ export default function ProductSearchBar({
           )}
 
           {searchText.trim().length < 1 && popularSearches.length === 0 && (
-            <p className="px-4 py-3.5 text-sm text-[#6868a0] m-0">
+            <p className="px-4 py-3.5 text-sm text-muted m-0">
               Type to search products...
             </p>
           )}
@@ -211,17 +211,17 @@ export default function ProductSearchBar({
                 className="w-full flex items-center justify-between px-4 py-3 text-left text-base text-white bg-transparent border-none border-b border-brand/[0.08] cursor-pointer font-semibold"
               >
                 <span>Search for &quot;{searchText.trim()}&quot;</span>
-                <span className="text-xs text-[#6868a0]">Enter ↵</span>
+                <span className="text-xs text-muted">Enter ↵</span>
               </button>
 
               {suggestionsLoading && (
-                <p className="px-4 py-3 text-sm text-[#6868a0] m-0">
+                <p className="px-4 py-3 text-sm text-muted m-0">
                   Loading suggestions...
                 </p>
               )}
 
               {!suggestionsLoading && suggestions.length === 0 && searchText.trim().length >= 2 && (
-                <p className="px-4 py-3 text-sm text-[#6868a0] m-0">
+                <p className="px-4 py-3 text-sm text-muted m-0">
                   No matching products.
                 </p>
               )}
@@ -239,10 +239,10 @@ export default function ProductSearchBar({
                           onClick={() => openSearchResults(s.text)}
                           className="flex items-center gap-2.5 w-full border-t border-brand/[0.06] border-l-0 border-r-0 border-b-0 px-4 py-2.5 text-left bg-transparent cursor-pointer transition-colors duration-[120ms] hover:bg-brand/[0.05]"
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6868a0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted">
                             <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
                           </svg>
-                          <span className="text-[0.84rem] text-[#d0d0e8]">{s.text}</span>
+                          <span className="text-[0.84rem] text-ink-light">{s.text}</span>
                         </button>
                       ))}
                     </>
@@ -253,7 +253,7 @@ export default function ProductSearchBar({
                     <>
                       {querySuggestions.length > 0 && (
                         <div className="border-t border-brand/[0.08] px-4 pt-1.5 pb-0.5">
-                          <p className="m-0 text-[0.65rem] text-[#6868a0] font-semibold uppercase tracking-wide">
+                          <p className="m-0 text-[0.65rem] text-muted font-semibold uppercase tracking-wide">
                             Products
                           </p>
                         </div>

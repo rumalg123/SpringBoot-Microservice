@@ -172,7 +172,7 @@ public class SecurityConfig {
                 .cast(JwtAuthenticationToken.class)
                 .map(JwtAuthenticationToken::getToken)
                 .map(jwt -> (AuthorizationResult) new AuthorizationDecision(
-                        isEmailVerified(jwt) && hasRole(jwt, "customer")
+                        isEmailVerified(jwt)
                 ))
                 .defaultIfEmpty(new AuthorizationDecision(false));
     }

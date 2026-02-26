@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import org.springframework.data.domain.PageRequest;
@@ -32,6 +33,7 @@ import static com.rumal.payment_service.entity.RefundStatus.*;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
 public class RefundService {
 
     private final RefundRequestRepository refundRequestRepository;
@@ -45,7 +47,7 @@ public class RefundService {
 
     // ── Create Refund Request ──────────────────────────────────────────
 
-    @Transactional
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public RefundRequestResponse createRefundRequest(String keycloakId, RefundRequestCreateRequest req) {
 
         // 1. Find the latest payment for this order
@@ -99,7 +101,7 @@ public class RefundService {
 
     // ── Vendor Respond ─────────────────────────────────────────────────
 
-    @Transactional
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public RefundRequestResponse vendorRespond(String vendorKeycloakId, UUID vendorId,
                                                 UUID refundId, RefundVendorResponseRequest req) {
 
@@ -144,7 +146,7 @@ public class RefundService {
 
     // ── Admin Finalize ─────────────────────────────────────────────────
 
-    @Transactional
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public RefundRequestResponse adminFinalize(String adminKeycloakId, UUID refundId,
                                                 RefundAdminFinalizeRequest req) {
 
@@ -270,7 +272,7 @@ public class RefundService {
 
     // ── Escalate Expired Refunds (called by scheduler) ─────────────────
 
-    @Transactional
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public void escalateExpiredRefunds() {
         int totalEscalated = 0;
         Page<RefundRequest> page;

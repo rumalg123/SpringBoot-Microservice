@@ -292,6 +292,7 @@ public class OrderService {
         return toResponse(saved);
     }
 
+    @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
     public List<OrderStatusAuditResponse> getStatusHistory(UUID orderId) {
         orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId));
@@ -355,6 +356,7 @@ public class OrderService {
         return toVendorOrderResponse(savedVendorOrder);
     }
 
+    @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
     public List<VendorOrderResponse> getVendorOrders(UUID orderId) {
         orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId));
@@ -363,12 +365,14 @@ public class OrderService {
                 .toList();
     }
 
+    @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
     public VendorOrderResponse getVendorOrder(UUID vendorOrderId) {
         VendorOrder vendorOrder = vendorOrderRepository.findById(vendorOrderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Vendor order not found: " + vendorOrderId));
         return toVendorOrderResponse(vendorOrder);
     }
 
+    @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
     public List<VendorOrderStatusAuditResponse> getVendorOrderStatusHistory(UUID vendorOrderId) {
         vendorOrderRepository.findById(vendorOrderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Vendor order not found: " + vendorOrderId));
@@ -516,6 +520,8 @@ public class OrderService {
             linesByVendor.computeIfAbsent(vendorId, k -> new ArrayList<>()).add(line);
         }
 
+        Map<UUID, String> vendorNames = vendorClient.getVendorNames(new ArrayList<>(linesByVendor.keySet()));
+
         Map<UUID, VendorOrder> vendorOrdersByVendorId = new LinkedHashMap<>();
         BigDecimal totalSubtotal = pricing.subtotal();
         int vendorCount = linesByVendor.size();
@@ -564,6 +570,7 @@ public class OrderService {
             VendorOrder vendorOrder = VendorOrder.builder()
                     .order(order)
                     .vendorId(vendorId)
+                    .vendorName(vendorNames.getOrDefault(vendorId, null))
                     .status(OrderStatus.PENDING)
                     .itemCount(vendorItemCount)
                     .quantity(vendorQuantity)
@@ -1218,6 +1225,7 @@ public class OrderService {
                 vendorOrder.getId(),
                 vendorOrder.getOrder() == null ? null : vendorOrder.getOrder().getId(),
                 vendorOrder.getVendorId(),
+                vendorOrder.getVendorName(),
                 vendorOrder.getStatus() == null ? null : vendorOrder.getStatus().name(),
                 vendorOrder.getItemCount(),
                 vendorOrder.getQuantity(),

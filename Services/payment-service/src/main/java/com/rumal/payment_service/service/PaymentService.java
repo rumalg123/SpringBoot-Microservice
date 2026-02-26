@@ -17,6 +17,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -33,6 +34,7 @@ import static com.rumal.payment_service.entity.PaymentStatus.*;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
 public class PaymentService {
 
     private final PaymentRepository paymentRepository;
@@ -48,7 +50,7 @@ public class PaymentService {
 
     // ── Payment Initiation ─────────────────────────────────────────────
 
-    @Transactional
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public PayHereCheckoutFormData initiatePayment(String keycloakId, UUID orderId) {
 
         // 1. Fetch order
@@ -198,7 +200,7 @@ public class PaymentService {
 
     // ── Webhook Processing ─────────────────────────────────────────────
 
-    @Transactional
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public void processWebhook(String merchantId, String orderId, String paymentId,
                                String payhereAmount, String currency, int statusCode,
                                String md5sig, String method, String cardHolderName,
@@ -367,7 +369,7 @@ public class PaymentService {
 
     // ── Admin Verify ───────────────────────────────────────────────────
 
-    @Transactional
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public PaymentDetailResponse verifyPaymentWithPayHere(UUID paymentId) {
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment not found: " + paymentId));

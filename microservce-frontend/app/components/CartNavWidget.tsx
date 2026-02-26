@@ -82,6 +82,13 @@ export default function CartNavWidget({ apiClient, emailVerified }: Props) {
     return () => window.removeEventListener("cart-updated", handler);
   }, [loadCart]);
 
+  // Re-fetch addresses when profile page emits 'addresses-updated'
+  useEffect(() => {
+    const handler = () => { void loadAddressPresence(); };
+    window.addEventListener("addresses-updated", handler);
+    return () => window.removeEventListener("addresses-updated", handler);
+  }, [loadAddressPresence]);
+
   useEffect(() => {
     if (!open || !apiClient || cart.itemCount <= 0 || emailVerified === false) return;
     const stale = Date.now() - addressesFetchedAt > 30_000;

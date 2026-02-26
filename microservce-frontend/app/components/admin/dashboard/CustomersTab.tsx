@@ -37,7 +37,7 @@ export default function CustomersTab({ customerSeg }: CustomersTabProps) {
             </ResponsiveContainer>
             <div className="grid grid-cols-2 gap-4">
               <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Total</p><p className="mt-2 text-[1.3rem] font-extrabold text-ink">{num(customerSeg.summary.totalCustomers)}</p></div>
-              <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Active</p><p className="mt-2 text-[1.3rem] font-extrabold text-[#34d399]">{num(customerSeg.summary.activeCustomers)}</p></div>
+              <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">Active</p><p className="mt-2 text-[1.3rem] font-extrabold text-success">{num(customerSeg.summary.activeCustomers)}</p></div>
               <div><p className="m-0 text-xs uppercase tracking-[0.08em] text-muted">New This Month</p><p className="mt-2 text-[1.3rem] font-extrabold text-brand">{num(customerSeg.summary.newCustomersThisMonth)}</p></div>
             </div>
           </div>
@@ -55,8 +55,8 @@ export default function CustomersTab({ customerSeg }: CustomersTabProps) {
               <YAxis tick={{ fill: CHART_TEXT, fontSize: 11 }} />
               <Tooltip content={<ChartTooltip />} />
               <Legend wrapperStyle={{ fontSize: "0.78rem" }} />
-              <Line type="monotone" dataKey="newCustomers" name="New Customers" stroke="#34d399" strokeWidth={2} dot={{ r: 3, fill: "#34d399" }} />
-              <Line type="monotone" dataKey="totalActive" name="Total Active" stroke="#00d4ff" strokeWidth={2} dot={{ r: 3, fill: "#00d4ff" }} />
+              <Line type="monotone" dataKey="newCustomers" name="New Customers" stroke={COLORS[2]} strokeWidth={2} dot={{ r: 3, fill: COLORS[2] }} />
+              <Line type="monotone" dataKey="totalActive" name="Total Active" stroke={COLORS[0]} strokeWidth={2} dot={{ r: 3, fill: COLORS[0] }} />
             </LineChart>
           </ResponsiveContainer>
         </div>

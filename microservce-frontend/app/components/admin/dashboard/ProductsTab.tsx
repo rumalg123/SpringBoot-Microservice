@@ -25,7 +25,7 @@ export default function ProductsTab({ topProducts }: ProductsTabProps) {
             onClick={() => setProductTab(t)}
             className={`cursor-pointer rounded-md border-none px-3.5 py-1.5 text-[0.78rem] font-semibold transition-all duration-200 ${
               productTab === t
-                ? "bg-[rgba(0,212,255,0.15)] text-brand"
+                ? "bg-brand/15 text-brand"
                 : "bg-white/[0.04] text-muted"
             }`}
           >
@@ -51,38 +51,38 @@ export default function ProductsTab({ topProducts }: ProductsTabProps) {
             <tbody>
               {productTab === "revenue" && topProducts.byRevenue?.map((p, i) => (
                 <tr key={p.productId}>
-                  <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-ink">{i + 1}</td>
-                  <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-ink">{p.productName || "Unnamed Product"}</td>
-                  <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-ink">{num(p.quantitySold)}</td>
-                  <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-right font-semibold text-brand">{money(p.totalRevenue)}</td>
+                  <td className="border-b border-line px-3 py-2.5 text-ink">{i + 1}</td>
+                  <td className="border-b border-line px-3 py-2.5 text-ink">{p.productName || "Unnamed Product"}</td>
+                  <td className="border-b border-line px-3 py-2.5 text-ink">{num(p.quantitySold)}</td>
+                  <td className="border-b border-line px-3 py-2.5 text-right font-semibold text-brand">{money(p.totalRevenue)}</td>
                 </tr>
               ))}
               {productTab === "views" && topProducts.byViews?.map((p, i) => (
                 <tr key={p.id}>
-                  <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-ink">{i + 1}</td>
-                  <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-ink">{p.name || "Unnamed Product"}</td>
-                  <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-right font-semibold text-ink">{num(p.viewCount)}</td>
+                  <td className="border-b border-line px-3 py-2.5 text-ink">{i + 1}</td>
+                  <td className="border-b border-line px-3 py-2.5 text-ink">{p.name || "Unnamed Product"}</td>
+                  <td className="border-b border-line px-3 py-2.5 text-right font-semibold text-ink">{num(p.viewCount)}</td>
                 </tr>
               ))}
               {productTab === "sold" && topProducts.bySold?.map((p, i) => (
                 <tr key={p.id}>
-                  <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-ink">{i + 1}</td>
-                  <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-ink">{p.name || "Unnamed Product"}</td>
-                  <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-right font-semibold text-ink">{num(p.soldCount)}</td>
+                  <td className="border-b border-line px-3 py-2.5 text-ink">{i + 1}</td>
+                  <td className="border-b border-line px-3 py-2.5 text-ink">{p.name || "Unnamed Product"}</td>
+                  <td className="border-b border-line px-3 py-2.5 text-right font-semibold text-ink">{num(p.soldCount)}</td>
                 </tr>
               ))}
               {productTab === "wishlisted" && topProducts.byWishlisted?.map((p, i) => (
                 <tr key={p.productId}>
-                  <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-ink">{i + 1}</td>
-                  <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-ink">{p.productName || "Unnamed Product"}</td>
-                  <td className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-right font-semibold text-ink">{num(p.wishlistCount)}</td>
+                  <td className="border-b border-line px-3 py-2.5 text-ink">{i + 1}</td>
+                  <td className="border-b border-line px-3 py-2.5 text-ink">{p.productName || "Unnamed Product"}</td>
+                  <td className="border-b border-line px-3 py-2.5 text-right font-semibold text-ink">{num(p.wishlistCount)}</td>
                 </tr>
               ))}
               {((productTab === "revenue" && !topProducts.byRevenue?.length) ||
                 (productTab === "views" && !topProducts.byViews?.length) ||
                 (productTab === "sold" && !topProducts.bySold?.length) ||
                 (productTab === "wishlisted" && !topProducts.byWishlisted?.length)) && (
-                <tr><td colSpan={4} className="border-b border-[rgba(120,120,200,0.06)] px-3 py-2.5 text-center text-muted">No data available.</td></tr>
+                <tr><td colSpan={4} className="border-b border-line px-3 py-2.5 text-center text-muted">No data available.</td></tr>
               )}
             </tbody>
           </table>
