@@ -234,6 +234,12 @@ services:
       - elasticsearch-data:/usr/share/elasticsearch/data
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
 
   customer-service:
     build:
@@ -514,7 +520,8 @@ services:
     depends_on:
       - discovery-server
       - redis
-      - elasticsearch
+      elasticsearch:
+        condition: service_healthy
     env_file:
       - ./env/common.env
       - ./env/search-service.env
