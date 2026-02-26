@@ -147,11 +147,11 @@ export default function AccessAuditPanel({
   const hasNextPage = totalPages > 0 ? page + 1 < totalPages : rows.length >= pageSize;
 
   return (
-    <section className="space-y-3 rounded-2xl p-4" style={{ background: "rgba(255,255,255,0.02)", border: "1px solid var(--line)" }}>
+    <section className="space-y-3 rounded-2xl border border-line bg-[rgba(255,255,255,0.02)] p-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold" style={{ color: "var(--ink)" }}>{title}</h3>
-          <p className="text-xs" style={{ color: "rgba(255,255,255,0.6)" }}>
+          <h3 className="text-sm font-semibold text-ink">{title}</h3>
+          <p className="text-xs text-white/60">
             {targetId ? `Showing latest access changes for ${targetType.toLowerCase().replace("_", " ")}.` : "Select a row to view audit history."}
           </p>
         </div>
@@ -161,15 +161,14 @@ export default function AccessAuditPanel({
       </div>
 
       {targetId && (
-        <div className="grid gap-2 rounded-xl p-3" style={{ border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.015)" }}>
+        <div className="grid gap-2 rounded-xl border border-white/[0.08] bg-white/[0.015] p-3">
           <div className="grid gap-2 md:grid-cols-4">
             <label className="space-y-1 text-xs">
-              <span style={{ color: "rgba(255,255,255,0.6)" }}>Action</span>
+              <span className="text-white/60">Action</span>
               <select
                 value={actionFilter}
                 onChange={(e) => setActionFilter(e.target.value)}
-                className="w-full rounded-lg px-2 py-2"
-                style={{ background: "var(--surface-2)", border: "1px solid var(--line)", color: "var(--ink)" }}
+                className="w-full rounded-lg border border-line bg-surface-2 px-2 py-2 text-ink"
               >
                 {actionOptions.map((option) => (
                   <option key={option} value={option}>{option}</option>
@@ -178,13 +177,12 @@ export default function AccessAuditPanel({
             </label>
 
             <label className="space-y-1 text-xs md:col-span-2">
-              <span style={{ color: "rgba(255,255,255,0.6)" }}>Actor / Reason / Email</span>
+              <span className="text-white/60">Actor / Reason / Email</span>
               <input
                 value={actorQuery}
                 onChange={(e) => setActorQuery(e.target.value)}
                 placeholder="Search actor, reason, email..."
-                className="w-full rounded-lg px-2 py-2"
-                style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--line)", color: "var(--ink)" }}
+                className="w-full rounded-lg border border-line bg-white/[0.03] px-2 py-2 text-ink"
               />
             </label>
 
@@ -207,27 +205,25 @@ export default function AccessAuditPanel({
 
           <div className="grid gap-2 md:grid-cols-3">
             <label className="space-y-1 text-xs">
-              <span style={{ color: "rgba(255,255,255,0.6)" }}>From Date</span>
+              <span className="text-white/60">From Date</span>
               <input
                 type="date"
                 value={fromDate}
                 onChange={(e) => setFromDate(e.target.value)}
-                className="w-full rounded-lg px-2 py-2"
-                style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--line)", color: "var(--ink)" }}
+                className="w-full rounded-lg border border-line bg-white/[0.03] px-2 py-2 text-ink"
               />
             </label>
             <label className="space-y-1 text-xs">
-              <span style={{ color: "rgba(255,255,255,0.6)" }}>To Date</span>
+              <span className="text-white/60">To Date</span>
               <input
                 type="date"
                 value={toDate}
                 onChange={(e) => setToDate(e.target.value)}
-                className="w-full rounded-lg px-2 py-2"
-                style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--line)", color: "var(--ink)" }}
+                className="w-full rounded-lg border border-line bg-white/[0.03] px-2 py-2 text-ink"
               />
             </label>
             <div className="flex items-end">
-              <div className="w-full rounded-lg px-3 py-2 text-xs" style={{ border: "1px solid rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.7)" }}>
+              <div className="w-full rounded-lg border border-white/[0.08] px-3 py-2 text-xs text-white/70">
                 Page {totalPages === 0 ? 0 : page + 1} / {Math.max(totalPages, 1)} • {rows.length} rows • {totalElements} total
               </div>
             </div>
@@ -236,58 +232,58 @@ export default function AccessAuditPanel({
       )}
 
       {!targetId ? (
-        <div className="rounded-xl px-4 py-5 text-sm" style={{ border: "1px dashed var(--line)", color: "rgba(255,255,255,0.65)" }}>
+        <div className="rounded-xl border border-dashed border-line px-4 py-5 text-sm text-white/65">
           Select a staff access row and click `History` to inspect changes.
         </div>
       ) : loading && rows.length === 0 ? (
-        <div className="rounded-xl px-4 py-5 text-sm" style={{ border: "1px dashed var(--line)", color: "rgba(255,255,255,0.65)" }}>
+        <div className="rounded-xl border border-dashed border-line px-4 py-5 text-sm text-white/65">
           Loading audit...
         </div>
       ) : rows.length === 0 ? (
-        <div className="rounded-xl px-4 py-5 text-sm" style={{ border: "1px dashed var(--line)", color: "rgba(255,255,255,0.65)" }}>
+        <div className="rounded-xl border border-dashed border-line px-4 py-5 text-sm text-white/65">
           No audit records found.
         </div>
       ) : rows.length === 0 ? (
-        <div className="rounded-xl px-4 py-5 text-sm" style={{ border: "1px dashed var(--line)", color: "rgba(255,255,255,0.65)" }}>
+        <div className="rounded-xl border border-dashed border-line px-4 py-5 text-sm text-white/65">
           No audit records match the current filters.
         </div>
       ) : (
         <div className="space-y-2">
           {rows.map((row) => (
-            <div key={row.id} className="rounded-xl p-3" style={{ border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.015)" }}>
+            <div key={row.id} className="rounded-xl border border-white/[0.08] bg-white/[0.015] p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ border: "1px solid rgba(0,212,255,0.2)", color: "rgba(0,212,255,0.9)" }}>
+                  <span className="rounded-full border border-[rgba(0,212,255,0.2)] px-2 py-0.5 text-[10px] font-semibold text-[rgba(0,212,255,0.9)]">
                     {row.action}
                   </span>
-                  <span className="text-xs" style={{ color: "rgba(255,255,255,0.65)" }}>
+                  <span className="text-xs text-white/65">
                     {formatDateTime(row.createdAt)}
                   </span>
                 </div>
                 <div className="flex flex-wrap gap-2 text-[11px]">
-                  <span style={{ color: row.activeAfter ? "#86efac" : "#fca5a5" }}>
+                  <span className={row.activeAfter ? "text-[#86efac]" : "text-[#fca5a5]"}>
                     {row.activeAfter ? "Active" : "Inactive"}
                   </span>
-                  <span style={{ color: row.deletedAfter ? "#fde68a" : "rgba(255,255,255,0.55)" }}>
+                  <span className={row.deletedAfter ? "text-[#fde68a]" : "text-white/55"}>
                     {row.deletedAfter ? "Deleted" : "Not Deleted"}
                   </span>
                 </div>
               </div>
 
               <div className="mt-2 grid gap-1 text-xs">
-                <p style={{ color: "rgba(255,255,255,0.7)" }}>
-                  <span style={{ color: "rgba(255,255,255,0.5)" }}>Actor:</span>{" "}
+                <p className="text-white/70">
+                  <span className="text-white/50">Actor:</span>{" "}
                   {row.actorSub || "system"}{" "}
                   {row.actorType ? `(${row.actorType})` : ""}
                 </p>
                 {row.email && (
-                  <p style={{ color: "rgba(255,255,255,0.7)" }}>
-                    <span style={{ color: "rgba(255,255,255,0.5)" }}>Email:</span> {row.email}
+                  <p className="text-white/70">
+                    <span className="text-white/50">Email:</span> {row.email}
                   </p>
                 )}
                 {row.reason && (
-                  <p style={{ color: "rgba(255,255,255,0.8)" }}>
-                    <span style={{ color: "rgba(255,255,255,0.5)" }}>Reason:</span> {row.reason}
+                  <p className="text-white/80">
+                    <span className="text-white/50">Reason:</span> {row.reason}
                   </p>
                 )}
                 {row.permissions && row.permissions.length > 0 && (
@@ -295,8 +291,7 @@ export default function AccessAuditPanel({
                     {row.permissions.map((permission) => (
                       <span
                         key={`${row.id}:${permission}`}
-                        className="rounded-full px-2 py-0.5 text-[10px]"
-                        style={{ border: "1px solid rgba(0,212,255,0.15)", color: "rgba(0,212,255,0.85)" }}
+                        className="rounded-full border border-[rgba(0,212,255,0.15)] px-2 py-0.5 text-[10px] text-[rgba(0,212,255,0.85)]"
                       >
                         {permission}
                       </span>
@@ -306,8 +301,8 @@ export default function AccessAuditPanel({
               </div>
             </div>
           ))}
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl px-3 py-2" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
-            <label className="flex items-center gap-2 text-xs" style={{ color: "rgba(255,255,255,0.7)" }}>
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/[0.08] px-3 py-2">
+            <label className="flex items-center gap-2 text-xs text-white/70">
               <span>Page Size</span>
               <select
                 value={pageSize}
@@ -315,8 +310,7 @@ export default function AccessAuditPanel({
                   setPageSize(Number(e.target.value));
                   setPage(0);
                 }}
-                className="rounded-lg px-2 py-1"
-                style={{ background: "var(--surface-2)", border: "1px solid var(--line)", color: "var(--ink)" }}
+                className="rounded-lg border border-line bg-surface-2 px-2 py-1 text-ink"
               >
                 {[10, 20, 50, 100].map((sizeOpt) => (
                   <option key={sizeOpt} value={sizeOpt}>{sizeOpt}</option>
@@ -327,7 +321,7 @@ export default function AccessAuditPanel({
               <button type="button" className="btn-ghost" disabled={!hasPrevPage || loading} onClick={() => setPage((p) => Math.max(0, p - 1))}>
                 Prev
               </button>
-              <span className="text-xs" style={{ color: "rgba(255,255,255,0.7)" }}>
+              <span className="text-xs text-white/70">
                 {totalPages === 0 ? "No pages" : `Page ${page + 1} of ${totalPages}`}
               </span>
               <button type="button" className="btn-ghost" disabled={!hasNextPage || loading} onClick={() => setPage((p) => p + 1)}>
@@ -340,4 +334,3 @@ export default function AccessAuditPanel({
     </section>
   );
 }
-

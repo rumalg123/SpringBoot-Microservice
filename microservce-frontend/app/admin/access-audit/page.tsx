@@ -174,14 +174,7 @@ export default function AccessAuditPage() {
           { label: "Access Audit" },
         ]}
       >
-        <div
-          style={{
-            padding: "48px 24px",
-            textAlign: "center",
-            fontSize: "0.85rem",
-            color: "var(--muted)",
-          }}
-        >
+        <div className="py-12 px-6 text-center text-base text-muted">
           Loading...
         </div>
       </AdminPageShell>
@@ -197,119 +190,12 @@ export default function AccessAuditPage() {
           { label: "Access Audit" },
         ]}
       >
-        <div
-          style={{
-            padding: "48px 24px",
-            textAlign: "center",
-            fontSize: "0.95rem",
-            color: "#f87171",
-            border: "1px dashed var(--line)",
-            borderRadius: 12,
-            background: "rgba(248,113,113,0.04)",
-          }}
-        >
+        <div className="py-12 px-6 text-center text-base text-[#f87171] border border-dashed border-line rounded-[12px] bg-[rgba(248,113,113,0.04)]">
           Unauthorized — Super Admin access required.
         </div>
       </AdminPageShell>
     );
   }
-
-  /* ───── styles ───── */
-
-  const labelStyle: React.CSSProperties = {
-    fontSize: "0.7rem",
-    fontWeight: 600,
-    color: "var(--muted)",
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-    marginBottom: 4,
-    display: "block",
-  };
-
-  const inputStyle: React.CSSProperties = {
-    padding: "8px 12px",
-    borderRadius: 8,
-    border: "1px solid var(--line)",
-    background: "var(--surface-2)",
-    color: "var(--ink)",
-    fontSize: "0.8rem",
-    outline: "none",
-    width: "100%",
-  };
-
-
-  const clearBtnStyle: React.CSSProperties = {
-    padding: "8px 16px",
-    borderRadius: 8,
-    border: "1px solid rgba(248,113,113,0.25)",
-    background: "rgba(248,113,113,0.08)",
-    color: "#f87171",
-    fontSize: "0.78rem",
-    fontWeight: 600,
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-    opacity: hasActiveFilters ? 1 : 0.4,
-    pointerEvents: hasActiveFilters ? "auto" : "none",
-    transition: "opacity 0.15s ease",
-  };
-
-  const cardStyle: React.CSSProperties = {
-    background: "rgba(255,255,255,0.02)",
-    border: "1px solid var(--line)",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 8,
-  };
-
-  const pillStyle = (bgColor: string, textColor: string): React.CSSProperties => ({
-    display: "inline-flex",
-    alignItems: "center",
-    padding: "3px 10px",
-    borderRadius: 999,
-    fontSize: "0.68rem",
-    fontWeight: 700,
-    letterSpacing: "0.03em",
-    background: bgColor,
-    color: textColor,
-    border: `1px solid ${textColor}25`,
-    whiteSpace: "nowrap",
-  });
-
-  const permPillStyle: React.CSSProperties = {
-    display: "inline-flex",
-    alignItems: "center",
-    padding: "2px 8px",
-    borderRadius: 999,
-    fontSize: "0.65rem",
-    fontWeight: 600,
-    border: "1px solid rgba(0,212,255,0.15)",
-    color: "rgba(0,212,255,0.85)",
-    whiteSpace: "nowrap",
-  };
-
-  const metaStyle: React.CSSProperties = {
-    fontSize: "0.75rem",
-    color: "rgba(255,255,255,0.6)",
-  };
-
-  const metaLabelStyle: React.CSSProperties = {
-    fontSize: "0.7rem",
-    color: "rgba(255,255,255,0.4)",
-    marginRight: 4,
-  };
-
-  const paginationBtnStyle = (disabled: boolean): React.CSSProperties => ({
-    padding: "6px 14px",
-    borderRadius: 8,
-    border: "1px solid var(--line)",
-    background: disabled ? "transparent" : "var(--surface-2)",
-    color: disabled ? "rgba(255,255,255,0.3)" : "var(--ink)",
-    fontSize: "0.78rem",
-    fontWeight: 600,
-    cursor: disabled ? "not-allowed" : "pointer",
-    opacity: disabled ? 0.5 : 1,
-    transition: "opacity 0.15s ease",
-  });
 
   return (
     <AdminPageShell
@@ -320,27 +206,14 @@ export default function AccessAuditPage() {
       ]}
     >
       {/* ─── Filter Bar ─── */}
-      <div
-        style={{
-          background: "var(--surface-2)",
-          border: "1px solid var(--line)",
-          borderRadius: 12,
-          padding: "14px 16px",
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 12,
-          alignItems: "flex-end",
-          marginBottom: 20,
-        }}
-      >
+      <div className="bg-surface-2 border border-line rounded-[12px] py-3.5 px-4 flex flex-wrap gap-3 items-end mb-5">
         {/* Target Type */}
-        <div style={{ flex: "1 1 160px", minWidth: 140 }}>
-          <label style={labelStyle}>Target Type</label>
+        <div className="flex-[1_1_160px] min-w-[140px]">
+          <label className="block text-xs font-semibold text-muted uppercase tracking-[0.05em] mb-1">Target Type</label>
           <select
             value={targetTypeFilter}
             onChange={(e) => setTargetTypeFilter(e.target.value)}
-            className="filter-select"
-            style={{ width: "100%" }}
+            className="filter-select w-full"
           >
             <option value="ALL">All</option>
             <option value="PLATFORM_STAFF">PLATFORM_STAFF</option>
@@ -349,13 +222,12 @@ export default function AccessAuditPage() {
         </div>
 
         {/* Action */}
-        <div style={{ flex: "1 1 160px", minWidth: 140 }}>
-          <label style={labelStyle}>Action</label>
+        <div className="flex-[1_1_160px] min-w-[140px]">
+          <label className="block text-xs font-semibold text-muted uppercase tracking-[0.05em] mb-1">Action</label>
           <select
             value={actionFilter}
             onChange={(e) => setActionFilter(e.target.value)}
-            className="filter-select"
-            style={{ width: "100%" }}
+            className="filter-select w-full"
           >
             <option value="ALL">All</option>
             <option value="CREATED">CREATED</option>
@@ -366,9 +238,9 @@ export default function AccessAuditPage() {
         </div>
 
         {/* Actor/Email Search */}
-        <div style={{ flex: "2 1 220px", minWidth: 180 }}>
-          <label style={labelStyle}>Actor / Email Search</label>
-          <div style={{ position: "relative" }}>
+        <div className="flex-[2_1_220px] min-w-[180px]">
+          <label className="block text-xs font-semibold text-muted uppercase tracking-[0.05em] mb-1">Actor / Email Search</label>
+          <div className="relative">
             <svg
               width="14"
               height="14"
@@ -378,13 +250,7 @@ export default function AccessAuditPage() {
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
-              style={{
-                position: "absolute",
-                left: 10,
-                top: "50%",
-                transform: "translateY(-50%)",
-                pointerEvents: "none",
-              }}
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
             >
               <circle cx="11" cy="11" r="8" />
               <line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -394,38 +260,38 @@ export default function AccessAuditPage() {
               placeholder="Search actor, email, reason..."
               value={actorQuery}
               onChange={(e) => setActorQuery(e.target.value)}
-              style={{ ...inputStyle, paddingLeft: 32 }}
+              className="w-full py-2 pr-3 pl-8 rounded-[8px] border border-line bg-surface-2 text-ink text-sm outline-none"
             />
           </div>
         </div>
 
         {/* Date From */}
-        <div style={{ flex: "1 1 150px", minWidth: 130 }}>
-          <label style={labelStyle}>Date From</label>
+        <div className="flex-[1_1_150px] min-w-[130px]">
+          <label className="block text-xs font-semibold text-muted uppercase tracking-[0.05em] mb-1">Date From</label>
           <input
             type="date"
             value={fromDate}
             onChange={(e) => setFromDate(e.target.value)}
-            style={inputStyle}
+            className="w-full py-2 px-3 rounded-[8px] border border-line bg-surface-2 text-ink text-sm outline-none"
           />
         </div>
 
         {/* Date To */}
-        <div style={{ flex: "1 1 150px", minWidth: 130 }}>
-          <label style={labelStyle}>Date To</label>
+        <div className="flex-[1_1_150px] min-w-[130px]">
+          <label className="block text-xs font-semibold text-muted uppercase tracking-[0.05em] mb-1">Date To</label>
           <input
             type="date"
             value={toDate}
             onChange={(e) => setToDate(e.target.value)}
-            style={inputStyle}
+            className="w-full py-2 px-3 rounded-[8px] border border-line bg-surface-2 text-ink text-sm outline-none"
           />
         </div>
 
         {/* Clear All */}
-        <div style={{ flex: "0 0 auto" }}>
+        <div className="flex-[0_0_auto]">
           <button
             type="button"
-            style={clearBtnStyle}
+            className={`py-2 px-4 rounded-[8px] border border-[rgba(248,113,113,0.25)] bg-[rgba(248,113,113,0.08)] text-[#f87171] text-[0.78rem] font-semibold cursor-pointer whitespace-nowrap transition-opacity duration-150 ${hasActiveFilters ? "opacity-100" : "opacity-40 pointer-events-none"}`}
             onClick={() => {
               setTargetTypeFilter("ALL");
               setActionFilter("ALL");
@@ -440,16 +306,8 @@ export default function AccessAuditPage() {
       </div>
 
       {/* ─── Summary bar ─── */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 12,
-          padding: "0 2px",
-        }}
-      >
-        <span style={{ fontSize: "0.78rem", color: "var(--muted)" }}>
+      <div className="flex justify-between items-center mb-3 px-0.5">
+        <span className="text-[0.78rem] text-muted">
           {loading
             ? "Loading..."
             : `${totalElements} record${totalElements !== 1 ? "s" : ""} found`}
@@ -458,17 +316,7 @@ export default function AccessAuditPage() {
           type="button"
           onClick={() => void load()}
           disabled={loading}
-          style={{
-            padding: "5px 12px",
-            borderRadius: 8,
-            border: "1px solid var(--line)",
-            background: "var(--surface-2)",
-            color: "var(--ink)",
-            fontSize: "0.75rem",
-            fontWeight: 600,
-            cursor: loading ? "not-allowed" : "pointer",
-            opacity: loading ? 0.5 : 1,
-          }}
+          className={`py-1.5 px-3 rounded-[8px] border border-line bg-surface-2 text-ink text-[0.75rem] font-semibold ${loading ? "cursor-not-allowed opacity-50" : "cursor-pointer opacity-100"}`}
         >
           {loading ? "Refreshing..." : "Refresh"}
         </button>
@@ -476,75 +324,44 @@ export default function AccessAuditPage() {
 
       {/* ─── Rows ─── */}
       {loading && rows.length === 0 ? (
-        <div
-          style={{
-            padding: "48px 24px",
-            textAlign: "center",
-            fontSize: "0.85rem",
-            color: "var(--muted)",
-            border: "1px dashed var(--line)",
-            borderRadius: 12,
-          }}
-        >
+        <div className="py-12 px-6 text-center text-base text-muted border border-dashed border-line rounded-[12px]">
           Loading audit records...
         </div>
       ) : rows.length === 0 ? (
-        <div
-          style={{
-            padding: "48px 24px",
-            textAlign: "center",
-            fontSize: "0.85rem",
-            color: "var(--muted)",
-            border: "1px dashed var(--line)",
-            borderRadius: 12,
-          }}
-        >
+        <div className="py-12 px-6 text-center text-base text-muted border border-dashed border-line rounded-[12px]">
           No audit records found.
         </div>
       ) : (
         <div>
           {rows.map((row) => (
-            <div key={row.id} style={cardStyle}>
+            <div key={row.id} className="bg-[rgba(255,255,255,0.02)] border border-line rounded-[12px] p-4 mb-2">
               {/* Top row: action badge, timestamp, status indicators */}
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 8,
-                  marginBottom: 10,
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span
-                    style={pillStyle(
-                      actionBadgeBg(row.action),
-                      actionBadgeColor(row.action)
-                    )}
+                    className="inline-flex items-center py-[3px] px-2.5 rounded-full text-[0.68rem] font-bold tracking-[0.03em] whitespace-nowrap"
+                    style={{
+                      background: actionBadgeBg(row.action),
+                      color: actionBadgeColor(row.action),
+                      border: `1px solid ${actionBadgeColor(row.action)}25`,
+                    }}
                   >
                     {row.action}
                   </span>
-                  <span style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.5)" }}>
+                  <span className="text-[0.75rem] text-[rgba(255,255,255,0.5)]">
                     {formatDateTime(row.createdAt)}
                   </span>
                 </div>
-                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <div className="flex gap-2.5 items-center">
                   <span
-                    style={{
-                      fontSize: "0.7rem",
-                      fontWeight: 600,
-                      color: row.activeAfter ? "#86efac" : "#fca5a5",
-                    }}
+                    className="text-xs font-semibold"
+                    style={{ color: row.activeAfter ? "#86efac" : "#fca5a5" }}
                   >
                     {row.activeAfter ? "Active" : "Inactive"}
                   </span>
                   <span
-                    style={{
-                      fontSize: "0.7rem",
-                      fontWeight: 600,
-                      color: row.deletedAfter ? "#fde68a" : "rgba(255,255,255,0.4)",
-                    }}
+                    className="text-xs font-semibold"
+                    style={{ color: row.deletedAfter ? "#fde68a" : "rgba(255,255,255,0.4)" }}
                   >
                     {row.deletedAfter ? "Deleted" : "Not Deleted"}
                   </span>
@@ -553,45 +370,41 @@ export default function AccessAuditPage() {
 
               {/* Second row: target type, email, actor info */}
               <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: "6px 16px",
-                  marginBottom: row.permissions && row.permissions.length > 0 ? 10 : 0,
-                }}
+                className="flex flex-wrap gap-x-4 gap-y-1.5"
+                style={{ marginBottom: row.permissions && row.permissions.length > 0 ? 10 : 0 }}
               >
-                <span style={metaStyle}>
-                  <span style={metaLabelStyle}>Type:</span>
+                <span className="text-[0.75rem] text-[rgba(255,255,255,0.6)]">
+                  <span className="text-xs text-[rgba(255,255,255,0.4)] mr-1">Type:</span>
                   {row.targetType}
                 </span>
                 {row.email && (
-                  <span style={metaStyle}>
-                    <span style={metaLabelStyle}>Email:</span>
+                  <span className="text-[0.75rem] text-[rgba(255,255,255,0.6)]">
+                    <span className="text-xs text-[rgba(255,255,255,0.4)] mr-1">Email:</span>
                     {row.email}
                   </span>
                 )}
-                <span style={metaStyle}>
-                  <span style={metaLabelStyle}>Actor:</span>
+                <span className="text-[0.75rem] text-[rgba(255,255,255,0.6)]">
+                  <span className="text-xs text-[rgba(255,255,255,0.4)] mr-1">Actor:</span>
                   {row.actorSub || "system"}
                   {row.actorType ? ` (${row.actorType})` : ""}
                 </span>
                 {row.changeSource && (
-                  <span style={metaStyle}>
-                    <span style={metaLabelStyle}>Source:</span>
+                  <span className="text-[0.75rem] text-[rgba(255,255,255,0.6)]">
+                    <span className="text-xs text-[rgba(255,255,255,0.4)] mr-1">Source:</span>
                     {row.changeSource}
                   </span>
                 )}
                 {row.vendorId && (
-                  <span style={metaStyle}>
-                    <span style={metaLabelStyle}>Vendor:</span>
-                    <span style={{ fontFamily: "monospace", fontSize: "0.7rem" }}>
+                  <span className="text-[0.75rem] text-[rgba(255,255,255,0.6)]">
+                    <span className="text-xs text-[rgba(255,255,255,0.4)] mr-1">Vendor:</span>
+                    <span className="font-mono text-xs">
                       {row.vendorId}
                     </span>
                   </span>
                 )}
                 {row.reason && (
-                  <span style={{ ...metaStyle, color: "rgba(255,255,255,0.75)" }}>
-                    <span style={metaLabelStyle}>Reason:</span>
+                  <span className="text-[0.75rem] text-[rgba(255,255,255,0.75)]">
+                    <span className="text-xs text-[rgba(255,255,255,0.4)] mr-1">Reason:</span>
                     {row.reason}
                   </span>
                 )}
@@ -599,9 +412,9 @@ export default function AccessAuditPage() {
 
               {/* Third row: permissions */}
               {row.permissions && row.permissions.length > 0 && (
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                <div className="flex flex-wrap gap-1.5">
                   {row.permissions.map((perm) => (
-                    <span key={`${row.id}:${perm}`} style={permPillStyle}>
+                    <span key={`${row.id}:${perm}`} className="inline-flex items-center py-0.5 px-2 rounded-full text-[0.65rem] font-semibold border border-[rgba(0,212,255,0.15)] text-[rgba(0,212,255,0.85)] whitespace-nowrap">
                       {perm}
                     </span>
                   ))}
@@ -611,23 +424,10 @@ export default function AccessAuditPage() {
           ))}
 
           {/* ─── Pagination ─── */}
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 12,
-              marginTop: 16,
-              padding: "12px 16px",
-              background: "rgba(255,255,255,0.02)",
-              border: "1px solid var(--line)",
-              borderRadius: 12,
-            }}
-          >
+          <div className="flex flex-wrap items-center justify-between gap-3 mt-4 py-3 px-4 bg-[rgba(255,255,255,0.02)] border border-line rounded-[12px]">
             {/* Page size selector */}
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: "0.75rem", color: "var(--muted)" }}>
+            <div className="flex items-center gap-2">
+              <span className="text-[0.75rem] text-muted">
                 Page Size
               </span>
               <select
@@ -646,16 +446,16 @@ export default function AccessAuditPage() {
             </div>
 
             {/* Page info and navigation */}
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 disabled={!hasPrevPage || loading}
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
-                style={paginationBtnStyle(!hasPrevPage || loading)}
+                className={`py-1.5 px-3.5 rounded-[8px] border border-line text-[0.78rem] font-semibold transition-opacity duration-150 ${!hasPrevPage || loading ? "bg-transparent text-[rgba(255,255,255,0.3)] cursor-not-allowed opacity-50" : "bg-surface-2 text-ink cursor-pointer opacity-100"}`}
               >
                 Prev
               </button>
-              <span style={{ fontSize: "0.78rem", color: "var(--muted)", whiteSpace: "nowrap" }}>
+              <span className="text-[0.78rem] text-muted whitespace-nowrap">
                 {totalPages === 0
                   ? "No pages"
                   : `Page ${page + 1} of ${totalPages}`}
@@ -664,7 +464,7 @@ export default function AccessAuditPage() {
                 type="button"
                 disabled={!hasNextPage || loading}
                 onClick={() => setPage((p) => p + 1)}
-                style={paginationBtnStyle(!hasNextPage || loading)}
+                className={`py-1.5 px-3.5 rounded-[8px] border border-line text-[0.78rem] font-semibold transition-opacity duration-150 ${!hasNextPage || loading ? "bg-transparent text-[rgba(255,255,255,0.3)] cursor-not-allowed opacity-50" : "bg-surface-2 text-ink cursor-pointer opacity-100"}`}
               >
                 Next
               </button>

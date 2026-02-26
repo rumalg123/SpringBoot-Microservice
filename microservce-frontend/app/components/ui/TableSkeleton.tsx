@@ -1,22 +1,22 @@
 export default function TableSkeleton({ rows = 5, cols = 4 }: { rows?: number; cols?: number }) {
   return (
-    <div style={{ borderRadius: "14px", overflow: "hidden", border: "1px solid var(--line-bright)" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+    <div className="rounded-[14px] overflow-hidden border border-line-bright">
+      <table className="w-full border-collapse">
         <thead>
-          <tr style={{ background: "var(--card)" }}>
+          <tr className="bg-[var(--card)]">
             {Array.from({ length: cols }, (_, i) => (
-              <th key={i} style={{ padding: "12px 14px" }}>
-                <div className="skeleton" style={{ height: "10px", width: "60%" }} />
+              <th key={i} className="py-3 px-3.5">
+                <div className="skeleton h-2.5 w-[60%]" />
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
           {Array.from({ length: rows }, (_, r) => (
-            <tr key={r} style={{ borderTop: "1px solid var(--line-bright)" }}>
+            <tr key={r} className="border-t border-line-bright">
               {Array.from({ length: cols }, (_, c) => (
-                <td key={c} style={{ padding: "14px" }}>
-                  <div className="skeleton" style={{ height: "12px", width: c === 0 ? "80%" : "50%" }} />
+                <td key={c} className="p-3.5">
+                  <div className={`skeleton h-3 ${c === 0 ? "w-[80%]" : "w-[50%]"}`} />
                 </td>
               ))}
             </tr>

@@ -91,9 +91,9 @@ export default function CategoryMenu() {
   const activeSubs = activeParent ? (subsByParent.get(activeParent.id) || []) : [];
 
   return (
-    <nav style={{ marginBottom: "16px" }}>
+    <nav className="mb-4">
       <div
-        style={{ position: "relative", display: "inline-block" }}
+        className="relative inline-block"
         onMouseEnter={openMenu}
         onMouseLeave={scheduleClose}
       >
@@ -101,15 +101,11 @@ export default function CategoryMenu() {
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
+          aria-haspopup="true"
           aria-expanded={open}
           aria-label="Browse all categories"
-          style={{
-            display: "inline-flex", alignItems: "center", gap: "8px",
-            padding: "9px 16px", borderRadius: "10px", border: "1px solid rgba(0,212,255,0.2)",
-            background: "linear-gradient(135deg, #00d4ff, #7c3aed)",
-            color: "#fff", fontSize: "0.82rem", fontWeight: 700, cursor: "pointer",
-            boxShadow: "0 0 16px rgba(0,212,255,0.2)", transition: "all 0.2s",
-          }}
+          className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-[rgba(0,212,255,0.2)] px-4 py-[9px] text-[0.82rem] font-bold text-white shadow-[0_0_16px_rgba(0,212,255,0.2)] transition-all duration-200"
+          style={{ background: "linear-gradient(135deg, #00d4ff, #7c3aed)" }}
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
@@ -122,7 +118,7 @@ export default function CategoryMenu() {
           <div
             onMouseEnter={openMenu}
             onMouseLeave={scheduleClose}
-            style={{ position: "absolute", top: "100%", left: 0, right: 0, height: "10px", zIndex: 49 }}
+            className="absolute left-0 right-0 top-full z-[49] h-[10px]"
           />
         )}
 
@@ -130,11 +126,11 @@ export default function CategoryMenu() {
         {open && (
           <div role="menu" style={dropdownStyle} onMouseEnter={openMenu} onMouseLeave={scheduleClose}>
             {/* Header */}
-            <div style={{ padding: "12px 14px", borderBottom: "1px solid rgba(0,212,255,0.08)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <p style={{ fontSize: "0.65rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.12em", color: "var(--muted)", margin: 0 }}>Browse Categories</p>
+            <div className="flex items-center justify-between border-b border-[rgba(0,212,255,0.08)] px-3.5 py-3">
+              <p className="m-0 text-[0.65rem] font-extrabold uppercase tracking-[0.12em] text-muted">Browse Categories</p>
               <Link
                 href="/products"
-                style={{ fontSize: "0.72rem", fontWeight: 700, color: "#00d4ff", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                className="inline-flex items-center gap-1 text-[0.72rem] font-bold text-[#00d4ff] no-underline"
               >
                 View All Products
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -144,9 +140,9 @@ export default function CategoryMenu() {
             </div>
 
             {/* Body: Parent List | Sub Grid */}
-            <div style={{ display: "grid", gridTemplateColumns: "220px 1fr" }}>
+            <div className="grid grid-cols-[220px_1fr]">
               {/* Parent list */}
-              <div style={{ borderRight: "1px solid rgba(0,212,255,0.08)", padding: "8px", maxHeight: "360px", overflowY: "auto" }}>
+              <div className="max-h-[360px] overflow-y-auto border-r border-[rgba(0,212,255,0.08)] p-2">
                 {parents.map((parent) => {
                   const isActive = activeParent?.id === parent.id;
                   const childCount = (subsByParent.get(parent.id) || []).length;
@@ -156,32 +152,30 @@ export default function CategoryMenu() {
                       role="menuitem"
                       href={`/categories/${encodeURIComponent(toCategorySlug(parent))}`}
                       onMouseEnter={() => setActiveParentId(parent.id)}
+                      className="mb-0.5 flex items-center justify-between rounded-[8px] px-3 py-2 text-[0.82rem] no-underline transition-all duration-150"
                       style={{
-                        display: "flex", alignItems: "center", justifyContent: "space-between",
-                        padding: "8px 12px", borderRadius: "8px", marginBottom: "2px",
-                        textDecoration: "none", fontSize: "0.82rem", transition: "all 0.15s",
                         background: isActive ? "rgba(0,212,255,0.08)" : "transparent",
                         color: isActive ? "#00d4ff" : "#c8c8e8",
                         border: isActive ? "1px solid rgba(0,212,255,0.15)" : "1px solid transparent",
                       }}
                     >
-                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{parent.name}</span>
-                      <span style={{ fontSize: "0.65rem", color: "var(--muted)", flexShrink: 0, marginLeft: "8px" }}>{childCount}</span>
+                      <span className="overflow-hidden text-ellipsis whitespace-nowrap">{parent.name}</span>
+                      <span className="ml-2 shrink-0 text-[0.65rem] text-muted">{childCount}</span>
                     </Link>
                   );
                 })}
               </div>
 
               {/* Sub grid */}
-              <div style={{ padding: "12px", maxHeight: "360px", overflowY: "auto" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
-                  <p style={{ fontSize: "0.65rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--muted)", margin: 0 }}>
+              <div className="max-h-[360px] overflow-y-auto p-3">
+                <div className="mb-2.5 flex items-center justify-between">
+                  <p className="m-0 text-[0.65rem] font-extrabold uppercase tracking-[0.1em] text-muted">
                     {activeParent?.name || "Subcategories"}
                   </p>
                   {activeParent && (
                     <Link
                       href={`/categories/${encodeURIComponent(toCategorySlug(activeParent))}`}
-                      style={{ fontSize: "0.72rem", fontWeight: 700, color: "#00d4ff", textDecoration: "none" }}
+                      className="text-[0.72rem] font-bold text-[#00d4ff] no-underline"
                     >
                       Open →
                     </Link>
@@ -189,35 +183,19 @@ export default function CategoryMenu() {
                 </div>
 
                 {activeSubs.length === 0 && (
-                  <p style={{ padding: "10px 12px", borderRadius: "8px", background: "rgba(0,212,255,0.03)", fontSize: "0.8rem", color: "var(--muted)", margin: 0 }}>
+                  <p className="m-0 rounded-[8px] bg-[rgba(0,212,255,0.03)] px-3 py-2.5 text-sm text-muted">
                     No subcategories
                   </p>
                 )}
 
                 {activeSubs.length > 0 && (
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                  <div className="grid grid-cols-2 gap-1.5">
                     {activeSubs.map((sub) => (
                       <Link
                         key={sub.id}
+                        role="menuitem"
                         href={`/categories/${encodeURIComponent(toCategorySlug(sub))}`}
-                        style={{
-                          padding: "8px 12px", borderRadius: "8px",
-                          border: "1px solid rgba(0,212,255,0.08)",
-                          background: "rgba(0,212,255,0.02)",
-                          fontSize: "0.8rem", color: "#c8c8e8",
-                          textDecoration: "none", transition: "all 0.15s",
-                          display: "block",
-                        }}
-                        onMouseEnter={(e) => {
-                          (e.currentTarget as HTMLElement).style.borderColor = "rgba(0,212,255,0.3)";
-                          (e.currentTarget as HTMLElement).style.color = "#00d4ff";
-                          (e.currentTarget as HTMLElement).style.background = "rgba(0,212,255,0.06)";
-                        }}
-                        onMouseLeave={(e) => {
-                          (e.currentTarget as HTMLElement).style.borderColor = "rgba(0,212,255,0.08)";
-                          (e.currentTarget as HTMLElement).style.color = "#c8c8e8";
-                          (e.currentTarget as HTMLElement).style.background = "rgba(0,212,255,0.02)";
-                        }}
+                        className="block rounded-[8px] border border-[rgba(0,212,255,0.08)] bg-[rgba(0,212,255,0.02)] px-3 py-2 text-sm text-[#c8c8e8] no-underline transition-all duration-150 hover:border-[rgba(0,212,255,0.3)] hover:bg-[rgba(0,212,255,0.06)] hover:text-[#00d4ff]"
                       >
                         {sub.name}
                       </Link>

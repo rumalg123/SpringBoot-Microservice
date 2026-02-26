@@ -10,17 +10,6 @@ type Props = {
   onCancel: () => void;
 };
 
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "9px 12px",
-  borderRadius: 10,
-  border: "1px solid var(--line)",
-  background: "var(--surface-2)",
-  color: "var(--ink)",
-  fontSize: "0.82rem",
-  outline: "none",
-};
-
 export default function StockAdjustModal({ open, itemLabel, loading, onConfirm, onCancel }: Props) {
   const [qty, setQty] = useState<number | "">(0);
   const [reason, setReason] = useState("");
@@ -44,36 +33,36 @@ export default function StockAdjustModal({ open, itemLabel, loading, onConfirm, 
     <div className="confirm-modal-overlay" onClick={handleCancel}>
       <div className="confirm-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
         <h3 className="confirm-modal-title">Adjust Stock</h3>
-        <p className="confirm-modal-message" style={{ marginBottom: 16 }}>
+        <p className="confirm-modal-message mb-4">
           Adjusting stock for <strong>{itemLabel}</strong>
         </p>
 
-        <div style={{ marginBottom: 14 }}>
-          <label style={{ display: "block", marginBottom: 5, fontSize: "0.78rem", fontWeight: 600, color: "var(--ink-light)" }}>
-            Quantity Change <span style={{ color: "var(--danger)" }}>*</span>
+        <div className="mb-3.5">
+          <label className="block mb-[5px] text-[0.78rem] font-semibold text-ink-light">
+            Quantity Change <span className="text-danger">*</span>
           </label>
           <input
             type="number"
             value={qty}
             onChange={(e) => setQty(e.target.value === "" ? "" : Number(e.target.value))}
-            style={inputStyle}
+            className="form-input w-full"
             placeholder="Positive to add, negative to subtract"
             autoFocus
           />
-          <p style={{ marginTop: 4, fontSize: "0.72rem", color: "var(--muted)" }}>
+          <p className="mt-1 text-xs text-muted">
             Use positive values to add stock, negative to remove
           </p>
         </div>
 
-        <div style={{ marginBottom: 14 }}>
-          <label style={{ display: "block", marginBottom: 5, fontSize: "0.78rem", fontWeight: 600, color: "var(--ink-light)" }}>
-            Reason <span style={{ color: "var(--danger)" }}>*</span>
+        <div className="mb-3.5">
+          <label className="block mb-[5px] text-[0.78rem] font-semibold text-ink-light">
+            Reason <span className="text-danger">*</span>
           </label>
           <textarea
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             rows={3}
-            style={{ ...inputStyle, resize: "vertical" }}
+            className="form-input w-full resize-y"
             placeholder="Reason for this adjustment (required for audit trail)"
           />
         </div>

@@ -19,14 +19,6 @@ type Props = {
   vendorId?: string;
 };
 
-const cardStyle: React.CSSProperties = {
-  background: "rgba(255,255,255,0.03)",
-  border: "1px solid var(--line)",
-  borderRadius: 16,
-  padding: 24,
-  marginBottom: 20,
-};
-
 export default function StockTab({ apiClient, apiPrefix, isAdmin = false, vendorId }: Props) {
   const [items, setItems] = useState<StockItem[]>([]);
   const [page, setPage] = useState(0);
@@ -189,17 +181,17 @@ export default function StockTab({ apiClient, apiPrefix, isAdmin = false, vendor
     { key: "sku", header: "SKU", render: (v) => String(v || "-"), width: "12%" },
     { key: "productId", header: "Product", render: (v) => {
       const s = String(v || "");
-      return <span title={s} style={{ fontSize: "0.75rem", fontFamily: "monospace" }}>{s.slice(0, 8)}...</span>;
+      return <span title={s} className="text-[0.75rem] font-mono">{s.slice(0, 8)}...</span>;
     }},
     { key: "warehouseName", header: "Warehouse" },
-    { key: "quantityOnHand", header: "On Hand", width: "8%", render: (v) => <span style={{ fontWeight: 700 }}>{String(v)}</span> },
+    { key: "quantityOnHand", header: "On Hand", width: "8%", render: (v) => <span className="font-bold">{String(v)}</span> },
     { key: "quantityReserved", header: "Reserved", width: "8%", render: (v) => String(v) },
     { key: "quantityAvailable", header: "Available", width: "8%", render: (v, row) => {
       const item = row as unknown as StockItem;
       const avail = item.quantityAvailable;
       const threshold = item.lowStockThreshold;
       const color = avail <= 0 ? "var(--danger)" : avail <= threshold ? "var(--warning-text)" : "var(--success)";
-      return <span style={{ fontWeight: 700, color }}>{avail}</span>;
+      return <span className="font-bold" style={{ color }}>{avail}</span>;
     }},
     { key: "stockStatus", header: "Status", render: (v) => <StatusBadge value={String(v)} colorMap={STOCK_STATUS_COLORS} /> },
     { key: "backorderable", header: "Backorder", width: "7%", render: (v) => v ? "Yes" : "No" },
@@ -207,7 +199,7 @@ export default function StockTab({ apiClient, apiPrefix, isAdmin = false, vendor
 
   if (showForm) {
     return (
-      <div style={cardStyle}>
+      <div className="bg-[rgba(255,255,255,0.03)] border border-line rounded-lg p-6 mb-5">
         <StockItemForm
           form={form}
           onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
@@ -223,19 +215,18 @@ export default function StockTab({ apiClient, apiPrefix, isAdmin = false, vendor
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+      <div className="flex justify-end gap-2 mb-3 flex-wrap">
         <button
           type="button"
-          className={lowStockOnly ? "btn-primary" : "btn-ghost"}
-          style={{ fontSize: "0.78rem", padding: "7px 14px" }}
+          className={`${lowStockOnly ? "btn-primary" : "btn-ghost"} text-[0.78rem] px-3.5 py-[7px]`}
           onClick={() => setLowStockOnly((v) => !v)}
         >
           {lowStockOnly ? "Show All Stock" : "Low Stock Only"}
         </button>
-        <button type="button" className="btn-ghost" style={{ fontSize: "0.78rem", padding: "7px 14px" }} onClick={() => setShowBulkImport(true)}>
+        <button type="button" className="btn-ghost text-[0.78rem] px-3.5 py-[7px]" onClick={() => setShowBulkImport(true)}>
           Bulk Import
         </button>
-        <button type="button" className="btn-primary" style={{ fontSize: "0.82rem", padding: "8px 18px" }} onClick={() => { setForm({ ...EMPTY_STOCK_FORM, vendorId: vendorId || "" }); setShowForm(true); }}>
+        <button type="button" className="btn-primary text-[0.82rem] px-4.5 py-2" onClick={() => { setForm({ ...EMPTY_STOCK_FORM, vendorId: vendorId || "" }); setShowForm(true); }}>
           + Add Stock
         </button>
       </div>
@@ -263,8 +254,8 @@ export default function StockTab({ apiClient, apiPrefix, isAdmin = false, vendor
           const item = row as unknown as StockItem;
           return (
             <>
-              <button type="button" className="btn-ghost" style={{ fontSize: "0.75rem", padding: "4px 10px" }} onClick={() => handleEdit(item)}>Edit</button>
-              <button type="button" className="btn-ghost" style={{ fontSize: "0.75rem", padding: "4px 10px", color: "var(--accent)" }} onClick={() => setAdjustTarget(item)}>Adjust</button>
+              <button type="button" className="btn-ghost text-[0.75rem] px-2.5 py-1" onClick={() => handleEdit(item)}>Edit</button>
+              <button type="button" className="btn-ghost text-[0.75rem] px-2.5 py-1 text-accent" onClick={() => setAdjustTarget(item)}>Adjust</button>
             </>
           );
         }}

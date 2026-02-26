@@ -1,21 +1,14 @@
 "use client";
 
-import Link from "next/link";
 import Pagination from "../../components/Pagination";
 import ExportButton from "../../components/ui/ExportButton";
+import AdminPageShell from "../../components/ui/AdminPageShell";
 import OrderBulkActionsBar from "../../components/admin/orders/OrderBulkActionsBar";
 import OrderFiltersBar from "../../components/admin/orders/OrderFiltersBar";
 import OrdersTable from "../../components/admin/orders/OrdersTable";
 import StatusHistoryPanel from "../../components/admin/orders/StatusHistoryPanel";
 import VendorOrdersPanel from "../../components/admin/orders/VendorOrdersPanel";
 import useAdminOrders from "../../components/admin/orders/useAdminOrders";
-
-const glassCard: React.CSSProperties = {
-  background: "rgba(17,17,40,0.7)",
-  backdropFilter: "blur(16px)",
-  border: "1px solid rgba(0,212,255,0.1)",
-  borderRadius: "16px",
-};
 
 export default function AdminOrdersPage() {
   const vm = useAdminOrders();
@@ -94,48 +87,38 @@ export default function AdminOrdersPage() {
 
   if (session.status === "loading" || session.status === "idle") {
     return (
-      <div style={{ minHeight: "100vh", background: "var(--bg)", display: "grid", placeItems: "center" }}>
-        <div style={{ textAlign: "center" }}>
+      <div className="min-h-screen bg-bg grid place-items-center">
+        <div className="text-center">
           <div className="spinner-lg" />
-          <p style={{ marginTop: "16px", color: "var(--muted)", fontSize: "0.875rem" }}>Loading...</p>
+          <p className="mt-4 text-muted text-base">Loading...</p>
         </div>
       </div>
     );
   }
   return (
-    <main className="mx-auto max-w-7xl px-4 py-4">
-        <nav className="breadcrumb">
-          <Link href="/">Home</Link>
-          <span className="breadcrumb-sep">{">"}</span>
-          <Link href="/admin/products">Admin</Link>
-          <span className="breadcrumb-sep">{">"}</span>
-          <span className="breadcrumb-current">Orders</span>
-        </nav>
-
-        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: "#00d4ff", margin: "0 0 4px" }}>ADMIN</p>
-            <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: "1.75rem", fontWeight: 800, color: "#fff", margin: 0 }}>All Orders</h1>
-            <p style={{ marginTop: "4px", fontSize: "0.8rem", color: "var(--muted)" }}>Manage and inspect all customer orders</p>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-            <ExportButton
-              apiClient={session.apiClient}
-              endpoint="/admin/orders/export"
-              filename={`orders-export-${new Date().toISOString().slice(0, 10)}.csv`}
-              label="Export CSV"
-              params={{
-                format: "csv",
-                ...(customerEmailFilter ? { customerEmail: customerEmailFilter } : {}),
-              }}
-            />
-            <span style={{ background: "linear-gradient(135deg, #00d4ff, #7c3aed)", color: "#fff", padding: "3px 14px", borderRadius: "20px", fontSize: "0.75rem", fontWeight: 800 }}>
-              {totalElements} total
-            </span>
-          </div>
+    <AdminPageShell
+      title="All Orders"
+      breadcrumbs={[{ label: "Admin", href: "/admin/dashboard" }, { label: "Orders" }]}
+      actions={
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <ExportButton
+            apiClient={session.apiClient}
+            endpoint="/admin/orders/export"
+            filename={`orders-export-${new Date().toISOString().slice(0, 10)}.csv`}
+            label="Export CSV"
+            params={{
+              format: "csv",
+              ...(customerEmailFilter ? { customerEmail: customerEmailFilter } : {}),
+            }}
+          />
+          <span className="bg-[linear-gradient(135deg,#00d4ff,#7c3aed)] text-white py-[3px] px-3.5 rounded-xl text-[0.75rem] font-extrabold">
+            {totalElements} total
+          </span>
         </div>
+      }
+    >
 
-        <section className="animate-rise" style={{ ...glassCard, padding: "20px" }}>
+        <section className="animate-rise bg-[rgba(17,17,40,0.7)] backdrop-blur-[16px] border border-[rgba(0,212,255,0.1)] rounded-lg p-5">
           <OrderFiltersBar
             customerEmailInput={customerEmailInput}
             filterBusy={filterBusy}
@@ -233,7 +216,7 @@ export default function AdminOrdersPage() {
             emptyFilterLabel={customerEmailFilter ? "Try a different customer email filter" : "No orders exist yet"}
           />
 
-          <div style={{ marginTop: "16px" }}>
+          <div className="mt-4">
             <Pagination
               currentPage={currentPage}
               totalPages={totalPages}
@@ -242,8 +225,8 @@ export default function AdminOrdersPage() {
               disabled={ordersLoading}
             />
           </div>
-          <p style={{ marginTop: "10px", fontSize: "0.72rem", color: "var(--muted-2)" }}>{status}</p>
+          <p className="mt-2.5 text-[0.72rem] text-muted-2">{status}</p>
         </section>
-    </main>
+    </AdminPageShell>
   );
 }

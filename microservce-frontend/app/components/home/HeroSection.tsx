@@ -19,84 +19,41 @@ export default function HeroSection({
 }: Props) {
   return (
     <section
-      className="animate-rise"
-      style={{
-        position: "relative",
-        overflow: "hidden",
-        background: "linear-gradient(135deg, #060618 0%, #0e0820 40%, #071428 100%)",
-        padding: "0",
-        marginBottom: "0",
-      }}
+      className="animate-rise relative overflow-hidden bg-[linear-gradient(135deg,#060618_0%,#0e0820_40%,#071428_100%)] p-0 mb-0"
     >
       {/* Decorative orbs */}
-      <div style={{ position: "absolute", top: "-80px", left: "-80px", width: "450px", height: "450px", borderRadius: "50%", background: "radial-gradient(circle, var(--brand-soft) 0%, transparent 70%)", pointerEvents: "none" }} />
-      <div style={{ position: "absolute", bottom: "-100px", right: "-60px", width: "500px", height: "500px", borderRadius: "50%", background: "radial-gradient(circle, var(--accent-soft) 0%, transparent 70%)", pointerEvents: "none" }} />
-      <div style={{ position: "absolute", top: "30%", left: "40%", width: "200px", height: "200px", borderRadius: "50%", background: "radial-gradient(circle, var(--brand-soft) 0%, transparent 70%)", pointerEvents: "none" }} />
+      <div className="absolute -top-[80px] -left-[80px] w-[450px] h-[450px] rounded-full bg-[radial-gradient(circle,var(--brand-soft)_0%,transparent_70%)] pointer-events-none" />
+      <div className="absolute -bottom-[100px] -right-[60px] w-[500px] h-[500px] rounded-full bg-[radial-gradient(circle,var(--accent-soft)_0%,transparent_70%)] pointer-events-none" />
+      <div className="absolute top-[30%] left-[40%] w-[200px] h-[200px] rounded-full bg-[radial-gradient(circle,var(--brand-soft)_0%,transparent_70%)] pointer-events-none" />
 
       {/* Subtle grid */}
       <div
+        className="absolute inset-0 pointer-events-none"
         style={{
-          position: "absolute", inset: 0, pointerEvents: "none",
           backgroundImage: "linear-gradient(var(--brand-soft) 1px, transparent 1px), linear-gradient(90deg, var(--brand-soft) 1px, transparent 1px)",
           backgroundSize: "48px 48px",
         }}
       />
 
-      <div className="mx-auto max-w-7xl px-4 py-16 md:py-24" style={{ position: "relative", zIndex: 1 }}>
+      <div className="mx-auto max-w-7xl px-4 py-16 md:py-24 relative z-[1]">
         <div className="grid items-center gap-12 md:grid-cols-[1fr,auto]">
-          <div style={{ maxWidth: "680px" }}>
+          <div className="max-w-[680px]">
             {/* Tag pill */}
-            <div
-              className="mb-6 inline-flex items-center gap-2 rounded-full px-4 py-1.5"
-              style={{
-                background: "var(--brand-soft)",
-                border: "1px solid var(--line-bright)",
-                fontSize: "0.72rem",
-                fontWeight: 800,
-                color: "var(--brand)",
-                letterSpacing: "0.12em",
-                textTransform: "uppercase",
-              }}
-            >
-              <span
-                style={{
-                  width: "6px", height: "6px", borderRadius: "50%",
-                  background: "var(--brand)",
-                  boxShadow: "0 0 8px var(--brand)",
-                  display: "inline-block",
-                  animation: "glowPulse 2s ease-in-out infinite",
-                }}
-              />
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full px-4 py-1.5 bg-brand-soft border border-line-bright text-xs font-extrabold text-brand tracking-[0.12em] uppercase">
+              <span className="w-1.5 h-1.5 rounded-full bg-brand shadow-[0_0_8px_var(--brand)] inline-block animate-[glowPulse_2s_ease-in-out_infinite]" />
               Mega Sale - Live Now
             </div>
 
             {/* Headline */}
-            <h1
-              style={{
-                fontFamily: "'Syne', sans-serif",
-                fontSize: "clamp(2.4rem, 6vw, 4.5rem)",
-                fontWeight: 800,
-                lineHeight: 1.08,
-                letterSpacing: "-0.03em",
-                margin: "0 0 24px",
-                color: "#fff",
-              }}
-            >
+            <h1 className="font-[Syne,sans-serif] text-[clamp(2.4rem,6vw,4.5rem)] font-extrabold leading-[1.08] tracking-tight mb-6 text-white">
               Your Next-Gen
               <br />
-              <span
-                style={{
-                  background: "var(--gradient-brand)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  backgroundClip: "text",
-                }}
-              >
+              <span className="bg-[image:var(--gradient-brand)] bg-clip-text [-webkit-background-clip:text] [-webkit-text-fill-color:transparent]">
                 Shopping Hub
               </span>
             </h1>
 
-            <p style={{ fontSize: "1rem", color: "#8888bb", lineHeight: 1.7, margin: "0 0 36px", maxWidth: "520px" }}>
+            <p className="text-lg text-[#8888bb] leading-[1.7] mb-9 max-w-[520px]">
               Discover thousands of premium products at unbeatable prices. Secure payments, lightning-fast delivery, and a shopping experience built for the future.
               {isAuthenticated ? " Welcome back - your deals are waiting." : " Sign in to unlock your personal store."}
             </p>
@@ -105,13 +62,7 @@ export default function HeroSection({
             <div className="flex flex-wrap gap-3">
               <Link
                 href="/products"
-                className="no-underline inline-flex items-center gap-2 rounded-xl px-7 py-3.5 font-bold transition"
-                style={{
-                  background: "var(--gradient-brand)",
-                  color: "#fff",
-                  fontSize: "0.9rem",
-                  boxShadow: "0 0 28px var(--brand-glow)",
-                }}
+                className="no-underline inline-flex items-center gap-2 rounded-xl px-7 py-3.5 font-bold transition bg-[image:var(--gradient-brand)] text-white text-[0.9rem] shadow-[0_0_28px_var(--brand-glow)]"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" />
@@ -122,8 +73,7 @@ export default function HeroSection({
               {isAuthenticated ? (
                 <Link
                   href={canViewAdmin ? "/admin/orders" : "/profile"}
-                  className="no-underline inline-flex items-center gap-2 rounded-xl px-7 py-3.5 font-bold transition"
-                  style={{ border: "1.5px solid var(--brand-glow)", color: "var(--brand)", background: "var(--brand-soft)", fontSize: "0.9rem" }}
+                  className="no-underline inline-flex items-center gap-2 rounded-xl px-7 py-3.5 font-bold transition border-[1.5px] border-brand-glow text-brand bg-brand-soft text-[0.9rem]"
                 >
                   {canViewAdmin ? "Go to Admin" : "My Profile"}
                 </Link>
@@ -131,8 +81,7 @@ export default function HeroSection({
                 <button
                   onClick={onSignup}
                   disabled={authBusy}
-                  className="inline-flex items-center gap-2 rounded-xl px-7 py-3.5 font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
-                  style={{ border: "1.5px solid var(--brand-glow)", color: "var(--brand)", background: "var(--brand-soft)", fontSize: "0.9rem", cursor: "pointer" }}
+                  className="inline-flex items-center gap-2 rounded-xl px-7 py-3.5 font-bold transition disabled:cursor-not-allowed disabled:opacity-50 border-[1.5px] border-brand-glow text-brand bg-brand-soft text-[0.9rem] cursor-pointer"
                 >
                   {authActionPending === "signup" ? "Redirecting..." : "Create Account ->"}
                 </button>
@@ -147,10 +96,10 @@ export default function HeroSection({
                 { value: "24/7", label: "Support" },
               ].map(({ value, label }) => (
                 <div key={label}>
-                  <p style={{ fontFamily: "'Syne', sans-serif", fontSize: "1.5rem", fontWeight: 800, color: "var(--brand)", margin: "0 0 2px", textShadow: "0 0 16px var(--brand-glow)" }}>
+                  <p className="font-[Syne,sans-serif] text-[1.5rem] font-extrabold text-brand mb-0.5 [text-shadow:0_0_16px_var(--brand-glow)]">
                     {value}
                   </p>
-                  <p style={{ fontSize: "0.72rem", color: "var(--muted)", margin: 0, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em" }}>{label}</p>
+                  <p className="text-xs text-muted m-0 font-semibold uppercase tracking-widest">{label}</p>
                 </div>
               ))}
             </div>
@@ -158,35 +107,14 @@ export default function HeroSection({
 
           {/* Side discount badge */}
           <div className="hidden md:flex flex-col items-center gap-4">
-            <div
-              style={{
-                padding: "32px 28px",
-                borderRadius: "24px",
-                border: "1px solid var(--line-bright)",
-                background: "var(--brand-soft)",
-                backdropFilter: "blur(12px)",
-                textAlign: "center",
-                boxShadow: "0 0 40px var(--brand-soft)",
-              }}
-            >
-              <p style={{ fontSize: "0.7rem", fontWeight: 800, color: "var(--brand)", letterSpacing: "0.16em", textTransform: "uppercase", margin: "0 0 4px" }}>UP TO</p>
-              <p style={{ fontFamily: "'Syne', sans-serif", fontSize: "5rem", fontWeight: 900, color: "#fff", lineHeight: 1, margin: "0 0 4px", textShadow: "0 0 32px var(--brand-glow)" }}>
-                70<span style={{ color: "var(--brand)" }}>%</span>
+            <div className="px-7 py-8 rounded-[24px] border border-line-bright bg-brand-soft backdrop-blur-[12px] text-center shadow-[0_0_40px_var(--brand-soft)]">
+              <p className="text-xs font-extrabold text-brand tracking-[0.16em] uppercase mb-1">UP TO</p>
+              <p className="font-[Syne,sans-serif] text-[5rem] font-black text-white leading-none mb-1 [text-shadow:0_0_32px_var(--brand-glow)]">
+                70<span className="text-brand">%</span>
               </p>
-              <p style={{ fontSize: "1rem", fontWeight: 800, color: "rgba(255,255,255,0.6)", letterSpacing: "0.08em", margin: 0 }}>OFF TODAY</p>
+              <p className="text-lg font-extrabold text-white/60 tracking-wide m-0">OFF TODAY</p>
             </div>
-            <div
-              style={{
-                padding: "14px 20px",
-                borderRadius: "14px",
-                border: "1px solid var(--accent-glow)",
-                background: "var(--accent-soft)",
-                textAlign: "center",
-                fontSize: "0.78rem",
-                color: "#a78bfa",
-                fontWeight: 600,
-              }}
-            >
+            <div className="px-5 py-3.5 rounded-[14px] border border-accent-glow bg-accent-soft text-center text-[0.78rem] text-[#a78bfa] font-semibold">
               * Free shipping on orders $25+
             </div>
           </div>

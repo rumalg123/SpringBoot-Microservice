@@ -64,27 +64,27 @@ export default function MovementsTab({ apiClient, apiPrefix, isAdmin = false }: 
     { key: "quantityChange", header: "Change", render: (v) => {
       const num = Number(v);
       const color = num > 0 ? "var(--success)" : num < 0 ? "var(--danger)" : "var(--muted)";
-      return <span style={{ fontWeight: 700, color }}>{num > 0 ? `+${num}` : String(num)}</span>;
+      return <span className="font-bold" style={{ color }}>{num > 0 ? `+${num}` : String(num)}</span>;
     }, width: "8%"},
     { key: "quantityBefore", header: "Before", width: "7%", render: (v) => String(v) },
     { key: "quantityAfter", header: "After", width: "7%", render: (v) => String(v) },
     { key: "productId", header: "Product", render: (v) => {
       const s = String(v || "");
-      return <span title={s} style={{ fontSize: "0.75rem", fontFamily: "monospace" }}>{s.slice(0, 8)}...</span>;
+      return <span title={s} className="text-[0.75rem] font-mono">{s.slice(0, 8)}...</span>;
     }},
     { key: "referenceType", header: "Reference", render: (_, row) => {
       const m = row as unknown as StockMovement;
       if (!m.referenceType) return "-";
       const refId = m.referenceId ? m.referenceId.slice(0, 8) + "..." : "";
-      return <span style={{ fontSize: "0.75rem" }}>{m.referenceType}{refId ? `: ${refId}` : ""}</span>;
+      return <span className="text-[0.75rem]">{m.referenceType}{refId ? `: ${refId}` : ""}</span>;
     }},
     { key: "actorType", header: "Actor", render: (_, row) => {
       const m = row as unknown as StockMovement;
-      return m.actorType ? <span style={{ fontSize: "0.75rem" }}>{m.actorType}{m.actorId ? ` (${m.actorId.slice(0, 12)})` : ""}</span> : "-";
+      return m.actorType ? <span className="text-[0.75rem]">{m.actorType}{m.actorId ? ` (${m.actorId.slice(0, 12)})` : ""}</span> : "-";
     }},
     { key: "note", header: "Note", render: (v) => {
       const s = String(v || "");
-      return s ? <span title={s} style={{ fontSize: "0.75rem" }}>{s.length > 40 ? s.slice(0, 40) + "..." : s}</span> : "-";
+      return s ? <span title={s} className="text-[0.75rem]">{s.length > 40 ? s.slice(0, 40) + "..." : s}</span> : "-";
     }},
     { key: "createdAt", header: "Date", render: (v) => v ? new Date(String(v)).toLocaleString() : "-" },
   ];

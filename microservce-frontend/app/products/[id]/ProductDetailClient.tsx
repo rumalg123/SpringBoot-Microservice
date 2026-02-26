@@ -99,8 +99,8 @@ export default function ProductDetailClient() {
       brandName: null,
       sellingPrice: product.sellingPrice,
     }, token);
-    fetchBoughtTogether(product.id, 4).then(setBoughtTogether).catch(() => {});
-    fetchSimilarProducts(product.id, 8).then(setSimilarProducts).catch(() => {});
+    fetchBoughtTogether(product.id, 4).then(setBoughtTogether).catch((e) => console.error("Failed to load bought together:", e));
+    fetchSimilarProducts(product.id, 8).then(setSimilarProducts).catch((e) => console.error("Failed to load similar products:", e));
   }, [product?.id, token]);
 
   const parentAttributeNames = useMemo(() => {
@@ -270,7 +270,7 @@ export default function ProductDetailClient() {
   /* Loading / not found */
   if (!displayProduct) {
     return (
-      <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
+      <div className="min-h-screen bg-bg">
         {isAuthenticated && (
           <AppNav
             email={(profile?.email as string) || ""}
@@ -284,12 +284,12 @@ export default function ProductDetailClient() {
           />
         )}
         <main className="mx-auto max-w-7xl px-4 py-8">
-          <div style={{ background: "rgba(17,17,40,0.7)", backdropFilter: "blur(16px)", border: "1px solid var(--line-bright)", borderRadius: "20px", padding: "48px 24px", textAlign: "center" }}>
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--brand-glow)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ margin: "0 auto 16px" }}>
+          <div className="rounded-xl border border-line-bright bg-[rgba(17,17,40,0.7)] px-6 py-12 text-center backdrop-blur-[16px]">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--brand-glow)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-4">
               <path d="M5 8h14M5 8a2 2 0 1 0 0-4h14a2 2 0 1 0 0 4M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8m-9 4h4" />
             </svg>
-            <p style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--ink-light)", margin: "0 0 12px" }}>{status}</p>
-            <Link href="/products" style={{ color: "var(--brand)", fontSize: "0.875rem", textDecoration: "none" }}>← Back to Shop</Link>
+            <p className="mb-3 mt-0 text-[1.1rem] font-bold text-ink-light">{status}</p>
+            <Link href="/products" className="text-base text-brand no-underline">← Back to Shop</Link>
           </div>
         </main>
       </div>
@@ -299,7 +299,7 @@ export default function ProductDetailClient() {
   const discount = calcDiscount(displayProduct.regularPrice, displayProduct.sellingPrice);
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
+    <div className="min-h-screen bg-bg">
       {isAuthenticated && (
         <AppNav
           email={(profile?.email as string) || ""}
@@ -318,14 +318,14 @@ export default function ProductDetailClient() {
       )}
 
       {!isAuthenticated && (
-        <header style={{ background: "var(--header-bg)", backdropFilter: "blur(12px)", borderBottom: "1px solid var(--brand-soft)", position: "sticky", top: 0, zIndex: 100 }}>
-          <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
-            <Link href="/" className="no-underline flex items-center gap-2">
-              <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: 900, fontSize: "1.2rem", background: "var(--gradient-brand)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+        <header className="sticky top-0 z-[100] border-b border-brand-soft bg-header-bg backdrop-blur-[12px]">
+          <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
+            <Link href="/" className="flex items-center gap-2 no-underline">
+              <span className="font-[Syne,sans-serif] text-[1.2rem] font-black" style={{ background: "var(--gradient-brand)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
                 Rumal Store
               </span>
             </Link>
-            <Link href="/" className="no-underline" style={{ padding: "8px 18px", borderRadius: "10px", background: "var(--gradient-brand)", color: "#fff", fontSize: "0.8rem", fontWeight: 700 }}>
+            <Link href="/" className="rounded-md bg-[var(--gradient-brand)] px-[18px] py-2 text-sm font-bold text-white no-underline">
               Sign In
             </Link>
           </div>
@@ -344,10 +344,9 @@ export default function ProductDetailClient() {
 
         {/* Main Card */}
         <section
-          className="animate-rise"
-          style={{ background: "rgba(17,17,40,0.7)", backdropFilter: "blur(20px)", border: "1px solid var(--line-bright)", borderRadius: "24px", padding: "28px", marginTop: "4px" }}
+          className="animate-rise mt-1 rounded-[24px] border border-line-bright bg-[rgba(17,17,40,0.7)] p-7 backdrop-blur-[20px]"
         >
-          <div style={{ display: "grid", gap: "40px", gridTemplateColumns: "1fr 1fr" }}>
+          <div className="grid grid-cols-2 gap-10">
             {/* Image Gallery */}
             <ProductImageGallery
               images={displayProduct.images}
@@ -359,39 +358,39 @@ export default function ProductDetailClient() {
             />
 
             {/* Product Info */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+            <div className="flex flex-col gap-5">
               {/* Title & Rating */}
               <div>
-                <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: "1.7rem", fontWeight: 900, color: "#fff", lineHeight: 1.2, margin: "0 0 10px" }}>
+                <h1 className="mb-2.5 mt-0 font-[Syne,sans-serif] text-[1.7rem] font-black leading-[1.2] text-white">
                   {displayProduct.name}
                 </h1>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-                  <span className="star-rating" style={{ fontSize: "0.95rem" }}>★★★★☆</span>
-                  <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>4.5 · 1,200+ ratings</span>
-                  <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>·</span>
-                  <span style={{ fontSize: "0.8rem", color: "var(--success)", fontWeight: 700 }}>In Stock</span>
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <span className="star-rating text-[0.95rem]">★★★★☆</span>
+                  <span className="text-sm text-muted">4.5 · 1,200+ ratings</span>
+                  <span className="text-sm text-muted">·</span>
+                  <span className="text-sm font-bold text-success">In Stock</span>
                 </div>
               </div>
 
               {/* Price */}
-              <div style={{ borderRadius: "14px", background: "var(--brand-soft)", border: "1px solid var(--line-bright)", padding: "16px 18px" }}>
-                <div style={{ display: "flex", alignItems: "baseline", gap: "12px", flexWrap: "wrap" }}>
-                  <span style={{ fontSize: "2rem", fontWeight: 900, color: "var(--brand)" }}>
+              <div className="rounded-[14px] border border-line-bright bg-brand-soft px-[18px] py-4">
+                <div className="flex flex-wrap items-baseline gap-3">
+                  <span className="text-[2rem] font-black text-brand">
                     {money(displayProduct.sellingPrice)}
                   </span>
                   {displayProduct.discountedPrice !== null && (
                     <>
-                      <span style={{ fontSize: "1.1rem", color: "var(--muted)", textDecoration: "line-through" }}>
+                      <span className="text-[1.1rem] text-muted line-through">
                         {money(displayProduct.regularPrice)}
                       </span>
                       {discount && (
-                        <span className="price-discount-badge" style={{ fontSize: "0.8rem" }}>−{discount}% OFF</span>
+                        <span className="price-discount-badge text-sm">−{discount}% OFF</span>
                       )}
                     </>
                   )}
                 </div>
                 {displayProduct.discountedPrice !== null && (
-                  <p style={{ margin: "6px 0 0", fontSize: "0.75rem", color: "var(--success)", fontWeight: 600 }}>
+                  <p className="mt-1.5 mb-0 text-xs font-semibold text-success">
                     You save {money(displayProduct.regularPrice - displayProduct.sellingPrice)}
                   </p>
                 )}
@@ -399,21 +398,20 @@ export default function ProductDetailClient() {
 
               {/* Description & SKU */}
               <div>
-                <p style={{ fontSize: "0.875rem", lineHeight: 1.7, color: "var(--ink-light)", margin: "0 0 8px" }}>
+                <p className="mb-2 mt-0 text-base leading-[1.7] text-ink-light">
                   {displayProduct.description}
                 </p>
-                <p style={{ fontSize: "0.72rem", color: "var(--muted-2)", fontFamily: "monospace", margin: 0 }}>
+                <p className="m-0 font-mono text-xs text-muted-2">
                   SKU: {displayProduct.sku}
                 </p>
               </div>
 
               {/* Categories */}
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+              <div className="flex flex-wrap gap-2">
                 {displayProduct.mainCategory && (
                   <Link
                     href={`/categories/${encodeURIComponent(displayProduct.mainCategorySlug || slugify(displayProduct.mainCategory))}`}
-                    className="no-underline"
-                    style={{ borderRadius: "20px", background: "var(--gradient-brand)", color: "#fff", padding: "4px 12px", fontSize: "0.72rem", fontWeight: 700 }}
+                    className="rounded-xl bg-[var(--gradient-brand)] px-3 py-1 text-xs font-bold text-white no-underline"
                   >
                     {displayProduct.mainCategory}
                   </Link>
@@ -422,8 +420,7 @@ export default function ProductDetailClient() {
                   <Link
                     key={`${c}-${index}`}
                     href={`/categories/${encodeURIComponent(displayProduct.subCategorySlugs?.[index] || slugify(c))}`}
-                    className="no-underline"
-                    style={{ borderRadius: "20px", background: "var(--brand-soft)", border: "1px solid var(--line-bright)", color: "var(--brand)", padding: "4px 12px", fontSize: "0.72rem", fontWeight: 700 }}
+                    className="rounded-xl border border-line-bright bg-brand-soft px-3 py-1 text-xs font-bold text-brand no-underline"
                   >
                     {c}
                   </Link>
@@ -432,20 +429,20 @@ export default function ProductDetailClient() {
 
               {/* Specifications / Variation Options (display panel) */}
               {displayProduct.variations.length > 0 && (
-                <div style={{ borderRadius: "12px", border: "1px solid var(--line-bright)", background: "var(--brand-soft)", padding: "14px 16px" }}>
-                  <p style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--muted)", margin: "0 0 10px" }}>
+                <div className="rounded-[12px] border border-line-bright bg-brand-soft px-4 py-3.5">
+                  <p className="mb-2.5 mt-0 text-[0.65rem] font-bold uppercase tracking-[0.1em] text-muted">
                     {displayProduct.productType === "PARENT" ? "Available Options" : "Specifications"}
                   </p>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                  <div className="flex flex-wrap gap-2">
                     {displayProduct.variations.map((v, i) => (
                       <span
                         key={`${v.name}-${i}`}
-                        style={{ borderRadius: "8px", border: "1px solid var(--line-bright)", background: "var(--brand-soft)", padding: "6px 12px", fontSize: "0.8rem" }}
+                        className="rounded-[8px] border border-line-bright bg-brand-soft px-3 py-1.5 text-sm"
                       >
                         {displayProduct.productType === "PARENT" ? (
-                          <span style={{ fontWeight: 700, color: "var(--ink-light)" }}>{v.name}</span>
+                          <span className="font-bold text-ink-light">{v.name}</span>
                         ) : (
-                          <><span style={{ color: "var(--muted)" }}>{v.name}: </span><span style={{ fontWeight: 700, color: "#fff" }}>{v.value}</span></>
+                          <><span className="text-muted">{v.name}: </span><span className="font-bold text-white">{v.value}</span></>
                         )}
                       </span>
                     ))}
@@ -484,13 +481,13 @@ export default function ProductDetailClient() {
               />
 
               {/* Trust Badges */}
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "16px", borderTop: "1px solid var(--brand-soft)", paddingTop: "16px" }}>
+              <div className="flex flex-wrap gap-4 border-t border-brand-soft pt-4">
                 {[
                   { icon: "M5 12h14M12 5l7 7-7 7", label: "Free Shipping" },
                   { icon: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z", label: "Secure Payment" },
                   { icon: "M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8M3 8v4h4M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16m18 0v-4h-4", label: "30-Day Returns" },
                 ].map(({ icon, label }) => (
-                  <span key={label} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.75rem", color: "var(--muted)" }}>
+                  <span key={label} className="flex items-center gap-1.5 text-xs text-muted">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d={icon} />
                     </svg>
@@ -505,18 +502,18 @@ export default function ProductDetailClient() {
         {/* Frequently Bought Together */}
         {boughtTogether.length > 0 && (
           <section className="mx-auto max-w-7xl px-4 py-8">
-            <h2 style={{ fontFamily: "'Syne', sans-serif", fontSize: "1.3rem", fontWeight: 800, color: "#fff", marginBottom: "16px" }}>Frequently Bought Together</h2>
-            <div style={{ display: "flex", gap: "16px", overflowX: "auto", paddingBottom: "8px" }}>
+            <h2 className="mb-4 font-[Syne,sans-serif] text-[1.3rem] font-extrabold text-white">Frequently Bought Together</h2>
+            <div className="flex gap-4 overflow-x-auto pb-2">
               {boughtTogether.map((p) => {
                 const imgUrl = resolveImageUrl(p.mainImage);
                 return (
-                  <Link href={`/products/${encodeURIComponent((p.slug || p.id).trim())}`} key={p.id} className="product-card no-underline" style={{ minWidth: "180px", maxWidth: "200px", flexShrink: 0 }}>
-                    <div style={{ position: "relative", aspectRatio: "1/1", overflow: "hidden", background: "var(--surface-2)" }}>
-                      {imgUrl ? (<Image src={imgUrl} alt={p.name} width={300} height={300} className="product-card-img" unoptimized />) : (<div style={{ display: "grid", placeItems: "center", width: "100%", height: "100%", background: "linear-gradient(135deg, var(--surface), #1c1c38)", color: "var(--muted-2)", fontSize: "0.75rem" }}>No Image</div>)}
+                  <Link href={`/products/${encodeURIComponent((p.slug || p.id).trim())}`} key={p.id} className="product-card shrink-0 no-underline" style={{ minWidth: "180px", maxWidth: "200px" }}>
+                    <div className="relative aspect-square overflow-hidden bg-surface-2">
+                      {imgUrl ? (<Image src={imgUrl} alt={p.name} width={300} height={300} className="product-card-img" unoptimized />) : (<div className="grid h-full w-full place-items-center bg-[linear-gradient(135deg,var(--surface),#1c1c38)] text-xs text-muted-2">No Image</div>)}
                     </div>
                     <div className="product-card-body">
-                      <p style={{ margin: "0 0 4px", fontSize: "0.8rem", fontWeight: 600, color: "var(--ink)", display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{p.name}</p>
-                      <span className="price-current" style={{ fontSize: "0.85rem" }}>{money(p.sellingPrice)}</span>
+                      <p className="mb-1 line-clamp-1 text-sm font-semibold text-ink">{p.name}</p>
+                      <span className="price-current text-sm">{money(p.sellingPrice)}</span>
                     </div>
                   </Link>
                 );
@@ -537,7 +534,7 @@ export default function ProductDetailClient() {
         {/* You May Also Like */}
         {similarProducts.length > 0 && (
           <section className="mx-auto max-w-7xl px-4 py-8">
-            <h2 style={{ fontFamily: "'Syne', sans-serif", fontSize: "1.3rem", fontWeight: 800, color: "#fff", marginBottom: "16px" }}>You May Also Like</h2>
+            <h2 className="mb-4 font-[Syne,sans-serif] text-[1.3rem] font-extrabold text-white">You May Also Like</h2>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {similarProducts.map((p, idx) => (
                 <ProductCard key={p.id} product={p} index={idx} />

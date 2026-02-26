@@ -1,12 +1,13 @@
 "use client";
 
-import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import toast from "react-hot-toast";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import ConfirmModal from "@/app/components/ConfirmModal";
 import AccessAuditPanel from "@/app/components/admin/access/AccessAuditPanel";
 import KeycloakUserLookupField from "@/app/components/admin/access/KeycloakUserLookupField";
 import PermissionChecklist from "@/app/components/admin/access/PermissionChecklist";
+import AdminPageShell from "@/app/components/ui/AdminPageShell";
 import { useAuthSession } from "@/lib/authSession";
 import { getErrorMessage } from "@/lib/error";
 
@@ -50,75 +51,54 @@ const PLATFORM_PERMISSION_OPTIONS = [
 
 export default function AdminPlatformStaffPage() {
   const session = useAuthSession();
+  const queryClient = useQueryClient();
 
-  const [rows, setRows] = useState<PlatformStaffRow[]>([]);
-  const [deletedRows, setDeletedRows] = useState<PlatformStaffRow[]>([]);
-  const [deletedLoaded, setDeletedLoaded] = useState(false);
   const [showDeleted, setShowDeleted] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [loadingDeleted, setLoadingDeleted] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<PlatformStaffRow | null>(null);
   const [confirmRestore, setConfirmRestore] = useState<PlatformStaffRow | null>(null);
   const [actionReason, setActionReason] = useState("");
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [restoringId, setRestoringId] = useState<string | null>(null);
   const [auditTargetRow, setAuditTargetRow] = useState<PlatformStaffRow | null>(null);
   const [accessAuditReloadKey, setAccessAuditReloadKey] = useState(0);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
+
+  const ready = session.status === "ready" && session.isAuthenticated;
+
+  const { data: rows = [], isLoading: loading } = useQuery({
+    queryKey: ["admin-platform-staff"],
+    queryFn: async () => {
+      const res = await session.apiClient!.get("/admin/platform-staff");
+      const raw = res.data as { content?: PlatformStaffRow[] };
+      return raw.content || [];
+    },
+    enabled: ready && !!session.apiClient,
+  });
+
+  const { data: deletedRows = [], isLoading: loadingDeleted } = useQuery({
+    queryKey: ["admin-platform-staff-deleted"],
+    queryFn: async () => {
+      const res = await session.apiClient!.get("/admin/platform-staff/deleted");
+      const raw = res.data as { content?: PlatformStaffRow[] };
+      return raw.content || [];
+    },
+    enabled: ready && !!session.apiClient && showDeleted,
+  });
 
   const activeRows = useMemo(
     () => [...rows].sort((a, b) => `${a.email}`.localeCompare(`${b.email}`)),
     [rows]
   );
 
-  const loadActive = useCallback(async () => {
-    if (!session.apiClient) return;
-    setLoading(true);
-    try {
-      const res = await session.apiClient.get("/admin/platform-staff");
-      const raw = res.data as { content?: PlatformStaffRow[] };
-      setRows(raw.content || []);
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    } finally {
-      setLoading(false);
-    }
-  }, [session.apiClient]);
+  const invalidateAll = () => {
+    void queryClient.invalidateQueries({ queryKey: ["admin-platform-staff"] });
+    void queryClient.invalidateQueries({ queryKey: ["admin-platform-staff-deleted"] });
+    setAccessAuditReloadKey((n) => n + 1);
+  };
 
-  const loadDeleted = useCallback(async () => {
-    if (!session.apiClient) return;
-    setLoadingDeleted(true);
-    try {
-      const res = await session.apiClient.get("/admin/platform-staff/deleted");
-      const raw = res.data as { content?: PlatformStaffRow[] };
-      setDeletedRows(raw.content || []);
-      setDeletedLoaded(true);
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    } finally {
-      setLoadingDeleted(false);
-    }
-  }, [session.apiClient]);
-
-  useEffect(() => {
-    if (session.status !== "ready" || !session.isAuthenticated) return;
-    void loadActive();
-  }, [session.status, session.isAuthenticated, loadActive]);
-
-  useEffect(() => {
-    if (!showDeleted || deletedLoaded) return;
-    void loadDeleted();
-  }, [showDeleted, deletedLoaded, loadDeleted]);
-
-  const save = useCallback(async () => {
-    if (!session.apiClient || saving) return;
-    if (!form.keycloakUserId.trim() || !form.email.trim()) {
-      toast.error("Keycloak user ID and email are required");
-      return;
-    }
-    setSaving(true);
-    try {
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      if (!form.keycloakUserId.trim() || !form.email.trim()) {
+        throw new Error("Keycloak user ID and email are required");
+      }
       const payload = {
         keycloakUserId: form.keycloakUserId.trim(),
         email: form.email.trim(),
@@ -127,91 +107,76 @@ export default function AdminPlatformStaffPage() {
         active: form.active,
       };
       if (form.id) {
-        await session.apiClient.put(`/admin/platform-staff/${form.id}`, payload);
-        toast.success("Platform staff updated");
+        await session.apiClient!.put(`/admin/platform-staff/${form.id}`, payload);
+        return "updated";
       } else {
-        await session.apiClient.post("/admin/platform-staff", payload);
-        toast.success("Platform staff created");
+        await session.apiClient!.post("/admin/platform-staff", payload);
+        return "created";
       }
+    },
+    onSuccess: (result) => {
+      toast.success(result === "updated" ? "Platform staff updated" : "Platform staff created");
       setForm(EMPTY_FORM);
-      setAccessAuditReloadKey((n) => n + 1);
-      await loadActive();
-      if (deletedLoaded) {
-        await loadDeleted();
-      }
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    } finally {
-      setSaving(false);
-    }
-  }, [session.apiClient, saving, form, loadActive, loadDeleted, deletedLoaded]);
+      invalidateAll();
+    },
+    onError: (error) => toast.error(getErrorMessage(error)),
+  });
 
-  const remove = useCallback(async (row: PlatformStaffRow) => {
-    if (!session.apiClient) return;
-    setDeletingId(row.id);
-    try {
-      await session.apiClient.delete(`/admin/platform-staff/${row.id}`, {
+  const removeMutation = useMutation({
+    mutationFn: async (row: PlatformStaffRow) => {
+      await session.apiClient!.delete(`/admin/platform-staff/${row.id}`, {
         headers: actionReason.trim() ? { "X-Action-Reason": actionReason.trim() } : undefined,
       });
+      return row;
+    },
+    onSuccess: () => {
       toast.success("Platform staff removed");
       setConfirmDelete(null);
       setActionReason("");
-      setAccessAuditReloadKey((n) => n + 1);
-      await loadActive();
-      if (deletedLoaded) {
-        await loadDeleted();
-      }
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    } finally {
-      setDeletingId(null);
-    }
-  }, [session.apiClient, loadActive, loadDeleted, deletedLoaded, actionReason]);
+      invalidateAll();
+    },
+    onError: (error) => toast.error(getErrorMessage(error)),
+  });
 
-  const restore = useCallback(async (row: PlatformStaffRow) => {
-    if (!session.apiClient) return;
-    setRestoringId(row.id);
-    try {
-      await session.apiClient.post(
+  const restoreMutation = useMutation({
+    mutationFn: async (row: PlatformStaffRow) => {
+      await session.apiClient!.post(
         `/admin/platform-staff/${row.id}/restore`,
         {},
         { headers: actionReason.trim() ? { "X-Action-Reason": actionReason.trim() } : undefined }
       );
+      return row;
+    },
+    onSuccess: () => {
       toast.success("Platform staff restored");
       setConfirmRestore(null);
       setActionReason("");
-      setAccessAuditReloadKey((n) => n + 1);
-      await loadActive();
-      if (deletedLoaded) {
-        await loadDeleted();
-      }
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    } finally {
-      setRestoringId(null);
-    }
-  }, [session.apiClient, loadActive, loadDeleted, deletedLoaded, actionReason]);
+      invalidateAll();
+    },
+    onError: (error) => toast.error(getErrorMessage(error)),
+  });
+
+  const saving = saveMutation.isPending;
+  const deletingId = removeMutation.isPending ? (removeMutation.variables as PlatformStaffRow | undefined)?.id ?? null : null;
+  const restoringId = restoreMutation.isPending ? (restoreMutation.variables as PlatformStaffRow | undefined)?.id ?? null : null;
 
   const rowsToRender = showDeleted ? deletedRows : activeRows;
   const listBusy = showDeleted ? loadingDeleted : loading;
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-      <main className="mx-auto max-w-7xl px-4 py-4">
-        <nav className="breadcrumb">
-          <Link href="/">Home</Link><span className="breadcrumb-sep">›</span>
-          <Link href="/admin/vendors">Admin</Link><span className="breadcrumb-sep">›</span>
-          <span className="breadcrumb-current">Platform Staff</span>
-        </nav>
-
+    <>
+    <AdminPageShell
+      title="Platform Staff"
+      breadcrumbs={[{ label: "Admin", href: "/admin/dashboard" }, { label: "Platform Staff" }]}
+    >
         <div className="grid gap-6 lg:grid-cols-[0.95fr,1.05fr]">
-          <section className="space-y-4 rounded-2xl p-5" style={{ background: "var(--surface-2)", border: "1px solid var(--line)" }}>
+          <section className="space-y-4 rounded-2xl p-5 bg-surface-2 border border-line">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h1 className="text-lg font-semibold" style={{ color: "var(--ink)" }}>
+                <h1 className="text-lg font-semibold text-ink">
                   {form.id ? "Edit Platform Staff" : "Add Platform Staff"}
                 </h1>
-                <p className="text-xs" style={{ color: "rgba(255,255,255,0.6)" }}>
+                <p className="text-xs text-[rgba(255,255,255,0.6)]">
                   Manage platform-level permissions for internal staff users.
                 </p>
               </div>
@@ -235,52 +200,49 @@ export default function AdminPlatformStaffPage() {
               />
 
               <label className="space-y-1 text-sm">
-                <span className="block text-xs font-semibold uppercase tracking-[0.12em]" style={{ color: "rgba(255,255,255,0.65)" }}>
+                <span className="block text-xs font-semibold uppercase tracking-[0.12em] text-[rgba(255,255,255,0.65)]">
                   Keycloak User ID
                 </span>
                 <input
                   value={form.keycloakUserId}
                   onChange={(e) => setForm((old) => ({ ...old, keycloakUserId: e.target.value }))}
-                  className="w-full rounded-xl px-3 py-2"
-                  style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--line)", color: "var(--ink)" }}
+                  className="w-full rounded-xl px-3 py-2 bg-[rgba(255,255,255,0.03)] border border-line text-ink"
                   placeholder="keycloak user UUID / subject"
                 />
               </label>
 
               <label className="space-y-1 text-sm">
-                <span className="block text-xs font-semibold uppercase tracking-[0.12em]" style={{ color: "rgba(255,255,255,0.65)" }}>
+                <span className="block text-xs font-semibold uppercase tracking-[0.12em] text-[rgba(255,255,255,0.65)]">
                   Email
                 </span>
                 <input
                   type="email"
                   value={form.email}
                   onChange={(e) => setForm((old) => ({ ...old, email: e.target.value }))}
-                  className="w-full rounded-xl px-3 py-2"
-                  style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--line)", color: "var(--ink)" }}
+                  className="w-full rounded-xl px-3 py-2 bg-[rgba(255,255,255,0.03)] border border-line text-ink"
                   placeholder="staff@example.com"
                 />
               </label>
 
               <label className="space-y-1 text-sm">
-                <span className="block text-xs font-semibold uppercase tracking-[0.12em]" style={{ color: "rgba(255,255,255,0.65)" }}>
+                <span className="block text-xs font-semibold uppercase tracking-[0.12em] text-[rgba(255,255,255,0.65)]">
                   Display Name
                 </span>
                 <input
                   value={form.displayName}
                   onChange={(e) => setForm((old) => ({ ...old, displayName: e.target.value }))}
-                  className="w-full rounded-xl px-3 py-2"
-                  style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--line)", color: "var(--ink)" }}
+                  className="w-full rounded-xl px-3 py-2 bg-[rgba(255,255,255,0.03)] border border-line text-ink"
                   placeholder="Platform Catalog Staff"
                 />
               </label>
 
-              <label className="flex items-center gap-2 rounded-xl px-3 py-2" style={{ border: "1px solid var(--line)", background: "rgba(255,255,255,0.02)" }}>
+              <label className="flex items-center gap-2 rounded-xl px-3 py-2 border border-line bg-[rgba(255,255,255,0.02)]">
                 <input
                   type="checkbox"
                   checked={form.active}
                   onChange={(e) => setForm((old) => ({ ...old, active: e.target.checked }))}
                 />
-                <span className="text-sm" style={{ color: "var(--ink)" }}>Active</span>
+                <span className="text-sm text-ink">Active</span>
               </label>
 
               <PermissionChecklist
@@ -293,22 +255,21 @@ export default function AdminPlatformStaffPage() {
             </div>
 
             <button type="button"
-              onClick={() => { void save(); }}
+              onClick={() => saveMutation.mutate()}
               disabled={saving}
-              className="inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-60"
-              style={{ background: "var(--brand-soft)", color: "var(--ink)", border: "1px solid rgba(0,212,255,0.25)" }}
+              className="inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-60 bg-brand-soft text-ink border border-[rgba(0,212,255,0.25)]"
             >
               {saving ? "Saving..." : form.id ? "Update Platform Staff" : "Create Platform Staff"}
             </button>
           </section>
 
-          <section className="space-y-4 rounded-2xl p-5" style={{ background: "var(--surface-2)", border: "1px solid var(--line)" }}>
+          <section className="space-y-4 rounded-2xl p-5 bg-surface-2 border border-line">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h2 className="text-lg font-semibold" style={{ color: "var(--ink)" }}>
+                <h2 className="text-lg font-semibold text-ink">
                   {showDeleted ? "Deleted Platform Staff" : "Platform Staff"}
                 </h2>
-                <p className="text-xs" style={{ color: "rgba(255,255,255,0.6)" }}>
+                <p className="text-xs text-[rgba(255,255,255,0.6)]">
                   {showDeleted ? "Restore soft-deleted staff access entries." : "Active platform staff access assignments."}
                 </p>
               </div>
@@ -319,36 +280,36 @@ export default function AdminPlatformStaffPage() {
             </div>
 
             {listBusy ? (
-              <div className="rounded-xl px-4 py-8 text-center text-sm" style={{ border: "1px dashed var(--line)", color: "rgba(255,255,255,0.65)" }}>
+              <div className="rounded-xl px-4 py-8 text-center text-sm border border-dashed border-line text-[rgba(255,255,255,0.65)]">
                 Loading...
               </div>
             ) : rowsToRender.length === 0 ? (
-              <div className="rounded-xl px-4 py-8 text-center text-sm" style={{ border: "1px dashed var(--line)", color: "rgba(255,255,255,0.65)" }}>
+              <div className="rounded-xl px-4 py-8 text-center text-sm border border-dashed border-line text-[rgba(255,255,255,0.65)]">
                 No rows found.
               </div>
             ) : (
               <div className="space-y-3">
                 {rowsToRender.map((row) => (
-                  <div key={row.id} className="rounded-xl p-4" style={{ border: "1px solid var(--line)", background: "rgba(255,255,255,0.02)" }}>
+                  <div key={row.id} className="rounded-xl p-4 border border-line bg-[rgba(255,255,255,0.02)]">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0 space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-semibold" style={{ color: "var(--ink)" }}>
+                          <p className="text-sm font-semibold text-ink">
                             {row.displayName || row.email}
                           </p>
-                          <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{
-                            background: row.active ? "rgba(34,197,94,0.12)" : "rgba(251,191,36,0.12)",
-                            color: row.active ? "#86efac" : "#fde68a",
-                            border: "1px solid rgba(255,255,255,0.08)"
-                          }}>
+                          <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold border border-[rgba(255,255,255,0.08)]"
+                            style={{
+                              background: row.active ? "rgba(34,197,94,0.12)" : "rgba(251,191,36,0.12)",
+                              color: row.active ? "#86efac" : "#fde68a",
+                            }}>
                             {row.active ? "Active" : "Inactive"}
                           </span>
                         </div>
-                        <p className="text-xs" style={{ color: "rgba(255,255,255,0.65)" }}>{row.email}</p>
-                        <p className="text-[11px] font-mono" style={{ color: "rgba(255,255,255,0.5)" }}>{row.keycloakUserId}</p>
+                        <p className="text-xs text-[rgba(255,255,255,0.65)]">{row.email}</p>
+                        <p className="text-[11px] font-mono text-[rgba(255,255,255,0.5)]">{row.keycloakUserId}</p>
                         <div className="flex flex-wrap gap-2 pt-1">
                           {(row.permissions || []).map((permission) => (
-                            <span key={permission} className="rounded-full px-2 py-0.5 text-[10px]" style={{ border: "1px solid rgba(0,212,255,0.15)", color: "rgba(0,212,255,0.85)" }}>
+                            <span key={permission} className="rounded-full px-2 py-0.5 text-[10px] border border-[rgba(0,212,255,0.15)] text-[rgba(0,212,255,0.85)]">
                               {permission}
                             </span>
                           ))}
@@ -404,7 +365,7 @@ export default function AdminPlatformStaffPage() {
             />
           </section>
         </div>
-      </main>
+    </AdminPageShell>
 
       <ConfirmModal
         open={Boolean(confirmDelete)}
@@ -421,7 +382,7 @@ export default function AdminPlatformStaffPage() {
         onReasonChange={setActionReason}
         onCancel={() => { setConfirmDelete(null); setActionReason(""); }}
         onConfirm={() => {
-          if (confirmDelete) void remove(confirmDelete);
+          if (confirmDelete) removeMutation.mutate(confirmDelete);
         }}
       />
       <ConfirmModal
@@ -438,10 +399,9 @@ export default function AdminPlatformStaffPage() {
         onReasonChange={setActionReason}
         onCancel={() => { setConfirmRestore(null); setActionReason(""); }}
         onConfirm={() => {
-          if (confirmRestore) void restore(confirmRestore);
+          if (confirmRestore) restoreMutation.mutate(confirmRestore);
         }}
       />
-    </div>
+    </>
   );
 }
-

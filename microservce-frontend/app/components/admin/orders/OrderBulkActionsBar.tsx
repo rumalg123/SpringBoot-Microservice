@@ -27,52 +27,22 @@ export default function OrderBulkActionsBar({
 }: Props) {
   if (isVendorScopedActor) {
     return (
-      <div
-        style={{
-          marginBottom: "12px",
-          padding: "10px 12px",
-          borderRadius: "12px",
-          border: "1px solid rgba(251,146,60,0.12)",
-          background: "rgba(251,146,60,0.05)",
-          color: "#fdba74",
-          fontSize: "0.75rem",
-        }}
-      >
+      <div className="mb-3 rounded-xl border border-[rgba(251,146,60,0.12)] bg-[rgba(251,146,60,0.05)] px-3 py-2.5 text-xs text-[#fdba74]">
         Vendor-scoped users manage status through vendor orders. Use the <strong>Vendor Orders</strong> action in each row.
       </div>
     );
   }
 
   return (
-    <div
-      style={{
-        marginBottom: "12px",
-        display: "flex",
-        flexWrap: "wrap",
-        alignItems: "center",
-        gap: "10px",
-        padding: "10px 12px",
-        borderRadius: "12px",
-        border: "1px solid rgba(0,212,255,0.08)",
-        background: "rgba(0,212,255,0.03)",
-      }}
-    >
-      <span style={{ fontSize: "0.75rem", color: "var(--muted)" }}>
-        Selected: <strong style={{ color: "#c8c8e8" }}>{selectedCount}</strong>
+    <div className="mb-3 flex flex-wrap items-center gap-2.5 rounded-xl border border-[rgba(0,212,255,0.08)] bg-[rgba(0,212,255,0.03)] px-3 py-2.5">
+      <span className="text-xs text-muted">
+        Selected: <strong className="text-[#c8c8e8]">{selectedCount}</strong>
       </span>
       <select
         value={bulkStatus}
         onChange={(e) => onBulkStatusChange(e.target.value)}
         disabled={bulkSaving || statusSavingId !== null || selectedCount === 0}
-        style={{
-          minWidth: "180px",
-          borderRadius: "8px",
-          border: "1px solid rgba(0,212,255,0.15)",
-          background: "rgba(0,212,255,0.04)",
-          color: "#c8c8e8",
-          padding: "8px 10px",
-          fontSize: "0.75rem",
-        }}
+        className="min-w-[180px] rounded-md border border-[rgba(0,212,255,0.15)] bg-[rgba(0,212,255,0.04)] px-2.5 py-2 text-xs text-[#c8c8e8]"
       >
         {ORDER_STATUSES.map((s) => (
           <option key={s} value={s}>{s.replaceAll("_", " ")}</option>
@@ -82,22 +52,14 @@ export default function OrderBulkActionsBar({
         type="button"
         onClick={() => { void onApplyBulkStatus(); }}
         disabled={bulkSaving || statusSavingId !== null || selectedCount === 0}
-        style={{
-          padding: "8px 12px",
-          borderRadius: "8px",
-          border: "1px solid rgba(0,212,255,0.18)",
-          background: bulkSaving ? "rgba(0,212,255,0.12)" : "rgba(0,212,255,0.08)",
-          color: "#67e8f9",
-          fontSize: "0.72rem",
-          fontWeight: 700,
-          cursor: bulkSaving ? "not-allowed" : "pointer",
-          opacity: selectedCount === 0 ? 0.55 : 1,
-        }}
+        className={`rounded-md border border-[rgba(0,212,255,0.18)] px-3 py-2 text-xs font-bold text-[#67e8f9] ${
+          bulkSaving ? "cursor-not-allowed bg-[rgba(0,212,255,0.12)]" : "cursor-pointer bg-[rgba(0,212,255,0.08)]"
+        } ${selectedCount === 0 ? "opacity-55" : "opacity-100"}`}
       >
         {bulkSaving ? "Applying..." : "Apply to Selected"}
       </button>
       {selectedCount > 0 && bulkInvalidSelectionCount > 0 && (
-        <span style={{ color: "#fdba74", fontSize: "0.72rem" }}>
+        <span className="text-xs text-[#fdba74]">
           {bulkInvalidSelectionCount} selected order{bulkInvalidSelectionCount === 1 ? "" : "s"} cannot transition to {bulkStatus.replaceAll("_", " ")}
         </span>
       )}
@@ -106,14 +68,7 @@ export default function OrderBulkActionsBar({
           type="button"
           onClick={onClearSelection}
           disabled={bulkSaving || statusSavingId !== null}
-          style={{
-            padding: "8px 10px",
-            borderRadius: "8px",
-            border: "1px solid rgba(255,255,255,0.08)",
-            background: "rgba(255,255,255,0.02)",
-            color: "var(--muted)",
-            fontSize: "0.72rem",
-          }}
+          className="rounded-md border border-white/[0.08] bg-white/[0.02] px-2.5 py-2 text-xs text-muted"
         >
           Clear Selection
         </button>
@@ -121,4 +76,3 @@ export default function OrderBulkActionsBar({
     </div>
   );
 }
-

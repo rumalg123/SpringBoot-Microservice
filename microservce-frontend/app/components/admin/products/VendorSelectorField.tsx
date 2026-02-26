@@ -86,8 +86,7 @@ export default function VendorSelectorField({
           type="button"
           onClick={() => void refreshVendors()}
           disabled={productMutationBusy || loadingVendors || !canSelectVendor}
-          className="rounded-md border border-[var(--line)] px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
-          style={{ background: "var(--surface-2)", color: "var(--ink-light)" }}
+          className="rounded-md border border-[var(--line)] bg-surface-2 px-2 py-1 text-xs text-ink-light disabled:cursor-not-allowed disabled:opacity-60"
         >
           {loadingVendors ? "Refreshing..." : "Refresh"}
         </button>
@@ -131,16 +130,12 @@ export default function VendorSelectorField({
                     type="button"
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => selectVendor(vendor.id, vendor.name)}
-                    className={`w-full rounded-md px-2 py-2 text-left text-xs ${isSelected ? "ring-1 ring-[var(--brand)]" : ""}`}
-                    style={{
-                      background: isSelected ? "var(--brand-soft)" : "transparent",
-                      color: "var(--ink)",
-                    }}
+                    className={`w-full rounded-md px-2 py-2 text-left text-xs text-ink ${isSelected ? "ring-1 ring-[var(--brand)] bg-brand-soft" : "bg-transparent"}`}
                     disabled={productMutationBusy}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-semibold">{vendor.name}</span>
-                      <span className="rounded px-1.5 py-0.5 text-[10px]" style={{ background: "rgba(255,255,255,0.06)", color: "var(--ink-light)" }}>
+                      <span className="rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-ink-light">
                         {vendor.status || (vendor.active ? "ACTIVE" : "INACTIVE")}
                       </span>
                     </div>
@@ -185,8 +180,7 @@ export default function VendorSelectorField({
               type="button"
               onClick={() => selectVendor("", "")}
               disabled={productMutationBusy || !form.vendorId}
-              className="rounded-md border border-[var(--line)] px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
-              style={{ background: "var(--surface-2)", color: "var(--ink-light)" }}
+              className="rounded-md border border-[var(--line)] bg-surface-2 px-2 py-1 text-xs text-ink-light disabled:cursor-not-allowed disabled:opacity-60"
             >
               Clear
             </button>

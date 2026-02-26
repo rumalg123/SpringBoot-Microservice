@@ -13,17 +13,17 @@ type Props = {
 
 export default function FormField({ label, htmlFor, required, error, helpText, children, style }: Props) {
   return (
-    <div style={{ marginBottom: 14, ...style }}>
+    <div className="mb-3.5" style={style}>
       <label
         htmlFor={htmlFor}
-        style={{ display: "block", marginBottom: 5, fontSize: "0.78rem", fontWeight: 600, color: "var(--ink-light)" }}
+        className="block mb-1 text-sm font-semibold text-ink-light"
       >
         {label}
-        {required && <span style={{ color: "var(--danger)", marginLeft: 3 }}>*</span>}
+        {required && <span className="text-danger ml-0.5">*</span>}
       </label>
       {children}
-      {error && <p style={{ marginTop: 4, fontSize: "0.72rem", color: "var(--danger)" }}>{error}</p>}
-      {helpText && !error && <p style={{ marginTop: 4, fontSize: "0.72rem", color: "var(--muted)" }}>{helpText}</p>}
+      {error && <p className="mt-1 text-xs text-danger">{error}</p>}
+      {helpText && !error && <p className="mt-1 text-xs text-muted">{helpText}</p>}
     </div>
   );
 }

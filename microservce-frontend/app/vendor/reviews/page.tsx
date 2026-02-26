@@ -1,220 +1,203 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import toast from "react-hot-toast";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuthSession } from "../../../lib/authSession";
 import type { Review, VendorReply } from "../../../lib/types/review";
+import VendorPageShell from "../../components/ui/VendorPageShell";
 
 type PagedReviews = { content: Review[]; totalPages: number; totalElements: number; number: number };
 
 export default function VendorReviewsPage() {
   const session = useAuthSession();
   const { status: sessionStatus, isAuthenticated, isVendorAdmin, apiClient } = session;
+  const queryClient = useQueryClient();
 
-  const [reviews, setReviews] = useState<Review[]>([]);
   const [page, setPage] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
-  const [totalElements, setTotalElements] = useState(0);
-  const [loading, setLoading] = useState(true);
 
   // Reply state
   const [replyingToId, setReplyingToId] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
-  const [submittingReply, setSubmittingReply] = useState(false);
 
   // Edit reply state
   const [editingReplyId, setEditingReplyId] = useState<string | null>(null);
   const [editReplyText, setEditReplyText] = useState("");
-  const [savingEdit, setSavingEdit] = useState(false);
 
   // Delete reply state
   const [deletingReplyId, setDeletingReplyId] = useState<string | null>(null);
 
-  const loadReviews = useCallback(async () => {
-    if (!apiClient) return;
-    setLoading(true);
-    try {
-      const res = await apiClient.get(`/reviews/vendor?page=${page}&size=20`);
-      const data = res.data as PagedReviews;
-      setReviews(data.content || []);
-      setTotalPages(data.totalPages || 0);
-      setTotalElements(data.totalElements || 0);
-    } catch {
-      toast.error("Failed to load reviews");
-    } finally {
-      setLoading(false);
-    }
-  }, [apiClient, page]);
+  const ready = sessionStatus === "ready" && isAuthenticated && isVendorAdmin && !!apiClient;
 
-  useEffect(() => {
-    if (sessionStatus !== "ready" || !isAuthenticated || !isVendorAdmin) return;
-    void loadReviews();
-  }, [sessionStatus, isAuthenticated, isVendorAdmin, loadReviews]);
+  const { data: reviewsData, isLoading: loading } = useQuery({
+    queryKey: ["vendor-reviews", page],
+    queryFn: async () => {
+      const res = await apiClient!.get(`/reviews/vendor?page=${page}&size=20`);
+      return res.data as PagedReviews;
+    },
+    enabled: ready,
+  });
 
-  const submitReply = async (reviewId: string) => {
-    if (!apiClient || !replyText.trim() || submittingReply) return;
-    setSubmittingReply(true);
-    try {
-      const res = await apiClient.post(`/reviews/vendor/${reviewId}/reply`, { comment: replyText.trim() });
-      const reply = res.data as VendorReply;
-      setReviews((old) => old.map((r) => (r.id === reviewId ? { ...r, vendorReply: reply } : r)));
+  const reviews = reviewsData?.content || [];
+  const totalPages = reviewsData?.totalPages || 0;
+  const totalElements = reviewsData?.totalElements || 0;
+
+  const submitReplyMutation = useMutation({
+    mutationFn: async (reviewId: string) => {
+      const res = await apiClient!.post(`/reviews/vendor/${reviewId}/reply`, { comment: replyText.trim() });
+      return res.data as VendorReply;
+    },
+    onSuccess: () => {
       setReplyingToId(null);
       setReplyText("");
       toast.success("Reply posted");
-    } catch (err) {
+      void queryClient.invalidateQueries({ queryKey: ["vendor-reviews", page] });
+    },
+    onError: (err) => {
       toast.error(err instanceof Error ? err.message : "Failed to post reply");
-    } finally {
-      setSubmittingReply(false);
-    }
-  };
+    },
+  });
 
-  const updateReply = async (replyId: string, reviewId: string) => {
-    if (!apiClient || !editReplyText.trim() || savingEdit) return;
-    setSavingEdit(true);
-    try {
-      const res = await apiClient.put(`/reviews/vendor/replies/${replyId}`, { comment: editReplyText.trim() });
-      const updated = res.data as VendorReply;
-      setReviews((old) => old.map((r) => (r.id === reviewId ? { ...r, vendorReply: updated } : r)));
+  const updateReplyMutation = useMutation({
+    mutationFn: async ({ replyId }: { replyId: string; reviewId: string }) => {
+      const res = await apiClient!.put(`/reviews/vendor/replies/${replyId}`, { comment: editReplyText.trim() });
+      return res.data as VendorReply;
+    },
+    onSuccess: () => {
       setEditingReplyId(null);
       setEditReplyText("");
       toast.success("Reply updated");
-    } catch (err) {
+      void queryClient.invalidateQueries({ queryKey: ["vendor-reviews", page] });
+    },
+    onError: (err) => {
       toast.error(err instanceof Error ? err.message : "Failed to update reply");
-    } finally {
-      setSavingEdit(false);
-    }
-  };
+    },
+  });
 
-  const deleteReply = async (replyId: string, reviewId: string) => {
-    if (!apiClient || deletingReplyId) return;
-    setDeletingReplyId(replyId);
-    try {
-      await apiClient.delete(`/reviews/vendor/replies/${replyId}`);
-      setReviews((old) => old.map((r) => (r.id === reviewId ? { ...r, vendorReply: null } : r)));
+  const deleteReplyMutation = useMutation({
+    mutationFn: async ({ replyId }: { replyId: string; reviewId: string }) => {
+      await apiClient!.delete(`/reviews/vendor/replies/${replyId}`);
+    },
+    onMutate: ({ replyId }) => { setDeletingReplyId(replyId); },
+    onSuccess: () => {
       toast.success("Reply deleted");
-    } catch (err) {
+      void queryClient.invalidateQueries({ queryKey: ["vendor-reviews", page] });
+    },
+    onError: (err) => {
       toast.error(err instanceof Error ? err.message : "Failed to delete reply");
-    } finally {
-      setDeletingReplyId(null);
-    }
-  };
+    },
+    onSettled: () => { setDeletingReplyId(null); },
+  });
 
-  const stars = (rating: number) => "★".repeat(rating) + "☆".repeat(5 - rating);
+  const submittingReply = submitReplyMutation.isPending;
+  const savingEdit = updateReplyMutation.isPending;
+
+  const stars = (rating: number) => "\u2605".repeat(rating) + "\u2606".repeat(5 - rating);
 
   if (sessionStatus === "loading" || sessionStatus === "idle") {
     return (
-      <div style={{ minHeight: "100vh", background: "var(--bg)", display: "grid", placeItems: "center" }}>
-        <p style={{ color: "var(--muted)" }}>Loading...</p>
-      </div>
+      <VendorPageShell title="Customer Reviews" breadcrumbs={[{ label: "Vendor Portal", href: "/vendor" }, { label: "Reviews" }]}>
+        <p className="text-muted text-center py-10">Loading...</p>
+      </VendorPageShell>
     );
   }
 
   return (
-      <main className="mx-auto max-w-7xl px-4 py-8">
-        <nav className="breadcrumb">
-          <Link href="/">Home</Link>
-          <span className="breadcrumb-sep">›</span>
-          <Link href="/vendor">Vendor Portal</Link>
-          <span className="breadcrumb-sep">›</span>
-          <span className="breadcrumb-current">Reviews</span>
-        </nav>
-
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "24px" }}>
-          <div>
-            <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: "1.5rem", fontWeight: 900, color: "#fff", margin: "0 0 4px" }}>
-              Customer Reviews
-            </h1>
-            <p style={{ fontSize: "0.8rem", color: "var(--muted)", margin: 0 }}>
-              {totalElements} {totalElements === 1 ? "review" : "reviews"} for your products
-            </p>
-          </div>
-        </div>
+      <VendorPageShell
+        title="Customer Reviews"
+        breadcrumbs={[{ label: "Vendor Portal", href: "/vendor" }, { label: "Reviews" }]}
+        actions={
+          <span className="text-sm text-muted">
+            {totalElements} {totalElements === 1 ? "review" : "reviews"} for your products
+          </span>
+        }
+      >
 
         {loading ? (
-          <div style={{ textAlign: "center", padding: "48px 0", color: "var(--muted)" }}>Loading reviews...</div>
+          <div className="text-center py-12 text-muted">Loading reviews...</div>
         ) : reviews.length === 0 ? (
-          <div style={{ background: "rgba(17,17,40,0.7)", backdropFilter: "blur(16px)", border: "1px solid var(--line-bright)", borderRadius: "20px", padding: "48px 24px", textAlign: "center" }}>
-            <p style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--ink-light)", margin: "0 0 8px" }}>No reviews yet</p>
-            <p style={{ fontSize: "0.85rem", color: "var(--muted)", margin: 0 }}>Reviews from customers will appear here.</p>
+          <div className="bg-[rgba(17,17,40,0.7)] backdrop-blur-[16px] border border-line-bright rounded-xl px-6 py-12 text-center">
+            <p className="text-[1.1rem] font-bold text-ink-light mb-2">No reviews yet</p>
+            <p className="text-base text-muted m-0">Reviews from customers will appear here.</p>
           </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          <div className="flex flex-col gap-4">
             {reviews.map((review) => (
               <div
                 key={review.id}
-                className="animate-rise"
-                style={{ background: "rgba(17,17,40,0.7)", backdropFilter: "blur(16px)", border: "1px solid var(--line-bright)", borderRadius: "16px", padding: "20px 24px" }}
+                className="animate-rise bg-[rgba(17,17,40,0.7)] backdrop-blur-[16px] border border-line-bright rounded-lg px-6 py-5"
               >
                 {/* Review header */}
-                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px", marginBottom: "12px" }}>
+                <div className="flex items-start justify-between gap-3 mb-3">
                   <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-                      <span style={{ color: "var(--brand-glow)", fontSize: "0.9rem", letterSpacing: "1px" }}>{stars(review.rating)}</span>
-                      <span style={{ fontSize: "0.75rem", color: "var(--muted)" }}>{review.rating}/5</span>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-brand-glow text-[0.9rem] tracking-[1px]">{stars(review.rating)}</span>
+                      <span className="text-[0.75rem] text-muted">{review.rating}/5</span>
                       {review.verifiedPurchase && (
-                        <span style={{ fontSize: "0.65rem", fontWeight: 700, color: "var(--success)", background: "rgba(52,211,153,0.1)", padding: "2px 8px", borderRadius: "8px" }}>
+                        <span className="text-[0.65rem] font-bold text-success bg-[rgba(52,211,153,0.1)] px-2 py-0.5 rounded-[8px]">
                           Verified Purchase
                         </span>
                       )}
                     </div>
-                    <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--muted)" }}>
-                      by <span style={{ color: "var(--ink-light)", fontWeight: 600 }}>{review.customerDisplayName}</span>
-                      {" · "}{new Date(review.createdAt).toLocaleDateString()}
+                    <p className="m-0 text-sm text-muted">
+                      by <span className="text-ink-light font-semibold">{review.customerDisplayName}</span>
+                      {" \u00b7 "}{new Date(review.createdAt).toLocaleDateString()}
                     </p>
                   </div>
                   <Link
                     href={`/products/${encodeURIComponent(review.productId)}`}
-                    style={{ fontSize: "0.72rem", color: "var(--brand)", textDecoration: "none", whiteSpace: "nowrap" }}
+                    className="text-xs text-brand no-underline whitespace-nowrap"
                   >
-                    View Product →
+                    View Product &rarr;
                   </Link>
                 </div>
 
                 {/* Review content */}
                 {review.title && (
-                  <p style={{ margin: "0 0 6px", fontSize: "0.95rem", fontWeight: 700, color: "#fff" }}>{review.title}</p>
+                  <p className="mb-1.5 mt-0 text-[0.95rem] font-bold text-white">{review.title}</p>
                 )}
-                <p style={{ margin: "0 0 12px", fontSize: "0.85rem", color: "var(--ink-light)", lineHeight: 1.6 }}>
+                <p className="mb-3 mt-0 text-base text-ink-light leading-relaxed">
                   {review.comment}
                 </p>
 
                 {/* Helpful counts */}
-                <div style={{ display: "flex", gap: "12px", fontSize: "0.72rem", color: "var(--muted)", marginBottom: "12px" }}>
-                  <span>👍 {review.helpfulCount} helpful</span>
-                  <span>👎 {review.notHelpfulCount} not helpful</span>
+                <div className="flex gap-3 text-xs text-muted mb-3">
+                  <span>&#128077; {review.helpfulCount} helpful</span>
+                  <span>&#128078; {review.notHelpfulCount} not helpful</span>
                 </div>
 
                 {/* Vendor reply */}
                 {review.vendorReply && editingReplyId !== review.vendorReply.id && (
-                  <div style={{ background: "rgba(52,211,153,0.06)", border: "1px solid rgba(52,211,153,0.15)", borderRadius: "12px", padding: "14px 16px", marginTop: "8px" }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
-                      <p style={{ margin: 0, fontSize: "0.72rem", fontWeight: 700, color: "#34d399", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  <div className="bg-[rgba(52,211,153,0.06)] border border-[rgba(52,211,153,0.15)] rounded-[12px] px-4 py-3.5 mt-2">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <p className="m-0 text-xs font-bold text-[#34d399] uppercase tracking-[0.05em]">
                         Your Reply
                       </p>
-                      <div style={{ display: "flex", gap: "8px" }}>
+                      <div className="flex gap-2">
                         <button
                           onClick={() => {
                             setEditingReplyId(review.vendorReply!.id);
                             setEditReplyText(review.vendorReply!.comment);
                           }}
-                          style={{ fontSize: "0.72rem", color: "var(--brand)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                          className="text-xs text-brand bg-transparent border-none cursor-pointer p-0"
                         >
                           Edit
                         </button>
                         <button
-                          onClick={() => void deleteReply(review.vendorReply!.id, review.id)}
+                          onClick={() => deleteReplyMutation.mutate({ replyId: review.vendorReply!.id, reviewId: review.id })}
                           disabled={deletingReplyId === review.vendorReply!.id}
-                          style={{ fontSize: "0.72rem", color: "var(--error)", background: "none", border: "none", cursor: "pointer", padding: 0, opacity: deletingReplyId === review.vendorReply!.id ? 0.5 : 1 }}
+                          className="text-xs text-[var(--error)] bg-transparent border-none cursor-pointer p-0"
+                          style={{ opacity: deletingReplyId === review.vendorReply!.id ? 0.5 : 1 }}
                         >
                           {deletingReplyId === review.vendorReply!.id ? "Deleting..." : "Delete"}
                         </button>
                       </div>
                     </div>
-                    <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--ink-light)", lineHeight: 1.6 }}>
+                    <p className="m-0 text-base text-ink-light leading-relaxed">
                       {review.vendorReply.comment}
                     </p>
-                    <p style={{ margin: "6px 0 0", fontSize: "0.65rem", color: "var(--muted-2)" }}>
+                    <p className="mt-1.5 mb-0 text-[0.65rem] text-muted-2">
                       {new Date(review.vendorReply.updatedAt || review.vendorReply.createdAt).toLocaleDateString()}
                     </p>
                   </div>
@@ -222,33 +205,29 @@ export default function VendorReviewsPage() {
 
                 {/* Edit reply form */}
                 {review.vendorReply && editingReplyId === review.vendorReply.id && (
-                  <div style={{ marginTop: "8px" }}>
+                  <div className="mt-2">
                     <textarea
                       value={editReplyText}
                       onChange={(e) => setEditReplyText(e.target.value)}
                       maxLength={1000}
                       rows={3}
                       placeholder="Edit your reply..."
-                      style={{
-                        width: "100%", padding: "10px 14px", borderRadius: "10px",
-                        border: "1px solid var(--line-bright)", background: "rgba(255,255,255,0.04)",
-                        color: "#fff", fontSize: "0.85rem", resize: "vertical", outline: "none",
-                      }}
+                      className="w-full px-3.5 py-2.5 rounded-md border border-line-bright bg-[rgba(255,255,255,0.04)] text-white text-base resize-y outline-none"
                     />
-                    <div style={{ display: "flex", gap: "8px", marginTop: "8px", justifyContent: "flex-end" }}>
+                    <div className="flex gap-2 mt-2 justify-end">
                       <button
                         onClick={() => { setEditingReplyId(null); setEditReplyText(""); }}
-                        style={{ padding: "6px 14px", borderRadius: "8px", border: "1px solid var(--line-bright)", background: "transparent", color: "var(--muted)", fontSize: "0.8rem", cursor: "pointer" }}
+                        className="px-3.5 py-1.5 rounded-[8px] border border-line-bright bg-transparent text-muted text-sm cursor-pointer"
                       >
                         Cancel
                       </button>
                       <button
-                        onClick={() => void updateReply(review.vendorReply!.id, review.id)}
+                        onClick={() => updateReplyMutation.mutate({ replyId: review.vendorReply!.id, reviewId: review.id })}
                         disabled={savingEdit || !editReplyText.trim()}
+                        className="px-3.5 py-1.5 rounded-[8px] border-none text-white text-sm font-bold"
                         style={{
-                          padding: "6px 14px", borderRadius: "8px", border: "none",
                           background: editReplyText.trim() ? "var(--gradient-brand)" : "rgba(255,255,255,0.1)",
-                          color: "#fff", fontSize: "0.8rem", fontWeight: 700, cursor: savingEdit || !editReplyText.trim() ? "not-allowed" : "pointer",
+                          cursor: savingEdit || !editReplyText.trim() ? "not-allowed" : "pointer",
                           opacity: savingEdit ? 0.6 : 1,
                         }}
                       >
@@ -262,18 +241,14 @@ export default function VendorReviewsPage() {
                 {!review.vendorReply && replyingToId !== review.id && (
                   <button
                     onClick={() => { setReplyingToId(review.id); setReplyText(""); }}
-                    style={{
-                      marginTop: "4px", padding: "6px 14px", borderRadius: "8px",
-                      border: "1px solid rgba(52,211,153,0.3)", background: "rgba(52,211,153,0.08)",
-                      color: "#34d399", fontSize: "0.8rem", fontWeight: 600, cursor: "pointer",
-                    }}
+                    className="mt-1 px-3.5 py-1.5 rounded-[8px] border border-[rgba(52,211,153,0.3)] bg-[rgba(52,211,153,0.08)] text-[#34d399] text-sm font-semibold cursor-pointer"
                   >
                     Reply to Review
                   </button>
                 )}
 
                 {!review.vendorReply && replyingToId === review.id && (
-                  <div style={{ marginTop: "8px" }}>
+                  <div className="mt-2">
                     <textarea
                       value={replyText}
                       onChange={(e) => setReplyText(e.target.value)}
@@ -281,26 +256,22 @@ export default function VendorReviewsPage() {
                       rows={3}
                       placeholder="Write your reply to this review..."
                       autoFocus
-                      style={{
-                        width: "100%", padding: "10px 14px", borderRadius: "10px",
-                        border: "1px solid var(--line-bright)", background: "rgba(255,255,255,0.04)",
-                        color: "#fff", fontSize: "0.85rem", resize: "vertical", outline: "none",
-                      }}
+                      className="w-full px-3.5 py-2.5 rounded-md border border-line-bright bg-[rgba(255,255,255,0.04)] text-white text-base resize-y outline-none"
                     />
-                    <div style={{ display: "flex", gap: "8px", marginTop: "8px", justifyContent: "flex-end" }}>
+                    <div className="flex gap-2 mt-2 justify-end">
                       <button
                         onClick={() => { setReplyingToId(null); setReplyText(""); }}
-                        style={{ padding: "6px 14px", borderRadius: "8px", border: "1px solid var(--line-bright)", background: "transparent", color: "var(--muted)", fontSize: "0.8rem", cursor: "pointer" }}
+                        className="px-3.5 py-1.5 rounded-[8px] border border-line-bright bg-transparent text-muted text-sm cursor-pointer"
                       >
                         Cancel
                       </button>
                       <button
-                        onClick={() => void submitReply(review.id)}
+                        onClick={() => submitReplyMutation.mutate(review.id)}
                         disabled={submittingReply || !replyText.trim()}
+                        className="px-3.5 py-1.5 rounded-[8px] border-none text-white text-sm font-bold"
                         style={{
-                          padding: "6px 14px", borderRadius: "8px", border: "none",
                           background: replyText.trim() ? "linear-gradient(135deg, #34d399, #059669)" : "rgba(255,255,255,0.1)",
-                          color: "#fff", fontSize: "0.8rem", fontWeight: 700, cursor: submittingReply || !replyText.trim() ? "not-allowed" : "pointer",
+                          cursor: submittingReply || !replyText.trim() ? "not-allowed" : "pointer",
                           opacity: submittingReply ? 0.6 : 1,
                         }}
                       >
@@ -314,36 +285,38 @@ export default function VendorReviewsPage() {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div style={{ display: "flex", justifyContent: "center", gap: "8px", marginTop: "16px" }}>
+              <div className="flex justify-center gap-2 mt-4">
                 <button
                   onClick={() => setPage((p) => Math.max(0, p - 1))}
                   disabled={page === 0}
+                  className="px-4 py-2 rounded-md border border-line-bright text-sm font-semibold"
                   style={{
-                    padding: "8px 16px", borderRadius: "10px", border: "1px solid var(--line-bright)",
-                    background: page === 0 ? "transparent" : "rgba(0,212,255,0.08)", color: page === 0 ? "var(--muted-2)" : "var(--brand)",
-                    fontSize: "0.8rem", fontWeight: 600, cursor: page === 0 ? "not-allowed" : "pointer",
+                    background: page === 0 ? "transparent" : "rgba(0,212,255,0.08)",
+                    color: page === 0 ? "var(--muted-2)" : "var(--brand)",
+                    cursor: page === 0 ? "not-allowed" : "pointer",
                   }}
                 >
-                  ← Previous
+                  &larr; Previous
                 </button>
-                <span style={{ display: "flex", alignItems: "center", fontSize: "0.8rem", color: "var(--muted)", padding: "0 12px" }}>
+                <span className="flex items-center text-sm text-muted px-3">
                   Page {page + 1} of {totalPages}
                 </span>
                 <button
                   onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
                   disabled={page >= totalPages - 1}
+                  className="px-4 py-2 rounded-md border border-line-bright text-sm font-semibold"
                   style={{
-                    padding: "8px 16px", borderRadius: "10px", border: "1px solid var(--line-bright)",
-                    background: page >= totalPages - 1 ? "transparent" : "rgba(0,212,255,0.08)", color: page >= totalPages - 1 ? "var(--muted-2)" : "var(--brand)",
-                    fontSize: "0.8rem", fontWeight: 600, cursor: page >= totalPages - 1 ? "not-allowed" : "pointer",
+                    background: page >= totalPages - 1 ? "transparent" : "rgba(0,212,255,0.08)",
+                    color: page >= totalPages - 1 ? "var(--muted-2)" : "var(--brand)",
+                    cursor: page >= totalPages - 1 ? "not-allowed" : "pointer",
                   }}
                 >
-                  Next →
+                  Next &rarr;
                 </button>
               </div>
             )}
           </div>
         )}
-      </main>
+      </VendorPageShell>
   );
 }

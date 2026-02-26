@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { money, calcDiscount } from "../../../lib/format";
@@ -28,7 +29,7 @@ type Props = {
   onWishlistToggle?: (e: React.MouseEvent<HTMLButtonElement>) => void;
 };
 
-export default function ProductCard({
+function ProductCardInner({
   product: p,
   index = 0,
   showWishlist = false,
@@ -54,31 +55,12 @@ export default function ProductCard({
           type="button"
           onClick={onWishlistToggle}
           disabled={wishlistBusy}
-          style={{
-            position: "absolute",
-            top: "10px",
-            right: "10px",
-            zIndex: 20,
-            width: "32px",
-            height: "32px",
-            borderRadius: "50%",
-            border: isWishlisted ? "1.5px solid var(--danger)" : "1.5px solid var(--line-bright)",
-            background: isWishlisted ? "var(--danger-soft)" : "var(--header-bg)",
-            color: isWishlisted ? "var(--danger)" : "var(--muted)",
-            cursor: wishlistBusy ? "not-allowed" : "pointer",
-            opacity: wishlistBusy ? 0.5 : 1,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            transition: "all 0.2s",
-            backdropFilter: "blur(8px)",
-            boxShadow: isWishlisted ? "0 0 10px var(--danger-soft)" : "none",
-          }}
+          className={`absolute top-2.5 right-2.5 z-20 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 backdrop-blur-sm ${isWishlisted ? "border-[1.5px] border-danger bg-danger-soft text-danger shadow-[0_0_10px_var(--danger-soft)]" : "border-[1.5px] border-line-bright bg-header-bg text-muted shadow-none"} ${wishlistBusy ? "cursor-not-allowed opacity-50" : "cursor-pointer opacity-100"}`}
           title={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
           aria-label={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
         >
           {wishlistBusy ? (
-            <span className="spinner-sm" style={{ width: "10px", height: "10px" }} />
+            <span className="spinner-sm w-2.5 h-2.5" />
           ) : (
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -98,14 +80,7 @@ export default function ProductCard({
       )}
 
       {/* Image */}
-      <div
-        style={{
-          position: "relative",
-          aspectRatio: "1/1",
-          overflow: "hidden",
-          background: "var(--surface-2)",
-        }}
-      >
+      <div className="relative aspect-square overflow-hidden bg-surface-2">
         {imgUrl ? (
           <Image
             src={imgUrl}
@@ -116,33 +91,12 @@ export default function ProductCard({
             unoptimized
           />
         ) : (
-          <div
-            style={{
-              display: "grid",
-              placeItems: "center",
-              width: "100%",
-              height: "100%",
-              background: "linear-gradient(135deg, var(--surface), var(--surface-3))",
-              color: "var(--muted-2)",
-              fontSize: "0.75rem",
-              fontWeight: 600,
-            }}
-          >
+          <div className="grid place-items-center w-full h-full bg-gradient-to-br from-surface to-surface-3 text-muted-2 text-[0.75rem] font-semibold">
             No Image
           </div>
         )}
-        <div className="product-card-overlay" style={{ borderRadius: "15px 15px 0 0" }}>
-          <span
-            style={{
-              background: "var(--gradient-brand)",
-              color: "#fff",
-              padding: "7px 16px",
-              borderRadius: "20px",
-              fontSize: "0.72rem",
-              fontWeight: 800,
-              letterSpacing: "0.04em",
-            }}
-          >
+        <div className="product-card-overlay rounded-t-[15px]">
+          <span className="bg-[image:var(--gradient-brand)] text-white px-4 py-[7px] rounded-full text-xs font-extrabold tracking-wide">
             View Product →
           </span>
         </div>
@@ -150,35 +104,15 @@ export default function ProductCard({
 
       {/* Body */}
       <div className="product-card-body">
-        <p
-          style={{
-            margin: "0 0 4px",
-            fontSize: "0.875rem",
-            fontWeight: 600,
-            color: "var(--ink)",
-            display: "-webkit-box",
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: "vertical",
-            overflow: "hidden",
-          }}
-        >
+        <p className="mb-1 text-base font-semibold text-ink line-clamp-2">
           {p.name}
         </p>
         {p.shortDescription && (
-          <p
-            style={{
-              margin: "0 0 8px",
-              fontSize: "0.7rem",
-              color: "var(--muted)",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
+          <p className="mb-2 text-xs text-muted overflow-hidden text-ellipsis whitespace-nowrap">
             {p.shortDescription}
           </p>
         )}
-        <div style={{ display: "flex", alignItems: "center", gap: "4px", flexWrap: "wrap" }}>
+        <div className="flex items-center gap-1 flex-wrap">
           <span className="price-current">{money(p.sellingPrice)}</span>
           {p.discountedPrice !== null && (
             <>
@@ -188,7 +122,7 @@ export default function ProductCard({
           )}
         </div>
         {p.sku && (
-          <p style={{ margin: "6px 0 0", fontSize: "0.65rem", color: "var(--muted-2)" }}>
+          <p className="mt-1.5 text-[0.65rem] text-muted-2">
             SKU: {p.sku}
           </p>
         )}
@@ -196,3 +130,5 @@ export default function ProductCard({
     </Link>
   );
 }
+
+export default React.memo(ProductCardInner);

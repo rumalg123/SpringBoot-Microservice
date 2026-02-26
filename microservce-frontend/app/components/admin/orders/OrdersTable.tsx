@@ -51,11 +51,11 @@ export default function OrdersTable({
   emptyFilterLabel,
 }: Props) {
   return (
-    <div style={{ overflowX: "auto", borderRadius: "12px", border: "1px solid rgba(0,212,255,0.08)" }}>
-      <table className="admin-table" style={{ minWidth: "980px" }}>
+    <div className="overflow-x-auto rounded-xl border border-[rgba(0,212,255,0.08)]">
+      <table className="admin-table min-w-[980px]">
         <thead>
           <tr>
-            <th style={{ width: "40px" }}>
+            <th className="w-[40px]">
               <input
                 type="checkbox"
                 checked={allCurrentSelected}
@@ -101,20 +101,17 @@ export default function OrdersTable({
                   disabled={isVendorScopedActor || ordersLoading || bulkSaving || statusSavingId !== null}
                 />
               </td>
-              <td style={{ fontFamily: "monospace", fontSize: "0.65rem", color: "var(--muted-2)" }}>{order.id}</td>
+              <td className="font-mono text-[0.65rem] text-muted-2">{order.id}</td>
               <td>
                 {(() => {
                   const chip = getStatusChip(order.status || "PENDING");
                   return (
                     <span
+                      className="rounded-full px-2.5 py-0.5 text-[0.7rem] font-extrabold"
                       style={{
-                        borderRadius: "20px",
                         background: chip.bg,
                         border: `1px solid ${chip.border}`,
                         color: chip.color,
-                        padding: "2px 10px",
-                        fontSize: "0.7rem",
-                        fontWeight: 800,
                       }}
                     >
                       {(order.status || "PENDING").replaceAll("_", " ")}
@@ -122,31 +119,22 @@ export default function OrdersTable({
                   );
                 })()}
               </td>
-              <td style={{ fontWeight: 600, color: "#c8c8e8" }}>{order.item}</td>
+              <td className="font-semibold text-[#c8c8e8]">{order.item}</td>
               <td>
-                <span style={{ borderRadius: "20px", background: "rgba(0,212,255,0.08)", border: "1px solid rgba(0,212,255,0.2)", color: "#00d4ff", padding: "2px 10px", fontSize: "0.72rem", fontWeight: 800 }}>
+                <span className="rounded-full border border-[rgba(0,212,255,0.2)] bg-brand-soft px-2.5 py-0.5 text-xs font-extrabold text-[#00d4ff]">
                   {order.quantity} / {order.itemCount}
                 </span>
               </td>
-              <td style={{ color: "#c8c8e8", fontWeight: 700 }}>${Number(order.orderTotal ?? 0).toFixed(2)}</td>
-              <td style={{ fontSize: "0.72rem", color: "var(--muted)" }}>{new Date(order.createdAt).toLocaleString()}</td>
+              <td className="font-bold text-[#c8c8e8]">${Number(order.orderTotal ?? 0).toFixed(2)}</td>
+              <td className="text-xs text-muted">{new Date(order.createdAt).toLocaleString()}</td>
               <td>
-                <div style={{ display: "flex", gap: "8px", alignItems: "center", minWidth: isVendorScopedActor ? "220px" : "360px", flexWrap: "wrap" }}>
+                <div className={`flex flex-wrap items-center gap-2 ${isVendorScopedActor ? "min-w-[220px]" : "min-w-[360px]"}`}>
                   {!isVendorScopedActor && (
                     <select
                       value={statusDrafts[order.id] || order.status || "PENDING"}
                       onChange={(e) => onStatusDraftChange(order.id, e.target.value)}
                       disabled={ordersLoading || statusSavingId === order.id}
-                      style={{
-                        flex: 1,
-                        minWidth: "150px",
-                        borderRadius: "8px",
-                        border: "1px solid rgba(0,212,255,0.15)",
-                        background: "rgba(0,212,255,0.04)",
-                        color: "#c8c8e8",
-                        padding: "8px 10px",
-                        fontSize: "0.75rem",
-                      }}
+                      className="min-w-[150px] flex-1 rounded-md border border-[rgba(0,212,255,0.15)] bg-[rgba(0,212,255,0.04)] px-2.5 py-2 text-xs text-[#c8c8e8]"
                     >
                       {ORDER_STATUSES.map((s) => (
                         <option key={s} value={s} disabled={!getAllowedNextStatuses(order.status).includes(s)}>
@@ -159,15 +147,9 @@ export default function OrdersTable({
                     type="button"
                     onClick={() => { void onToggleVendorOrders(order.id); }}
                     disabled={ordersLoading || bulkSaving || statusSavingId !== null || vendorOrderStatusSavingId !== null}
-                    style={{
-                      padding: "8px 10px",
-                      borderRadius: "8px",
-                      border: "1px solid rgba(124,58,237,0.18)",
-                      background: vendorOrdersOrderId === order.id ? "rgba(124,58,237,0.12)" : "rgba(124,58,237,0.08)",
-                      color: "#c4b5fd",
-                      fontSize: "0.72rem",
-                      fontWeight: 700,
-                    }}
+                    className={`rounded-md border border-[rgba(124,58,237,0.18)] px-2.5 py-2 text-xs font-bold text-[#c4b5fd] ${
+                      vendorOrdersOrderId === order.id ? "bg-[rgba(124,58,237,0.12)]" : "bg-[rgba(124,58,237,0.08)]"
+                    }`}
                   >
                     {vendorOrdersLoading && vendorOrdersOrderId === order.id ? "Loading..." : vendorOrdersOrderId === order.id ? "Hide Vendor Orders" : "Vendor Orders"}
                   </button>
@@ -175,15 +157,9 @@ export default function OrdersTable({
                     type="button"
                     onClick={() => { void onToggleOrderHistory(order.id); }}
                     disabled={ordersLoading || bulkSaving || statusSavingId !== null || vendorOrderStatusSavingId !== null}
-                    style={{
-                      padding: "8px 10px",
-                      borderRadius: "8px",
-                      border: "1px solid rgba(255,255,255,0.08)",
-                      background: historyOrderId === order.id ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.02)",
-                      color: historyOrderId === order.id ? "#c8c8e8" : "var(--muted)",
-                      fontSize: "0.72rem",
-                      fontWeight: 700,
-                    }}
+                    className={`rounded-md border border-white/[0.08] px-2.5 py-2 text-xs font-bold ${
+                      historyOrderId === order.id ? "bg-white/5 text-[#c8c8e8]" : "bg-white/[0.02] text-muted"
+                    }`}
                   >
                     {historyLoading && historyOrderId === order.id ? "Loading..." : historyOrderId === order.id ? "Hide" : "History"}
                   </button>
@@ -197,17 +173,11 @@ export default function OrdersTable({
                         || (statusDrafts[order.id] || order.status) === order.status
                         || !canTransitionOrderStatus(order.status, statusDrafts[order.id] || order.status)
                       }
-                      style={{
-                        padding: "8px 10px",
-                        borderRadius: "8px",
-                        border: "1px solid rgba(0,212,255,0.18)",
-                        background: statusSavingId === order.id ? "rgba(0,212,255,0.12)" : "rgba(0,212,255,0.08)",
-                        color: "#67e8f9",
-                        fontSize: "0.72rem",
-                        fontWeight: 700,
-                        cursor: statusSavingId !== null ? "not-allowed" : "pointer",
-                        opacity: (statusDrafts[order.id] || order.status) === order.status ? 0.55 : 1,
-                      }}
+                      className={`rounded-md border border-[rgba(0,212,255,0.18)] px-2.5 py-2 text-xs font-bold text-[#67e8f9] ${
+                        statusSavingId === order.id ? "bg-[rgba(0,212,255,0.12)]" : "bg-[rgba(0,212,255,0.08)]"
+                      } ${statusSavingId !== null ? "cursor-not-allowed" : "cursor-pointer"} ${
+                        (statusDrafts[order.id] || order.status) === order.status ? "opacity-55" : "opacity-100"
+                      }`}
                       title={
                         canTransitionOrderStatus(order.status, statusDrafts[order.id] || order.status)
                           ? "Save order status"
@@ -226,4 +196,3 @@ export default function OrdersTable({
     </div>
   );
 }
-

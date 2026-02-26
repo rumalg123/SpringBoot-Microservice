@@ -37,7 +37,7 @@ function NavLink({ href, label, color, isActive }: { href: string; label: string
     <Link
       href={href}
       aria-current={isActive ? "page" : undefined}
-      className="px-4 py-2 text-sm font-semibold rounded-lg transition no-underline relative"
+      className="relative px-4 py-2 text-sm font-semibold rounded-lg transition no-underline"
       style={{
         color: isActive ? c.active : c.inactive,
         background: isActive ? c.bg : "transparent",
@@ -70,7 +70,16 @@ export default function AppNav({
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 10);
+    let ticking = false;
+    const onScroll = () => {
+      if (!ticking) {
+        requestAnimationFrame(() => {
+          setScrolled(window.scrollY > 10);
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
@@ -136,37 +145,26 @@ export default function AppNav({
 
   return (
     <header
-      className="sticky top-0 z-50 transition-all duration-300"
+      className="sticky top-0 z-50 border-b border-[var(--brand-soft)] bg-header-bg backdrop-blur-[20px] transition-all duration-300"
       style={{
-        background: "var(--header-bg)",
-        backdropFilter: "blur(20px)",
         WebkitBackdropFilter: "blur(20px)",
-        borderBottom: "1px solid var(--brand-soft)",
         boxShadow: scrolled ? "0 4px 32px rgba(0,0,0,0.5)" : "none",
       }}
     >
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-3 no-underline group" style={{ flexShrink: 0 }}>
+        <Link href="/" className="flex shrink-0 items-center gap-3 no-underline group">
           <div
-            className="flex h-9 w-9 items-center justify-center rounded-xl text-xs font-black"
-            style={{
-              background: "var(--gradient-brand)",
-              boxShadow: "0 0 16px var(--brand-glow)",
-              color: "#fff",
-              letterSpacing: "0.02em",
-            }}
+            className="flex h-9 w-9 items-center justify-center rounded-xl text-xs font-black tracking-[0.02em] text-white shadow-[0_0_16px_var(--brand-glow)]"
+            style={{ background: "var(--gradient-brand)" }}
           >
             RS
           </div>
           <div>
-            <p
-              className="text-base font-black leading-tight"
-              style={{ fontFamily: "'Syne', sans-serif", color: "#fff", letterSpacing: "-0.01em" }}
-            >
+            <p className="text-base font-black leading-tight tracking-[-0.01em] text-white" style={{ fontFamily: "'Syne', sans-serif" }}>
               Rumal Store
             </p>
-            <p className="text-[9px] font-semibold tracking-[0.2em]" style={{ color: "rgba(0,212,255,0.6)" }}>
+            <p className="text-[9px] font-semibold tracking-[0.2em] text-[rgba(0,212,255,0.6)]">
               ONLINE MARKETPLACE
             </p>
           </div>
@@ -181,27 +179,14 @@ export default function AppNav({
         <div className="flex items-center gap-2 sm:gap-3">
           <WishlistNavWidget apiClient={apiClient} />
           <CartNavWidget apiClient={apiClient} emailVerified={emailVerified} />
-          <span
-            className="hidden rounded-full px-3 py-1.5 text-xs font-medium md:inline-block"
-            style={{
-              background: "var(--brand-soft)",
-              border: "1px solid var(--line-bright)",
-              color: "rgba(0,212,255,0.8)",
-            }}
-          >
+          <span className="hidden rounded-full border border-line-bright bg-brand-soft px-3 py-1.5 text-xs font-medium text-[rgba(0,212,255,0.8)] md:inline-block">
             {email || "User"}
           </span>
           <button type="button"
             disabled={logoutPending}
             onClick={() => { void handleLogout(); }}
-            className="hidden md:inline-flex rounded-xl px-4 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
-            style={{
-              background: "var(--gradient-brand)",
-              color: "#fff",
-              border: "none",
-              cursor: "pointer",
-              boxShadow: "0 0 14px var(--line-bright)",
-            }}
+            className="hidden cursor-pointer rounded-xl border-none px-4 py-2 text-xs font-bold text-white shadow-[0_0_14px_var(--line-bright)] transition disabled:cursor-not-allowed disabled:opacity-50 md:inline-flex"
+            style={{ background: "var(--gradient-brand)" }}
           >
             {logoutPending ? "Logging out..." : "Logout"}
           </button>
@@ -209,8 +194,7 @@ export default function AppNav({
           <button
             type="button"
             onClick={() => setMobileOpen((o) => !o)}
-            className="md:hidden rounded-lg p-2 transition"
-            style={{ color: "#fff", background: "rgba(255,255,255,0.05)", border: "1px solid var(--line-bright)" }}
+            className="rounded-lg border border-line-bright bg-white/5 p-2 text-white transition md:hidden"
             aria-label={mobileOpen ? "Close menu" : "Open menu"}
             aria-expanded={mobileOpen}
             aria-controls="main-nav"
@@ -230,8 +214,7 @@ export default function AppNav({
       <nav
         id="main-nav"
         aria-label="Main navigation"
-        className={mobileOpen ? "block" : "hidden md:block"}
-        style={{ borderTop: "1px solid var(--brand-soft)", background: "rgba(8,8,18,0.6)" }}
+        className={`border-t border-[var(--brand-soft)] bg-[rgba(8,8,18,0.6)] ${mobileOpen ? "block" : "hidden md:block"}`}
       >
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-1 px-4 py-2">
           {userLinks.map((item) => (
@@ -258,23 +241,18 @@ export default function AppNav({
 
           {/* Mobile-only: user info + logout */}
           {mobileOpen && (
-            <div className="w-full mt-1 pt-2" style={{ borderTop: "1px solid var(--brand-soft)" }}>
+            <div className="mt-1 w-full border-t border-[var(--brand-soft)] pt-2">
               <div className="flex items-center justify-between gap-3">
                 {email && (
-                  <span className="text-xs font-medium" style={{ color: "rgba(0,212,255,0.7)" }}>
+                  <span className="text-xs font-medium text-[rgba(0,212,255,0.7)]">
                     {email}
                   </span>
                 )}
                 <button type="button"
                   disabled={logoutPending}
                   onClick={() => { void handleLogout(); }}
-                  className="rounded-lg px-4 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
-                  style={{
-                    background: "var(--gradient-brand)",
-                    color: "#fff",
-                    border: "none",
-                    cursor: "pointer",
-                  }}
+                  className="cursor-pointer rounded-lg border-none px-4 py-2 text-xs font-bold text-white transition disabled:cursor-not-allowed disabled:opacity-50"
+                  style={{ background: "var(--gradient-brand)" }}
                 >
                   {logoutPending ? "Logging out..." : "Logout"}
                 </button>

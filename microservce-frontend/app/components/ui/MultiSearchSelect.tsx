@@ -165,65 +165,17 @@ export default function MultiSearchSelect({
 
   const filteredResults = results.filter((item) => !values.includes(String(item[valueField] || "")));
 
-  const containerStyle: React.CSSProperties = {
-    position: "relative",
-  };
-
-  const wrapperStyle: React.CSSProperties = {
-    display: "flex",
-    flexWrap: "wrap",
-    alignItems: "center",
-    gap: 6,
-    padding: "6px 10px",
-    borderRadius: 10,
-    border: "1px solid var(--line)",
-    background: "var(--surface-2)",
-    minHeight: 40,
-    cursor: disabled ? "not-allowed" : "text",
-    opacity: disabled ? 0.6 : 1,
-    transition: "border-color 0.15s",
-  };
-
-  const chipStyle: React.CSSProperties = {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 4,
-    padding: "3px 8px",
-    borderRadius: 6,
-    background: "var(--brand-soft)",
-    border: "1px solid var(--line-bright)",
-    color: "var(--brand)",
-    fontSize: "0.74rem",
-    fontWeight: 600,
-    whiteSpace: "nowrap",
-  };
-
-  const chipCloseStyle: React.CSSProperties = {
-    width: 16,
-    height: 16,
-    borderRadius: "50%",
-    background: "rgba(255,255,255,0.08)",
-    border: "none",
-    color: "var(--brand)",
-    fontSize: "0.65rem",
-    cursor: "pointer",
-    display: "grid",
-    placeItems: "center",
-    flexShrink: 0,
-    lineHeight: 1,
-  };
-
   return (
-    <div ref={containerRef} style={containerStyle}>
+    <div ref={containerRef} className="relative">
       <div
-        style={wrapperStyle}
+        className={`flex flex-wrap items-center gap-1.5 py-1.5 px-2.5 rounded-md border border-line bg-surface-2 min-h-[40px] transition-colors duration-150 ${disabled ? "cursor-not-allowed opacity-60" : "cursor-text"}`}
         onClick={() => {
           if (!disabled) inputRef.current?.focus();
         }}
       >
         {values.map((val) => (
-          <span key={val} style={chipStyle}>
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis", maxWidth: 160 }}>{getLabel(val)}</span>
+          <span key={val} className="inline-flex items-center gap-1 py-[3px] px-2 rounded-sm bg-brand-soft border border-line-bright text-brand text-[0.74rem] font-semibold whitespace-nowrap">
+            <span className="overflow-hidden text-ellipsis max-w-[160px]">{getLabel(val)}</span>
             {!disabled && (
               <button
                 type="button"
@@ -231,7 +183,7 @@ export default function MultiSearchSelect({
                   e.stopPropagation();
                   handleRemove(val);
                 }}
-                style={chipCloseStyle}
+                className="w-4 h-4 rounded-full bg-[rgba(255,255,255,0.08)] border-none text-brand text-[0.65rem] cursor-pointer grid place-items-center shrink-0 leading-none"
               >
                 x
               </button>
@@ -246,16 +198,7 @@ export default function MultiSearchSelect({
           onKeyDown={handleKeyDown}
           placeholder={values.length === 0 ? placeholder : ""}
           disabled={disabled}
-          style={{
-            flex: 1,
-            minWidth: 80,
-            border: "none",
-            background: "transparent",
-            color: "var(--ink)",
-            fontSize: "0.82rem",
-            outline: "none",
-            padding: "3px 0",
-          }}
+          className="flex-1 min-w-[80px] border-none bg-transparent text-ink text-sm outline-none py-[3px]"
         />
       </div>
 
@@ -263,39 +206,16 @@ export default function MultiSearchSelect({
       {open && !disabled && (
         <div
           ref={listRef}
-          style={{
-            position: "absolute",
-            top: "calc(100% + 4px)",
-            left: 0,
-            right: 0,
-            maxHeight: 220,
-            overflowY: "auto",
-            borderRadius: 10,
-            border: "1px solid var(--line-bright)",
-            background: "var(--surface-2)",
-            boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
-            zIndex: 50,
-            padding: 4,
-          }}
+          className="absolute top-[calc(100%+4px)] left-0 right-0 max-h-[220px] overflow-y-auto rounded-md border border-line-bright bg-surface-2 shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-50 p-1"
         >
           {loading && (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "16px 12px", gap: 8 }}>
-              <span
-                style={{
-                  display: "inline-block",
-                  width: 14,
-                  height: 14,
-                  border: "2px solid var(--brand)",
-                  borderTopColor: "transparent",
-                  borderRadius: "50%",
-                  animation: "spin 0.6s linear infinite",
-                }}
-              />
-              <span style={{ fontSize: "0.78rem", color: "var(--muted)" }}>Searching...</span>
+            <div className="flex items-center justify-center py-4 px-3 gap-2">
+              <span className="inline-block w-3.5 h-3.5 border-2 border-brand border-t-transparent rounded-full animate-spin" />
+              <span className="text-sm text-muted">Searching...</span>
             </div>
           )}
           {!loading && filteredResults.length === 0 && (
-            <div style={{ padding: "16px 12px", textAlign: "center", fontSize: "0.78rem", color: "var(--muted)" }}>
+            <div className="py-4 px-3 text-center text-sm text-muted">
               {results.length > 0 && filteredResults.length === 0 ? "All results already selected" : "No results found"}
             </div>
           )}
@@ -309,16 +229,7 @@ export default function MultiSearchSelect({
                   key={itemValue || index}
                   onClick={() => handleSelect(item)}
                   onMouseEnter={() => setHighlightIndex(index)}
-                  style={{
-                    padding: "8px 10px",
-                    borderRadius: 8,
-                    fontSize: "0.82rem",
-                    cursor: "pointer",
-                    color: "var(--ink)",
-                    fontWeight: 500,
-                    background: isHighlighted ? "var(--brand-soft)" : "transparent",
-                    transition: "background 0.1s",
-                  }}
+                  className={`py-2 px-2.5 rounded-[8px] text-sm cursor-pointer text-ink font-medium transition-[background] duration-100 ${isHighlighted ? "bg-brand-soft" : "bg-transparent"}`}
                 >
                   {itemLabel}
                 </div>

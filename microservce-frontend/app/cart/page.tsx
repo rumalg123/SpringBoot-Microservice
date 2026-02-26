@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import AppNav from "../components/AppNav";
 import Footer from "../components/Footer";
@@ -10,13 +10,15 @@ import { useAuthSession } from "../../lib/authSession";
 import { getErrorMessage } from "../../lib/error";
 import { PayHereFormData, submitToPayHere } from "../../lib/payhere";
 import { trackPurchase, fetchSimilarProducts, type PersonalizationProduct } from "../../lib/personalization";
-import { money, calcDiscount } from "../../lib/format";
-import { resolveImageUrl } from "../../lib/image";
-import type { CartItem, CartResponse, CheckoutPreviewResponse, CheckoutResponse, AppliedPromotion, RejectedPromotion } from "../../lib/types/cart";
+import { money } from "../../lib/format";
+import type { CheckoutPreviewResponse } from "../../lib/types/cart";
 import { emptyCart } from "../../lib/types/cart";
-import type { CustomerAddress } from "../../lib/types/customer";
-import Image from "next/image";
+import { useCart, useUpdateCartItem, useRemoveCartItem, useSaveForLater, useMoveToCart, useClearCart, useCheckoutPreview, useCheckout } from "../../lib/hooks/queries/useCart";
+import { useAddresses } from "../../lib/hooks/queries/useAddresses";
 import CheckoutSidebar from "../components/cart/CheckoutSidebar";
+import CartItemCard from "../components/cart/CartItemCard";
+import SavedForLaterSection from "../components/cart/SavedForLaterSection";
+import CartSuggestions from "../components/cart/CartSuggestions";
 import EmptyState from "../components/ui/EmptyState";
 
 
@@ -28,69 +30,63 @@ export default function CartPage() {
     ensureCustomer, apiClient, profile, logout, emailVerified, resendVerificationEmail,
   } = session;
 
-  const [cart, setCart] = useState<CartResponse>(emptyCart);
-  const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
+  // --- UI form state ---
   const [shippingAddressId, setShippingAddressId] = useState("");
   const [billingAddressId, setBillingAddressId] = useState("");
   const [billingSameAsShipping, setBillingSameAsShipping] = useState(true);
   const [status, setStatus] = useState("Loading cart...");
   const [resendingVerification, setResendingVerification] = useState(false);
-  const [addressLoading, setAddressLoading] = useState(false);
+  const [couponCode, setCouponCode] = useState("");
+  const [preview, setPreview] = useState<CheckoutPreviewResponse | null>(null);
+  const [couponError, setCouponError] = useState("");
+  const [suggestions, setSuggestions] = useState<PersonalizationProduct[]>([]);
+
+  // --- Item-level busy tracking ---
   const [updatingItemId, setUpdatingItemId] = useState<string | null>(null);
   const [removingItemId, setRemovingItemId] = useState<string | null>(null);
   const [savingItemId, setSavingItemId] = useState<string | null>(null);
   const [movingItemId, setMovingItemId] = useState<string | null>(null);
-  const [clearingCart, setClearingCart] = useState(false);
-  const [checkingOut, setCheckingOut] = useState(false);
-  const [couponCode, setCouponCode] = useState("");
-  const [preview, setPreview] = useState<CheckoutPreviewResponse | null>(null);
-  const [previewing, setPreviewing] = useState(false);
-  const [couponError, setCouponError] = useState("");
-  const [suggestions, setSuggestions] = useState<PersonalizationProduct[]>([]);
 
-  const loadCart = useCallback(async () => {
-    if (!apiClient) return;
-    const res = await apiClient.get<CartResponse>("/cart/me");
-    const data = res.data ?? emptyCart;
-    setCart({ ...emptyCart, ...data, items: data.items || [] });
-  }, [apiClient]);
+  // --- React Query: data fetching ---
+  const { data: cart = emptyCart, isLoading: cartLoading } = useCart(apiClient);
+  const { data: addresses = [], isLoading: addressLoading } = useAddresses(apiClient);
 
-  const loadAddresses = useCallback(async () => {
-    if (!apiClient) return;
-    setAddressLoading(true);
-    try {
-      const res = await apiClient.get<CustomerAddress[]>("/customers/me/addresses");
-      const loaded = res.data ?? [];
-      setAddresses(loaded);
-      const defaultShipping = loaded.find((a) => a.defaultShipping)?.id || loaded[0]?.id || "";
-      const defaultBilling = loaded.find((a) => a.defaultBilling)?.id || defaultShipping;
-      setShippingAddressId((old) => old || defaultShipping);
-      setBillingAddressId((old) => old || defaultBilling);
-    } finally {
-      setAddressLoading(false);
-    }
-  }, [apiClient]);
+  // --- React Query: mutations ---
+  const updateCartItemMut = useUpdateCartItem(apiClient);
+  const removeCartItemMut = useRemoveCartItem(apiClient);
+  const saveForLaterMut = useSaveForLater(apiClient);
+  const moveToCartMut = useMoveToCart(apiClient);
+  const clearCartMut = useClearCart(apiClient);
+  const checkoutPreviewMut = useCheckoutPreview(apiClient);
+  const checkoutMut = useCheckout(apiClient);
 
+  // --- Auth guard & customer bootstrap ---
   useEffect(() => {
     if (sessionStatus !== "ready") return;
     if (!isAuthenticated) { router.replace("/"); return; }
-    const run = async () => {
-      try {
-        await ensureCustomer();
-        await Promise.all([loadCart(), loadAddresses()]);
-        setStatus("Cart ready.");
-      } catch (err) {
-        setStatus(err instanceof Error ? err.message : "Failed to load cart");
-      }
-    };
-    void run();
-  }, [sessionStatus, isAuthenticated, router, ensureCustomer, loadCart, loadAddresses]);
+    void ensureCustomer();
+  }, [sessionStatus, isAuthenticated, router, ensureCustomer]);
+
+  // --- Update status based on query state ---
+  useEffect(() => {
+    if (cartLoading) setStatus("Loading cart...");
+    else setStatus("Cart ready.");
+  }, [cartLoading]);
+
+  // --- Default address selection when addresses load ---
+  useEffect(() => {
+    if (addresses.length === 0) return;
+    const defaultShipping = addresses.find((a) => a.defaultShipping)?.id || addresses[0]?.id || "";
+    const defaultBilling = addresses.find((a) => a.defaultBilling)?.id || defaultShipping;
+    setShippingAddressId((old) => old || defaultShipping);
+    setBillingAddressId((old) => old || defaultBilling);
+  }, [addresses]);
 
   // Fetch "Complete Your Purchase" suggestions
   useEffect(() => {
     const firstProduct = cart.items[0];
     if (!firstProduct) { setSuggestions([]); return; }
-    fetchSimilarProducts(firstProduct.productId, 4).then(setSuggestions).catch(() => {});
+    fetchSimilarProducts(firstProduct.productId, 4).then(setSuggestions).catch((e) => console.error("Failed to load suggestions:", e));
   }, [cart.items.length > 0 ? cart.items[0]?.productId : null]);
 
   useEffect(() => {
@@ -98,117 +94,118 @@ export default function CartPage() {
     setBillingAddressId(shippingAddressId);
   }, [billingSameAsShipping, shippingAddressId]);
 
-  const busy = updatingItemId !== null || removingItemId !== null || savingItemId !== null || movingItemId !== null || clearingCart || checkingOut || previewing;
+  const busy =
+    updatingItemId !== null ||
+    removingItemId !== null ||
+    savingItemId !== null ||
+    movingItemId !== null ||
+    clearCartMut.isPending ||
+    checkoutMut.isPending ||
+    checkoutPreviewMut.isPending;
 
-  const updateQuantity = async (itemId: string, quantity: number) => {
+  const clearingCart = clearCartMut.isPending;
+  const previewing = checkoutPreviewMut.isPending;
+  const checkingOut = checkoutMut.isPending;
+
+  const updateQuantity = (itemId: string, quantity: number) => {
     if (!apiClient || busy || quantity < 1) return;
     setUpdatingItemId(itemId);
-    try {
-      const res = await apiClient.put<CartResponse>(`/cart/me/items/${itemId}`, { quantity });
-      setCart(res.data ?? emptyCart);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to update quantity");
-    } finally { setUpdatingItemId(null); }
+    updateCartItemMut.mutate(
+      { itemId, quantity },
+      {
+        onError: (err) => { toast.error(err instanceof Error ? err.message : "Failed to update quantity"); },
+        onSettled: () => { setUpdatingItemId(null); },
+      },
+    );
   };
 
-  const removeItem = async (itemId: string) => {
+  const removeItem = (itemId: string) => {
     if (!apiClient || busy) return;
     setRemovingItemId(itemId);
-    try {
-      await apiClient.delete(`/cart/me/items/${itemId}`);
-      await loadCart();
-      toast.success("Item removed from cart");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to remove item");
-    } finally { setRemovingItemId(null); }
+    removeCartItemMut.mutate(itemId, {
+      onSuccess: () => { toast.success("Item removed from cart"); },
+      onError: (err) => { toast.error(err instanceof Error ? err.message : "Failed to remove item"); },
+      onSettled: () => { setRemovingItemId(null); },
+    });
   };
 
-  const saveForLater = async (itemId: string) => {
+  const saveForLater = (itemId: string) => {
     if (!apiClient || busy) return;
     setSavingItemId(itemId);
-    try {
-      const res = await apiClient.post<CartResponse>(`/cart/me/items/${itemId}/save-for-later`);
-      setCart(res.data ?? emptyCart);
-      toast.success("Item saved for later");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save item");
-    } finally { setSavingItemId(null); }
+    saveForLaterMut.mutate(itemId, {
+      onSuccess: () => { toast.success("Item saved for later"); },
+      onError: (err) => { toast.error(err instanceof Error ? err.message : "Failed to save item"); },
+      onSettled: () => { setSavingItemId(null); },
+    });
   };
 
-  const moveToCart = async (itemId: string) => {
+  const moveToCart = (itemId: string) => {
     if (!apiClient || busy) return;
     setMovingItemId(itemId);
-    try {
-      const res = await apiClient.post<CartResponse>(`/cart/me/items/${itemId}/move-to-cart`);
-      setCart(res.data ?? emptyCart);
-      toast.success("Item moved to cart");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to move item to cart");
-    } finally { setMovingItemId(null); }
+    moveToCartMut.mutate(itemId, {
+      onSuccess: () => { toast.success("Item moved to cart"); },
+      onError: (err) => { toast.error(err instanceof Error ? err.message : "Failed to move item to cart"); },
+      onSettled: () => { setMovingItemId(null); },
+    });
   };
 
-  const clearCart = async () => {
+  const clearCart = () => {
     if (!apiClient || busy || cart.items.length === 0) return;
-    setClearingCart(true);
-    try {
-      await apiClient.delete("/cart/me");
-      await loadCart();
-      toast.success("Cart cleared");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to clear cart");
-    } finally { setClearingCart(false); }
+    clearCartMut.mutate(undefined, {
+      onSuccess: () => { toast.success("Cart cleared"); },
+      onError: (err) => { toast.error(err instanceof Error ? err.message : "Failed to clear cart"); },
+    });
   };
 
-  const loadPreview = async () => {
+  const loadPreview = () => {
     if (!apiClient || cart.items.length === 0) return;
-    setPreviewing(true);
     setCouponError("");
-    try {
-      const res = await apiClient.post<CheckoutPreviewResponse>("/cart/me/checkout/preview", {
-        couponCode: couponCode.trim() || null,
-        shippingAmount: 0,
-      });
-      setPreview(res.data);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Preview failed";
-      if (couponCode.trim() && msg.toLowerCase().includes("coupon")) {
-        setCouponError(msg);
-      } else {
-        toast.error(msg);
-      }
-      setPreview(null);
-    } finally { setPreviewing(false); }
+    checkoutPreviewMut.mutate(
+      { couponCode: couponCode.trim() || null, shippingAmount: 0 },
+      {
+        onSuccess: (data) => { setPreview(data); },
+        onError: (err) => {
+          const msg = err instanceof Error ? err.message : "Preview failed";
+          if (couponCode.trim() && msg.toLowerCase().includes("coupon")) {
+            setCouponError(msg);
+          } else {
+            toast.error(msg);
+          }
+          setPreview(null);
+        },
+      },
+    );
   };
 
-  const checkout = async () => {
+  const checkout = () => {
     if (!apiClient || busy || cart.items.length === 0) return;
     const resolvedShipping = shippingAddressId.trim();
     const resolvedBilling = (billingSameAsShipping ? shippingAddressId : billingAddressId).trim();
     if (!resolvedShipping || !resolvedBilling) { toast.error("Select shipping and billing addresses"); return; }
-    setCheckingOut(true);
     setStatus("Placing order...");
-    try {
-      const res = await apiClient.post<CheckoutResponse>("/cart/me/checkout", {
+    checkoutMut.mutate(
+      {
         shippingAddressId: resolvedShipping,
         billingAddressId: resolvedBilling,
         couponCode: couponCode.trim() || null,
         shippingAmount: 0,
-      });
-      const data = res.data;
-      await loadCart();
-      setPreview(null);
-
-      setStatus("Redirecting to payment...");
-      toast.success(`Order placed! Total: ${money(data.grandTotal)}`);
-      trackPurchase(cart.items.map((item) => ({ id: item.productId, price: item.unitPrice })), session.token);
-      const payRes = await apiClient.post<PayHereFormData>("/payments/me/initiate", { orderId: data.orderId });
-      submitToPayHere(payRes.data);
-    } catch (err) {
-      const message = getErrorMessage(err);
-      setStatus(message);
-      toast.error(message);
-      setCheckingOut(false);
-    }
+      },
+      {
+        onSuccess: async (data) => {
+          setPreview(null);
+          setStatus("Redirecting to payment...");
+          toast.success(`Order placed! Total: ${money(data.grandTotal)}`);
+          trackPurchase(cart.items.map((item) => ({ id: item.productId, price: item.unitPrice })), session.token);
+          const payRes = await apiClient.post<PayHereFormData>("/payments/me/initiate", { orderId: data.orderId });
+          submitToPayHere(payRes.data);
+        },
+        onError: (err) => {
+          const message = getErrorMessage(err);
+          setStatus(message);
+          toast.error(message);
+        },
+      },
+    );
   };
 
   const resendVerification = async () => {
@@ -229,10 +226,10 @@ export default function CartPage() {
 
   if (sessionStatus === "loading" || sessionStatus === "idle") {
     return (
-      <div style={{ minHeight: "100vh", background: "var(--bg)", display: "grid", placeItems: "center" }}>
-        <div style={{ textAlign: "center" }}>
+      <div className="grid min-h-screen place-items-center bg-bg">
+        <div className="text-center">
           <div className="spinner-lg" />
-          <p style={{ marginTop: "16px", color: "var(--muted)", fontSize: "0.875rem" }}>Loading...</p>
+          <p className="mt-4 text-base text-muted">Loading...</p>
         </div>
       </div>
     );
@@ -241,7 +238,7 @@ export default function CartPage() {
   if (!isAuthenticated) return null;
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
+    <div className="min-h-screen bg-bg">
       <AppNav
         email={(profile?.email as string) || ""}
         isSuperAdmin={session.isSuperAdmin}
@@ -261,30 +258,19 @@ export default function CartPage() {
         {/* Email verification warning */}
         {emailVerified === false && (
           <section
-            className="mb-4 flex items-center gap-3 rounded-xl px-4 py-3 text-sm"
-            style={{ border: "1px solid var(--warning-border)", background: "var(--warning-soft)", color: "var(--warning-text)" }}
+            className="mb-4 flex items-center gap-3 rounded-xl border border-warning-border bg-warning-soft px-4 py-3 text-sm text-warning-text"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
             </svg>
             <div className="flex-1">
               <p className="font-semibold">Email not verified</p>
-              <p style={{ fontSize: "0.75rem", opacity: 0.8 }}>Cart checkout is blocked until your email is verified.</p>
+              <p className="text-xs opacity-80">Cart checkout is blocked until your email is verified.</p>
             </div>
             <button
               onClick={() => { void resendVerification(); }}
               disabled={resendingVerification}
-              style={{
-                background: "rgba(245,158,11,0.2)",
-                border: "1px solid rgba(245,158,11,0.4)",
-                color: "var(--warning-text)",
-                padding: "6px 14px",
-                borderRadius: "8px",
-                fontSize: "0.75rem",
-                fontWeight: 700,
-                cursor: resendingVerification ? "not-allowed" : "pointer",
-                opacity: resendingVerification ? 0.5 : 1,
-              }}
+              className="rounded-[8px] border border-[rgba(245,158,11,0.4)] bg-[rgba(245,158,11,0.2)] px-3.5 py-1.5 text-xs font-bold text-warning-text disabled:cursor-not-allowed disabled:opacity-50"
             >
               {resendingVerification ? "Sending..." : "Resend Email"}
             </button>
@@ -300,50 +286,31 @@ export default function CartPage() {
         {/* Page Header */}
         <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: "1.75rem", fontWeight: 800, color: "#fff", margin: 0 }}>
+            <h1 className="m-0 font-[Syne,sans-serif] text-[1.75rem] font-extrabold text-white">
               Your Cart
             </h1>
-            <p style={{ marginTop: "4px", fontSize: "0.8rem", color: "var(--muted)" }}>{status}</p>
+            <p className="mt-1 text-sm text-muted">{status}</p>
           </div>
-          <div style={{ display: "flex", gap: "10px" }}>
+          <div className="flex gap-2.5">
             <Link
               href="/products"
-              className="no-underline"
-              style={{
-                padding: "9px 18px",
-                borderRadius: "10px",
-                border: "1px solid rgba(0,212,255,0.25)",
-                color: "var(--brand)",
-                background: "rgba(0,212,255,0.06)",
-                fontSize: "0.8rem",
-                fontWeight: 700,
-              }}
+              className="rounded-md border border-[rgba(0,212,255,0.25)] bg-[rgba(0,212,255,0.06)] px-[18px] py-[9px] text-sm font-bold text-brand no-underline"
             >
               Continue Shopping
             </Link>
             <button
               onClick={() => { void clearCart(); }}
               disabled={busy || cart.items.length === 0}
-              style={{
-                padding: "9px 18px",
-                borderRadius: "10px",
-                border: "1px solid rgba(239,68,68,0.25)",
-                background: "rgba(239,68,68,0.06)",
-                color: "var(--danger)",
-                fontSize: "0.8rem",
-                fontWeight: 700,
-                cursor: busy || cart.items.length === 0 ? "not-allowed" : "pointer",
-                opacity: cart.items.length === 0 ? 0.4 : 1,
-              }}
+              className="rounded-md border border-[rgba(239,68,68,0.25)] bg-[rgba(239,68,68,0.06)] px-[18px] py-[9px] text-sm font-bold text-danger disabled:cursor-not-allowed disabled:opacity-40"
             >
               {clearingCart ? "Clearing..." : "Clear Cart"}
             </button>
           </div>
         </div>
 
-        <div className="cart-grid" style={{ display: "grid", gap: "20px", gridTemplateColumns: "1.4fr 0.8fr" }}>
+        <div className="cart-grid grid gap-5" style={{ gridTemplateColumns: "1.4fr 0.8fr" }}>
           {/* Cart Items */}
-          <section style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          <section className="flex flex-col gap-3">
             {cart.items.length === 0 && (
               <EmptyState
                 icon={
@@ -360,74 +327,17 @@ export default function CartPage() {
             )}
 
             {cart.items.map((item) => (
-              <article key={item.id} className="animate-rise glass-card">
-                <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: "12px" }}>
-                  <div style={{ flex: 1, minWidth: "200px" }}>
-                    <Link
-                      href={`/products/${encodeURIComponent(item.productSlug)}`}
-                      className="no-underline"
-                      style={{ fontWeight: 700, color: "#fff", fontSize: "0.95rem", lineHeight: 1.4 }}
-                      onMouseEnter={(e) => { e.currentTarget.style.color = "var(--brand)"; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.color = "#fff"; }}
-                    >
-                      {item.productName}
-                    </Link>
-                    <p style={{ margin: "4px 0 0", fontSize: "0.7rem", color: "var(--muted-2)", fontFamily: "monospace" }}>
-                      SKU: {item.productSku}
-                    </p>
-                    <p style={{ margin: "6px 0 0", fontSize: "0.9rem", fontWeight: 700, color: "var(--brand)" }}>
-                      {money(item.unitPrice)} each
-                    </p>
-                    <p style={{ margin: "2px 0 0", fontSize: "0.75rem", color: "var(--muted)" }}>
-                      Line total: <strong style={{ color: "var(--ink-light)" }}>{money(item.lineTotal)}</strong>
-                    </p>
-                  </div>
-
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "10px" }}>
-                    <div className="qty-stepper">
-                      <button disabled={busy || item.quantity <= 1} onClick={() => { void updateQuantity(item.id, item.quantity - 1); }}>−</button>
-                      <span>{updatingItemId === item.id ? "…" : item.quantity}</span>
-                      <button disabled={busy} onClick={() => { void updateQuantity(item.id, item.quantity + 1); }}>+</button>
-                    </div>
-                    <div style={{ display: "flex", gap: "6px" }}>
-                      <button
-                        onClick={() => { void saveForLater(item.id); }}
-                        disabled={busy}
-                        style={{
-                          padding: "5px 14px",
-                          borderRadius: "8px",
-                          border: "1px solid rgba(124,58,237,0.25)",
-                          background: "rgba(124,58,237,0.06)",
-                          color: "#a78bfa",
-                          fontSize: "0.72rem",
-                          fontWeight: 700,
-                          cursor: busy ? "not-allowed" : "pointer",
-                          opacity: busy ? 0.5 : 1,
-                        }}
-                      >
-                        {savingItemId === item.id ? "Saving..." : "Save for Later"}
-                      </button>
-                      <button
-                        onClick={() => { void removeItem(item.id); }}
-                        disabled={busy}
-                        style={{
-                          padding: "5px 14px",
-                          borderRadius: "8px",
-                          border: "1px solid rgba(239,68,68,0.25)",
-                          background: "rgba(239,68,68,0.06)",
-                          color: "var(--danger)",
-                          fontSize: "0.72rem",
-                          fontWeight: 700,
-                          cursor: busy ? "not-allowed" : "pointer",
-                          opacity: busy ? 0.5 : 1,
-                        }}
-                      >
-                        {removingItemId === item.id ? "Removing..." : "Remove"}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </article>
+              <CartItemCard
+                key={item.id}
+                item={item}
+                busy={busy}
+                updatingItemId={updatingItemId}
+                savingItemId={savingItemId}
+                removingItemId={removingItemId}
+                onUpdateQuantity={(id, qty) => { void updateQuantity(id, qty); }}
+                onSaveForLater={(id) => { void saveForLater(id); }}
+                onRemove={(id) => { void removeItem(id); }}
+              />
             ))}
           </section>
 
@@ -460,94 +370,21 @@ export default function CartPage() {
         </div>
 
         {/* Saved for Later */}
-        {cart.savedForLaterItems.length > 0 && (
-          <section style={{ marginTop: "24px" }}>
-            <h2 style={{ fontFamily: "'Syne', sans-serif", fontSize: "1.2rem", fontWeight: 800, color: "#fff", margin: "0 0 12px" }}>
-              Saved for Later ({cart.savedForLaterItems.length})
-            </h2>
-            <div style={{ display: "grid", gap: "10px", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
-              {cart.savedForLaterItems.map((item) => (
-                <article key={item.id} className="glass-card" style={{ padding: "14px" }}>
-                  <Link
-                    href={`/products/${encodeURIComponent(item.productSlug)}`}
-                    className="no-underline"
-                    style={{ fontWeight: 700, color: "#fff", fontSize: "0.85rem", lineHeight: 1.4 }}
-                  >
-                    {item.productName}
-                  </Link>
-                  <p style={{ margin: "4px 0 0", fontSize: "0.7rem", color: "var(--muted-2)", fontFamily: "monospace" }}>
-                    SKU: {item.productSku}
-                  </p>
-                  <p style={{ margin: "6px 0 10px", fontSize: "0.85rem", fontWeight: 700, color: "var(--brand)" }}>
-                    {money(item.unitPrice)}
-                  </p>
-                  <div style={{ display: "flex", gap: "6px" }}>
-                    <button
-                      onClick={() => { void moveToCart(item.id); }}
-                      disabled={busy}
-                      style={{
-                        padding: "5px 14px",
-                        borderRadius: "8px",
-                        border: "1px solid rgba(0,212,255,0.25)",
-                        background: "rgba(0,212,255,0.06)",
-                        color: "var(--brand)",
-                        fontSize: "0.72rem",
-                        fontWeight: 700,
-                        cursor: busy ? "not-allowed" : "pointer",
-                        opacity: busy ? 0.5 : 1,
-                      }}
-                    >
-                      {movingItemId === item.id ? "Moving..." : "Move to Cart"}
-                    </button>
-                    <button
-                      onClick={() => { void removeItem(item.id); }}
-                      disabled={busy}
-                      style={{
-                        padding: "5px 14px",
-                        borderRadius: "8px",
-                        border: "1px solid rgba(239,68,68,0.25)",
-                        background: "rgba(239,68,68,0.06)",
-                        color: "var(--danger)",
-                        fontSize: "0.72rem",
-                        fontWeight: 700,
-                        cursor: busy ? "not-allowed" : "pointer",
-                        opacity: busy ? 0.5 : 1,
-                      }}
-                    >
-                      {removingItemId === item.id ? "Removing..." : "Remove"}
-                    </button>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </section>
-        )}
+        <SavedForLaterSection
+          items={cart.savedForLaterItems}
+          busy={busy}
+          movingItemId={movingItemId}
+          removingItemId={removingItemId}
+          onMoveToCart={(id) => { void moveToCart(id); }}
+          onRemove={(id) => { void removeItem(id); }}
+        />
       </main>
 
       {/* Complete Your Purchase */}
-      {suggestions.length > 0 && cart.items.length > 0 && (
-        <section className="mx-auto max-w-7xl px-4 pb-8">
-          <h2 style={{ fontFamily: "'Syne', sans-serif", fontSize: "1.3rem", fontWeight: 800, color: "#fff", marginBottom: "16px" }}>Complete Your Purchase</h2>
-          <div style={{ display: "flex", gap: "16px", overflowX: "auto", paddingBottom: "8px" }}>
-            {suggestions.map((p) => {
-              const discount = calcDiscount(p.regularPrice, p.sellingPrice);
-              const imgUrl = resolveImageUrl(p.mainImage);
-              return (
-                <Link href={`/products/${encodeURIComponent((p.slug || p.id).trim())}`} key={p.id} className="product-card no-underline" style={{ minWidth: "200px", maxWidth: "220px", flexShrink: 0 }}>
-                  {discount && <span className="badge-sale">-{discount}%</span>}
-                  <div style={{ position: "relative", aspectRatio: "1/1", overflow: "hidden", background: "var(--surface-2)" }}>
-                    {imgUrl ? (<Image src={imgUrl} alt={p.name} width={300} height={300} className="product-card-img" unoptimized />) : (<div style={{ display: "grid", placeItems: "center", width: "100%", height: "100%", background: "linear-gradient(135deg, var(--surface), #1c1c38)", color: "var(--muted-2)", fontSize: "0.75rem" }}>No Image</div>)}
-                  </div>
-                  <div className="product-card-body">
-                    <p style={{ margin: "0 0 4px", fontSize: "0.8rem", fontWeight: 600, color: "var(--ink)", display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{p.name}</p>
-                    <span className="price-current" style={{ fontSize: "0.85rem" }}>{money(p.sellingPrice)}</span>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        </section>
-      )}
+      <CartSuggestions
+        suggestions={suggestions}
+        visible={cart.items.length > 0}
+      />
 
       <Footer />
     </div>

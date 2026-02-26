@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import toast from "react-hot-toast";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuthSession } from "../../../lib/authSession";
-import { getErrorMessage } from "../../../lib/error";
 import { money } from "../../../lib/format";
 import VendorPageShell from "../../components/ui/VendorPageShell";
 import {
@@ -42,17 +41,6 @@ type VendorDashboard = {
 const CHART_GRID = "rgba(120,120,200,0.08)";
 const CHART_TEXT = "#6868a0";
 
-/* ───── styles ───── */
-
-const cardStyle: React.CSSProperties = { background: "rgba(255,255,255,0.03)", border: "1px solid var(--line)", borderRadius: 16, padding: "20px 24px" };
-const sectionStyle: React.CSSProperties = { ...cardStyle, padding: "24px 28px", marginTop: 24 };
-const labelStyle: React.CSSProperties = { color: "var(--muted)", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.08em", margin: 0 };
-const valueStyle: React.CSSProperties = { fontSize: "1.6rem", fontWeight: 800, color: "var(--ink)", margin: "8px 0 0" };
-const sectionTitle: React.CSSProperties = { fontSize: "1rem", fontWeight: 700, color: "var(--ink)", margin: "0 0 16px" };
-const tableStyle: React.CSSProperties = { width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" };
-const thStyle: React.CSSProperties = { padding: "10px 12px", textAlign: "left", color: "var(--muted)", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: "1px solid var(--line)" };
-const tdStyle: React.CSSProperties = { padding: "10px 12px", borderBottom: "1px solid rgba(120,120,200,0.06)", color: "var(--ink)" };
-
 /* ───── helpers ───── */
 
 function num(v: number | null | undefined): string { return (v ?? 0).toLocaleString(); }
@@ -67,10 +55,10 @@ function shortMoney(v: number | null | undefined): string {
 function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: { name: string; value: number; color: string }[]; label?: string }) {
   if (!active || !payload?.length) return null;
   return (
-    <div style={{ background: "rgba(17,17,40,0.95)", border: "1px solid var(--line)", borderRadius: 10, padding: "10px 14px", fontSize: "0.8rem" }}>
-      <p style={{ color: "var(--muted)", margin: "0 0 6px", fontSize: "0.72rem" }}>{label}</p>
+    <div className="bg-[rgba(17,17,40,0.95)] border border-line rounded-md px-3.5 py-2.5 text-sm">
+      <p className="text-muted m-0 mb-1.5 text-xs">{label}</p>
       {payload.map((p, i) => (
-        <p key={i} style={{ color: p.color, margin: "2px 0", fontWeight: 600 }}>{p.name}: {typeof p.value === "number" && p.name.toLowerCase().includes("revenue") ? money(p.value) : num(p.value)}</p>
+        <p key={i} style={{ color: p.color }} className="my-0.5 font-semibold">{p.name}: {typeof p.value === "number" && p.name.toLowerCase().includes("revenue") ? money(p.value) : num(p.value)}</p>
       ))}
     </div>
   );
@@ -81,48 +69,37 @@ function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: 
 export default function VendorAnalyticsPage() {
   const session = useAuthSession();
   const [vendorId, setVendorId] = useState<string | null>(null);
-  const [data, setData] = useState<VendorDashboard | null>(null);
-  const [loading, setLoading] = useState(true);
   const api = session.apiClient;
 
+  const vendorReady = !!api && (session.isVendorAdmin || session.isVendorStaff);
+
   // First get vendor ID from /vendors/me
-  useEffect(() => {
-    if (!api || (!session.isVendorAdmin && !session.isVendorStaff)) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await api.get("/vendors/me");
-        if (!cancelled) setVendorId(res.data.id);
-      } catch (e) {
-        if (!cancelled) toast.error(getErrorMessage(e));
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [api, session.isVendorAdmin, session.isVendorStaff]);
+  useQuery({
+    queryKey: ["vendor-analytics-id"],
+    queryFn: async () => {
+      const res = await api!.get("/vendors/me");
+      const id = (res.data as { id: string }).id;
+      setVendorId(id);
+      return id;
+    },
+    enabled: vendorReady,
+  });
 
   // Then fetch analytics
-  useEffect(() => {
-    if (!api || !vendorId) return;
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      try {
-        const res = await api.get(`/analytics/vendor/${vendorId}/dashboard`);
-        if (!cancelled) setData(res.data);
-      } catch (e) {
-        if (!cancelled) toast.error(getErrorMessage(e));
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [api, vendorId]);
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ["vendor-analytics", vendorId],
+    queryFn: async () => {
+      const res = await api!.get(`/analytics/vendor/${vendorId}/dashboard`);
+      return res.data as VendorDashboard;
+    },
+    enabled: vendorReady && !!vendorId,
+  });
 
   if (session.status === "ready" && !session.isVendorAdmin && !session.isVendorStaff) {
     return (
       <VendorPageShell title="Vendor Analytics" breadcrumbs={[{ label: "Vendor Portal", href: "/vendor" }, { label: "Analytics" }]}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 320 }}>
-          <p style={{ color: "var(--muted)" }}>Unauthorized.</p>
+        <div className="flex items-center justify-center min-h-[320px]">
+          <p className="text-muted">Unauthorized.</p>
         </div>
       </VendorPageShell>
     );
@@ -137,26 +114,26 @@ export default function VendorAnalyticsPage() {
   return (
     <VendorPageShell title="Vendor Analytics" breadcrumbs={[{ label: "Vendor Portal", href: "/vendor" }, { label: "Analytics" }]}>
       {loading && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 14 }}>
-          {Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton" style={{ ...cardStyle, height: 100, background: "rgba(255,255,255,0.02)" }} />)}
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3.5">
+          {Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton bg-[rgba(255,255,255,0.02)] border border-line rounded-lg px-6 py-5 h-[100px]" />)}
         </div>
       )}
 
       {!loading && data && (
         <>
           {/* KPI Cards */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 14 }}>
-            <div style={cardStyle}><p style={labelStyle}>Revenue</p><p style={{ ...valueStyle, color: "var(--brand)" }}>{shortMoney(o?.totalRevenue)}</p></div>
-            <div style={cardStyle}><p style={labelStyle}>Total Orders</p><p style={valueStyle}>{num(o?.totalOrders)}</p><p style={{ color: "var(--muted)", fontSize: "0.72rem", margin: "4px 0 0" }}>{num(o?.activeOrders)} active</p></div>
-            <div style={cardStyle}><p style={labelStyle}>Payouts</p><p style={{ ...valueStyle, color: "#34d399" }}>{shortMoney(o?.totalPayouts)}</p></div>
-            <div style={cardStyle}><p style={labelStyle}>Platform Fees</p><p style={{ ...valueStyle, color: "#fbbf24" }}>{shortMoney(o?.totalPlatformFees)}</p></div>
-            <div style={cardStyle}><p style={labelStyle}>Avg Order Value</p><p style={valueStyle}>{shortMoney(o?.averageOrderValue)}</p></div>
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3.5">
+            <div className="bg-[rgba(255,255,255,0.03)] border border-line rounded-lg px-6 py-5"><p className="text-muted text-xs uppercase tracking-[0.08em] m-0">Revenue</p><p className="text-[1.6rem] font-extrabold text-brand mt-2 mb-0">{shortMoney(o?.totalRevenue)}</p></div>
+            <div className="bg-[rgba(255,255,255,0.03)] border border-line rounded-lg px-6 py-5"><p className="text-muted text-xs uppercase tracking-[0.08em] m-0">Total Orders</p><p className="text-[1.6rem] font-extrabold text-ink mt-2 mb-0">{num(o?.totalOrders)}</p><p className="text-muted text-xs mt-1 mb-0">{num(o?.activeOrders)} active</p></div>
+            <div className="bg-[rgba(255,255,255,0.03)] border border-line rounded-lg px-6 py-5"><p className="text-muted text-xs uppercase tracking-[0.08em] m-0">Payouts</p><p className="text-[1.6rem] font-extrabold text-[#34d399] mt-2 mb-0">{shortMoney(o?.totalPayouts)}</p></div>
+            <div className="bg-[rgba(255,255,255,0.03)] border border-line rounded-lg px-6 py-5"><p className="text-muted text-xs uppercase tracking-[0.08em] m-0">Platform Fees</p><p className="text-[1.6rem] font-extrabold text-[#fbbf24] mt-2 mb-0">{shortMoney(o?.totalPlatformFees)}</p></div>
+            <div className="bg-[rgba(255,255,255,0.03)] border border-line rounded-lg px-6 py-5"><p className="text-muted text-xs uppercase tracking-[0.08em] m-0">Avg Order Value</p><p className="text-[1.6rem] font-extrabold text-ink mt-2 mb-0">{shortMoney(o?.averageOrderValue)}</p></div>
           </div>
 
           {/* Revenue Trend */}
           {data.revenueTrend?.length > 0 && (
-            <div style={sectionStyle}>
-              <h2 style={sectionTitle}>Revenue Trend (30 Days)</h2>
+            <div className="bg-[rgba(255,255,255,0.03)] border border-line rounded-lg px-7 py-6 mt-6">
+              <h2 className="text-lg font-bold text-ink mb-4">Revenue Trend (30 Days)</h2>
               <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={data.revenueTrend}>
                   <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
@@ -172,14 +149,14 @@ export default function VendorAnalyticsPage() {
 
           {/* Top Products */}
           {data.topProducts?.length > 0 && (
-            <div style={sectionStyle}>
-              <h2 style={sectionTitle}>Top Products by Revenue</h2>
-              <div style={{ overflowX: "auto" }}>
-                <table style={tableStyle}>
-                  <thead><tr><th style={thStyle}>#</th><th style={thStyle}>Product</th><th style={thStyle}>Qty Sold</th><th style={{ ...thStyle, textAlign: "right" }}>Revenue</th></tr></thead>
+            <div className="bg-[rgba(255,255,255,0.03)] border border-line rounded-lg px-7 py-6 mt-6">
+              <h2 className="text-lg font-bold text-ink mb-4">Top Products by Revenue</h2>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-base">
+                  <thead><tr><th className="px-3 py-2.5 text-left text-muted text-xs uppercase tracking-[0.06em] border-b border-line">#</th><th className="px-3 py-2.5 text-left text-muted text-xs uppercase tracking-[0.06em] border-b border-line">Product</th><th className="px-3 py-2.5 text-left text-muted text-xs uppercase tracking-[0.06em] border-b border-line">Qty Sold</th><th className="px-3 py-2.5 text-right text-muted text-xs uppercase tracking-[0.06em] border-b border-line">Revenue</th></tr></thead>
                   <tbody>
                     {data.topProducts.map((p, i) => (
-                      <tr key={p.productId}><td style={tdStyle}>{i + 1}</td><td style={tdStyle}>{p.productName || p.productId}</td><td style={tdStyle}>{num(p.quantitySold)}</td><td style={{ ...tdStyle, textAlign: "right", color: "var(--brand)", fontWeight: 600 }}>{money(p.totalRevenue)}</td></tr>
+                      <tr key={p.productId}><td className="px-3 py-2.5 border-b border-[rgba(120,120,200,0.06)] text-ink">{i + 1}</td><td className="px-3 py-2.5 border-b border-[rgba(120,120,200,0.06)] text-ink">{p.productName || p.productId}</td><td className="px-3 py-2.5 border-b border-[rgba(120,120,200,0.06)] text-ink">{num(p.quantitySold)}</td><td className="px-3 py-2.5 border-b border-[rgba(120,120,200,0.06)] text-right text-brand font-semibold">{money(p.totalRevenue)}</td></tr>
                     ))}
                   </tbody>
                 </table>
@@ -188,10 +165,10 @@ export default function VendorAnalyticsPage() {
           )}
 
           {/* Two-column: Inventory + Reviews */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16, marginTop: 24 }}>
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-4 mt-6">
             {/* Inventory */}
-            <div style={cardStyle}>
-              <h3 style={{ ...sectionTitle, fontSize: "0.88rem" }}>Inventory Health</h3>
+            <div className="bg-[rgba(255,255,255,0.03)] border border-line rounded-lg px-6 py-5">
+              <h3 className="text-[0.88rem] font-bold text-ink mb-4">Inventory Health</h3>
               {inv ? (
                 <ResponsiveContainer width="100%" height={200}>
                   <PieChart>
@@ -209,56 +186,56 @@ export default function VendorAnalyticsPage() {
                     <Legend wrapperStyle={{ fontSize: "0.75rem", color: CHART_TEXT }} />
                   </PieChart>
                 </ResponsiveContainer>
-              ) : <p style={{ color: "var(--muted)", fontSize: "0.85rem" }}>No inventory data.</p>}
+              ) : <p className="text-muted text-base">No inventory data.</p>}
             </div>
 
             {/* Reviews */}
-            <div style={cardStyle}>
-              <h3 style={{ ...sectionTitle, fontSize: "0.88rem" }}>Review Summary</h3>
+            <div className="bg-[rgba(255,255,255,0.03)] border border-line rounded-lg px-6 py-5">
+              <h3 className="text-[0.88rem] font-bold text-ink mb-4">Review Summary</h3>
               {rev ? (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <div><p style={labelStyle}>Total</p><p style={{ ...valueStyle, fontSize: "1.2rem" }}>{num(rev.totalReviews)}</p></div>
-                  <div><p style={labelStyle}>Avg Rating</p><p style={{ ...valueStyle, fontSize: "1.2rem", color: "#fbbf24" }}>{(rev.avgRating ?? 0).toFixed(1)}</p></div>
-                  <div><p style={labelStyle}>Verified %</p><p style={{ ...valueStyle, fontSize: "1.1rem" }}>{pct(rev.verifiedPurchasePercent)}</p></div>
-                  <div><p style={labelStyle}>Reply Rate</p><p style={{ ...valueStyle, fontSize: "1.1rem" }}>{pct(rev.replyRate)}</p></div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><p className="text-muted text-xs uppercase tracking-[0.08em] m-0">Total</p><p className="text-[1.2rem] font-extrabold text-ink mt-2 mb-0">{num(rev.totalReviews)}</p></div>
+                  <div><p className="text-muted text-xs uppercase tracking-[0.08em] m-0">Avg Rating</p><p className="text-[1.2rem] font-extrabold text-[#fbbf24] mt-2 mb-0">{(rev.avgRating ?? 0).toFixed(1)}</p></div>
+                  <div><p className="text-muted text-xs uppercase tracking-[0.08em] m-0">Verified %</p><p className="text-[1.1rem] font-extrabold text-ink mt-2 mb-0">{pct(rev.verifiedPurchasePercent)}</p></div>
+                  <div><p className="text-muted text-xs uppercase tracking-[0.08em] m-0">Reply Rate</p><p className="text-[1.1rem] font-extrabold text-ink mt-2 mb-0">{pct(rev.replyRate)}</p></div>
                 </div>
-              ) : <p style={{ color: "var(--muted)", fontSize: "0.85rem" }}>No review data.</p>}
+              ) : <p className="text-muted text-base">No review data.</p>}
             </div>
           </div>
 
           {/* Performance + Promotions */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16, marginTop: 16 }}>
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-4 mt-4">
             {/* Performance */}
-            <div style={cardStyle}>
-              <h3 style={{ ...sectionTitle, fontSize: "0.88rem" }}>Performance Metrics</h3>
+            <div className="bg-[rgba(255,255,255,0.03)] border border-line rounded-lg px-6 py-5">
+              <h3 className="text-[0.88rem] font-bold text-ink mb-4">Performance Metrics</h3>
               {perf ? (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <div><p style={labelStyle}>Fulfillment Rate</p><p style={{ ...valueStyle, fontSize: "1.2rem", color: "#34d399" }}>{pct(perf.fulfillmentRate)}</p></div>
-                  <div><p style={labelStyle}>Dispute Rate</p><p style={{ ...valueStyle, fontSize: "1.2rem", color: (perf.disputeRate ?? 0) > 5 ? "#f87171" : "var(--ink)" }}>{pct(perf.disputeRate)}</p></div>
-                  <div><p style={labelStyle}>Response Time</p><p style={{ ...valueStyle, fontSize: "1.1rem" }}>{(perf.responseTimeHours ?? 0).toFixed(1)}h</p></div>
-                  <div><p style={labelStyle}>Commission</p><p style={{ ...valueStyle, fontSize: "1.1rem" }}>{pct(perf.commissionRate)}</p></div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><p className="text-muted text-xs uppercase tracking-[0.08em] m-0">Fulfillment Rate</p><p className="text-[1.2rem] font-extrabold text-[#34d399] mt-2 mb-0">{pct(perf.fulfillmentRate)}</p></div>
+                  <div><p className="text-muted text-xs uppercase tracking-[0.08em] m-0">Dispute Rate</p><p className="text-[1.2rem] font-extrabold mt-2 mb-0" style={{ color: (perf.disputeRate ?? 0) > 5 ? "#f87171" : "var(--ink)" }}>{pct(perf.disputeRate)}</p></div>
+                  <div><p className="text-muted text-xs uppercase tracking-[0.08em] m-0">Response Time</p><p className="text-[1.1rem] font-extrabold text-ink mt-2 mb-0">{(perf.responseTimeHours ?? 0).toFixed(1)}h</p></div>
+                  <div><p className="text-muted text-xs uppercase tracking-[0.08em] m-0">Commission</p><p className="text-[1.1rem] font-extrabold text-ink mt-2 mb-0">{pct(perf.commissionRate)}</p></div>
                 </div>
-              ) : <p style={{ color: "var(--muted)", fontSize: "0.85rem" }}>No performance data.</p>}
+              ) : <p className="text-muted text-base">No performance data.</p>}
             </div>
 
             {/* Promotions */}
-            <div style={cardStyle}>
-              <h3 style={{ ...sectionTitle, fontSize: "0.88rem" }}>Promotions</h3>
+            <div className="bg-[rgba(255,255,255,0.03)] border border-line rounded-lg px-6 py-5">
+              <h3 className="text-[0.88rem] font-bold text-ink mb-4">Promotions</h3>
               {promo ? (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <div><p style={labelStyle}>Total Campaigns</p><p style={{ ...valueStyle, fontSize: "1.2rem" }}>{num(promo.totalCampaigns)}</p></div>
-                  <div><p style={labelStyle}>Active</p><p style={{ ...valueStyle, fontSize: "1.2rem", color: "#34d399" }}>{num(promo.activeCampaigns)}</p></div>
-                  <div><p style={labelStyle}>Total Budget</p><p style={{ ...valueStyle, fontSize: "1.1rem" }}>{shortMoney(promo.totalBudget)}</p></div>
-                  <div><p style={labelStyle}>Burned</p><p style={{ ...valueStyle, fontSize: "1.1rem", color: "#fbbf24" }}>{shortMoney(promo.totalBurned)}</p></div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><p className="text-muted text-xs uppercase tracking-[0.08em] m-0">Total Campaigns</p><p className="text-[1.2rem] font-extrabold text-ink mt-2 mb-0">{num(promo.totalCampaigns)}</p></div>
+                  <div><p className="text-muted text-xs uppercase tracking-[0.08em] m-0">Active</p><p className="text-[1.2rem] font-extrabold text-[#34d399] mt-2 mb-0">{num(promo.activeCampaigns)}</p></div>
+                  <div><p className="text-muted text-xs uppercase tracking-[0.08em] m-0">Total Budget</p><p className="text-[1.1rem] font-extrabold text-ink mt-2 mb-0">{shortMoney(promo.totalBudget)}</p></div>
+                  <div><p className="text-muted text-xs uppercase tracking-[0.08em] m-0">Burned</p><p className="text-[1.1rem] font-extrabold text-[#fbbf24] mt-2 mb-0">{shortMoney(promo.totalBurned)}</p></div>
                 </div>
-              ) : <p style={{ color: "var(--muted)", fontSize: "0.85rem" }}>No promotion data.</p>}
+              ) : <p className="text-muted text-base">No promotion data.</p>}
             </div>
           </div>
 
           {/* Rating Distribution */}
           {rev?.ratingDistribution && Object.keys(rev.ratingDistribution).length > 0 && (
-            <div style={sectionStyle}>
-              <h2 style={sectionTitle}>Rating Distribution</h2>
+            <div className="bg-[rgba(255,255,255,0.03)] border border-line rounded-lg px-7 py-6 mt-6">
+              <h2 className="text-lg font-bold text-ink mb-4">Rating Distribution</h2>
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={[5, 4, 3, 2, 1].map((star) => ({ star: `${star} Star`, count: rev.ratingDistribution[star] ?? 0 }))}>
                   <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
@@ -276,8 +253,8 @@ export default function VendorAnalyticsPage() {
       )}
 
       {!loading && !data && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 200 }}>
-          <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>No analytics data available.</p>
+        <div className="flex items-center justify-center min-h-[200px]">
+          <p className="text-muted text-[0.9rem]">No analytics data available.</p>
         </div>
       )}
     </VendorPageShell>

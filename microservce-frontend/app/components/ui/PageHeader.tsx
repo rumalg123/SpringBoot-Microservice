@@ -11,18 +11,13 @@ export default function PageHeader({ title, subtitle, actions }: Props) {
     <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
       <div>
         <h1
-          className="m-0"
-          style={{
-            fontFamily: "'Syne', sans-serif",
-            fontSize: "1.75rem",
-            fontWeight: 800,
-            color: "#fff",
-          }}
+          className="m-0 text-[1.75rem] font-extrabold text-white"
+          style={{ fontFamily: "'Syne', sans-serif" }}
         >
           {title}
         </h1>
         {subtitle && (
-          <p className="m-0" style={{ marginTop: 4, fontSize: "0.8rem", color: "var(--muted)" }}>
+          <p className="m-0 mt-1 text-sm text-muted">
             {subtitle}
           </p>
         )}

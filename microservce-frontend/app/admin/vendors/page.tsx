@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import ConfirmModal from "../../components/ConfirmModal";
+import AdminPageShell from "../../components/ui/AdminPageShell";
 import VendorFormPanel from "../../components/admin/vendors/VendorFormPanel";
 import VendorListPanel from "../../components/admin/vendors/VendorListPanel";
 import VendorDeletionEligibilityPanel from "../../components/admin/vendors/VendorDeletionEligibilityPanel";
@@ -55,10 +55,7 @@ export default function AdminVendorsPage() {
     });
   };
 
-  useEffect(() => {
-    if (session.status !== "ready") return;
-    void vendors.loadVendors();
-  }, [session.status]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Vendor list loading is now handled by React Query (enabled when apiClient is available)
 
   useEffect(() => {
     if (!vendors.lastVendorSavedAt) return;
@@ -84,45 +81,30 @@ export default function AdminVendorsPage() {
   }, []);
 
   if (session.status === "loading" || session.status === "idle") {
-    return <div style={{ minHeight: "100vh", background: "var(--bg)" }} />;
+    return <div className="min-h-screen bg-bg" />;
   }
   return (
     <>
-      <main className="mx-auto max-w-7xl px-4 py-4">
-        <nav className="breadcrumb">
-          <Link href="/">Home</Link>
-          <span className="breadcrumb-sep">{">"}</span>
-          <Link href="/admin/orders">Admin</Link>
-          <span className="breadcrumb-sep">{">"}</span>
-          <span className="breadcrumb-current">Vendors</span>
-        </nav>
-
+      <AdminPageShell
+        title="Vendor Setup & Onboarding"
+        breadcrumbs={[{ label: "Admin", href: "/admin/dashboard" }, { label: "Vendors" }]}
+        actions={
+          <button
+            type="button"
+            onClick={vendors.refreshCurrentVendorList}
+            disabled={vendors.showDeleted ? vendors.loadingDeleted : vendors.loading}
+            className="rounded-md border border-[var(--line)] px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-60 bg-surface-2 text-ink-light"
+          >
+            {(vendors.showDeleted ? vendors.loadingDeleted : vendors.loading) ? "Refreshing..." : "Refresh Vendors"}
+          </button>
+        }
+      >
         <section
-          className="animate-rise space-y-4 rounded-xl p-5"
-          style={{
-            background: "rgba(17,17,40,0.7)",
-            border: "1px solid rgba(0,212,255,0.1)",
-            backdropFilter: "blur(16px)",
-          }}
+          className="animate-rise space-y-4 rounded-xl p-5 bg-[rgba(17,17,40,0.7)] border border-[rgba(0,212,255,0.1)] backdrop-blur-[16px]"
         >
-          <div className="flex items-end justify-between gap-3">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-[var(--brand)]">ADMIN VENDORS</p>
-              <h1 className="text-2xl font-bold text-[var(--ink)]">Vendor Setup & Onboarding</h1>
-              <p className="mt-1 text-xs text-[var(--muted)]">
-                Create vendors, restore deleted vendors, and onboard vendor admins without calling APIs manually.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={vendors.refreshCurrentVendorList}
-              disabled={vendors.showDeleted ? vendors.loadingDeleted : vendors.loading}
-              className="rounded-md border border-[var(--line)] px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-60"
-              style={{ background: "var(--surface-2)", color: "var(--ink-light)" }}
-            >
-              {(vendors.showDeleted ? vendors.loadingDeleted : vendors.loading) ? "Refreshing..." : "Refresh Vendors"}
-            </button>
-          </div>
+          <p className="text-xs text-[var(--muted)] -mt-3">
+            Create vendors, restore deleted vendors, and onboard vendor admins without calling APIs manually.
+          </p>
 
           <VendorSetupStepper
             hasAnyVendors={vendors.vendors.length > 0}
@@ -130,7 +112,7 @@ export default function AdminVendorsPage() {
             vendorUserCount={vendors.vendorUsers.length}
           />
 
-          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--line)] px-3 py-2 text-xs" style={{ background: "rgba(255,255,255,0.02)" }}>
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--line)] px-3 py-2 text-xs bg-[rgba(255,255,255,0.02)]">
             <button
               type="button"
               className="btn-ghost"
@@ -285,7 +267,7 @@ export default function AdminVendorsPage() {
 
           <p className="text-xs text-[var(--muted)]">{vendors.status}</p>
         </section>
-      </main>
+      </AdminPageShell>
 
       <ConfirmModal
         open={Boolean(vendors.confirmState)}

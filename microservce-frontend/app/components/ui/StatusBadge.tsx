@@ -1,5 +1,7 @@
 "use client";
 
+import React from "react";
+
 type ColorDef = { bg: string; border: string; color: string };
 
 export const LIFECYCLE_COLORS: Record<string, ColorDef> = {
@@ -82,12 +84,17 @@ export const VERIFICATION_COLORS: Record<string, ColorDef> = {
 
 type Props = { value: string; colorMap?: Record<string, ColorDef> };
 
-export default function StatusBadge({ value, colorMap }: Props) {
+function StatusBadgeInner({ value, colorMap }: Props) {
   const map = colorMap || {};
   const c = map[value] || { bg: "transparent", border: "var(--line)", color: "var(--muted)" };
   return (
-    <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 999, fontSize: "0.68rem", fontWeight: 700, border: `1px solid ${c.border}`, color: c.color, background: c.bg, whiteSpace: "nowrap" }}>
+    <span
+      className="inline-block py-0.5 px-2 rounded-full text-xs font-bold whitespace-nowrap"
+      style={{ border: `1px solid ${c.border}`, color: c.color, background: c.bg }}
+    >
       {value.replace(/_/g, " ")}
     </span>
   );
 }
+
+export default React.memo(StatusBadgeInner);

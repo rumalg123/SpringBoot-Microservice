@@ -105,94 +105,88 @@ export default function CartNavWidget({ apiClient, emailVerified }: Props) {
 
   return (
     <div
-      style={{ position: "relative" }}
+      className="relative"
       onMouseEnter={() => { if (desktop) setOpen(true); }}
       onMouseLeave={() => { if (desktop) setOpen(false); }}
     >
       <Link
         href="/cart"
-        style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center", width: "40px", height: "40px", borderRadius: "50%", background: "rgba(255,255,255,0.08)", color: "#fff", textDecoration: "none", transition: "background 0.2s" }}
+        className="relative inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.08] text-white no-underline transition-[background] duration-200"
         aria-label="Open cart"
+        aria-haspopup="true"
+        aria-expanded={open}
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" />
           <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
         </svg>
-        <span style={{ position: "absolute", top: "-6px", right: "-6px", minWidth: "18px", minHeight: "18px", borderRadius: "20px", background: "linear-gradient(135deg, #00d4ff, #7c3aed)", fontSize: "10px", fontWeight: 800, color: "#fff", display: "grid", placeItems: "center", padding: "0 4px" }}>
+        <span
+          className="absolute -right-1.5 -top-1.5 grid min-h-[18px] min-w-[18px] place-items-center rounded-[20px] bg-[linear-gradient(135deg,#00d4ff,#7c3aed)] px-1 text-[10px] font-extrabold text-white"
+          aria-live="polite"
+          aria-atomic="true"
+        >
           {cart.itemCount}
         </span>
       </Link>
 
       {desktop && open && (
-        <div style={popupStyle}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
-            <p style={{ fontSize: "0.875rem", fontWeight: 800, color: "#fff", margin: 0, fontFamily: "'Syne', sans-serif" }}>Cart</p>
-            <Link href="/cart" style={{ fontSize: "0.72rem", fontWeight: 700, color: "#00d4ff", textDecoration: "none" }}>Open Cart →</Link>
+        <div style={popupStyle} role="dialog" aria-label="Cart preview" aria-hidden={!open}>
+          <div className="mb-3 flex items-center justify-between">
+            <p className="m-0 font-[Syne,sans-serif] text-base font-extrabold text-white">Cart</p>
+            <Link href="/cart" className="text-[0.72rem] font-bold text-[#00d4ff] no-underline">Open Cart →</Link>
           </div>
 
           {loadingCart && (
-            <div style={{ padding: "10px 12px", borderRadius: "8px", background: "rgba(0,212,255,0.04)", fontSize: "0.78rem", color: "var(--muted)", display: "flex", alignItems: "center", gap: "8px" }}>
+            <div className="flex items-center gap-2 rounded-[8px] bg-[rgba(0,212,255,0.04)] px-3 py-2.5 text-[0.78rem] text-muted">
               <span className="spinner-sm" /> Loading cart...
             </div>
           )}
 
           {!loadingCart && cart.itemCount === 0 && (
-            <p style={{ padding: "10px 12px", borderRadius: "8px", background: "rgba(0,212,255,0.03)", fontSize: "0.78rem", color: "var(--muted)", margin: 0 }}>Your cart is empty.</p>
+            <p className="m-0 rounded-[8px] bg-[rgba(0,212,255,0.03)] px-3 py-2.5 text-[0.78rem] text-muted">Your cart is empty.</p>
           )}
 
           {!loadingCart && cart.itemCount > 0 && (
             <>
-              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <div className="flex flex-col gap-1.5">
                 {previewItems.map((item) => (
                   <Link
                     key={item.id}
                     href={`/products/${encodeURIComponent(item.productSlug)}`}
-                    style={{
-                      display: "block", padding: "8px 10px", borderRadius: "8px",
-                      border: "1px solid rgba(0,212,255,0.08)", background: "rgba(0,212,255,0.02)",
-                      textDecoration: "none", transition: "all 0.15s",
-                    }}
-                    onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLElement).style.background = "rgba(0,212,255,0.06)";
-                      (e.currentTarget as HTMLElement).style.borderColor = "rgba(0,212,255,0.2)";
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLElement).style.background = "rgba(0,212,255,0.02)";
-                      (e.currentTarget as HTMLElement).style.borderColor = "rgba(0,212,255,0.08)";
-                    }}
+                    className="block rounded-[8px] border border-[rgba(0,212,255,0.08)] bg-[rgba(0,212,255,0.02)] px-2.5 py-2 no-underline transition-all duration-150 hover:border-[rgba(0,212,255,0.2)] hover:bg-[rgba(0,212,255,0.06)]"
                   >
-                    <p style={{ fontSize: "0.78rem", fontWeight: 600, color: "#c8c8e8", margin: "0 0 2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.productName}</p>
-                    <p style={{ fontSize: "0.68rem", color: "var(--muted)", margin: 0 }}>Qty {item.quantity} · {money(item.lineTotal)}</p>
+                    <p className="m-0 mb-0.5 overflow-hidden text-ellipsis whitespace-nowrap text-[0.78rem] font-semibold text-[#c8c8e8]">{item.productName}</p>
+                    <p className="m-0 text-[0.68rem] text-muted">Qty {item.quantity} · {money(item.lineTotal)}</p>
                   </Link>
                 ))}
               </div>
 
               {cart.itemCount > previewItems.length && (
-                <p style={{ marginTop: "6px", fontSize: "0.68rem", color: "var(--muted)" }}>+{cart.itemCount - previewItems.length} more item(s)</p>
+                <p className="mt-1.5 text-[0.68rem] text-muted">+{cart.itemCount - previewItems.length} more item(s)</p>
               )}
 
-              <div style={{ marginTop: "12px", paddingTop: "10px", borderTop: "1px solid rgba(0,212,255,0.08)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: "0.75rem", color: "var(--muted)" }}>Subtotal</span>
-                <span style={{ fontSize: "0.9rem", fontWeight: 800, color: "#00d4ff" }}>{money(cart.subtotal)}</span>
+              <div className="mt-3 flex items-center justify-between border-t border-[rgba(0,212,255,0.08)] pt-2.5">
+                <span className="text-sm text-muted">Subtotal</span>
+                <span className="text-base font-extrabold text-[#00d4ff]">{money(cart.subtotal)}</span>
               </div>
 
               <button
                 type="button"
                 onClick={() => { if (canCheckout) router.push("/cart"); }}
                 disabled={!canCheckout}
+                className={`mt-2.5 w-full rounded-md border-none px-2.5 py-2.5 text-sm font-bold text-white transition-all duration-200 ${
+                  canCheckout
+                    ? "cursor-pointer opacity-100"
+                    : "cursor-not-allowed opacity-60"
+                }`}
                 style={{
-                  marginTop: "10px", width: "100%", padding: "10px", borderRadius: "10px", border: "none",
                   background: canCheckout ? "linear-gradient(135deg, #00d4ff, #7c3aed)" : "rgba(255,255,255,0.08)",
-                  color: "#fff", fontSize: "0.8rem", fontWeight: 700,
-                  cursor: canCheckout ? "pointer" : "not-allowed",
-                  opacity: canCheckout ? 1 : 0.6,
-                  transition: "all 0.2s",
                 }}
               >
                 Go to Checkout
               </button>
               {!canCheckout && checkoutHint && (
-                <p style={{ marginTop: "6px", fontSize: "0.68rem", color: "var(--muted)", textAlign: "center" }}>{checkoutHint}</p>
+                <p className="mt-1.5 text-center text-[0.68rem] text-muted">{checkoutHint}</p>
               )}
             </>
           )}

@@ -60,52 +60,6 @@ const VERIFICATION_STATUS_COLORS: Record<string, { bg: string; border: string; c
   VERIFICATION_REJECTED: { bg: "var(--danger-soft)", border: "rgba(239,68,68,0.25)", color: "#f87171" },
 };
 
-/* ───── styles ───── */
-
-const glassCard: React.CSSProperties = {
-  background: "rgba(255,255,255,0.03)",
-  border: "1px solid var(--line)",
-  borderRadius: 16,
-  padding: "24px",
-};
-
-const statCard: React.CSSProperties = {
-  background: "rgba(255,255,255,0.03)",
-  border: "1px solid var(--line)",
-  borderRadius: 12,
-  padding: "16px 20px",
-};
-
-const statLabel: React.CSSProperties = {
-  color: "var(--muted)",
-  fontSize: "0.72rem",
-  textTransform: "uppercase",
-  letterSpacing: "0.08em",
-  margin: 0,
-};
-
-const statValue: React.CSSProperties = {
-  fontSize: "1.6rem",
-  fontWeight: 800,
-  color: "var(--ink)",
-  margin: "6px 0 0",
-};
-
-const skeletonCard: React.CSSProperties = {
-  ...glassCard,
-  height: 200,
-  background: "rgba(255,255,255,0.02)",
-};
-
-const sectionTitle: React.CSSProperties = {
-  fontSize: "0.85rem",
-  fontWeight: 700,
-  color: "var(--muted)",
-  textTransform: "uppercase",
-  letterSpacing: "0.06em",
-  margin: "0 0 12px",
-};
-
 /* ───── component ───── */
 
 export default function VendorDashboardPage() {
@@ -151,21 +105,8 @@ export default function VendorDashboardPage() {
         title="Vendor Portal"
         breadcrumbs={[{ label: "Vendor Portal" }]}
       >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            minHeight: 320,
-          }}
-        >
-          <p
-            style={{
-              color: "var(--muted)",
-              fontSize: "1rem",
-              textAlign: "center",
-            }}
-          >
+        <div className="flex items-center justify-center min-h-[320px]">
+          <p className="text-muted text-lg text-center">
             Unauthorized. You do not have permission to access the vendor portal.
           </p>
         </div>
@@ -180,20 +121,13 @@ export default function VendorDashboardPage() {
     >
       {/* ── loading skeleton ── */}
       {loading && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <div className="skeleton" style={skeletonCard} />
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-              gap: 16,
-            }}
-          >
+        <div className="flex flex-col gap-4">
+          <div className="skeleton bg-[rgba(255,255,255,0.02)] border border-line rounded-lg p-6 h-[200px]" />
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
             {Array.from({ length: 4 }).map((_, i) => (
               <div
                 key={i}
-                className="skeleton"
-                style={{ ...statCard, height: 90, background: "rgba(255,255,255,0.02)" }}
+                className="skeleton bg-[rgba(255,255,255,0.02)] border border-line rounded-[12px] px-5 py-4 h-[90px]"
               />
             ))}
           </div>
@@ -202,76 +136,43 @@ export default function VendorDashboardPage() {
 
       {/* ── vendor profile ── */}
       {!loading && vendor && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+        <div className="flex flex-col gap-6">
           {/* header card */}
-          <div style={glassCard}>
+          <div className="bg-[rgba(255,255,255,0.03)] border border-line rounded-lg p-6">
             {/* vendor name + status */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                flexWrap: "wrap",
-                marginBottom: 16,
-              }}
-            >
-              <h2
-                style={{
-                  fontSize: "1.4rem",
-                  fontWeight: 800,
-                  color: "var(--ink)",
-                  margin: 0,
-                }}
-              >
+            <div className="flex items-center gap-3 flex-wrap mb-4">
+              <h2 className="text-[1.4rem] font-extrabold text-ink m-0">
                 {vendor.name}
               </h2>
               <StatusBadge value={vendor.status} colorMap={VENDOR_STATUS_COLORS} />
             </div>
 
             {/* badges row */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                flexWrap: "wrap",
-                marginBottom: 20,
-              }}
-            >
+            <div className="flex items-center gap-2.5 flex-wrap mb-5">
               <StatusBadge
                 value={vendor.verificationStatus}
                 colorMap={VERIFICATION_STATUS_COLORS}
               />
               <span
-                style={{
-                  display: "inline-block",
-                  padding: "2px 8px",
-                  borderRadius: 999,
-                  fontSize: "0.68rem",
-                  fontWeight: 700,
-                  whiteSpace: "nowrap",
-                  border: vendor.acceptingOrders
-                    ? "1px solid rgba(34,197,94,0.3)"
-                    : "1px solid rgba(239,68,68,0.25)",
-                  color: vendor.acceptingOrders ? "var(--success)" : "#f87171",
-                  background: vendor.acceptingOrders
-                    ? "var(--success-soft)"
-                    : "var(--danger-soft)",
-                }}
+                className={`inline-block px-2 py-0.5 rounded-full text-[0.68rem] font-bold whitespace-nowrap ${
+                  vendor.acceptingOrders
+                    ? "border border-[rgba(34,197,94,0.3)] text-success bg-success-soft"
+                    : "border border-[rgba(239,68,68,0.25)] text-[#f87171] bg-danger-soft"
+                }`}
               >
                 {vendor.acceptingOrders ? "Accepting Orders" : "Orders Paused"}
               </span>
             </div>
 
             {/* contact info */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--muted)" }}>
-                <span style={{ color: "var(--ink)", fontWeight: 600 }}>Email: </span>
+            <div className="flex flex-col gap-1.5">
+              <p className="m-0 text-base text-muted">
+                <span className="text-ink font-semibold">Email: </span>
                 {vendor.contactEmail}
               </p>
               {vendor.contactPhone && (
-                <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--muted)" }}>
-                  <span style={{ color: "var(--ink)", fontWeight: 600 }}>Phone: </span>
+                <p className="m-0 text-base text-muted">
+                  <span className="text-ink font-semibold">Phone: </span>
                   {vendor.contactPhone}
                 </p>
               )}
@@ -280,37 +181,31 @@ export default function VendorDashboardPage() {
 
           {/* stats grid */}
           <div>
-            <h3 style={sectionTitle}>Performance</h3>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-                gap: 16,
-              }}
-            >
-              <div style={statCard}>
-                <p style={statLabel}>Total Orders Completed</p>
-                <p style={statValue}>{vendor.totalOrdersCompleted.toLocaleString()}</p>
+            <h3 className="text-base font-bold text-muted uppercase tracking-[0.06em] mb-3">Performance</h3>
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
+              <div className="bg-[rgba(255,255,255,0.03)] border border-line rounded-[12px] px-5 py-4">
+                <p className="text-muted text-xs uppercase tracking-[0.08em] m-0">Total Orders Completed</p>
+                <p className="text-[1.6rem] font-extrabold text-ink mt-1.5 mb-0">{vendor.totalOrdersCompleted.toLocaleString()}</p>
               </div>
-              <div style={statCard}>
-                <p style={statLabel}>Average Rating</p>
-                <p style={statValue}>
+              <div className="bg-[rgba(255,255,255,0.03)] border border-line rounded-[12px] px-5 py-4">
+                <p className="text-muted text-xs uppercase tracking-[0.08em] m-0">Average Rating</p>
+                <p className="text-[1.6rem] font-extrabold text-ink mt-1.5 mb-0">
                   {vendor.averageRating !== null
                     ? vendor.averageRating.toFixed(1)
                     : "N/A"}
                 </p>
               </div>
-              <div style={statCard}>
-                <p style={statLabel}>Fulfillment Rate</p>
-                <p style={statValue}>
+              <div className="bg-[rgba(255,255,255,0.03)] border border-line rounded-[12px] px-5 py-4">
+                <p className="text-muted text-xs uppercase tracking-[0.08em] m-0">Fulfillment Rate</p>
+                <p className="text-[1.6rem] font-extrabold text-ink mt-1.5 mb-0">
                   {vendor.fulfillmentRate !== null
                     ? `${(vendor.fulfillmentRate * 100).toFixed(1)}%`
                     : "N/A"}
                 </p>
               </div>
-              <div style={statCard}>
-                <p style={statLabel}>Commission Rate</p>
-                <p style={statValue}>
+              <div className="bg-[rgba(255,255,255,0.03)] border border-line rounded-[12px] px-5 py-4">
+                <p className="text-muted text-xs uppercase tracking-[0.08em] m-0">Commission Rate</p>
+                <p className="text-[1.6rem] font-extrabold text-ink mt-1.5 mb-0">
                   {vendor.commissionRate !== null
                     ? `${(vendor.commissionRate * 100).toFixed(1)}%`
                     : "N/A"}
@@ -321,33 +216,17 @@ export default function VendorDashboardPage() {
 
           {/* quick actions */}
           <div>
-            <h3 style={sectionTitle}>Quick Actions</h3>
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <h3 className="text-base font-bold text-muted uppercase tracking-[0.06em] mb-3">Quick Actions</h3>
+            <div className="flex gap-3 flex-wrap">
               <Link
                 href="/vendor/orders"
-                className="btn-brand"
-                style={{
-                  padding: "12px 24px",
-                  borderRadius: 10,
-                  fontWeight: 600,
-                  fontSize: "0.85rem",
-                  textDecoration: "none",
-                  display: "inline-block",
-                }}
+                className="btn-brand px-6 py-3 rounded-md font-semibold text-base no-underline inline-block"
               >
                 View Orders
               </Link>
               <Link
                 href="/vendor/settings"
-                className="btn-outline"
-                style={{
-                  padding: "12px 24px",
-                  borderRadius: 10,
-                  fontWeight: 600,
-                  fontSize: "0.85rem",
-                  textDecoration: "none",
-                  display: "inline-block",
-                }}
+                className="btn-outline px-6 py-3 rounded-md font-semibold text-base no-underline inline-block"
               >
                 Settings
               </Link>
@@ -358,15 +237,8 @@ export default function VendorDashboardPage() {
 
       {/* ── empty state ── */}
       {!loading && !vendor && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            minHeight: 200,
-          }}
-        >
-          <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
+        <div className="flex items-center justify-center min-h-[200px]">
+          <p className="text-muted text-[0.9rem]">
             No vendor profile found.
           </p>
         </div>

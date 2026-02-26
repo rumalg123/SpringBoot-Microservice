@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { OrderStatusAudit } from "./types";
 
 type ApiClientLike = {
@@ -13,52 +14,56 @@ type Params = {
 };
 
 export default function useOrderHistory({ apiClient, setStatusMessage }: Params) {
+  const queryClient = useQueryClient();
   const [historyOrderId, setHistoryOrderId] = useState<string | null>(null);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyRows, setHistoryRows] = useState<OrderStatusAudit[]>([]);
   const [historyActorTypeFilter, setHistoryActorTypeFilter] = useState<string>("ALL");
   const [historySourceFilter, setHistorySourceFilter] = useState<string>("ALL");
   const [historyExpanded, setHistoryExpanded] = useState(false);
 
-  const loadOrderHistory = async (orderId: string) => {
-    if (!apiClient || historyLoading) return;
+  const historyQuery = useQuery<OrderStatusAudit[]>({
+    queryKey: ["admin-order-history", historyOrderId],
+    queryFn: async () => {
+      if (!apiClient || !historyOrderId) throw new Error("No API client or order ID");
+      const res = await apiClient.get(`/admin/orders/${historyOrderId}/status-history`);
+      return (res.data as OrderStatusAudit[]) || [];
+    },
+    enabled: Boolean(apiClient) && Boolean(historyOrderId),
+  });
+
+  const historyRows = historyQuery.data ?? [];
+  const historyLoading = historyQuery.isLoading || historyQuery.isFetching;
+
+  useEffect(() => {
+    if (historyQuery.data && historyOrderId) {
+      setStatusMessage(`Loaded status history for order ${historyOrderId}.`);
+    }
+  }, [historyQuery.data, historyOrderId, setStatusMessage]);
+
+  useEffect(() => {
+    if (historyQuery.error && historyOrderId) {
+      setStatusMessage(historyQuery.error instanceof Error ? historyQuery.error.message : "Failed to load order status history.");
+    }
+  }, [historyQuery.error, historyOrderId, setStatusMessage]);
+
+  const loadOrderHistory = (orderId: string) => {
+    if (historyLoading) return;
     if (historyOrderId === orderId) {
       setHistoryOrderId(null);
-      setHistoryRows([]);
       setHistoryExpanded(false);
       return;
     }
-    setHistoryLoading(true);
-    try {
-      const res = await apiClient.get(`/admin/orders/${orderId}/status-history`);
-      setHistoryRows((res.data as OrderStatusAudit[]) || []);
-      setHistoryOrderId(orderId);
-      setHistoryExpanded(false);
-      setStatusMessage(`Loaded status history for order ${orderId}.`);
-    } catch (err) {
-      setStatusMessage(err instanceof Error ? err.message : "Failed to load order status history.");
-    } finally {
-      setHistoryLoading(false);
-    }
+    setHistoryOrderId(orderId);
+    setHistoryExpanded(false);
   };
 
   const refreshOpenOrderHistory = async () => {
     if (!apiClient || !historyOrderId || historyLoading) return;
-    setHistoryLoading(true);
-    try {
-      const res = await apiClient.get(`/admin/orders/${historyOrderId}/status-history`);
-      setHistoryRows((res.data as OrderStatusAudit[]) || []);
-      setStatusMessage(`Refreshed status history for order ${historyOrderId}.`);
-    } catch (err) {
-      setStatusMessage(err instanceof Error ? err.message : "Failed to refresh order status history.");
-    } finally {
-      setHistoryLoading(false);
-    }
+    await queryClient.invalidateQueries({ queryKey: ["admin-order-history", historyOrderId] });
+    setStatusMessage(`Refreshed status history for order ${historyOrderId}.`);
   };
 
   const resetOrderHistory = () => {
     setHistoryOrderId(null);
-    setHistoryRows([]);
     setHistoryActorTypeFilter("ALL");
     setHistorySourceFilter("ALL");
     setHistoryExpanded(false);
@@ -83,7 +88,10 @@ export default function useOrderHistory({ apiClient, setStatusMessage }: Params)
     historyActorTypeOptions,
     historySourceOptions,
     setHistoryOrderId,
-    setHistoryRows,
+    setHistoryRows: (_rows: OrderStatusAudit[]) => {
+      // For compatibility with page close handler that sets rows to []
+      // When historyOrderId is set to null, query will return empty anyway
+    },
     setHistoryActorTypeFilter,
     setHistorySourceFilter,
     setHistoryExpanded,
@@ -92,4 +100,3 @@ export default function useOrderHistory({ apiClient, setStatusMessage }: Params)
     resetOrderHistory,
   };
 }
-

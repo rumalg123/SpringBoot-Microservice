@@ -29,32 +29,22 @@ type Props<T extends StatusHistoryRow> = {
   onClose: () => void;
 };
 
-function accentStyles(accent: "cyan" | "violet") {
+function accentClasses(accent: "cyan" | "violet") {
   if (accent === "violet") {
     return {
-      panelBorder: "1px solid rgba(124,58,237,0.12)",
-      panelBg: "rgba(124,58,237,0.03)",
-      titleColor: "#ddd6fe",
-      controlBorder: "1px solid rgba(124,58,237,0.18)",
-      controlBg: "rgba(124,58,237,0.06)",
-      controlText: "#e9d5ff",
-      buttonBg: "rgba(124,58,237,0.08)",
-      buttonText: "#c4b5fd",
-      rowBorder: "1px solid rgba(255,255,255,0.06)",
-      rowBg: "rgba(255,255,255,0.015)",
+      panel: "border-[rgba(124,58,237,0.12)] bg-[rgba(124,58,237,0.03)]",
+      titleColor: "text-[#ddd6fe]",
+      control: "border-[rgba(124,58,237,0.18)] bg-[rgba(124,58,237,0.06)] text-[#e9d5ff]",
+      button: "border-[rgba(124,58,237,0.18)] bg-[rgba(124,58,237,0.08)] text-[#c4b5fd]",
+      row: "border-white/[0.06] bg-white/[0.015]",
     };
   }
   return {
-    panelBorder: "1px solid rgba(0,212,255,0.08)",
-    panelBg: "rgba(0,212,255,0.03)",
-    titleColor: "#c8c8e8",
-    controlBorder: "1px solid rgba(0,212,255,0.12)",
-    controlBg: "rgba(0,212,255,0.04)",
-    controlText: "#c8c8e8",
-    buttonBg: "rgba(0,212,255,0.04)",
-    buttonText: "#67e8f9",
-    rowBorder: "1px solid rgba(0,212,255,0.07)",
-    rowBg: "rgba(255,255,255,0.01)",
+    panel: "border-[rgba(0,212,255,0.08)] bg-[rgba(0,212,255,0.03)]",
+    titleColor: "text-[#c8c8e8]",
+    control: "border-[rgba(0,212,255,0.12)] bg-[rgba(0,212,255,0.04)] text-[#c8c8e8]",
+    button: "border-[rgba(0,212,255,0.12)] bg-[rgba(0,212,255,0.04)] text-[#67e8f9]",
+    row: "border-[rgba(0,212,255,0.07)] bg-white/[0.01]",
   };
 }
 
@@ -83,68 +73,39 @@ export default function StatusHistoryPanel<T extends StatusHistoryRow>({
     return true;
   });
   const visibleRows = expanded ? filteredRows : filteredRows.slice(0, 6);
-  const styles = accentStyles(accent);
+  const cls = accentClasses(accent);
 
   return (
-    <div
-      style={{
-        marginBottom: "12px",
-        borderRadius: "12px",
-        border: styles.panelBorder,
-        background: styles.panelBg,
-        padding: "12px",
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px" }}>
+    <div className={`mb-3 rounded-xl border p-3 ${cls.panel}`}>
+      <div className="flex items-center justify-between gap-2.5">
         <div>
-          <p style={{ margin: 0, color: styles.titleColor, fontWeight: 700, fontSize: "0.85rem" }}>{title}</p>
-          <p style={{ margin: "4px 0 0", color: "var(--muted)", fontSize: "0.7rem", fontFamily: "monospace" }}>{entityId}</p>
+          <p className={`m-0 text-base font-bold ${cls.titleColor}`}>{title}</p>
+          <p className="mt-1 text-[0.7rem] font-mono text-muted">{entityId}</p>
         </div>
-        <div style={{ display: "flex", gap: "8px" }}>
+        <div className="flex gap-2">
           <button
             type="button"
             onClick={() => { void onRefresh(); }}
             disabled={loading}
-            style={{
-              padding: "6px 10px",
-              borderRadius: "8px",
-              border: styles.controlBorder,
-              background: styles.buttonBg,
-              color: styles.buttonText,
-              fontSize: "0.72rem",
-            }}
+            className={`rounded-md px-2.5 py-1.5 text-xs ${cls.button}`}
           >
             {loading ? "Refreshing..." : "Refresh"}
           </button>
           <button
             type="button"
             onClick={onClose}
-            style={{
-              padding: "6px 10px",
-              borderRadius: "8px",
-              border: "1px solid rgba(255,255,255,0.08)",
-              background: "rgba(255,255,255,0.02)",
-              color: "var(--muted)",
-              fontSize: "0.72rem",
-            }}
+            className="rounded-md border border-white/[0.08] bg-white/[0.02] px-2.5 py-1.5 text-xs text-muted"
           >
             Close
           </button>
         </div>
       </div>
 
-      <div style={{ marginTop: "10px", display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
+      <div className="mt-2.5 flex flex-wrap items-center gap-2">
         <select
           value={actorTypeFilter}
           onChange={(e) => onActorTypeFilterChange(e.target.value)}
-          style={{
-            borderRadius: "8px",
-            border: styles.controlBorder,
-            background: styles.controlBg,
-            color: styles.controlText,
-            padding: "6px 8px",
-            fontSize: "0.72rem",
-          }}
+          className={`rounded-md px-2 py-1.5 text-xs ${cls.control}`}
         >
           <option value="ALL">All actors</option>
           {actorTypeOptions.map((v) => <option key={v} value={v}>{v}</option>)}
@@ -152,68 +113,48 @@ export default function StatusHistoryPanel<T extends StatusHistoryRow>({
         <select
           value={sourceFilter}
           onChange={(e) => onSourceFilterChange(e.target.value)}
-          style={{
-            borderRadius: "8px",
-            border: styles.controlBorder,
-            background: styles.controlBg,
-            color: styles.controlText,
-            padding: "6px 8px",
-            fontSize: "0.72rem",
-          }}
+          className={`rounded-md px-2 py-1.5 text-xs ${cls.control}`}
         >
           <option value="ALL">All sources</option>
           {sourceOptions.map((v) => <option key={v} value={v}>{v}</option>)}
         </select>
-        <span style={{ color: "var(--muted)", fontSize: "0.72rem" }}>
+        <span className="text-xs text-muted">
           Showing {visibleRows.length} of {filteredRows.length} filtered entries ({rows.length} total)
         </span>
         {filteredRows.length > 6 && (
           <button
             type="button"
             onClick={onToggleExpanded}
-            style={{
-              padding: "6px 8px",
-              borderRadius: "8px",
-              border: "1px solid rgba(255,255,255,0.08)",
-              background: "rgba(255,255,255,0.02)",
-              color: "var(--muted)",
-              fontSize: "0.72rem",
-            }}
+            className="rounded-md border border-white/[0.08] bg-white/[0.02] px-2 py-1.5 text-xs text-muted"
           >
             {expanded ? "Collapse" : "Show All"}
           </button>
         )}
       </div>
 
-      <div style={{ marginTop: "10px", display: "grid", gap: "8px" }}>
-        {loading && <div style={{ color: "var(--muted)", fontSize: "0.75rem" }}>Loading history...</div>}
+      <div className="mt-2.5 grid gap-2">
+        {loading && <div className="text-xs text-muted">Loading history...</div>}
         {!loading && filteredRows.length === 0 && (
-          <div style={{ color: "var(--muted)", fontSize: "0.75rem" }}>No history entries found.</div>
+          <div className="text-xs text-muted">No history entries found.</div>
         )}
         {!loading && visibleRows.map((row) => (
           <div
             key={row.id}
-            style={{
-              border: styles.rowBorder,
-              background: styles.rowBg,
-              borderRadius: "10px",
-              padding: "10px",
-            }}
+            className={`rounded-md border p-2.5 ${cls.row}`}
           >
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
-              <span style={{ color: "#c8c8e8", fontWeight: 700, fontSize: "0.75rem" }}>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-bold text-[#c8c8e8]">
                 {(row.fromStatus || "NEW").replaceAll("_", " ")} {"->"} {row.toStatus.replaceAll("_", " ")}
               </span>
-              <span style={{ color: "var(--muted)", fontSize: "0.7rem" }}>{new Date(row.createdAt).toLocaleString()}</span>
+              <span className="text-[0.7rem] text-muted">{new Date(row.createdAt).toLocaleString()}</span>
             </div>
-            <div style={{ marginTop: "4px", color: "var(--muted)", fontSize: "0.7rem" }}>
+            <div className="mt-1 text-[0.7rem] text-muted">
               {row.actorType} | {row.changeSource}{row.actorSub ? ` | ${row.actorSub}` : ""}
             </div>
-            {row.note && <div style={{ marginTop: "4px", color: "var(--muted)", fontSize: "0.7rem" }}>{row.note}</div>}
+            {row.note && <div className="mt-1 text-[0.7rem] text-muted">{row.note}</div>}
           </div>
         ))}
       </div>
     </div>
   );
 }
-

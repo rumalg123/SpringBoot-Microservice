@@ -34,8 +34,7 @@ export default function VariationAttributesEditor({
           type="button"
           onClick={addParentAttribute}
           disabled={productMutationBusy}
-          className="rounded-lg border border-[var(--line)] px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-60"
-          style={{ background: "var(--surface-2)", color: "var(--ink-light)" }}
+          className="rounded-lg border border-[var(--line)] bg-surface-2 px-3 py-2 text-xs text-ink-light disabled:cursor-not-allowed disabled:opacity-60"
         >
           Add
         </button>
@@ -54,8 +53,7 @@ export default function VariationAttributesEditor({
               type="button"
               onClick={() => removeParentAttribute(name)}
               disabled={productMutationBusy}
-              className="rounded-full border border-[var(--line)] px-1.5 text-[10px] leading-4 disabled:cursor-not-allowed disabled:opacity-60"
-              style={{ background: "var(--surface-2)", color: "var(--muted)" }}
+              className="rounded-full border border-[var(--line)] bg-surface-2 px-1.5 text-[10px] leading-4 text-muted disabled:cursor-not-allowed disabled:opacity-60"
             >
               x
             </button>

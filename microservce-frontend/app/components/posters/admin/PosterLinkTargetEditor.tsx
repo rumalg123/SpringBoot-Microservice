@@ -1,7 +1,7 @@
-﻿"use client";
+"use client";
 
 import type { AxiosInstance } from "axios";
-import { CSSProperties, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import PosterFormField from "./PosterFormField";
 
 type LinkType = "PRODUCT" | "CATEGORY" | "SEARCH" | "URL" | "NONE";
@@ -33,7 +33,6 @@ type Props = {
   linkTarget: string;
   openInNewTab: boolean;
   disabled?: boolean;
-  fieldBaseStyle: CSSProperties;
   onLinkTypeChange: (value: LinkType) => void;
   onLinkTargetChange: (value: string) => void;
   onOpenInNewTabChange: (value: boolean) => void;
@@ -65,7 +64,6 @@ export default function PosterLinkTargetEditor({
   linkTarget,
   openInNewTab,
   disabled = false,
-  fieldBaseStyle,
   onLinkTypeChange,
   onLinkTargetChange,
   onOpenInNewTabChange,
@@ -179,8 +177,7 @@ export default function PosterLinkTargetEditor({
           <select
             value={linkType}
             onChange={(e) => onLinkTypeChange(e.target.value as LinkType)}
-            className="poster-select-admin rounded-lg border px-3 py-2.5"
-            style={fieldBaseStyle}
+            className="poster-select-admin rounded-lg border border-line bg-surface-2 text-ink px-3 py-2.5"
             disabled={disabled}
           >
             {["NONE", "PRODUCT", "CATEGORY", "SEARCH", "URL"].map((t) => (
@@ -210,13 +207,13 @@ export default function PosterLinkTargetEditor({
             onChange={(e) => onLinkTargetChange(e.target.value)}
             disabled={disabled || linkType === "NONE"}
             placeholder={linkType === "NONE" ? "No target needed" : linkType === "SEARCH" ? "q=watch&mainCategory=electronics" : linkType === "URL" ? "https://example.com/campaign" : "slug or URL"}
-            className="rounded-lg border px-3 py-2.5"
-            style={{ ...fieldBaseStyle, opacity: linkType === "NONE" ? 0.7 : 1 }}
+            className="rounded-lg border border-line bg-surface-2 text-ink px-3 py-2.5"
+            style={{ opacity: linkType === "NONE" ? 0.7 : 1 }}
           />
         </PosterFormField>
 
         <PosterFormField label="Link Behavior">
-          <label className="flex items-center gap-2 rounded-lg border px-3 py-2.5" style={{ ...fieldBaseStyle, display: "flex" }}>
+          <label className="flex items-center gap-2 rounded-lg border border-line bg-surface-2 text-ink px-3 py-2.5">
             <input
               type="checkbox"
               checked={openInNewTab}
@@ -237,8 +234,7 @@ export default function PosterLinkTargetEditor({
                 const selected = categoryOptions.find((c) => c.id === e.target.value);
                 onLinkTargetChange(selected ? selected.slug : "");
               }}
-              className="poster-select-admin rounded-lg border px-3 py-2.5"
-              style={fieldBaseStyle}
+              className="poster-select-admin rounded-lg border border-line bg-surface-2 text-ink px-3 py-2.5"
               disabled={disabled || categoriesLoading}
             >
               <option value="">{categoriesLoading ? "Loading categories..." : "Select category"}</option>
@@ -254,7 +250,7 @@ export default function PosterLinkTargetEditor({
             </select>
           </PosterFormField>
           <PosterFormField label="Generated URL Preview" hint="Frontend resolves CATEGORY links to category pages.">
-            <div className="rounded-lg border px-3 py-2.5" style={{ ...fieldBaseStyle, minHeight: 44, display: "flex", alignItems: "center", color: linkPreview ? "var(--ink)" : "var(--muted)" }}>
+            <div className={`flex min-h-[44px] items-center rounded-lg border border-line bg-surface-2 px-3 py-2.5 ${linkPreview ? "text-ink" : "text-muted"}`}>
               {linkPreview || "Select a category or enter a category slug"}
             </div>
           </PosterFormField>
@@ -269,14 +265,13 @@ export default function PosterLinkTargetEditor({
                 value={productSearch}
                 onChange={(e) => setProductSearch(e.target.value)}
                 placeholder="Search by product name or SKU"
-                className="rounded-lg border px-3 py-2.5"
-                style={fieldBaseStyle}
+                className="rounded-lg border border-line bg-surface-2 text-ink px-3 py-2.5"
                 disabled={disabled}
               />
-              <div className="rounded-lg border" style={{ ...fieldBaseStyle, maxHeight: 180, overflowY: "auto" }}>
-                {productSearch.trim().length < 2 && <div style={{ padding: "10px 12px", color: "var(--muted)", fontSize: "0.8rem" }}>Type at least 2 characters</div>}
-                {productSearch.trim().length >= 2 && productLoading && <div style={{ padding: "10px 12px", color: "var(--muted)", fontSize: "0.8rem" }}>Loading products...</div>}
-                {productSearch.trim().length >= 2 && !productLoading && productResults.length === 0 && <div style={{ padding: "10px 12px", color: "var(--muted)", fontSize: "0.8rem" }}>No matching products</div>}
+              <div className="max-h-[180px] overflow-y-auto rounded-lg border border-line bg-surface-2 text-ink">
+                {productSearch.trim().length < 2 && <div className="px-3 py-2.5 text-muted text-[0.8rem]">Type at least 2 characters</div>}
+                {productSearch.trim().length >= 2 && productLoading && <div className="px-3 py-2.5 text-muted text-[0.8rem]">Loading products...</div>}
+                {productSearch.trim().length >= 2 && !productLoading && productResults.length === 0 && <div className="px-3 py-2.5 text-muted text-[0.8rem]">No matching products</div>}
                 {!productLoading && productResults.map((p) => (
                   <button
                     key={p.id}
@@ -286,25 +281,18 @@ export default function PosterLinkTargetEditor({
                       setProductSearch(p.name);
                     }}
                     disabled={disabled}
-                    style={{
-                      width: "100%",
-                      textAlign: "left",
-                      border: "none",
-                      borderTop: "1px solid rgba(255,255,255,0.03)",
-                      background: "transparent",
-                      cursor: disabled ? "not-allowed" : "pointer",
-                      padding: "10px 12px",
-                    }}
+                    className="w-full border-t border-[rgba(255,255,255,0.03)] bg-transparent px-3 py-2.5 text-left"
+                    style={{ cursor: disabled ? "not-allowed" : "pointer" }}
                   >
-                    <div style={{ color: "var(--ink)", fontSize: "0.83rem", fontWeight: 600 }}>{p.name}</div>
-                    <div style={{ color: "var(--muted)", fontSize: "0.72rem" }}>SKU: {p.sku} | slug: {p.slug || p.id}</div>
+                    <div className="text-ink text-[0.83rem] font-semibold">{p.name}</div>
+                    <div className="text-muted text-xs">SKU: {p.sku} | slug: {p.slug || p.id}</div>
                   </button>
                 ))}
               </div>
             </div>
           </PosterFormField>
           <PosterFormField label="Generated URL Preview" hint="Frontend resolves PRODUCT links to product detail pages.">
-            <div className="rounded-lg border px-3 py-2.5" style={{ ...fieldBaseStyle, minHeight: 44, display: "flex", alignItems: "center", color: linkPreview ? "var(--ink)" : "var(--muted)" }}>
+            <div className={`flex min-h-[44px] items-center rounded-lg border border-line bg-surface-2 px-3 py-2.5 ${linkPreview ? "text-ink" : "text-muted"}`}>
               {linkPreview || "Pick a product or enter a product slug"}
             </div>
           </PosterFormField>
@@ -318,8 +306,7 @@ export default function PosterLinkTargetEditor({
               value={searchQueryValue}
               onChange={(e) => setSearchQueryValue(e.target.value)}
               placeholder="headphones"
-              className="rounded-lg border px-3 py-2.5"
-              style={fieldBaseStyle}
+              className="rounded-lg border border-line bg-surface-2 text-ink px-3 py-2.5"
               disabled={disabled}
             />
           </PosterFormField>
@@ -327,8 +314,7 @@ export default function PosterLinkTargetEditor({
             <select
               value={searchMainCategorySlug}
               onChange={(e) => setSearchMainCategorySlug(e.target.value)}
-              className="poster-select-admin rounded-lg border px-3 py-2.5"
-              style={fieldBaseStyle}
+              className="poster-select-admin rounded-lg border border-line bg-surface-2 text-ink px-3 py-2.5"
               disabled={disabled || categoriesLoading}
             >
               <option value="">Any category</option>
@@ -347,19 +333,12 @@ export default function PosterLinkTargetEditor({
                 type="button"
                 onClick={applySearchBuilder}
                 disabled={disabled}
-                style={{
-                  padding: "10px 12px",
-                  borderRadius: 10,
-                  border: "1px solid var(--line-bright)",
-                  background: "var(--brand-soft)",
-                  color: "var(--brand)",
-                  fontWeight: 700,
-                  cursor: disabled ? "not-allowed" : "pointer",
-                }}
+                className="rounded-[10px] border border-line-bright bg-brand-soft px-3 py-2.5 text-brand font-bold"
+                style={{ cursor: disabled ? "not-allowed" : "pointer" }}
               >
                 Generate Query
               </button>
-              <div className="rounded-lg border px-3 py-2.5" style={{ ...fieldBaseStyle, flex: 1, minHeight: 44, display: "flex", alignItems: "center", color: linkPreview ? "var(--ink)" : "var(--muted)" }}>
+              <div className={`flex flex-1 min-h-[44px] items-center rounded-lg border border-line bg-surface-2 px-3 py-2.5 ${linkPreview ? "text-ink" : "text-muted"}`}>
                 {linkPreview || "Build or type search query"}
               </div>
             </div>
@@ -369,7 +348,7 @@ export default function PosterLinkTargetEditor({
 
       {linkType === "URL" && (
         <PosterFormField label="URL Preview" hint="External links open based on the Link Behavior setting.">
-          <div className="rounded-lg border px-3 py-2.5" style={{ ...fieldBaseStyle, minHeight: 44, display: "flex", alignItems: "center", color: linkPreview ? "var(--ink)" : "var(--muted)" }}>
+          <div className={`flex min-h-[44px] items-center rounded-lg border border-line bg-surface-2 px-3 py-2.5 ${linkPreview ? "text-ink" : "text-muted"}`}>
             {linkPreview || "Enter an external URL"}
           </div>
         </PosterFormField>

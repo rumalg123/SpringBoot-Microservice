@@ -25,7 +25,7 @@ export default function PermissionChecklist({
 
   return (
     <div className="space-y-2">
-      <label className="block text-xs font-semibold uppercase tracking-[0.12em]" style={{ color: "rgba(255,255,255,0.65)" }}>
+      <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-white/65">
         {title}
       </label>
       <div className="grid gap-2">
@@ -34,12 +34,11 @@ export default function PermissionChecklist({
           return (
             <label
               key={option.value}
-              className="flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-2 transition"
-              style={{
-                borderColor: checked ? "rgba(0,212,255,0.28)" : "rgba(255,255,255,0.08)",
-                background: checked ? "rgba(0,212,255,0.07)" : "rgba(255,255,255,0.02)",
-                opacity: disabled ? 0.65 : 1,
-              }}
+              className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-2 transition ${
+                checked
+                  ? "border-[rgba(0,212,255,0.28)] bg-[rgba(0,212,255,0.07)]"
+                  : "border-white/[0.08] bg-white/[0.02]"
+              } ${disabled ? "opacity-65" : "opacity-100"}`}
             >
               <input
                 type="checkbox"
@@ -54,11 +53,11 @@ export default function PermissionChecklist({
                 className="mt-1 h-4 w-4"
               />
               <span className="min-w-0">
-                <span className="block text-sm font-semibold" style={{ color: "var(--ink)" }}>
+                <span className="block text-sm font-semibold text-ink">
                   {option.label}
                 </span>
                 {option.description && (
-                  <span className="block text-xs" style={{ color: "rgba(255,255,255,0.6)" }}>
+                  <span className="block text-xs text-white/60">
                     {option.description}
                   </span>
                 )}

@@ -91,10 +91,7 @@ export default function KeycloakUserLookupField({
   return (
     <div className="space-y-2">
       <label className="space-y-1 text-sm">
-        <span
-          className="block text-xs font-semibold uppercase tracking-[0.12em]"
-          style={{ color: "rgba(255,255,255,0.65)" }}
-        >
+        <span className="block text-xs font-semibold uppercase tracking-[0.12em] text-white/65">
           {label}
         </span>
         <input
@@ -105,27 +102,23 @@ export default function KeycloakUserLookupField({
           }}
           onFocus={() => setExpanded(true)}
           disabled={disabled || !apiClient}
-          className="w-full rounded-xl px-3 py-2"
-          style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--line)", color: "var(--ink)" }}
+          className="w-full rounded-xl border border-line bg-white/[0.03] px-3 py-2 text-ink"
           placeholder="Search user by email, name or username"
         />
       </label>
 
-      <p className="text-xs" style={{ color: "rgba(255,255,255,0.55)" }}>
+      <p className="text-xs text-white/55">
         {helperText}
       </p>
 
       {showDropdown && (
-        <div
-          className="max-h-72 overflow-auto rounded-xl"
-          style={{ border: "1px solid var(--line)", background: "var(--surface-2)" }}
-        >
+        <div className="max-h-72 overflow-auto rounded-xl border border-line bg-surface-2">
           {statusText && !hasResults ? (
-            <div className="px-3 py-3 text-sm" style={{ color: error ? "#fca5a5" : "rgba(255,255,255,0.65)" }}>
+            <div className={`px-3 py-3 text-sm ${error ? "text-[#fca5a5]" : "text-white/65"}`}>
               {statusText}
             </div>
           ) : (
-            <div className="divide-y" style={{ borderColor: "rgba(255,255,255,0.05)" }}>
+            <div className="divide-y divide-white/5">
               {results.map((user) => {
                 const displayName = (user.displayName || "").trim() || (user.email || "").trim() || (user.username || "").trim() || user.id;
                 return (
@@ -137,19 +130,18 @@ export default function KeycloakUserLookupField({
                       setExpanded(false);
                       setQuery(user.email || user.username || displayName);
                     }}
-                    className="flex w-full items-start justify-between gap-3 px-3 py-3 text-left hover:bg-white/5"
-                    style={{ color: "var(--ink)" }}
+                    className="flex w-full items-start justify-between gap-3 px-3 py-3 text-left text-ink hover:bg-white/5"
                   >
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-semibold">{displayName}</span>
-                      <span className="block truncate text-xs" style={{ color: "rgba(255,255,255,0.65)" }}>
+                      <span className="block truncate text-xs text-white/65">
                         {user.email || user.username || "No email/username"}
                       </span>
-                      <span className="block truncate font-mono text-[11px]" style={{ color: "rgba(255,255,255,0.45)" }}>
+                      <span className="block truncate font-mono text-[11px] text-white/45">
                         {user.id}
                       </span>
                     </span>
-                    <span className="shrink-0 text-[10px]" style={{ color: "rgba(255,255,255,0.55)" }}>
+                    <span className="shrink-0 text-[10px] text-white/55">
                       {(user.enabled ?? true) ? "Enabled" : "Disabled"}
                       {" | "}
                       {(user.emailVerified ?? false) ? "Email verified" : "Email unverified"}

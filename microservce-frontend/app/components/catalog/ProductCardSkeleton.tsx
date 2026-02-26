@@ -8,18 +8,13 @@ export default function ProductCardSkeleton({ count = 4 }: Props) {
       {Array.from({ length: count }, (_, i) => (
         <div
           key={i}
-          style={{
-            borderRadius: "16px",
-            overflow: "hidden",
-            background: "var(--surface)",
-            border: "1px solid var(--line)",
-          }}
+          className="rounded-lg overflow-hidden bg-surface border border-line"
         >
-          <div className="skeleton" style={{ height: "220px", width: "100%", borderRadius: 0 }} />
-          <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: "8px" }}>
-            <div className="skeleton" style={{ height: "13px", width: "80%" }} />
-            <div className="skeleton" style={{ height: "13px", width: "60%" }} />
-            <div className="skeleton" style={{ height: "18px", width: "45%" }} />
+          <div className="skeleton h-[220px] w-full rounded-none" />
+          <div className="px-4 py-3.5 flex flex-col gap-2">
+            <div className="skeleton h-[13px] w-[80%]" />
+            <div className="skeleton h-[13px] w-[60%]" />
+            <div className="skeleton h-[18px] w-[45%]" />
           </div>
         </div>
       ))}

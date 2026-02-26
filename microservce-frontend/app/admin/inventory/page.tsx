@@ -11,17 +11,6 @@ import ReservationsTab from "../../components/inventory/ReservationsTab";
 const TABS = ["Warehouses", "Stock", "Movements", "Reservations"] as const;
 type Tab = (typeof TABS)[number];
 
-const tabBtnBase: React.CSSProperties = {
-  padding: "10px 20px",
-  background: "transparent",
-  border: "none",
-  cursor: "pointer",
-  fontSize: "0.85rem",
-  fontWeight: 600,
-  transition: "color 0.2s",
-  borderBottom: "2px solid transparent",
-};
-
 export default function AdminInventoryPage() {
   const session = useAuthSession();
   const [activeTab, setActiveTab] = useState<Tab>("Warehouses");
@@ -30,8 +19,8 @@ export default function AdminInventoryPage() {
   if (session.status === "loading" || session.status === "idle") {
     return (
       <AdminPageShell title="Inventory" breadcrumbs={[{ label: "Admin", href: "/admin/dashboard" }, { label: "Inventory" }]}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300 }}>
-          <p style={{ color: "var(--muted)", fontSize: "0.875rem" }}>Loading session...</p>
+        <div className="flex items-center justify-center min-h-[300px]">
+          <p className="text-muted text-base">Loading session...</p>
         </div>
       </AdminPageShell>
     );
@@ -40,9 +29,9 @@ export default function AdminInventoryPage() {
   if (!session.canViewAdmin) {
     return (
       <AdminPageShell title="Inventory" breadcrumbs={[{ label: "Admin", href: "/admin/dashboard" }, { label: "Inventory" }]}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300, flexDirection: "column", gap: 12 }}>
-          <p style={{ color: "var(--danger)", fontSize: "1.1rem", fontWeight: 700, fontFamily: "var(--font-display, Syne, sans-serif)" }}>Unauthorized</p>
-          <p style={{ color: "var(--muted)", fontSize: "0.8rem" }}>You do not have permission to manage inventory.</p>
+        <div className="flex items-center justify-center min-h-[300px] flex-col gap-3">
+          <p className="text-danger text-[1.1rem] font-bold font-[var(--font-display,Syne,sans-serif)]">Unauthorized</p>
+          <p className="text-muted text-sm">You do not have permission to manage inventory.</p>
         </div>
       </AdminPageShell>
     );
@@ -51,17 +40,13 @@ export default function AdminInventoryPage() {
   return (
     <AdminPageShell title="Inventory" breadcrumbs={[{ label: "Admin", href: "/admin/dashboard" }, { label: "Inventory" }]}>
       {/* ── Tab bar ── */}
-      <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--line)", marginBottom: 20 }}>
+      <div className="flex gap-0 border-b border-line mb-5">
         {TABS.map((tab) => (
           <button
             key={tab}
             type="button"
             onClick={() => setActiveTab(tab)}
-            style={{
-              ...tabBtnBase,
-              color: activeTab === tab ? "var(--brand)" : "var(--muted)",
-              borderBottomColor: activeTab === tab ? "var(--brand)" : "transparent",
-            }}
+            className={`py-2.5 px-5 bg-transparent border-none cursor-pointer text-base font-semibold transition-colors duration-200 border-b-2 ${activeTab === tab ? "text-brand border-b-brand" : "text-muted border-b-transparent"}`}
           >
             {tab}
           </button>

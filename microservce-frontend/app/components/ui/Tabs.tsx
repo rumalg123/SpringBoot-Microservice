@@ -19,47 +19,6 @@ type Props = {
   style?: CSSProperties;
 };
 
-const pillBase: CSSProperties = {
-  padding: "8px 18px",
-  borderRadius: 10,
-  fontSize: "0.82rem",
-  fontWeight: 600,
-  cursor: "pointer",
-  border: "1px solid transparent",
-  background: "transparent",
-  transition: "all 0.2s",
-};
-
-const pillActive: CSSProperties = {
-  background: "rgba(0,212,255,0.12)",
-  color: "var(--brand)",
-  borderColor: "rgba(0,212,255,0.25)",
-};
-
-const pillInactive: CSSProperties = {
-  color: "var(--muted)",
-};
-
-const underlineBase: CSSProperties = {
-  padding: "10px 20px",
-  background: "transparent",
-  border: "none",
-  borderBottom: "2px solid transparent",
-  cursor: "pointer",
-  fontSize: "0.85rem",
-  fontWeight: 600,
-  transition: "color 0.15s, border-color 0.15s",
-};
-
-const underlineActive: CSSProperties = {
-  color: "var(--brand)",
-  borderBottomColor: "var(--brand)",
-};
-
-const underlineInactive: CSSProperties = {
-  color: "var(--muted)",
-};
-
 export default function Tabs({
   tabs,
   activeKey,
@@ -70,18 +29,22 @@ export default function Tabs({
 }: Props) {
   const isPill = variant === "pill";
 
-  const wrapperStyle: CSSProperties = isPill
-    ? { display: "flex", gap: 6, flexWrap: "wrap", ...style }
-    : { display: "flex", gap: 0, borderBottom: "1px solid var(--line)", ...style };
-
   return (
-    <div className={className} style={wrapperStyle} role="tablist">
+    <div
+      className={`flex ${isPill ? "gap-1.5 flex-wrap" : "gap-0 border-b border-line"} ${className || ""}`}
+      style={style}
+      role="tablist"
+    >
       {tabs.map((tab) => {
         const isActive = tab.key === activeKey;
-        const base = isPill ? pillBase : underlineBase;
-        const state = isActive
-          ? (isPill ? pillActive : underlineActive)
-          : (isPill ? pillInactive : underlineInactive);
+
+        const pillClasses = isActive
+          ? "bg-[rgba(0,212,255,0.12)] text-brand border-[rgba(0,212,255,0.25)]"
+          : "text-muted border-transparent bg-transparent";
+
+        const underlineClasses = isActive
+          ? "text-brand border-b-brand"
+          : "text-muted border-b-transparent";
 
         return (
           <button
@@ -90,11 +53,15 @@ export default function Tabs({
             role="tab"
             aria-selected={isActive}
             onClick={() => onChange(tab.key)}
-            style={{ ...base, ...state }}
+            className={
+              isPill
+                ? `py-2 px-[18px] rounded-md text-sm font-semibold cursor-pointer border transition-all duration-200 ${pillClasses}`
+                : `py-2.5 px-5 bg-transparent border-none border-b-2 cursor-pointer text-sm font-semibold transition-colors duration-150 ${underlineClasses}`
+            }
           >
             {tab.label}
             {tab.badge != null && (
-              <span style={{ marginLeft: 6, opacity: 0.7 }}>({tab.badge})</span>
+              <span className="ml-1.5 opacity-70">({tab.badge})</span>
             )}
           </button>
         );

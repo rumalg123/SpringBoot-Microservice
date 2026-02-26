@@ -112,15 +112,8 @@ function PosterCard({ poster, variant }: { poster: PosterItem; variant: Variant 
 
   const inner = (
     <div
-      style={{
-        position: "relative",
-        overflow: "hidden",
-        borderRadius: variant === "hero" ? "20px" : "16px",
-        border: "1px solid rgba(0,212,255,0.12)",
-        background: bg,
-        aspectRatio: aspectByVariant(variant),
-        boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
-      }}
+      className={`relative overflow-hidden border border-brand/[0.12] shadow-[0_10px_30px_rgba(0,0,0,0.18)] ${variant === "hero" ? "rounded-xl" : "rounded-lg"}`}
+      style={{ background: bg, aspectRatio: aspectByVariant(variant) }}
     >
       {imageUrl ? (
         <Image
@@ -128,7 +121,7 @@ function PosterCard({ poster, variant }: { poster: PosterItem; variant: Variant 
           alt={poster.title || poster.name}
           fill
           sizes={variant === "hero" ? "100vw" : "(max-width: 1024px) 100vw, 50vw"}
-          style={{ objectFit: "cover" }}
+          className="object-cover"
           unoptimized
           onError={() => {
             if (imageSources?.fallback && imageUrl !== imageSources.fallback) {
@@ -139,13 +132,12 @@ function PosterCard({ poster, variant }: { poster: PosterItem; variant: Variant 
           }}
         />
       ) : (
-        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(135deg,#0f172a,#111827)" }} />
+        <div className="absolute inset-0 bg-[linear-gradient(135deg,#0f172a,#111827)]" />
       )}
 
       <div
+        className="absolute inset-0"
         style={{
-          position: "absolute",
-          inset: 0,
           background: variant === "hero"
             ? "linear-gradient(90deg, rgba(7,10,18,0.8) 0%, rgba(7,10,18,0.45) 45%, rgba(7,10,18,0.15) 100%)"
             : "linear-gradient(180deg, rgba(7,10,18,0.1) 0%, rgba(7,10,18,0.65) 100%)",
@@ -153,59 +145,26 @@ function PosterCard({ poster, variant }: { poster: PosterItem; variant: Variant 
       />
 
       <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          display: "flex",
-          alignItems: variant === "hero" ? "center" : "flex-end",
-          padding: variant === "hero" ? "22px 24px" : "14px 14px",
-        }}
+        className={`absolute inset-0 flex ${variant === "hero" ? "items-center px-6 py-[22px]" : "items-end p-3.5"}`}
       >
-        <div style={{ maxWidth: variant === "hero" ? "540px" : "100%" }}>
+        <div className={variant === "hero" ? "max-w-[540px]" : "max-w-full"}>
           {poster.title && (
             <div
-              style={{
-                color: "#fff",
-                fontWeight: 800,
-                fontSize: variant === "hero" ? "clamp(1.15rem, 2vw, 2rem)" : "0.95rem",
-                lineHeight: 1.15,
-                marginBottom: poster.subtitle ? "6px" : "0",
-                textShadow: "0 2px 10px rgba(0,0,0,0.35)",
-              }}
+              className={`text-white font-extrabold leading-[1.15] [text-shadow:0_2px_10px_rgba(0,0,0,0.35)] ${variant === "hero" ? "text-[clamp(1.15rem,2vw,2rem)]" : "text-[0.95rem]"} ${poster.subtitle ? "mb-1.5" : ""}`}
             >
               {poster.title}
             </div>
           )}
           {poster.subtitle && (
             <div
-              style={{
-                color: "rgba(255,255,255,0.88)",
-                fontSize: variant === "hero" ? "0.9rem" : "0.75rem",
-                lineHeight: 1.35,
-                marginBottom: poster.ctaLabel ? "10px" : "0",
-                display: "-webkit-box",
-                WebkitLineClamp: variant === "hero" ? 2 : 2,
-                WebkitBoxOrient: "vertical",
-                overflow: "hidden",
-              }}
+              className={`text-white/[0.88] leading-[1.35] line-clamp-2 ${variant === "hero" ? "text-[0.9rem]" : "text-[0.75rem]"} ${poster.ctaLabel ? "mb-2.5" : ""}`}
             >
               {poster.subtitle}
             </div>
           )}
           {poster.ctaLabel && (
             <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                padding: variant === "hero" ? "8px 12px" : "6px 10px",
-                borderRadius: "999px",
-                background: "rgba(0,212,255,0.2)",
-                color: "#d9fbff",
-                border: "1px solid rgba(0,212,255,0.26)",
-                fontSize: variant === "hero" ? "0.78rem" : "0.7rem",
-                fontWeight: 700,
-              }}
+              className={`inline-flex items-center gap-1.5 rounded-full bg-brand/20 text-[#d9fbff] border border-brand/[0.26] font-bold ${variant === "hero" ? "px-3 py-2 text-[0.78rem]" : "px-2.5 py-1.5 text-xs"}`}
             >
               {poster.ctaLabel}
               <span aria-hidden>→</span>
@@ -246,33 +205,13 @@ function CarouselControls({
   onSelect: (next: number) => void;
   compact: boolean;
 }) {
-  const buttonSize = compact ? 34 : 40;
-
   return (
     <>
       <button
         type="button"
         onClick={onPrev}
         aria-label="Previous poster"
-        style={{
-          position: "absolute",
-          left: "10px",
-          top: "50%",
-          transform: "translateY(-50%)",
-          width: `${buttonSize}px`,
-          height: `${buttonSize}px`,
-          borderRadius: "999px",
-          border: "1px solid rgba(255,255,255,0.22)",
-          background: "rgba(7,10,18,0.55)",
-          color: "#fff",
-          display: "grid",
-          placeItems: "center",
-          fontSize: compact ? "0.9rem" : "1rem",
-          fontWeight: 800,
-          backdropFilter: "blur(6px)",
-          cursor: "pointer",
-          zIndex: 2,
-        }}
+        className={`absolute left-2.5 top-1/2 -translate-y-1/2 rounded-full border border-white/[0.22] bg-[rgba(7,10,18,0.55)] text-white grid place-items-center font-extrabold backdrop-blur-sm cursor-pointer z-[2] ${compact ? "w-[34px] h-[34px] text-[0.9rem]" : "w-10 h-10 text-lg"}`}
       >
         ‹
       </button>
@@ -281,46 +220,14 @@ function CarouselControls({
         type="button"
         onClick={onNext}
         aria-label="Next poster"
-        style={{
-          position: "absolute",
-          right: "10px",
-          top: "50%",
-          transform: "translateY(-50%)",
-          width: `${buttonSize}px`,
-          height: `${buttonSize}px`,
-          borderRadius: "999px",
-          border: "1px solid rgba(255,255,255,0.22)",
-          background: "rgba(7,10,18,0.55)",
-          color: "#fff",
-          display: "grid",
-          placeItems: "center",
-          fontSize: compact ? "0.9rem" : "1rem",
-          fontWeight: 800,
-          backdropFilter: "blur(6px)",
-          cursor: "pointer",
-          zIndex: 2,
-        }}
+        className={`absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full border border-white/[0.22] bg-[rgba(7,10,18,0.55)] text-white grid place-items-center font-extrabold backdrop-blur-sm cursor-pointer z-[2] ${compact ? "w-[34px] h-[34px] text-[0.9rem]" : "w-10 h-10 text-lg"}`}
       >
         ›
       </button>
 
       <div
         aria-label="Poster slide indicators"
-        style={{
-          position: "absolute",
-          left: "50%",
-          bottom: "10px",
-          transform: "translateX(-50%)",
-          display: "flex",
-          alignItems: "center",
-          gap: "6px",
-          padding: "6px 8px",
-          borderRadius: "999px",
-          background: "rgba(7,10,18,0.45)",
-          border: "1px solid rgba(255,255,255,0.12)",
-          backdropFilter: "blur(6px)",
-          zIndex: 2,
-        }}
+        className="absolute left-1/2 bottom-2.5 -translate-x-1/2 flex items-center gap-1.5 px-2 py-1.5 rounded-full bg-[rgba(7,10,18,0.45)] border border-white/[0.12] backdrop-blur-sm z-[2]"
       >
         {Array.from({ length: count }).map((_, dotIndex) => (
           <button
@@ -329,15 +236,7 @@ function CarouselControls({
             onClick={() => onSelect(dotIndex)}
             aria-label={`Show poster ${dotIndex + 1}`}
             aria-pressed={dotIndex === index}
-            style={{
-              width: dotIndex === index ? "18px" : "8px",
-              height: "8px",
-              borderRadius: "999px",
-              border: "none",
-              background: dotIndex === index ? "rgba(0,212,255,0.95)" : "rgba(255,255,255,0.45)",
-              cursor: "pointer",
-              transition: "all 140ms ease",
-            }}
+            className={`h-2 rounded-full border-none cursor-pointer transition-all duration-[140ms] ease-linear ${dotIndex === index ? "w-[18px] bg-brand/95" : "w-2 bg-white/45"}`}
           />
         ))}
       </div>
@@ -433,7 +332,7 @@ export default function PosterSlot({
         onBlurCapture={() => setPaused(false)}
       >
         <div
-          style={{ position: "relative", touchAction: "pan-y" }}
+          className="relative touch-pan-y"
           onTouchStart={(event) => {
             const touch = event.touches[0];
             if (!touch) return;

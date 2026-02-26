@@ -35,57 +35,35 @@ export default function VendorOrdersPanel({
   if (!orderId) return null;
 
   return (
-    <div
-      style={{
-        marginBottom: "12px",
-        borderRadius: "12px",
-        border: "1px solid rgba(124,58,237,0.15)",
-        background: "rgba(124,58,237,0.04)",
-        padding: "12px",
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px" }}>
+    <div className="mb-3 rounded-xl border border-[rgba(124,58,237,0.15)] bg-[rgba(124,58,237,0.04)] p-3">
+      <div className="flex items-center justify-between gap-2.5">
         <div>
-          <p style={{ margin: 0, color: "#ddd6fe", fontWeight: 700, fontSize: "0.85rem" }}>Vendor Orders</p>
-          <p style={{ margin: "4px 0 0", color: "var(--muted)", fontSize: "0.7rem", fontFamily: "monospace" }}>{orderId}</p>
+          <p className="m-0 text-base font-bold text-[#ddd6fe]">Vendor Orders</p>
+          <p className="mt-1 font-mono text-[0.7rem] text-muted">{orderId}</p>
         </div>
-        <div style={{ display: "flex", gap: "8px" }}>
+        <div className="flex gap-2">
           <button
             type="button"
             onClick={() => { void onRefresh(); }}
             disabled={loading}
-            style={{
-              padding: "6px 10px",
-              borderRadius: "8px",
-              border: "1px solid rgba(124,58,237,0.18)",
-              background: "rgba(124,58,237,0.08)",
-              color: "#c4b5fd",
-              fontSize: "0.72rem",
-            }}
+            className="rounded-md border border-[rgba(124,58,237,0.18)] bg-[rgba(124,58,237,0.08)] px-2.5 py-1.5 text-xs text-[#c4b5fd]"
           >
             {loading ? "Refreshing..." : "Refresh"}
           </button>
           <button
             type="button"
             onClick={onClose}
-            style={{
-              padding: "6px 10px",
-              borderRadius: "8px",
-              border: "1px solid rgba(255,255,255,0.08)",
-              background: "rgba(255,255,255,0.02)",
-              color: "var(--muted)",
-              fontSize: "0.72rem",
-            }}
+            className="rounded-md border border-white/[0.08] bg-white/[0.02] px-2.5 py-1.5 text-xs text-muted"
           >
             Close
           </button>
         </div>
       </div>
 
-      <div style={{ marginTop: "10px", display: "grid", gap: "8px" }}>
-        {loading && <div style={{ color: "var(--muted)", fontSize: "0.75rem" }}>Loading vendor orders...</div>}
+      <div className="mt-2.5 grid gap-2">
+        {loading && <div className="text-xs text-muted">Loading vendor orders...</div>}
         {!loading && rows.length === 0 && (
-          <div style={{ color: "var(--muted)", fontSize: "0.75rem" }}>No vendor orders found for this order.</div>
+          <div className="text-xs text-muted">No vendor orders found for this order.</div>
         )}
         {!loading && rows.map((row) => {
           const chip = getStatusChip(row.status || "PENDING");
@@ -95,52 +73,36 @@ export default function VendorOrdersPanel({
           return (
             <div
               key={row.id}
-              style={{
-                border: "1px solid rgba(255,255,255,0.06)",
-                background: "rgba(255,255,255,0.015)",
-                borderRadius: "10px",
-                padding: "10px",
-              }}
+              className="rounded-md border border-white/[0.06] bg-white/[0.015] p-2.5"
             >
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", justifyContent: "space-between" }}>
-                <div style={{ display: "grid", gap: "3px" }}>
-                  <span style={{ color: "#c8c8e8", fontSize: "0.72rem", fontFamily: "monospace" }}>{row.id}</span>
-                  <span style={{ color: "var(--muted)", fontSize: "0.68rem", fontFamily: "monospace" }}>vendor: {row.vendorId}</span>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="grid gap-[3px]">
+                  <span className="font-mono text-xs text-[#c8c8e8]">{row.id}</span>
+                  <span className="font-mono text-[0.68rem] text-muted">vendor: {row.vendorId}</span>
                 </div>
                 <span
+                  className="rounded-full px-2.5 py-0.5 text-[0.7rem] font-extrabold"
                   style={{
-                    borderRadius: "20px",
                     background: chip.bg,
                     border: `1px solid ${chip.border}`,
                     color: chip.color,
-                    padding: "2px 10px",
-                    fontSize: "0.7rem",
-                    fontWeight: 800,
                   }}
                 >
                   {(row.status || "PENDING").replaceAll("_", " ")}
                 </span>
               </div>
-              <div style={{ marginTop: "6px", display: "flex", flexWrap: "wrap", gap: "10px", color: "var(--muted)", fontSize: "0.7rem" }}>
+              <div className="mt-1.5 flex flex-wrap gap-2.5 text-[0.7rem] text-muted">
                 <span>Qty: {row.quantity}</span>
                 <span>Items: {row.itemCount}</span>
                 <span>Total: ${Number(row.orderTotal ?? 0).toFixed(2)}</span>
                 <span>{new Date(row.createdAt).toLocaleString()}</span>
               </div>
-              <div style={{ marginTop: "8px", display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
                 <select
                   value={draftStatus}
                   onChange={(e) => onDraftChange(row.id, e.target.value)}
                   disabled={loading || statusSavingId === row.id}
-                  style={{
-                    minWidth: "170px",
-                    borderRadius: "8px",
-                    border: "1px solid rgba(124,58,237,0.18)",
-                    background: "rgba(124,58,237,0.06)",
-                    color: "#e9d5ff",
-                    padding: "8px 10px",
-                    fontSize: "0.74rem",
-                  }}
+                  className="min-w-[170px] rounded-md border border-[rgba(124,58,237,0.18)] bg-[rgba(124,58,237,0.06)] px-2.5 py-2 text-[0.74rem] text-[#e9d5ff]"
                 >
                   {ORDER_STATUSES.map((s) => (
                     <option key={s} value={s} disabled={!getAllowedNextStatuses(row.status).includes(s)}>
@@ -152,15 +114,9 @@ export default function VendorOrdersPanel({
                   type="button"
                   onClick={() => { void onToggleHistory(row.id); }}
                   disabled={loading || statusSavingId !== null}
-                  style={{
-                    padding: "8px 10px",
-                    borderRadius: "8px",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    background: activeHistoryVendorOrderId === row.id ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.02)",
-                    color: activeHistoryVendorOrderId === row.id ? "#c8c8e8" : "var(--muted)",
-                    fontSize: "0.72rem",
-                    fontWeight: 700,
-                  }}
+                  className={`rounded-md border border-white/[0.08] px-2.5 py-2 text-xs font-bold ${
+                    activeHistoryVendorOrderId === row.id ? "bg-white/5 text-[#c8c8e8]" : "bg-white/[0.02] text-muted"
+                  }`}
                 >
                   {historyLoading && activeHistoryVendorOrderId === row.id ? "Loading..." : activeHistoryVendorOrderId === row.id ? "Hide History" : "History"}
                 </button>
@@ -173,16 +129,9 @@ export default function VendorOrdersPanel({
                       ? "Save vendor-order status"
                       : `Invalid transition: ${row.status} -> ${draftStatus}`
                   }
-                  style={{
-                    padding: "8px 10px",
-                    borderRadius: "8px",
-                    border: "1px solid rgba(124,58,237,0.18)",
-                    background: statusSavingId === row.id ? "rgba(124,58,237,0.12)" : "rgba(124,58,237,0.08)",
-                    color: "#ddd6fe",
-                    fontSize: "0.72rem",
-                    fontWeight: 700,
-                    opacity: canSaveVendorOrder ? 1 : 0.55,
-                  }}
+                  className={`rounded-md border border-[rgba(124,58,237,0.18)] px-2.5 py-2 text-xs font-bold text-[#ddd6fe] ${
+                    statusSavingId === row.id ? "bg-[rgba(124,58,237,0.12)]" : "bg-[rgba(124,58,237,0.08)]"
+                  } ${canSaveVendorOrder ? "opacity-100" : "opacity-55"}`}
                 >
                   {statusSavingId === row.id ? "Saving..." : "Save"}
                 </button>
@@ -194,4 +143,3 @@ export default function VendorOrdersPanel({
     </div>
   );
 }
-

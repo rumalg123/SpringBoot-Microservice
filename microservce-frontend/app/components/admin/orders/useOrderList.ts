@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuthSession } from "../../../../lib/authSession";
 import { canTransitionOrderStatus } from "./orderStatus";
-import type { AdminOrder, AdminOrdersPageResponse, OrderStatusAudit } from "./types";
+import type { AdminOrder, AdminOrdersPageResponse } from "./types";
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -28,12 +29,10 @@ export default function useOrderList({
   onVendorScopedOrderStatusAttempt,
   onRefreshOrderHistoryIfOpen,
 }: Params) {
-  const [ordersPage, setOrdersPage] = useState<AdminOrdersPageResponse | null>(null);
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
   const [customerEmailInput, setCustomerEmailInput] = useState("");
   const [customerEmailFilter, setCustomerEmailFilter] = useState("");
-  const [ordersLoading, setOrdersLoading] = useState(false);
-  const [filterSubmitting, setFilterSubmitting] = useState(false);
   const [statusDrafts, setStatusDrafts] = useState<Record<string, string>>({});
   const [statusSavingId, setStatusSavingId] = useState<string | null>(null);
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
@@ -45,90 +44,79 @@ export default function useOrderList({
     resetPanelsForListReloadRef.current = onResetPanelsForListReload;
   }, [onResetPanelsForListReload]);
 
-  const loadAdminOrders = useCallback(
-    async (targetPage: number, targetCustomerEmail: string) => {
-      const apiClient: ApiClientLike = session.apiClient;
-      if (!apiClient) return;
-      setOrdersLoading(true);
-      try {
-        const params = new URLSearchParams();
-        params.set("page", String(targetPage));
-        params.set("size", String(DEFAULT_PAGE_SIZE));
-        params.set("sort", "createdAt,DESC");
-        if (targetCustomerEmail.trim()) params.set("customerEmail", targetCustomerEmail.trim());
-        const res = await apiClient.get(`/admin/orders?${params.toString()}`);
-        const nextPageData = res.data as AdminOrdersPageResponse;
-        setOrdersPage(nextPageData);
-        setStatusDrafts((prev) => {
-          const next = { ...prev };
-          for (const order of nextPageData.content || []) {
-            if (!next[order.id]) next[order.id] = order.status || "PENDING";
-          }
-          return next;
-        });
-        setPage(targetPage);
-        setSelectedOrderIds([]);
-        resetPanelsForListReloadRef.current();
-      } finally {
-        setOrdersLoading(false);
-      }
-    },
-    [session.apiClient]
-  );
-
+  // Auth guards
   useEffect(() => {
     if (session.status !== "ready") return;
     if (!session.isAuthenticated) { router.replace("/"); return; }
     if (!session.canManageAdminOrders) { router.replace("/orders"); return; }
-    const run = async () => {
-      try {
-        await loadAdminOrders(0, "");
-        setStatusMessage("Admin orders loaded.");
-      } catch (err) {
-        setStatusMessage(err instanceof Error ? err.message : "Failed to load admin orders.");
+  }, [router, session.status, session.isAuthenticated, session.canManageAdminOrders]);
+
+  const canFetch =
+    session.status === "ready" &&
+    session.isAuthenticated &&
+    Boolean(session.canManageAdminOrders) &&
+    Boolean(session.apiClient);
+
+  const ordersQuery = useQuery<AdminOrdersPageResponse>({
+    queryKey: ["admin-orders", page, customerEmailFilter],
+    queryFn: async () => {
+      const apiClient: ApiClientLike = session.apiClient;
+      if (!apiClient) throw new Error("No API client");
+      const params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("size", String(DEFAULT_PAGE_SIZE));
+      params.set("sort", "createdAt,DESC");
+      if (customerEmailFilter.trim()) params.set("customerEmail", customerEmailFilter.trim());
+      const res = await apiClient.get(`/admin/orders?${params.toString()}`);
+      return res.data as AdminOrdersPageResponse;
+    },
+    enabled: canFetch,
+  });
+
+  const ordersPage = ordersQuery.data ?? null;
+  const ordersLoading = ordersQuery.isLoading || ordersQuery.isFetching;
+
+  // Sync statusDrafts and reset panels/selection when data changes
+  const prevDataRef = useRef<AdminOrdersPageResponse | null>(null);
+  useEffect(() => {
+    if (!ordersQuery.data || ordersQuery.data === prevDataRef.current) return;
+    prevDataRef.current = ordersQuery.data;
+    const nextPageData = ordersQuery.data;
+    setStatusDrafts((prev) => {
+      const next = { ...prev };
+      for (const order of nextPageData.content || []) {
+        if (!next[order.id]) next[order.id] = order.status || "PENDING";
       }
-    };
-    void run();
-  }, [router, session.status, session.isAuthenticated, session.canManageAdminOrders, loadAdminOrders, setStatusMessage]);
+      return next;
+    });
+    setSelectedOrderIds([]);
+    resetPanelsForListReloadRef.current();
+    setStatusMessage("Admin orders loaded.");
+  }, [ordersQuery.data, setStatusMessage]);
 
-  const applyFilter = async () => {
-    if (ordersLoading || filterSubmitting) return;
-    setFilterSubmitting(true);
+  useEffect(() => {
+    if (ordersQuery.error) {
+      setStatusMessage(ordersQuery.error instanceof Error ? ordersQuery.error.message : "Failed to load admin orders.");
+    }
+  }, [ordersQuery.error, setStatusMessage]);
+
+  const applyFilter = () => {
+    if (ordersLoading) return;
     const nextFilter = customerEmailInput.trim();
-    try {
-      setCustomerEmailFilter(nextFilter);
-      await loadAdminOrders(0, nextFilter);
-      setStatusMessage("Admin orders loaded.");
-    } catch (err) {
-      setStatusMessage(err instanceof Error ? err.message : "Failed to load admin orders.");
-    } finally {
-      setFilterSubmitting(false);
-    }
+    setCustomerEmailFilter(nextFilter);
+    setPage(0);
   };
 
-  const clearFilter = async () => {
-    if (ordersLoading || filterSubmitting) return;
-    setFilterSubmitting(true);
-    try {
-      setCustomerEmailInput("");
-      setCustomerEmailFilter("");
-      await loadAdminOrders(0, "");
-      setStatusMessage("Admin orders loaded.");
-    } catch (err) {
-      setStatusMessage(err instanceof Error ? err.message : "Failed to load admin orders.");
-    } finally {
-      setFilterSubmitting(false);
-    }
+  const clearFilter = () => {
+    if (ordersLoading) return;
+    setCustomerEmailInput("");
+    setCustomerEmailFilter("");
+    setPage(0);
   };
 
-  const goToPage = async (nextPage: number) => {
+  const goToPage = (nextPage: number) => {
     if (nextPage < 0 || ordersLoading) return;
-    try {
-      await loadAdminOrders(nextPage, customerEmailFilter);
-      setStatusMessage("Admin orders loaded.");
-    } catch (err) {
-      setStatusMessage(err instanceof Error ? err.message : "Failed to load admin orders.");
-    }
+    setPage(nextPage);
   };
 
   const updateOrderStatus = async (orderId: string) => {
@@ -150,10 +138,13 @@ export default function useOrderList({
     try {
       const res = await apiClient.patch(`/admin/orders/${orderId}/status`, { status: nextStatus });
       const updated = res.data as AdminOrder;
-      setOrdersPage((prev) => prev ? ({
-        ...prev,
-        content: prev.content.map((order) => (order.id === orderId ? { ...order, ...updated } : order)),
-      }) : prev);
+      queryClient.setQueryData<AdminOrdersPageResponse>(
+        ["admin-orders", page, customerEmailFilter],
+        (prev) => prev ? ({
+          ...prev,
+          content: prev.content.map((order) => (order.id === orderId ? { ...order, ...updated } : order)),
+        }) : prev!
+      );
       setStatusDrafts((prev) => ({ ...prev, [orderId]: updated.status || nextStatus }));
       setStatusMessage(`Order ${orderId} updated to ${updated.status || nextStatus}.`);
       await onRefreshOrderHistoryIfOpen(orderId);
@@ -198,10 +189,13 @@ export default function useOrderList({
       try {
         const res = await apiClient.patch(`/admin/orders/${orderId}/status`, { status: nextStatus });
         const updated = res.data as AdminOrder;
-        setOrdersPage((prev) => prev ? ({
-          ...prev,
-          content: prev.content.map((order) => (order.id === orderId ? { ...order, ...updated } : order)),
-        }) : prev);
+        queryClient.setQueryData<AdminOrdersPageResponse>(
+          ["admin-orders", page, customerEmailFilter],
+          (prev) => prev ? ({
+            ...prev,
+            content: prev.content.map((order) => (order.id === orderId ? { ...order, ...updated } : order)),
+          }) : prev!
+        );
         setStatusDrafts((prev) => ({ ...prev, [orderId]: updated.status || nextStatus }));
         success += 1;
       } catch {
@@ -223,7 +217,7 @@ export default function useOrderList({
   const currentPage = ordersPage?.number ?? ordersPage?.page?.number ?? page;
   const totalPages = ordersPage?.totalPages ?? ordersPage?.page?.totalPages ?? 0;
   const totalElements = ordersPage?.totalElements ?? ordersPage?.page?.totalElements ?? 0;
-  const filterBusy = ordersLoading || filterSubmitting;
+  const filterBusy = ordersLoading;
   const allCurrentSelected = orders.length > 0 && orders.every((o) => selectedOrderIds.includes(o.id));
   const someCurrentSelected = selectedOrderIds.length > 0 && !allCurrentSelected;
   const selectedOrders = useMemo(() => orders.filter((o) => selectedOrderIds.includes(o.id)), [orders, selectedOrderIds]);
@@ -239,7 +233,7 @@ export default function useOrderList({
     customerEmailInput,
     customerEmailFilter,
     ordersLoading,
-    filterSubmitting,
+    filterSubmitting: ordersLoading,
     filterBusy,
     statusDrafts,
     statusSavingId,
@@ -261,6 +255,8 @@ export default function useOrderList({
     toggleOrderSelection,
     toggleSelectAllCurrentPage,
     applyBulkStatus,
-    loadAdminOrders,
+    loadAdminOrders: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+    },
   };
 }

@@ -114,23 +114,16 @@ export default function ProductSearchBar({
   const querySuggestions = suggestions.filter((s) => s.type === "query");
 
   return (
-    <div ref={searchBoxRef} className={className} style={{ position: "relative", maxWidth, ...style }}>
+    <div ref={searchBoxRef} className={`relative ${className ?? ""}`} style={{ maxWidth, ...style }}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
           if (searchSubmitPending) return;
           openSearchResults(searchText);
         }}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          overflow: "hidden",
-          borderRadius: "12px",
-          border: "1px solid rgba(0,212,255,0.18)",
-          background: "rgba(255,255,255,0.04)",
-        }}
+        className="flex items-center overflow-hidden rounded-xl border border-brand/[0.18] bg-white/[0.04]"
       >
-        <span style={{ paddingLeft: "14px", color: "rgba(0,212,255,0.45)", flexShrink: 0 }}>
+        <span className="pl-3.5 text-brand/45 shrink-0">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="8" />
             <path d="m21 21-4.3-4.3" />
@@ -139,16 +132,12 @@ export default function ProductSearchBar({
         <input
           type="text"
           placeholder={placeholder}
-          style={{
-            flex: 1,
-            border: "none",
-            background: "transparent",
-            padding: "11px 12px",
-            fontSize: "0.875rem",
-            color: "#fff",
-            outline: "none",
-          }}
+          className="flex-1 border-none bg-transparent px-3 py-[11px] text-base text-white outline-none"
           value={searchText}
+          role="combobox"
+          aria-expanded={searchDropdownOpen}
+          aria-autocomplete="list"
+          aria-controls="search-suggestions-listbox"
           onFocus={() => setSearchDropdownOpen(true)}
           onChange={(e) => {
             setSearchText(e.target.value);
@@ -163,21 +152,7 @@ export default function ProductSearchBar({
               setSuggestions([]);
               setSearchDropdownOpen(true);
             }}
-            style={{
-              marginRight: "8px",
-              width: "22px",
-              height: "22px",
-              borderRadius: "50%",
-              border: "none",
-              background: "rgba(255,255,255,0.1)",
-              color: "#aaa",
-              fontSize: "0.65rem",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-            }}
+            className="mr-2 w-[22px] h-[22px] rounded-full border-none bg-white/10 text-[#aaa] text-[0.65rem] cursor-pointer flex items-center justify-center shrink-0"
             aria-label="Clear search"
           >
             ×
@@ -186,18 +161,7 @@ export default function ProductSearchBar({
         <button
           type="submit"
           disabled={searchSubmitPending || !searchText.trim()}
-          style={{
-            padding: "11px 20px",
-            border: "none",
-            background: "linear-gradient(135deg, #00d4ff, #7c3aed)",
-            color: "#fff",
-            fontWeight: 700,
-            fontSize: "0.8rem",
-            cursor: searchSubmitPending || !searchText.trim() ? "not-allowed" : "pointer",
-            opacity: !searchText.trim() ? 0.6 : 1,
-            transition: "opacity 0.2s",
-            whiteSpace: "nowrap",
-          }}
+          className={`px-5 py-[11px] border-none bg-[image:linear-gradient(135deg,#00d4ff,#7c3aed)] text-white font-bold text-sm transition-opacity duration-200 whitespace-nowrap ${searchSubmitPending || !searchText.trim() ? "cursor-not-allowed opacity-60" : "cursor-pointer opacity-100"}`}
         >
           Search
         </button>
@@ -205,40 +169,25 @@ export default function ProductSearchBar({
 
       {searchDropdownOpen && (
         <div
-          style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            zIndex: 40,
-            marginTop: "6px",
-            borderRadius: "12px",
-            border: "1px solid rgba(0,212,255,0.15)",
-            background: "#111128",
-            boxShadow: "0 16px 48px rgba(0,0,0,0.7)",
-            overflow: "hidden",
-          }}
+          id="search-suggestions-listbox"
+          role="listbox"
+          aria-live="polite"
+          className="absolute left-0 right-0 z-40 mt-1.5 rounded-xl border border-brand/15 bg-[#111128] shadow-[0_16px_48px_rgba(0,0,0,0.7)] overflow-hidden"
         >
           {/* Empty state: show popular searches */}
           {searchText.trim().length < 1 && popularSearches.length > 0 && (
-            <div style={{ padding: "12px 16px" }}>
-              <p style={{ margin: "0 0 8px", fontSize: "0.7rem", color: "#6868a0", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            <div className="px-4 py-3">
+              <p className="mb-2 text-xs text-[#6868a0] font-semibold uppercase tracking-wide">
                 Popular Searches
               </p>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+              <div className="flex flex-wrap gap-1.5">
                 {popularSearches.slice(0, 8).map((term) => (
                   <button
                     key={term}
                     type="button"
+                    role="option"
                     onClick={() => openSearchResults(term)}
-                    style={{
-                      padding: "5px 12px",
-                      borderRadius: "16px",
-                      border: "1px solid rgba(0,212,255,0.12)",
-                      background: "rgba(0,212,255,0.06)",
-                      color: "#c0c0e0",
-                      fontSize: "0.78rem",
-                      cursor: "pointer",
-                    }}
+                    className="px-3 py-[5px] rounded-2xl border border-brand/[0.12] bg-brand/[0.06] text-[#c0c0e0] text-[0.78rem] cursor-pointer"
                   >
                     {term}
                   </button>
@@ -248,7 +197,7 @@ export default function ProductSearchBar({
           )}
 
           {searchText.trim().length < 1 && popularSearches.length === 0 && (
-            <p style={{ padding: "14px 16px", fontSize: "0.8rem", color: "#6868a0", margin: 0 }}>
+            <p className="px-4 py-3.5 text-sm text-[#6868a0] m-0">
               Type to search products...
             </p>
           )}
@@ -257,41 +206,28 @@ export default function ProductSearchBar({
             <>
               <button
                 type="button"
+                role="option"
                 onClick={() => openSearchResults(searchText)}
-                style={{
-                  width: "100%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "12px 16px",
-                  textAlign: "left",
-                  fontSize: "0.875rem",
-                  color: "#fff",
-                  background: "transparent",
-                  border: "none",
-                  borderBottom: "1px solid rgba(0,212,255,0.08)",
-                  cursor: "pointer",
-                  fontWeight: 600,
-                }}
+                className="w-full flex items-center justify-between px-4 py-3 text-left text-base text-white bg-transparent border-none border-b border-brand/[0.08] cursor-pointer font-semibold"
               >
                 <span>Search for &quot;{searchText.trim()}&quot;</span>
-                <span style={{ fontSize: "0.7rem", color: "#6868a0" }}>Enter ↵</span>
+                <span className="text-xs text-[#6868a0]">Enter ↵</span>
               </button>
 
               {suggestionsLoading && (
-                <p style={{ padding: "12px 16px", fontSize: "0.8rem", color: "#6868a0", margin: 0 }}>
+                <p className="px-4 py-3 text-sm text-[#6868a0] m-0">
                   Loading suggestions...
                 </p>
               )}
 
               {!suggestionsLoading && suggestions.length === 0 && searchText.trim().length >= 2 && (
-                <p style={{ padding: "12px 16px", fontSize: "0.8rem", color: "#6868a0", margin: 0 }}>
+                <p className="px-4 py-3 text-sm text-[#6868a0] m-0">
                   No matching products.
                 </p>
               )}
 
               {!suggestionsLoading && (
-                <div style={{ maxHeight: "320px", overflowY: "auto" }}>
+                <div className="max-h-[320px] overflow-y-auto">
                   {/* Query suggestions */}
                   {querySuggestions.length > 0 && (
                     <>
@@ -299,29 +235,14 @@ export default function ProductSearchBar({
                         <button
                           key={`q-${s.text}`}
                           type="button"
+                          role="option"
                           onClick={() => openSearchResults(s.text)}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "10px",
-                            width: "100%",
-                            borderTop: "1px solid rgba(0,212,255,0.06)",
-                            padding: "10px 16px",
-                            textAlign: "left",
-                            background: "transparent",
-                            borderLeft: "none",
-                            borderRight: "none",
-                            borderBottom: "none",
-                            cursor: "pointer",
-                            transition: "background 0.12s",
-                          }}
-                          onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(0,212,255,0.05)"; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                          className="flex items-center gap-2.5 w-full border-t border-brand/[0.06] border-l-0 border-r-0 border-b-0 px-4 py-2.5 text-left bg-transparent cursor-pointer transition-colors duration-[120ms] hover:bg-brand/[0.05]"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6868a0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
                           </svg>
-                          <span style={{ fontSize: "0.84rem", color: "#d0d0e8" }}>{s.text}</span>
+                          <span className="text-[0.84rem] text-[#d0d0e8]">{s.text}</span>
                         </button>
                       ))}
                     </>
@@ -331,8 +252,8 @@ export default function ProductSearchBar({
                   {productSuggestions.length > 0 && (
                     <>
                       {querySuggestions.length > 0 && (
-                        <div style={{ borderTop: "1px solid rgba(0,212,255,0.08)", padding: "6px 16px 2px" }}>
-                          <p style={{ margin: 0, fontSize: "0.65rem", color: "#6868a0", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                        <div className="border-t border-brand/[0.08] px-4 pt-1.5 pb-0.5">
+                          <p className="m-0 text-[0.65rem] text-[#6868a0] font-semibold uppercase tracking-wide">
                             Products
                           </p>
                         </div>
@@ -341,24 +262,11 @@ export default function ProductSearchBar({
                         <button
                           key={`p-${s.id}`}
                           type="button"
+                          role="option"
                           onClick={() => openSuggestion(s)}
-                          style={{
-                            display: "block",
-                            width: "100%",
-                            borderTop: "1px solid rgba(0,212,255,0.06)",
-                            padding: "10px 16px",
-                            textAlign: "left",
-                            background: "transparent",
-                            borderLeft: "none",
-                            borderRight: "none",
-                            borderBottom: "none",
-                            cursor: "pointer",
-                            transition: "background 0.12s",
-                          }}
-                          onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(0,212,255,0.05)"; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                          className="block w-full border-t border-brand/[0.06] border-l-0 border-r-0 border-b-0 px-4 py-2.5 text-left bg-transparent cursor-pointer transition-colors duration-[120ms] hover:bg-brand/[0.05]"
                         >
-                          <p style={{ margin: 0, fontSize: "0.875rem", fontWeight: 600, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          <p className="m-0 text-base font-semibold text-white overflow-hidden text-ellipsis whitespace-nowrap">
                             {s.text}
                           </p>
                         </button>

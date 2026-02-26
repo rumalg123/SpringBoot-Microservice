@@ -59,24 +59,24 @@ export default function ReservationsTab({ apiClient, apiPrefix }: Props) {
     { key: "status", header: "Status", render: (v) => <StatusBadge value={String(v)} colorMap={RESERVATION_STATUS_COLORS} /> },
     { key: "orderId", header: "Order", render: (v) => {
       const s = String(v || "");
-      return <span title={s} style={{ fontSize: "0.75rem", fontFamily: "monospace" }}>{s.slice(0, 8)}...</span>;
+      return <span title={s} className="text-[0.75rem] font-mono">{s.slice(0, 8)}...</span>;
     }},
     { key: "productId", header: "Product", render: (v) => {
       const s = String(v || "");
-      return <span title={s} style={{ fontSize: "0.75rem", fontFamily: "monospace" }}>{s.slice(0, 8)}...</span>;
+      return <span title={s} className="text-[0.75rem] font-mono">{s.slice(0, 8)}...</span>;
     }},
-    { key: "quantityReserved", header: "Qty Reserved", width: "9%", render: (v) => <span style={{ fontWeight: 700 }}>{String(v)}</span> },
+    { key: "quantityReserved", header: "Qty Reserved", width: "9%", render: (v) => <span className="font-bold">{String(v)}</span> },
     { key: "reservedAt", header: "Reserved At", render: (v) => v ? new Date(String(v)).toLocaleString() : "-" },
     { key: "expiresAt", header: "Expires At", render: (v) => {
       if (!v) return "-";
       const d = new Date(String(v));
       const isExpired = d < new Date();
-      return <span style={{ color: isExpired ? "var(--danger)" : "var(--ink)" }}>{d.toLocaleString()}</span>;
+      return <span className={isExpired ? "text-danger" : "text-ink"}>{d.toLocaleString()}</span>;
     }},
     { key: "confirmedAt", header: "Confirmed", render: (v) => v ? new Date(String(v)).toLocaleString() : "-" },
     { key: "releaseReason", header: "Release Reason", render: (v) => {
       const s = String(v || "");
-      return s ? <span title={s} style={{ fontSize: "0.75rem" }}>{s.length > 30 ? s.slice(0, 30) + "..." : s}</span> : "-";
+      return s ? <span title={s} className="text-[0.75rem]">{s.length > 30 ? s.slice(0, 30) + "..." : s}</span> : "-";
     }},
   ];
 

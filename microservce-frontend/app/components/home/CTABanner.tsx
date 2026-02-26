@@ -19,47 +19,35 @@ export default function CTABanner({
 }: Props) {
   return (
     <section
-      className="animate-rise mx-auto max-w-7xl px-4 pb-16"
-      style={{ animationDelay: "400ms" }}
+      className="animate-rise mx-auto max-w-7xl px-4 pb-16 [animation-delay:400ms]"
     >
-      <div
-        style={{
-          borderRadius: "24px",
-          padding: "56px 40px",
-          textAlign: "center",
-          background: "linear-gradient(135deg, #0a0a22 0%, #12082e 50%, #080e28 100%)",
-          border: "1px solid var(--line-bright)",
-          position: "relative",
-          overflow: "hidden",
-        }}
-      >
+      <div className="rounded-[24px] px-10 py-14 text-center bg-[linear-gradient(135deg,#0a0a22_0%,#12082e_50%,#080e28_100%)] border border-line-bright relative overflow-hidden">
         {/* Decorative orbs */}
-        <div style={{ position: "absolute", top: "-60px", left: "20%", width: "300px", height: "300px", borderRadius: "50%", background: "radial-gradient(circle, var(--brand-soft) 0%, transparent 70%)", pointerEvents: "none" }} />
-        <div style={{ position: "absolute", bottom: "-60px", right: "15%", width: "250px", height: "250px", borderRadius: "50%", background: "radial-gradient(circle, var(--accent-soft) 0%, transparent 70%)", pointerEvents: "none" }} />
+        <div className="absolute -top-[60px] left-[20%] w-[300px] h-[300px] rounded-full bg-[radial-gradient(circle,var(--brand-soft)_0%,transparent_70%)] pointer-events-none" />
+        <div className="absolute -bottom-[60px] right-[15%] w-[250px] h-[250px] rounded-full bg-[radial-gradient(circle,var(--accent-soft)_0%,transparent_70%)] pointer-events-none" />
 
-        <div style={{ position: "relative", zIndex: 1 }}>
-          <span style={{ display: "inline-block", fontFamily: "'Syne', sans-serif", fontSize: "2.4rem", fontWeight: 900, lineHeight: 1.15, color: "#fff", marginBottom: "16px" }}>
+        <div className="relative z-[1]">
+          <span className="inline-block font-[Syne,sans-serif] text-[2.4rem] font-black leading-[1.15] text-white mb-4">
             {isAuthenticated ? "Welcome Back!" : (
               <>
                 Join{" "}
-                <span style={{ background: "var(--gradient-brand)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
+                <span className="bg-[image:var(--gradient-brand)] bg-clip-text [-webkit-background-clip:text] [-webkit-text-fill-color:transparent]">
                   Rumal Store
                 </span>{" "}
                 Today
               </>
             )}
           </span>
-          <p style={{ fontSize: "0.95rem", color: "#8888bb", margin: "0 auto 36px", maxWidth: "500px", lineHeight: 1.7 }}>
+          <p className="text-[0.95rem] text-[#8888bb] mx-auto mb-9 max-w-[500px] leading-[1.7]">
             {isAuthenticated
               ? "Continue shopping, check your orders, and manage your account all in one place."
               : "Create your free account and unlock exclusive deals, fast checkout, order tracking, and a premium shopping experience."}
           </p>
-          <div style={{ display: "flex", justifyContent: "center", gap: "14px", flexWrap: "wrap" }}>
+          <div className="flex justify-center gap-3.5 flex-wrap">
             {isAuthenticated ? (
               <Link
                 href={canViewAdmin ? "/admin/orders" : "/profile"}
-                className="no-underline inline-flex items-center gap-2 rounded-xl px-8 py-3.5 font-bold transition"
-                style={{ background: "var(--gradient-brand)", color: "#fff", fontSize: "0.9rem", boxShadow: "0 0 24px var(--line-bright)" }}
+                className="no-underline inline-flex items-center gap-2 rounded-xl px-8 py-3.5 font-bold transition bg-[image:var(--gradient-brand)] text-white text-[0.9rem] shadow-[0_0_24px_var(--line-bright)]"
               >
                 {canViewAdmin ? "Open Admin ->" : "Open Profile ->"}
               </Link>
@@ -67,16 +55,14 @@ export default function CTABanner({
               <button
                 onClick={onSignup}
                 disabled={authBusy}
-                className="inline-flex items-center gap-2 rounded-xl px-8 py-3.5 font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
-                style={{ background: "var(--gradient-brand)", color: "#fff", fontSize: "0.9rem", cursor: "pointer", border: "none", boxShadow: "0 0 24px var(--line-bright)" }}
+                className="inline-flex items-center gap-2 rounded-xl px-8 py-3.5 font-bold transition disabled:cursor-not-allowed disabled:opacity-50 bg-[image:var(--gradient-brand)] text-white text-[0.9rem] cursor-pointer border-none shadow-[0_0_24px_var(--line-bright)]"
               >
                 {authActionPending === "signup" ? "Redirecting..." : "Sign Up Free ->"}
               </button>
             )}
             <Link
               href="/products"
-              className="no-underline inline-flex items-center gap-2 rounded-xl px-8 py-3.5 font-bold transition"
-              style={{ border: "1.5px solid var(--brand-glow)", color: "var(--brand)", background: "var(--brand-soft)", fontSize: "0.9rem" }}
+              className="no-underline inline-flex items-center gap-2 rounded-xl px-8 py-3.5 font-bold transition border-[1.5px] border-brand-glow text-brand bg-brand-soft text-[0.9rem]"
             >
               Browse Products
             </Link>

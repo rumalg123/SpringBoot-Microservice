@@ -209,10 +209,10 @@ export default function AdminPermissionGroupsPage() {
   /* ── render guards ── */
   if (session.status === "loading" || session.status === "idle") {
     return (
-      <div style={{ minHeight: "100vh", background: "var(--bg)", display: "grid", placeItems: "center" }}>
-        <div style={{ textAlign: "center" }}>
+      <div className="min-h-screen bg-bg grid place-items-center">
+        <div className="text-center">
           <div className="spinner-lg" />
-          <p style={{ marginTop: 16, color: "var(--muted)", fontSize: "0.875rem" }}>Loading...</p>
+          <p className="mt-4 text-muted text-base">Loading...</p>
         </div>
       </div>
     );
@@ -227,19 +227,11 @@ export default function AdminPermissionGroupsPage() {
           { label: "Permission Groups" },
         ]}
       >
-        <div
-          style={{
-            background: "rgba(255,255,255,0.03)",
-            border: "1px solid var(--line)",
-            borderRadius: 16,
-            padding: "48px 24px",
-            textAlign: "center",
-          }}
-        >
-          <p style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--ink)", marginBottom: 8 }}>
+        <div className="bg-[rgba(255,255,255,0.03)] border border-line rounded-lg py-12 px-6 text-center">
+          <p className="text-[1.1rem] font-bold text-ink mb-2">
             Unauthorized
           </p>
-          <p style={{ fontSize: "0.82rem", color: "var(--muted)" }}>
+          <p className="text-[0.82rem] text-muted">
             You do not have permission to manage permission groups. Only Super Admins can access this page.
           </p>
         </div>
@@ -265,20 +257,7 @@ export default function AdminPermissionGroupsPage() {
         <button
           type="button"
           onClick={openCreate}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "8px 18px",
-            borderRadius: 12,
-            fontSize: "0.8rem",
-            fontWeight: 700,
-            border: "1px solid rgba(0,212,255,0.25)",
-            background: "var(--brand-soft)",
-            color: "var(--ink)",
-            cursor: "pointer",
-            transition: "opacity 0.15s",
-          }}
+          className="inline-flex items-center gap-1.5 py-2 px-[18px] rounded-[12px] text-sm font-bold border border-[rgba(0,212,255,0.25)] bg-brand-soft text-ink cursor-pointer transition-opacity duration-150"
         >
           + Add Permission Group
         </button>
@@ -286,45 +265,20 @@ export default function AdminPermissionGroupsPage() {
     >
       {/* ───── Create / Edit Form ───── */}
       {formOpen && (
-        <section
-          style={{
-            background: "rgba(255,255,255,0.03)",
-            border: "1px solid var(--line)",
-            borderRadius: 16,
-            padding: 24,
-            marginBottom: 24,
-          }}
-        >
-          <h2
-            style={{
-              fontSize: "1rem",
-              fontWeight: 700,
-              color: "var(--ink)",
-              marginBottom: 4,
-            }}
-          >
+        <section className="bg-[rgba(255,255,255,0.03)] border border-line rounded-lg p-6 mb-6">
+          <h2 className="text-lg font-bold text-ink mb-1">
             {editing ? "Edit Permission Group" : "Create Permission Group"}
           </h2>
-          <p style={{ fontSize: "0.75rem", color: "var(--muted)", marginBottom: 20 }}>
+          <p className="text-[0.75rem] text-muted mb-5">
             {editing
               ? "Update the permission group details below."
               : "Define a new permission group with a name, scope, and list of permissions."}
           </p>
 
-          <div style={{ display: "grid", gap: 16, maxWidth: 560 }}>
+          <div className="grid gap-4 max-w-[560px]">
             {/* Name */}
-            <label style={{ display: "block" }}>
-              <span
-                style={{
-                  display: "block",
-                  fontSize: "0.72rem",
-                  fontWeight: 700,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.06em",
-                  color: "var(--muted)",
-                  marginBottom: 6,
-                }}
-              >
+            <label className="block">
+              <span className="block text-[0.72rem] font-bold uppercase tracking-[0.06em] text-muted mb-1.5">
                 Name
               </span>
               <input
@@ -333,32 +287,13 @@ export default function AdminPermissionGroupsPage() {
                 onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))}
                 placeholder="e.g. Order Managers"
                 disabled={saving}
-                style={{
-                  width: "100%",
-                  padding: "10px 14px",
-                  borderRadius: 12,
-                  border: "1px solid var(--line)",
-                  background: "rgba(255,255,255,0.03)",
-                  color: "var(--ink)",
-                  fontSize: "0.85rem",
-                  outline: "none",
-                }}
+                className="w-full py-2.5 px-3.5 rounded-[12px] border border-line bg-[rgba(255,255,255,0.03)] text-ink text-base outline-none"
               />
             </label>
 
             {/* Description */}
-            <label style={{ display: "block" }}>
-              <span
-                style={{
-                  display: "block",
-                  fontSize: "0.72rem",
-                  fontWeight: 700,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.06em",
-                  color: "var(--muted)",
-                  marginBottom: 6,
-                }}
-              >
+            <label className="block">
+              <span className="block text-[0.72rem] font-bold uppercase tracking-[0.06em] text-muted mb-1.5">
                 Description
               </span>
               <textarea
@@ -367,46 +302,20 @@ export default function AdminPermissionGroupsPage() {
                 placeholder="Optional description of this group"
                 rows={2}
                 disabled={saving}
-                style={{
-                  width: "100%",
-                  padding: "10px 14px",
-                  borderRadius: 12,
-                  border: "1px solid var(--line)",
-                  background: "rgba(255,255,255,0.03)",
-                  color: "var(--ink)",
-                  fontSize: "0.85rem",
-                  resize: "vertical",
-                  outline: "none",
-                }}
+                className="w-full py-2.5 px-3.5 rounded-[12px] border border-line bg-[rgba(255,255,255,0.03)] text-ink text-base resize-y outline-none"
               />
             </label>
 
             {/* Scope radio */}
-            <fieldset style={{ border: "none", margin: 0, padding: 0 }}>
-              <legend
-                style={{
-                  fontSize: "0.72rem",
-                  fontWeight: 700,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.06em",
-                  color: "var(--muted)",
-                  marginBottom: 8,
-                }}
-              >
+            <fieldset className="border-none m-0 p-0">
+              <legend className="text-[0.72rem] font-bold uppercase tracking-[0.06em] text-muted mb-2">
                 Scope
               </legend>
-              <div style={{ display: "flex", gap: 16 }}>
+              <div className="flex gap-4">
                 {(["PLATFORM", "VENDOR"] as const).map((s) => (
                   <label
                     key={s}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      cursor: "pointer",
-                      fontSize: "0.82rem",
-                      color: "var(--ink)",
-                    }}
+                    className="flex items-center gap-1.5 cursor-pointer text-[0.82rem] text-ink"
                   >
                     <input
                       type="radio"
@@ -424,18 +333,8 @@ export default function AdminPermissionGroupsPage() {
             </fieldset>
 
             {/* Permissions textarea */}
-            <label style={{ display: "block" }}>
-              <span
-                style={{
-                  display: "block",
-                  fontSize: "0.72rem",
-                  fontWeight: 700,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.06em",
-                  color: "var(--muted)",
-                  marginBottom: 6,
-                }}
-              >
+            <label className="block">
+              <span className="block text-[0.72rem] font-bold uppercase tracking-[0.06em] text-muted mb-1.5">
                 Permissions (one per line)
               </span>
               <textarea
@@ -444,35 +343,19 @@ export default function AdminPermissionGroupsPage() {
                 placeholder={"platform.orders.manage\nplatform.products.read\nplatform.categories.manage"}
                 rows={6}
                 disabled={saving}
-                style={{
-                  width: "100%",
-                  padding: "10px 14px",
-                  borderRadius: 12,
-                  border: "1px solid var(--line)",
-                  background: "rgba(255,255,255,0.03)",
-                  color: "var(--ink)",
-                  fontSize: "0.82rem",
-                  fontFamily: "monospace",
-                  resize: "vertical",
-                  outline: "none",
-                  lineHeight: 1.7,
-                }}
+                className="w-full py-2.5 px-3.5 rounded-[12px] border border-line bg-[rgba(255,255,255,0.03)] text-ink text-[0.82rem] font-mono resize-y outline-none leading-[1.7]"
               />
             </label>
           </div>
 
           {/* Save / Cancel */}
-          <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+          <div className="flex gap-2.5 mt-5">
             <button
               type="button"
               onClick={() => { void save(); }}
               disabled={saving}
-              className="btn-brand"
+              className="btn-brand py-[9px] px-[22px] rounded-[12px] text-[0.82rem] font-bold"
               style={{
-                padding: "9px 22px",
-                borderRadius: 12,
-                fontSize: "0.82rem",
-                fontWeight: 700,
                 cursor: saving ? "not-allowed" : "pointer",
                 opacity: saving ? 0.6 : 1,
               }}
@@ -483,14 +366,7 @@ export default function AdminPermissionGroupsPage() {
               type="button"
               onClick={closeForm}
               disabled={saving}
-              className="btn-ghost"
-              style={{
-                padding: "9px 18px",
-                borderRadius: 12,
-                fontSize: "0.82rem",
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
+              className="btn-ghost py-[9px] px-[18px] rounded-[12px] text-[0.82rem] font-semibold cursor-pointer"
             >
               Cancel
             </button>
@@ -499,7 +375,7 @@ export default function AdminPermissionGroupsPage() {
       )}
 
       {/* ───── Scope Filter Tabs ───── */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 18, flexWrap: "wrap" }}>
+      <div className="flex gap-1.5 mb-[18px] flex-wrap">
         {scopeOptions.map((opt) => {
           const active = scopeFilter === opt.value;
           return (
@@ -507,61 +383,26 @@ export default function AdminPermissionGroupsPage() {
               key={opt.value}
               type="button"
               onClick={() => setScopeFilter(opt.value)}
-              style={{
-                padding: "6px 16px",
-                borderRadius: 10,
-                fontSize: "0.78rem",
-                fontWeight: 700,
-                border: active ? "1px solid var(--brand)" : "1px solid var(--line)",
-                background: active ? "var(--brand-soft)" : "transparent",
-                color: active ? "var(--brand)" : "var(--muted)",
-                cursor: "pointer",
-                transition: "all 0.15s ease",
-              }}
+              className={`py-1.5 px-4 rounded-md text-[0.78rem] font-bold cursor-pointer transition-all duration-150 ${active ? "border border-brand bg-brand-soft text-brand" : "border border-line bg-transparent text-muted"}`}
             >
               {opt.label}
             </button>
           );
         })}
-        <span
-          style={{
-            marginLeft: "auto",
-            display: "flex",
-            alignItems: "center",
-            fontSize: "0.75rem",
-            color: "var(--muted)",
-          }}
-        >
+        <span className="ml-auto flex items-center text-[0.75rem] text-muted">
           {totalElements} group{totalElements !== 1 ? "s" : ""}
         </span>
       </div>
 
       {/* ───── Table ───── */}
-      <div
-        style={{
-          background: "rgba(255,255,255,0.03)",
-          border: "1px solid var(--line)",
-          borderRadius: 16,
-          overflow: "auto",
-        }}
-      >
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <div className="bg-[rgba(255,255,255,0.03)] border border-line rounded-lg overflow-auto">
+        <table className="w-full border-collapse">
           <thead>
             <tr>
               {["Name", "Scope", "Permissions", "Created", "Actions"].map((h) => (
                 <th
                   key={h}
-                  style={{
-                    background: "var(--surface-2)",
-                    color: "var(--muted)",
-                    fontSize: "0.72rem",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                    padding: "12px 14px",
-                    textAlign: "left",
-                    fontWeight: 700,
-                    whiteSpace: "nowrap",
-                  }}
+                  className="bg-surface-2 text-muted text-[0.72rem] uppercase tracking-[0.05em] py-3 px-3.5 text-left font-bold whitespace-nowrap"
                 >
                   {h}
                 </th>
@@ -573,12 +414,7 @@ export default function AdminPermissionGroupsPage() {
               <tr>
                 <td
                   colSpan={5}
-                  style={{
-                    padding: "40px 14px",
-                    textAlign: "center",
-                    fontSize: "0.82rem",
-                    color: "var(--muted)",
-                  }}
+                  className="py-10 px-3.5 text-center text-[0.82rem] text-muted"
                 >
                   Loading...
                 </td>
@@ -587,12 +423,7 @@ export default function AdminPermissionGroupsPage() {
               <tr>
                 <td
                   colSpan={5}
-                  style={{
-                    padding: "40px 14px",
-                    textAlign: "center",
-                    fontSize: "0.82rem",
-                    color: "var(--muted)",
-                  }}
+                  className="py-10 px-3.5 text-center text-[0.82rem] text-muted"
                 >
                   No permission groups found.
                 </td>
@@ -601,118 +432,46 @@ export default function AdminPermissionGroupsPage() {
               groups.map((g) => (
                 <tr key={g.id}>
                   {/* Name */}
-                  <td
-                    style={{
-                      fontSize: "0.82rem",
-                      color: "var(--ink)",
-                      padding: "12px 14px",
-                      borderBottom: "1px solid var(--line)",
-                      fontWeight: 600,
-                    }}
-                  >
+                  <td className="text-[0.82rem] text-ink py-3 px-3.5 border-b border-line font-semibold">
                     <div>{g.name}</div>
                     {g.description && (
-                      <div
-                        style={{
-                          fontSize: "0.72rem",
-                          color: "var(--muted)",
-                          marginTop: 2,
-                          maxWidth: 260,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
+                      <div className="text-[0.72rem] text-muted mt-0.5 max-w-[260px] overflow-hidden text-ellipsis whitespace-nowrap">
                         {g.description}
                       </div>
                     )}
                   </td>
 
                   {/* Scope */}
-                  <td
-                    style={{
-                      fontSize: "0.82rem",
-                      color: "var(--ink)",
-                      padding: "12px 14px",
-                      borderBottom: "1px solid var(--line)",
-                    }}
-                  >
+                  <td className="text-[0.82rem] text-ink py-3 px-3.5 border-b border-line">
                     <StatusBadge value={g.scope} colorMap={SCOPE_COLORS} />
                   </td>
 
                   {/* Permissions count */}
-                  <td
-                    style={{
-                      fontSize: "0.82rem",
-                      color: "var(--ink)",
-                      padding: "12px 14px",
-                      borderBottom: "1px solid var(--line)",
-                    }}
-                  >
-                    <span
-                      style={{
-                        display: "inline-block",
-                        padding: "2px 10px",
-                        borderRadius: 999,
-                        fontSize: "0.72rem",
-                        fontWeight: 700,
-                        background: "rgba(255,255,255,0.06)",
-                        border: "1px solid var(--line)",
-                        color: "var(--ink)",
-                      }}
-                    >
+                  <td className="text-[0.82rem] text-ink py-3 px-3.5 border-b border-line">
+                    <span className="inline-block py-0.5 px-2.5 rounded-full text-[0.72rem] font-bold bg-[rgba(255,255,255,0.06)] border border-line text-ink">
                       {g.permissions.length}
                     </span>
                   </td>
 
                   {/* Created */}
-                  <td
-                    style={{
-                      fontSize: "0.82rem",
-                      color: "var(--ink)",
-                      padding: "12px 14px",
-                      borderBottom: "1px solid var(--line)",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
+                  <td className="text-[0.82rem] text-ink py-3 px-3.5 border-b border-line whitespace-nowrap">
                     {formatDate(g.createdAt)}
                   </td>
 
                   {/* Actions */}
-                  <td
-                    style={{
-                      fontSize: "0.82rem",
-                      color: "var(--ink)",
-                      padding: "12px 14px",
-                      borderBottom: "1px solid var(--line)",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    <div style={{ display: "flex", gap: 6 }}>
+                  <td className="text-[0.82rem] text-ink py-3 px-3.5 border-b border-line whitespace-nowrap">
+                    <div className="flex gap-1.5">
                       <button
                         type="button"
-                        className="btn-ghost"
+                        className="btn-ghost text-[0.78rem] py-1 px-3 rounded-[8px] cursor-pointer"
                         onClick={() => openEdit(g)}
-                        style={{
-                          fontSize: "0.78rem",
-                          padding: "4px 12px",
-                          borderRadius: 8,
-                          cursor: "pointer",
-                        }}
                       >
                         Edit
                       </button>
                       <button
                         type="button"
-                        className="btn-ghost"
+                        className="btn-ghost text-[0.78rem] py-1 px-3 rounded-[8px] text-[#f87171] cursor-pointer"
                         onClick={() => setDeleteTarget(g)}
-                        style={{
-                          fontSize: "0.78rem",
-                          padding: "4px 12px",
-                          borderRadius: 8,
-                          color: "#f87171",
-                          cursor: "pointer",
-                        }}
                       >
                         Delete
                       </button>
@@ -727,53 +486,23 @@ export default function AdminPermissionGroupsPage() {
 
       {/* ───── Pagination ───── */}
       {totalPages > 1 && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 12,
-            marginTop: 20,
-          }}
-        >
+        <div className="flex items-center justify-center gap-3 mt-5">
           <button
             type="button"
             onClick={() => goToPage(page - 1)}
             disabled={page <= 0 || loading}
-            style={{
-              padding: "7px 16px",
-              borderRadius: 10,
-              fontSize: "0.78rem",
-              fontWeight: 600,
-              border: "1px solid var(--line)",
-              background: page <= 0 ? "transparent" : "rgba(255,255,255,0.04)",
-              color: page <= 0 ? "var(--muted)" : "var(--ink)",
-              cursor: page <= 0 ? "not-allowed" : "pointer",
-              opacity: page <= 0 ? 0.5 : 1,
-              transition: "opacity 0.15s",
-            }}
+            className={`py-[7px] px-4 rounded-md text-[0.78rem] font-semibold border border-line transition-opacity duration-150 ${page <= 0 ? "bg-transparent text-muted cursor-not-allowed opacity-50" : "bg-[rgba(255,255,255,0.04)] text-ink cursor-pointer opacity-100"}`}
           >
             Prev
           </button>
-          <span style={{ fontSize: "0.78rem", color: "var(--muted)" }}>
+          <span className="text-[0.78rem] text-muted">
             Page {page + 1} of {totalPages}
           </span>
           <button
             type="button"
             onClick={() => goToPage(page + 1)}
             disabled={page >= totalPages - 1 || loading}
-            style={{
-              padding: "7px 16px",
-              borderRadius: 10,
-              fontSize: "0.78rem",
-              fontWeight: 600,
-              border: "1px solid var(--line)",
-              background: page >= totalPages - 1 ? "transparent" : "rgba(255,255,255,0.04)",
-              color: page >= totalPages - 1 ? "var(--muted)" : "var(--ink)",
-              cursor: page >= totalPages - 1 ? "not-allowed" : "pointer",
-              opacity: page >= totalPages - 1 ? 0.5 : 1,
-              transition: "opacity 0.15s",
-            }}
+            className={`py-[7px] px-4 rounded-md text-[0.78rem] font-semibold border border-line transition-opacity duration-150 ${page >= totalPages - 1 ? "bg-transparent text-muted cursor-not-allowed opacity-50" : "bg-[rgba(255,255,255,0.04)] text-ink cursor-pointer opacity-100"}`}
           >
             Next
           </button>

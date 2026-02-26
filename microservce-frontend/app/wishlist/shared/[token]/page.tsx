@@ -37,20 +37,20 @@ export default function SharedWishlistPage() {
 
   if (!data) {
     return (
-      <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-        <header style={{ background: "var(--header-bg)", backdropFilter: "blur(12px)", borderBottom: "1px solid var(--brand-soft)", position: "sticky", top: 0, zIndex: 100 }}>
-          <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
-            <Link href="/" className="no-underline flex items-center gap-2">
-              <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: 900, fontSize: "1.2rem", background: "var(--gradient-brand)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+      <div className="min-h-screen bg-bg">
+        <header className="sticky top-0 z-[100] border-b border-brand-soft bg-header-bg backdrop-blur-[12px]">
+          <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
+            <Link href="/" className="flex items-center gap-2 no-underline">
+              <span className="font-[Syne,sans-serif] text-[1.2rem] font-black" style={{ background: "var(--gradient-brand)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
                 Rumal Store
               </span>
             </Link>
           </div>
         </header>
         <main className="mx-auto max-w-7xl px-4 py-8">
-          <div style={{ background: "rgba(17,17,40,0.7)", backdropFilter: "blur(16px)", border: "1px solid var(--line-bright)", borderRadius: "20px", padding: "48px 24px", textAlign: "center" }}>
-            <p style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--ink-light)", margin: "0 0 12px" }}>{status}</p>
-            <Link href="/" style={{ color: "var(--brand)", fontSize: "0.875rem", textDecoration: "none" }}>← Back to Home</Link>
+          <div className="rounded-xl border border-line-bright bg-[rgba(17,17,40,0.7)] px-6 py-12 text-center backdrop-blur-[16px]">
+            <p className="mb-3 mt-0 text-[1.1rem] font-bold text-ink-light">{status}</p>
+            <Link href="/" className="text-base text-brand no-underline">← Back to Home</Link>
           </div>
         </main>
         <Footer />
@@ -59,15 +59,15 @@ export default function SharedWishlistPage() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-      <header style={{ background: "var(--header-bg)", backdropFilter: "blur(12px)", borderBottom: "1px solid var(--brand-soft)", position: "sticky", top: 0, zIndex: 100 }}>
-        <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
-          <Link href="/" className="no-underline flex items-center gap-2">
-            <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: 900, fontSize: "1.2rem", background: "var(--gradient-brand)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+    <div className="min-h-screen bg-bg">
+      <header className="sticky top-0 z-[100] border-b border-brand-soft bg-header-bg backdrop-blur-[12px]">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
+          <Link href="/" className="flex items-center gap-2 no-underline">
+            <span className="font-[Syne,sans-serif] text-[1.2rem] font-black" style={{ background: "var(--gradient-brand)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
               Rumal Store
             </span>
           </Link>
-          <Link href="/" className="no-underline" style={{ padding: "8px 18px", borderRadius: "10px", background: "var(--gradient-brand)", color: "#fff", fontSize: "0.8rem", fontWeight: 700 }}>
+          <Link href="/" className="rounded-md bg-[var(--gradient-brand)] px-[18px] py-2 text-sm font-bold text-white no-underline">
             Sign In
           </Link>
         </div>
@@ -80,48 +80,47 @@ export default function SharedWishlistPage() {
           <span className="breadcrumb-current">Shared Wishlist</span>
         </nav>
 
-        <div style={{ background: "rgba(17,17,40,0.7)", backdropFilter: "blur(16px)", border: "1px solid var(--line-bright)", borderRadius: "20px", padding: "28px", marginTop: "8px" }}>
-          <div style={{ marginBottom: "24px" }}>
-            <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: "1.5rem", fontWeight: 900, color: "#fff", margin: "0 0 6px" }}>
+        <div className="mt-2 rounded-xl border border-line-bright bg-[rgba(17,17,40,0.7)] p-7 backdrop-blur-[16px]">
+          <div className="mb-6">
+            <h1 className="mb-1.5 mt-0 font-[Syne,sans-serif] text-[1.5rem] font-black text-white">
               {data.collectionName}
             </h1>
             {data.description && (
-              <p style={{ fontSize: "0.85rem", color: "var(--muted)", margin: 0 }}>{data.description}</p>
+              <p className="m-0 text-sm text-muted">{data.description}</p>
             )}
-            <p style={{ fontSize: "0.75rem", color: "var(--muted-2)", margin: "8px 0 0" }}>
+            <p className="mt-2 mb-0 text-xs text-muted-2">
               {data.itemCount} {data.itemCount === 1 ? "item" : "items"}
             </p>
           </div>
 
           {data.items.length === 0 ? (
-            <p style={{ textAlign: "center", color: "var(--muted)", padding: "32px 0" }}>This wishlist is empty.</p>
+            <p className="py-8 text-center text-muted">This wishlist is empty.</p>
           ) : (
-            <div style={{ display: "grid", gap: "16px", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))" }}>
+            <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))" }}>
               {data.items.map((item: WishlistItem) => {
                 const imgUrl = resolveImageUrl(item.mainImage);
                 return (
                   <Link
                     key={item.id}
                     href={`/products/${encodeURIComponent(item.productSlug || item.productId)}`}
-                    className="product-card no-underline"
-                    style={{ display: "flex", flexDirection: "column" }}
+                    className="product-card flex flex-col no-underline"
                   >
-                    <div style={{ position: "relative", aspectRatio: "1/1", overflow: "hidden", background: "var(--surface-2)", borderRadius: "12px 12px 0 0" }}>
+                    <div className="relative aspect-square overflow-hidden rounded-t-[12px] bg-surface-2">
                       {imgUrl ? (
                         <Image src={imgUrl} alt={item.productName} width={300} height={300} className="product-card-img" unoptimized />
                       ) : (
-                        <div style={{ display: "grid", placeItems: "center", width: "100%", height: "100%", background: "linear-gradient(135deg, var(--surface), #1c1c38)", color: "var(--muted-2)", fontSize: "0.75rem" }}>No Image</div>
+                        <div className="grid h-full w-full place-items-center bg-[linear-gradient(135deg,var(--surface),#1c1c38)] text-xs text-muted-2">No Image</div>
                       )}
                     </div>
-                    <div className="product-card-body" style={{ padding: "12px", flex: 1 }}>
-                      <p style={{ margin: "0 0 6px", fontSize: "0.85rem", fontWeight: 600, color: "var(--ink)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                    <div className="product-card-body flex-1 p-3">
+                      <p className="mb-1.5 line-clamp-2 text-sm font-semibold text-ink">
                         {item.productName}
                       </p>
                       {item.sellingPriceSnapshot !== null && (
-                        <span className="price-current" style={{ fontSize: "0.9rem" }}>{money(item.sellingPriceSnapshot)}</span>
+                        <span className="price-current text-[0.9rem]">{money(item.sellingPriceSnapshot)}</span>
                       )}
                       {item.note && (
-                        <p style={{ margin: "6px 0 0", fontSize: "0.72rem", color: "var(--muted)", fontStyle: "italic" }}>
+                        <p className="mt-1.5 mb-0 text-xs italic text-muted">
                           &ldquo;{item.note}&rdquo;
                         </p>
                       )}

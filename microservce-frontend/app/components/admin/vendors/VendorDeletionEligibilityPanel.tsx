@@ -28,8 +28,7 @@ export default function VendorDeletionEligibilityPanel({
           type="button"
           onClick={onRefresh}
           disabled={!vendor || loading}
-          className="rounded-md border border-[var(--line)] px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
-          style={{ background: "var(--surface-2)", color: "var(--ink-light)" }}
+          className="rounded-md border border-[var(--line)] bg-surface-2 px-2 py-1 text-xs text-ink-light disabled:cursor-not-allowed disabled:opacity-60"
         >
           {loading ? "Checking..." : "Refresh"}
         </button>
@@ -90,8 +89,7 @@ export default function VendorDeletionEligibilityPanel({
 
           {eligibility && !eligibility.eligible && (
             <div
-              className="rounded-lg border p-3 text-xs"
-              style={{ borderColor: "rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.05)" }}
+              className="rounded-lg border border-red-500/25 bg-red-500/5 p-3 text-xs"
             >
               <p className="font-semibold text-[var(--ink)]">Blocking reasons</p>
               <ul className="mt-2 list-disc space-y-1 pl-4 text-[var(--muted)]">

@@ -13,21 +13,21 @@ type Props = { title: string; breadcrumbs?: Crumb[]; actions?: ReactNode; childr
  */
 export default function AdminPageShell({ title, breadcrumbs = [], actions, children }: Props) {
   return (
-    <main style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--ink)", padding: "100px 24px 48px" }}>
-      <div style={{ maxWidth: 1280, margin: "0 auto" }}>
+    <main className="min-h-screen bg-bg text-ink pt-[100px] px-6 pb-12">
+      <div className="max-w-[1280px] mx-auto">
         {breadcrumbs.length > 0 && (
-          <nav aria-label="Breadcrumbs" style={{ display: "flex", gap: 6, fontSize: "0.75rem", color: "var(--muted)", marginBottom: 12 }}>
+          <nav aria-label="Breadcrumbs" className="flex gap-1.5 text-sm text-muted mb-3">
             {breadcrumbs.map((c, i) => (
               <span key={i}>
-                {i > 0 && <span style={{ margin: "0 4px" }}>/</span>}
-                {c.href ? <Link href={c.href} style={{ color: "var(--brand)", textDecoration: "none" }}>{c.label}</Link> : <span>{c.label}</span>}
+                {i > 0 && <span className="mx-1">/</span>}
+                {c.href ? <Link href={c.href} className="text-brand no-underline">{c.label}</Link> : <span>{c.label}</span>}
               </span>
             ))}
           </nav>
         )}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
-          <h1 style={{ fontFamily: "var(--font-display, Syne, sans-serif)", fontSize: "clamp(1.4rem,3vw,1.8rem)", fontWeight: 800, background: "var(--gradient-brand)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>{title}</h1>
-          {actions && <div style={{ display: "flex", gap: 8 }}>{actions}</div>}
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+          <h1 className="gradient-text" style={{ fontFamily: "var(--font-display, Syne, sans-serif)", fontSize: "clamp(1.4rem,3vw,1.8rem)" }}>{title}</h1>
+          {actions && <div className="flex gap-2">{actions}</div>}
         </div>
         {children}
       </div>

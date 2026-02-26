@@ -2,74 +2,29 @@ import Link from "next/link";
 
 export default function Footer() {
     return (
-        <footer
-            style={{
-                marginTop: "80px",
-                background: "linear-gradient(180deg, var(--footer-bg) 0%, #04040c 100%)",
-                borderTop: "1px solid var(--line-bright)",
-                position: "relative",
-                overflow: "hidden",
-            }}
-        >
+        <footer className="relative mt-20 overflow-hidden border-t border-line-bright bg-[linear-gradient(180deg,var(--footer-bg)_0%,#04040c_100%)]">
             {/* Decorative glow blobs */}
-            <div
-                style={{
-                    position: "absolute",
-                    top: "-80px",
-                    left: "10%",
-                    width: "400px",
-                    height: "400px",
-                    borderRadius: "50%",
-                    background: "radial-gradient(circle, var(--brand-soft) 0%, transparent 70%)",
-                    pointerEvents: "none",
-                }}
-            />
-            <div
-                style={{
-                    position: "absolute",
-                    top: "-80px",
-                    right: "5%",
-                    width: "300px",
-                    height: "300px",
-                    borderRadius: "50%",
-                    background: "radial-gradient(circle, var(--accent-soft) 0%, transparent 70%)",
-                    pointerEvents: "none",
-                }}
-            />
+            <div className="pointer-events-none absolute -top-20 left-[10%] h-[400px] w-[400px] rounded-full bg-[radial-gradient(circle,var(--brand-soft)_0%,transparent_70%)]" />
+            <div className="pointer-events-none absolute -top-20 right-[5%] h-[300px] w-[300px] rounded-full bg-[radial-gradient(circle,var(--accent-soft)_0%,transparent_70%)]" />
 
             {/* Main Footer Grid */}
             <div className="mx-auto grid max-w-7xl gap-10 px-6 py-14 sm:grid-cols-2 lg:grid-cols-4">
                 {/* Brand Column */}
                 <div>
                     <Link href="/" className="mb-5 flex items-center gap-3 no-underline">
-                        <div
-                            style={{
-                                width: "40px",
-                                height: "40px",
-                                borderRadius: "12px",
-                                background: "var(--gradient-brand)",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                fontWeight: "900",
-                                fontSize: "0.75rem",
-                                color: "#fff",
-                                boxShadow: "0 0 16px var(--brand-glow)",
-                                flexShrink: 0,
-                            }}
-                        >
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--gradient-brand)] text-sm font-black text-white shadow-[0_0_16px_var(--brand-glow)]" style={{ background: "var(--gradient-brand)" }}>
                             RS
                         </div>
                         <div>
-                            <p style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, color: "#fff", fontSize: "1rem", margin: 0 }}>
+                            <p className="m-0 font-[Syne,sans-serif] text-lg font-extrabold text-white">
                                 Rumal Store
                             </p>
-                            <p style={{ fontSize: "9px", color: "var(--brand)", letterSpacing: "0.2em", margin: 0, fontWeight: 600, opacity: 0.5 }}>
+                            <p className="m-0 text-[9px] font-semibold tracking-[0.2em] text-brand opacity-50">
                                 ONLINE MARKETPLACE
                             </p>
                         </div>
                     </Link>
-                    <p className="text-sm leading-relaxed" style={{ color: "var(--muted)" }}>
+                    <p className="text-sm leading-relaxed text-muted">
                         Your trusted next-gen online marketplace. Discover amazing deals on top products with fast delivery and secure payments.
                     </p>
 
@@ -78,12 +33,7 @@ export default function Footer() {
                         {["SSL Secure", "Safe Pay", "Fast Ship"].map((badge) => (
                             <span
                                 key={badge}
-                                className="rounded-full px-3 py-1 text-[10px] font-bold tracking-wider"
-                                style={{
-                                    background: "var(--brand-soft)",
-                                    border: "1px solid var(--line-bright)",
-                                    color: "var(--brand)",
-                                }}
+                                className="rounded-full border border-line-bright bg-brand-soft px-3 py-1 text-[10px] font-bold tracking-wider text-brand"
                             >
                                 ✓ {badge}
                             </span>
@@ -92,14 +42,11 @@ export default function Footer() {
                 </div>
 
                 {/* Customer Service */}
-                <div>
-                    <h4
-                        className="mb-5 text-xs font-bold uppercase tracking-widest"
-                        style={{ color: "#fff", letterSpacing: "0.14em" }}
-                    >
+                <nav aria-label="Customer service">
+                    <h4 className="mb-5 text-xs font-bold uppercase tracking-[0.14em] text-white">
                         Customer Service
                     </h4>
-                    <ul className="space-y-3 text-sm" style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                    <ul className="m-0 list-none space-y-3 p-0 text-sm">
                         {[
                             { href: "/products", label: "Help Center" },
                             { href: "/orders", label: "Track Order" },
@@ -110,28 +57,22 @@ export default function Footer() {
                             <li key={label}>
                                 <Link
                                     href={href}
-                                    className="flex items-center gap-2 no-underline transition"
-                                    style={{ color: "var(--muted)" }}
-                                    onMouseEnter={(e) => { e.currentTarget.style.color = "var(--brand)"; }}
-                                    onMouseLeave={(e) => { e.currentTarget.style.color = "var(--muted)"; }}
+                                    className="flex items-center gap-2 text-muted no-underline transition-colors hover:text-brand"
                                 >
-                                    <span style={{ color: "var(--brand-glow)", fontSize: "0.6rem" }}>▶</span>
+                                    <span className="text-[0.6rem] text-[var(--brand-glow)]">▶</span>
                                     {label}
                                 </Link>
                             </li>
                         ))}
                     </ul>
-                </div>
+                </nav>
 
                 {/* Quick Links */}
-                <div>
-                    <h4
-                        className="mb-5 text-xs font-bold uppercase tracking-widest"
-                        style={{ color: "#fff", letterSpacing: "0.14em" }}
-                    >
+                <nav aria-label="Quick links">
+                    <h4 className="mb-5 text-xs font-bold uppercase tracking-[0.14em] text-white">
                         Quick Links
                     </h4>
-                    <ul className="space-y-3 text-sm" style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                    <ul className="m-0 list-none space-y-3 p-0 text-sm">
                         {[
                             { href: "/products", label: "Shop All" },
                             { href: "/products", label: "New Arrivals" },
@@ -142,28 +83,22 @@ export default function Footer() {
                             <li key={label}>
                                 <Link
                                     href={href}
-                                    className="flex items-center gap-2 no-underline transition"
-                                    style={{ color: "var(--muted)" }}
-                                    onMouseEnter={(e) => { e.currentTarget.style.color = "var(--brand)"; }}
-                                    onMouseLeave={(e) => { e.currentTarget.style.color = "var(--muted)"; }}
+                                    className="flex items-center gap-2 text-muted no-underline transition-colors hover:text-brand"
                                 >
-                                    <span style={{ color: "var(--brand-glow)", fontSize: "0.6rem" }}>▶</span>
+                                    <span className="text-[0.6rem] text-[var(--brand-glow)]">▶</span>
                                     {label}
                                 </Link>
                             </li>
                         ))}
                     </ul>
-                </div>
+                </nav>
 
                 {/* My Account + Payment */}
-                <div>
-                    <h4
-                        className="mb-5 text-xs font-bold uppercase tracking-widest"
-                        style={{ color: "#fff", letterSpacing: "0.14em" }}
-                    >
+                <nav aria-label="My account">
+                    <h4 className="mb-5 text-xs font-bold uppercase tracking-[0.14em] text-white">
                         My Account
                     </h4>
-                    <ul className="space-y-3 text-sm" style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                    <ul className="m-0 list-none space-y-3 p-0 text-sm">
                         {[
                             { href: "/profile", label: "My Profile" },
                             { href: "/orders", label: "My Orders" },
@@ -173,12 +108,9 @@ export default function Footer() {
                             <li key={label}>
                                 <Link
                                     href={href}
-                                    className="flex items-center gap-2 no-underline"
-                                    style={{ color: "var(--muted)" }}
-                                    onMouseEnter={(e) => { e.currentTarget.style.color = "var(--brand)"; }}
-                                    onMouseLeave={(e) => { e.currentTarget.style.color = "var(--muted)"; }}
+                                    className="flex items-center gap-2 text-muted no-underline transition-colors hover:text-brand"
                                 >
-                                    <span style={{ color: "var(--brand-glow)", fontSize: "0.6rem" }}>▶</span>
+                                    <span className="text-[0.6rem] text-[var(--brand-glow)]">▶</span>
                                     {label}
                                 </Link>
                             </li>
@@ -186,35 +118,29 @@ export default function Footer() {
                     </ul>
 
                     <div className="mt-6">
-                        <p className="mb-3 text-xs font-bold uppercase tracking-widest" style={{ color: "#fff", letterSpacing: "0.14em" }}>
+                        <p className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-white">
                             We Accept
                         </p>
                         <div className="flex flex-wrap gap-2">
                             {["VISA", "MC", "PayPal", "COD"].map((pm) => (
                                 <span
                                     key={pm}
-                                    className="rounded-lg px-3 py-1.5 text-[10px] font-black"
-                                    style={{
-                                        background: "rgba(255,255,255,0.04)",
-                                        border: "1px solid rgba(255,255,255,0.1)",
-                                        color: "rgba(255,255,255,0.6)",
-                                        letterSpacing: "0.04em",
-                                    }}
+                                    className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[10px] font-black tracking-[0.04em] text-white/60"
                                 >
                                     {pm}
                                 </span>
                             ))}
                         </div>
                     </div>
-                </div>
+                </nav>
             </div>
 
             {/* Bottom Bar */}
-            <div style={{ borderTop: "1px solid var(--brand-soft)", background: "rgba(0,0,0,0.3)" }}>
+            <div className="border-t border-[var(--brand-soft)] bg-black/30">
                 <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-4">
-                    <p className="text-xs" style={{ color: "#4a4a70" }}>
+                    <p className="text-xs text-[#4a4a70]">
                         © {new Date().getFullYear()} Rumal Store. All rights reserved. Built with{" "}
-                        <span style={{ color: "var(--brand)", opacity: 0.5 }}>♦</span> precision.
+                        <span className="text-brand opacity-50">♦</span> precision.
                     </p>
                     <div className="flex items-center gap-3">
                         {/* Social icons */}
@@ -226,23 +152,7 @@ export default function Footer() {
                             <button
                                 key={label}
                                 aria-label={label}
-                                className="flex h-8 w-8 items-center justify-center rounded-lg transition"
-                                style={{
-                                    background: "rgba(255,255,255,0.04)",
-                                    border: "1px solid var(--line-bright)",
-                                    color: "#4a4a70",
-                                    cursor: "pointer",
-                                }}
-                                onMouseEnter={(e) => {
-                                    e.currentTarget.style.color = "var(--brand)";
-                                    e.currentTarget.style.borderColor = "var(--brand-glow)";
-                                    e.currentTarget.style.boxShadow = "0 0 12px var(--line-bright)";
-                                }}
-                                onMouseLeave={(e) => {
-                                    e.currentTarget.style.color = "#4a4a70";
-                                    e.currentTarget.style.borderColor = "var(--line-bright)";
-                                    e.currentTarget.style.boxShadow = "none";
-                                }}
+                                className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-line-bright bg-white/[0.04] text-[#4a4a70] transition-all hover:border-[var(--brand-glow)] hover:text-brand hover:shadow-[0_0_12px_var(--line-bright)]"
                             >
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                                     <path d={path} />

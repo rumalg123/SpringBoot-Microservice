@@ -21,7 +21,7 @@ export default function ProductImagesEditor({
         <p className="text-xs text-[var(--muted)]">
           Product Images ({form.images.length}/{maxImageCount})
         </p>
-        <label className="cursor-pointer rounded-md border border-[var(--line)] px-2 py-1 text-xs" style={{ background: "var(--surface-2)", color: "var(--ink-light)" }}>
+        <label className="cursor-pointer rounded-md border border-[var(--line)] bg-surface-2 px-2 py-1 text-xs text-ink-light">
           {uploadingImages ? "Uploading..." : "Upload Images"}
           <input
             type="file"
@@ -47,10 +47,9 @@ export default function ProductImagesEditor({
               onDragStart={() => setDragImageIndex(index)}
               onDragOver={(e: DragEvent<HTMLDivElement>) => e.preventDefault()}
               onDrop={() => onImageDrop(index)}
-              className="flex items-center gap-2 rounded-lg border border-[var(--line)] p-2"
-              style={{ background: "var(--surface-2)" }}
+              className="flex items-center gap-2 rounded-lg border border-[var(--line)] bg-surface-2 p-2"
             >
-              <div className="h-12 w-12 overflow-hidden rounded-md border border-[var(--line)]" style={{ background: "var(--surface-3)" }}>
+              <div className="h-12 w-12 overflow-hidden rounded-md border border-[var(--line)] bg-surface-3">
                 {imageUrl ? (
                   <Image src={imageUrl} alt={imageName} width={48} height={48} className="h-full w-full object-cover" unoptimized />
                 ) : (
@@ -65,8 +64,7 @@ export default function ProductImagesEditor({
                 type="button"
                 onClick={() => removeImage(index)}
                 disabled={productMutationBusy}
-                className="rounded border border-red-900/30 px-2 py-1 text-[10px] text-red-400 disabled:cursor-not-allowed disabled:opacity-60"
-                style={{ background: "rgba(239,68,68,0.06)" }}
+                className="rounded border border-red-900/30 bg-red-500/[0.06] px-2 py-1 text-[10px] text-red-400 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Remove
               </button>

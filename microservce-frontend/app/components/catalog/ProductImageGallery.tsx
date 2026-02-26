@@ -23,10 +23,10 @@ export default function ProductImageGallery({
   const mainUrl = resolveImageUrl(images?.[selectedIndex] || "");
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-      <div style={{ position: "relative", aspectRatio: "1", overflow: "hidden", borderRadius: "16px", border: "1px solid var(--line-bright)", background: "rgba(0,0,10,0.5)" }}>
+    <div className="flex flex-col gap-3">
+      <div className="relative aspect-square overflow-hidden rounded-lg border border-line-bright bg-[rgba(0,0,10,0.5)]">
         {discount && (
-          <span className="badge-sale" style={{ top: "12px", left: "12px" }}>-{discount}% OFF</span>
+          <span className="badge-sale top-3 left-3">-{discount}% OFF</span>
         )}
         {mainUrl ? (
           <Image
@@ -37,7 +37,7 @@ export default function ProductImageGallery({
             unoptimized
           />
         ) : (
-          <div style={{ display: "grid", placeItems: "center", height: "100%", background: "linear-gradient(135deg, var(--brand-soft), var(--accent-soft))" }}>
+          <div className="grid place-items-center h-full bg-gradient-to-br from-brand-soft to-accent-soft">
             <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="var(--brand-glow)" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
               <path d="M5 8h14M5 8a2 2 0 1 0 0-4h14a2 2 0 1 0 0 4M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8m-9 4h4" />
             </svg>
@@ -46,7 +46,7 @@ export default function ProductImageGallery({
       </div>
 
       {images?.length > 1 && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "8px" }}>
+        <div className="grid grid-cols-5 gap-2">
           {images.slice(0, 5).map((img, index) => {
             const imageUrl = resolveImageUrl(img);
             const isSelected = selectedIndex === index;
@@ -55,18 +55,12 @@ export default function ProductImageGallery({
                 key={`${img}-${index}`}
                 onClick={() => onSelectIndex(index)}
                 disabled={disabled}
-                style={{
-                  aspectRatio: "1", overflow: "hidden", borderRadius: "10px", padding: 0,
-                  border: isSelected ? "2px solid var(--brand)" : "2px solid var(--line-bright)",
-                  background: "rgba(0,0,10,0.5)", cursor: "pointer",
-                  boxShadow: isSelected ? "0 0 10px var(--brand-glow)" : "none",
-                  transition: "border-color 0.2s, box-shadow 0.2s",
-                }}
+                className={`aspect-square overflow-hidden rounded-md p-0 bg-[rgba(0,0,10,0.5)] cursor-pointer transition-[border-color,box-shadow] duration-200 ${isSelected ? "border-2 border-brand shadow-[0_0_10px_var(--brand-glow)]" : "border-2 border-line-bright shadow-none"}`}
               >
                 {imageUrl ? (
                   <Image src={imageUrl} alt={img} width={120} height={120} className="h-full w-full object-cover" unoptimized />
                 ) : (
-                  <div style={{ display: "grid", placeItems: "center", height: "100%", fontSize: "20px" }}>
+                  <div className="grid place-items-center h-full text-[20px]">
                     📦
                   </div>
                 )}

@@ -101,8 +101,8 @@ export default function ReviewSection({ productId, vendorId, isAuthenticated, ap
   };
 
   return (
-    <section style={{ maxWidth: "1200px", margin: "0 auto", padding: "40px 24px" }}>
-      <h2 style={{ fontSize: "1.3rem", fontWeight: 800, color: "var(--ink)", margin: "0 0 20px" }}>Customer Reviews</h2>
+    <section className="max-w-[1200px] mx-auto px-6 py-10">
+      <h2 className="text-[1.3rem] font-extrabold text-ink mb-5">Customer Reviews</h2>
 
       {/* Summary */}
       {summary && (
@@ -117,7 +117,7 @@ export default function ReviewSection({ productId, vendorId, isAuthenticated, ap
 
       {/* Review Form */}
       {showForm && apiClient && (
-        <div style={{ marginTop: "20px" }}>
+        <div className="mt-5">
           <ReviewForm
             productId={productId}
             vendorId={vendorId}
@@ -129,15 +129,14 @@ export default function ReviewSection({ productId, vendorId, isAuthenticated, ap
       )}
 
       {/* Sort */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "24px", marginBottom: "8px" }}>
-        <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>
+      <div className="flex items-center justify-between mt-6 mb-2">
+        <span className="text-sm text-muted">
           {summary ? `${summary.totalReviews} review${summary.totalReviews !== 1 ? "s" : ""}` : ""}
         </span>
         <select
           value={sortBy}
           onChange={(e) => { setSortBy(e.target.value); setPage(0); }}
-          className="form-select"
-          style={{ padding: "6px 12px", borderRadius: "8px", border: "1px solid var(--line)", background: "var(--bg)", color: "var(--ink)", fontSize: "0.78rem" }}
+          className="form-select px-3 py-[6px] rounded-[8px] border border-line bg-bg text-ink text-[0.78rem]"
         >
           <option value="recent">Most Recent</option>
           <option value="helpful">Most Helpful</option>
@@ -148,9 +147,9 @@ export default function ReviewSection({ productId, vendorId, isAuthenticated, ap
 
       {/* Review list */}
       {loading && reviews.length === 0 ? (
-        <p style={{ fontSize: "0.85rem", color: "var(--muted)", padding: "20px 0" }}>Loading reviews...</p>
+        <p className="text-[0.85rem] text-muted py-5">Loading reviews...</p>
       ) : reviews.length === 0 ? (
-        <p style={{ fontSize: "0.85rem", color: "var(--muted)", padding: "20px 0" }}>No reviews yet. Be the first to review this product!</p>
+        <p className="text-[0.85rem] text-muted py-5">No reviews yet. Be the first to review this product!</p>
       ) : (
         reviews.map((review) => (
           <ReviewCard
@@ -165,13 +164,12 @@ export default function ReviewSection({ productId, vendorId, isAuthenticated, ap
 
       {/* Report Dialog */}
       {reportingId && (
-        <div style={{ padding: "16px 20px", borderRadius: "12px", border: "1px solid var(--line-bright)", background: "var(--surface)", marginTop: "12px" }}>
-          <p style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--ink)", margin: "0 0 10px" }}>Report this review</p>
+        <div className="px-5 py-4 rounded-[12px] border border-line-bright bg-surface mt-3">
+          <p className="text-[0.85rem] font-bold text-ink mb-[10px]">Report this review</p>
           <select
             value={reportReason}
             onChange={(e) => setReportReason(e.target.value)}
-            className="form-select"
-            style={{ width: "100%", marginBottom: "8px", padding: "8px 12px", borderRadius: "8px", border: "1px solid var(--line)", background: "var(--bg)", color: "var(--ink)", fontSize: "0.8rem" }}
+            className="form-select w-full mb-2 px-3 py-2 rounded-[8px] border border-line bg-bg text-ink text-sm"
           >
             <option value="INAPPROPRIATE">Inappropriate content</option>
             <option value="SPAM">Spam</option>
@@ -185,19 +183,18 @@ export default function ReviewSection({ productId, vendorId, isAuthenticated, ap
             placeholder="Additional details (optional)"
             maxLength={500}
             rows={2}
-            className="form-input"
-            style={{ width: "100%", marginBottom: "10px", padding: "8px 12px", borderRadius: "8px", border: "1px solid var(--line)", background: "var(--bg)", color: "var(--ink)", fontSize: "0.8rem", resize: "vertical" }}
+            className="form-input w-full mb-[10px] px-3 py-2 rounded-[8px] border border-line bg-bg text-ink text-sm resize-y"
           />
-          <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+          <div className="flex gap-2 justify-end">
             <button
               onClick={() => setReportingId(null)}
-              style={{ padding: "7px 14px", borderRadius: "8px", border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", fontSize: "0.78rem", fontWeight: 700, cursor: "pointer" }}
+              className="px-[14px] py-[7px] rounded-[8px] border border-line bg-transparent text-muted text-[0.78rem] font-bold cursor-pointer"
             >
               Cancel
             </button>
             <button
               onClick={() => { void submitReport(); }}
-              style={{ padding: "7px 14px", borderRadius: "8px", border: "none", background: "var(--danger)", color: "#fff", fontSize: "0.78rem", fontWeight: 700, cursor: "pointer" }}
+              className="px-[14px] py-[7px] rounded-[8px] border-none bg-danger text-white text-[0.78rem] font-bold cursor-pointer"
             >
               Submit Report
             </button>
@@ -207,21 +204,21 @@ export default function ReviewSection({ productId, vendorId, isAuthenticated, ap
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div style={{ display: "flex", justifyContent: "center", gap: "8px", marginTop: "20px" }}>
+        <div className="flex justify-center gap-2 mt-5">
           <button
             disabled={page === 0}
             onClick={() => setPage((p) => p - 1)}
-            style={{ padding: "8px 16px", borderRadius: "8px", border: "1px solid var(--line)", background: "transparent", color: page === 0 ? "var(--muted)" : "var(--ink)", fontSize: "0.78rem", cursor: page === 0 ? "not-allowed" : "pointer" }}
+            className={`px-4 py-2 rounded-[8px] border border-line bg-transparent text-[0.78rem] ${page === 0 ? "text-muted cursor-not-allowed" : "text-ink cursor-pointer"}`}
           >
             Previous
           </button>
-          <span style={{ padding: "8px 12px", fontSize: "0.78rem", color: "var(--muted)" }}>
+          <span className="px-3 py-2 text-[0.78rem] text-muted">
             Page {page + 1} of {totalPages}
           </span>
           <button
             disabled={page >= totalPages - 1}
             onClick={() => setPage((p) => p + 1)}
-            style={{ padding: "8px 16px", borderRadius: "8px", border: "1px solid var(--line)", background: "transparent", color: page >= totalPages - 1 ? "var(--muted)" : "var(--ink)", fontSize: "0.78rem", cursor: page >= totalPages - 1 ? "not-allowed" : "pointer" }}
+            className={`px-4 py-2 rounded-[8px] border border-line bg-transparent text-[0.78rem] ${page >= totalPages - 1 ? "text-muted cursor-not-allowed" : "text-ink cursor-pointer"}`}
           >
             Next
           </button>

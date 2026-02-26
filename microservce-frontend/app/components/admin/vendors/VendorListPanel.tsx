@@ -98,12 +98,12 @@ function VendorRow({
           </div>
         )}
         {!showDeleted && deleteRequested && (
-          <div className="mt-1 text-[11px]" style={{ color: "#fca5a5" }}>
+          <div className="mt-1 text-[11px] text-red-300">
             Delete requested{vendor.deletionRequestedAt ? ` (${new Date(vendor.deletionRequestedAt).toLocaleString()})` : ""}
           </div>
         )}
         {!showDeleted && eligibility && !eligibility.eligible && (
-          <div className="mt-1 text-[11px]" style={{ color: "#fca5a5" }}>
+          <div className="mt-1 text-[11px] text-red-300">
             Delete blocked: {deleteBlockText}
             {eligibility.refundHoldUntil ? ` (until ${new Date(eligibility.refundHoldUntil).toLocaleString()})` : ""}
           </div>
@@ -118,8 +118,7 @@ function VendorRow({
             <button
               type="button"
               onClick={() => onRestoreVendor(vendor)}
-              className="rounded-md border border-emerald-500/40 px-2 py-1 text-xs"
-              style={{ background: "rgba(16,185,129,0.10)", color: "#34d399" }}
+              className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-xs text-emerald-300"
             >
               Restore
             </button>
@@ -128,8 +127,7 @@ function VendorRow({
               <button
                 type="button"
                 onClick={() => onEditVendor(vendor)}
-                className="rounded-md border border-[var(--line)] px-2 py-1 text-xs"
-                style={{ background: "var(--surface-2)", color: "var(--ink-light)" }}
+                className="rounded-md border border-[var(--line)] bg-surface-2 px-2 py-1 text-xs text-ink-light"
               >
                 Edit
               </button>
@@ -137,19 +135,18 @@ function VendorRow({
                 type="button"
                 onClick={() => onSelectVendor(vendor)}
                 title="Open vendor users, deletion eligibility and lifecycle logs"
-                className="rounded-md border border-[var(--line)] px-2 py-1 text-xs"
-                style={{
-                  background: selectedVendorId === vendor.id ? "var(--brand-soft)" : "var(--surface-2)",
-                  color: selectedVendorId === vendor.id ? "var(--brand)" : "var(--ink-light)",
-                }}
+                className={`rounded-md border border-[var(--line)] px-2 py-1 text-xs ${
+                  selectedVendorId === vendor.id
+                    ? "bg-brand-soft text-brand"
+                    : "bg-surface-2 text-ink-light"
+                }`}
               >
                 {selectedVendorId === vendor.id ? "Managing" : "Manage"}
               </button>
               <button
                 type="button"
                 onClick={() => onOpenLogs(vendor)}
-                className="rounded-md border border-[var(--line)] px-2 py-1 text-xs"
-                style={{ background: "var(--surface-2)", color: "var(--ink-light)" }}
+                className="rounded-md border border-[var(--line)] bg-surface-2 px-2 py-1 text-xs text-ink-light"
                 title="Open lifecycle logs for this vendor"
               >
                 Logs
@@ -157,12 +154,11 @@ function VendorRow({
               <button
                 type="button"
                 onClick={() => (vendor.acceptingOrders ? onStopOrders(vendor) : onResumeOrders(vendor))}
-                className="rounded-md border px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
-                style={{
-                  borderColor: vendor.acceptingOrders ? "rgba(251,191,36,0.35)" : "rgba(16,185,129,0.35)",
-                  background: vendor.acceptingOrders ? "rgba(251,191,36,0.08)" : "rgba(16,185,129,0.08)",
-                  color: vendor.acceptingOrders ? "#fde68a" : "#86efac",
-                }}
+                className={`rounded-md border px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60 ${
+                  vendor.acceptingOrders
+                    ? "border-amber-400/35 bg-amber-400/[0.08] text-amber-200"
+                    : "border-emerald-500/35 bg-emerald-500/[0.08] text-emerald-300"
+                }`}
                 disabled={orderToggleLoading}
                 title={vendor.acceptingOrders ? "Stop new orders and hide products publicly" : "Resume orders (requires active + ACTIVE status)"}
               >
@@ -173,12 +169,7 @@ function VendorRow({
                   <button
                     type="button"
                     onClick={() => onVerifyVendor(vendor)}
-                    className="rounded-md border px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
-                    style={{
-                      borderColor: "rgba(34,197,94,0.4)",
-                      background: "rgba(34,197,94,0.10)",
-                      color: "#86efac",
-                    }}
+                    className="rounded-md border border-green-500/40 bg-green-500/10 px-2 py-1 text-xs text-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
                     disabled={verifyingVendorId === vendor.id}
                     title="Verify this vendor"
                   >
@@ -187,12 +178,7 @@ function VendorRow({
                   <button
                     type="button"
                     onClick={() => onRejectVerification(vendor)}
-                    className="rounded-md border px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
-                    style={{
-                      borderColor: "rgba(239,68,68,0.4)",
-                      background: "rgba(239,68,68,0.08)",
-                      color: "#fca5a5",
-                    }}
+                    className="rounded-md border border-red-500/40 bg-red-500/[0.08] px-2 py-1 text-xs text-red-300 disabled:cursor-not-allowed disabled:opacity-60"
                     disabled={rejectingVerificationId === vendor.id}
                     title="Reject verification for this vendor"
                   >
@@ -203,8 +189,9 @@ function VendorRow({
               <button
                 type="button"
                 onClick={() => void (deleteRequested ? onConfirmDeleteVendor(vendor) : onDeleteVendor(vendor))}
-                className="rounded-md border border-red-500/40 px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50"
-                style={{ background: deleteRequested ? "rgba(220,38,38,0.14)" : "rgba(239,68,68,0.08)", color: "#fca5a5" }}
+                className={`rounded-md border border-red-500/40 px-2 py-1 text-xs text-red-300 disabled:cursor-not-allowed disabled:opacity-50 ${
+                  deleteRequested ? "bg-red-600/[0.14]" : "bg-red-500/[0.08]"
+                }`}
                 disabled={deleteBlocked || eligibilityLoading}
                 title={
                   deleteBlocked
@@ -265,11 +252,11 @@ export default function VendorListPanel({
             type="button"
             onClick={() => onToggleShowDeleted(!showDeleted)}
             disabled={loading || loadingDeleted}
-            className="rounded-md border border-[var(--line)] px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
-            style={{
-              background: showDeleted ? "var(--brand-soft)" : "var(--surface-2)",
-              color: showDeleted ? "var(--brand)" : "var(--ink-light)",
-            }}
+            className={`rounded-md border border-[var(--line)] px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60 ${
+              showDeleted
+                ? "bg-brand-soft text-brand"
+                : "bg-surface-2 text-ink-light"
+            }`}
           >
             {showDeleted ? "Show Active" : "Show Deleted"}
           </button>
@@ -277,17 +264,16 @@ export default function VendorListPanel({
             type="button"
             onClick={onRefresh}
             disabled={loading || (showDeleted && loadingDeleted)}
-            className="rounded-md border border-[var(--line)] px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
-            style={{ background: "var(--surface-2)", color: "var(--ink-light)" }}
+            className="rounded-md border border-[var(--line)] bg-surface-2 px-2 py-1 text-xs text-ink-light disabled:cursor-not-allowed disabled:opacity-60"
           >
             {loading || (showDeleted && loadingDeleted) ? "Refreshing..." : "Refresh"}
           </button>
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-[var(--line)]" style={{ background: "var(--surface)" }}>
+      <div className="overflow-hidden rounded-2xl border border-[var(--line)] bg-surface">
         <table className="w-full text-left text-sm">
-          <thead style={{ background: "var(--surface-2)", color: "var(--ink)" }}>
+          <thead className="bg-surface-2 text-ink">
             <tr>
               <th className="px-3 py-2">Vendor</th>
               <th className="px-3 py-2">Contact</th>

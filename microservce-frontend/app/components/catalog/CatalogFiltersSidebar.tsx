@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent } from "react";
 
 type Category = {
   id: string;
@@ -49,64 +49,33 @@ export default function CatalogFiltersSidebar({
 
   return (
     <aside
-      className="filter-sidebar animate-rise"
-      style={{ padding: "0", border: "1px solid rgba(0,212,255,0.1)" }}
+      className="filter-sidebar animate-rise p-0 border border-brand/10"
     >
       {/* Sidebar Header */}
-      <div
-        style={{
-          padding: "16px 18px",
-          borderBottom: "1px solid rgba(0,212,255,0.08)",
-          background: "rgba(0,212,255,0.03)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
+      <div className="px-[18px] py-4 border-b border-brand/[0.08] bg-brand/[0.03] flex items-center justify-between">
         <div className="flex items-center gap-2">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00d4ff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
           </svg>
-          <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: "0.9rem", color: "#fff" }}>
+          <span className="font-[Syne,sans-serif] font-extrabold text-[0.9rem] text-white">
             Filters
           </span>
           {activeCount > 0 && (
-            <span
-              style={{
-                background: "linear-gradient(135deg, #00d4ff, #7c3aed)",
-                color: "#fff",
-                fontSize: "0.6rem",
-                fontWeight: 800,
-                padding: "2px 7px",
-                borderRadius: "20px",
-                lineHeight: 1.4,
-              }}
-            >
+            <span className="bg-[image:linear-gradient(135deg,#00d4ff,#7c3aed)] text-white text-[0.6rem] font-extrabold px-[7px] py-[2px] rounded-full leading-[1.4]">
               {activeCount}
             </span>
           )}
         </div>
       </div>
 
-      <div style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: "20px" }}>
+      <div className="px-[18px] py-4 flex flex-col gap-5">
         {/* Price Range */}
         <div>
           <p className="filter-section-title mb-3">Price Range</p>
           <form onSubmit={onApplyPriceFilter}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "10px" }}>
-              <div style={{ position: "relative" }}>
-                <span
-                  style={{
-                    position: "absolute",
-                    left: "10px",
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    color: "rgba(0,212,255,0.5)",
-                    fontSize: "0.75rem",
-                    fontWeight: 700,
-                    pointerEvents: "none",
-                  }}
-                >
+            <div className="grid grid-cols-2 gap-2 mb-2.5">
+              <div className="relative">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-brand/50 text-[0.75rem] font-bold pointer-events-none">
                   $
                 </span>
                 <input
@@ -116,31 +85,12 @@ export default function CatalogFiltersSidebar({
                   value={minPriceInput}
                   onChange={(e) => onMinPriceChange(e.target.value)}
                   placeholder="Min"
-                  style={{
-                    width: "100%",
-                    padding: "9px 10px 9px 22px",
-                    borderRadius: "8px",
-                    border: "1px solid rgba(0,212,255,0.15)",
-                    background: "rgba(0,212,255,0.04)",
-                    color: "#fff",
-                    fontSize: "0.8rem",
-                    outline: "none",
-                  }}
+                  aria-label="Minimum price"
+                  className="w-full py-[9px] pr-2.5 pl-[22px] rounded-lg border border-brand/15 bg-brand/[0.04] text-white text-sm outline-none"
                 />
               </div>
-              <div style={{ position: "relative" }}>
-                <span
-                  style={{
-                    position: "absolute",
-                    left: "10px",
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    color: "rgba(0,212,255,0.5)",
-                    fontSize: "0.75rem",
-                    fontWeight: 700,
-                    pointerEvents: "none",
-                  }}
-                >
+              <div className="relative">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-brand/50 text-[0.75rem] font-bold pointer-events-none">
                   $
                 </span>
                 <input
@@ -150,36 +100,16 @@ export default function CatalogFiltersSidebar({
                   value={maxPriceInput}
                   onChange={(e) => onMaxPriceChange(e.target.value)}
                   placeholder="Max"
-                  style={{
-                    width: "100%",
-                    padding: "9px 10px 9px 22px",
-                    borderRadius: "8px",
-                    border: "1px solid rgba(0,212,255,0.15)",
-                    background: "rgba(0,212,255,0.04)",
-                    color: "#fff",
-                    fontSize: "0.8rem",
-                    outline: "none",
-                  }}
+                  aria-label="Maximum price"
+                  className="w-full py-[9px] pr-2.5 pl-[22px] rounded-lg border border-brand/15 bg-brand/[0.04] text-white text-sm outline-none"
                 />
               </div>
             </div>
-            <div style={{ display: "flex", gap: "8px" }}>
+            <div className="flex gap-2">
               <button
                 type="submit"
                 disabled={loading}
-                style={{
-                  flex: 1,
-                  padding: "8px",
-                  borderRadius: "8px",
-                  border: "none",
-                  background: "linear-gradient(135deg, #00d4ff, #7c3aed)",
-                  color: "#fff",
-                  fontSize: "0.75rem",
-                  fontWeight: 700,
-                  cursor: loading ? "not-allowed" : "pointer",
-                  opacity: loading ? 0.5 : 1,
-                  transition: "all 0.2s",
-                }}
+                className={`flex-1 py-2 rounded-lg border-none bg-[image:linear-gradient(135deg,#00d4ff,#7c3aed)] text-white text-[0.75rem] font-bold transition-all duration-200 ${loading ? "cursor-not-allowed opacity-50" : "cursor-pointer opacity-100"}`}
               >
                 Apply
               </button>
@@ -187,19 +117,7 @@ export default function CatalogFiltersSidebar({
                 type="button"
                 disabled={loading}
                 onClick={onClearPriceFilter}
-                style={{
-                  flex: 1,
-                  padding: "8px",
-                  borderRadius: "8px",
-                  border: "1px solid rgba(0,212,255,0.2)",
-                  background: "transparent",
-                  color: "#00d4ff",
-                  fontSize: "0.75rem",
-                  fontWeight: 700,
-                  cursor: loading ? "not-allowed" : "pointer",
-                  opacity: loading ? 0.5 : 1,
-                  transition: "all 0.2s",
-                }}
+                className={`flex-1 py-2 rounded-lg border border-brand/20 bg-transparent text-brand text-[0.75rem] font-bold transition-all duration-200 ${loading ? "cursor-not-allowed opacity-50" : "cursor-pointer opacity-100"}`}
               >
                 Clear
               </button>
@@ -215,12 +133,12 @@ export default function CatalogFiltersSidebar({
           <p className="filter-section-title mb-3">Categories</p>
 
           {parents.length === 0 && (
-            <p style={{ fontSize: "0.78rem", color: "#4a4a70", padding: "8px 10px", background: "rgba(0,212,255,0.03)", borderRadius: "8px" }}>
+            <p className="text-[0.78rem] text-[#4a4a70] px-2.5 py-2 bg-brand/[0.03] rounded-lg">
               No categories available.
             </p>
           )}
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+          <div className="flex flex-col gap-1.5">
             {parents.map((parent) => {
               const selected = selectedParentNames.includes(parent.name);
               const expanded = Boolean(expandedParentIds[parent.id]);
@@ -229,53 +147,21 @@ export default function CatalogFiltersSidebar({
               return (
                 <div
                   key={parent.id}
-                  style={{
-                    borderRadius: "10px",
-                    border: selected ? "1px solid rgba(0,212,255,0.35)" : "1px solid rgba(0,212,255,0.08)",
-                    background: selected ? "rgba(0,212,255,0.05)" : "transparent",
-                    overflow: "hidden",
-                    transition: "all 0.2s",
-                  }}
+                  className={`rounded-md overflow-hidden transition-all duration-200 ${selected ? "border border-brand/35 bg-brand/[0.05]" : "border border-brand/[0.08] bg-transparent"}`}
                 >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "9px 12px",
-                      gap: "8px",
-                    }}
-                  >
+                  <div className="flex items-center justify-between px-3 py-[9px] gap-2">
                     <label
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "10px",
-                        fontSize: "0.82rem",
-                        color: selected ? "#00d4ff" : "#c8c8e8",
-                        cursor: "pointer",
-                        flex: 1,
-                        fontWeight: selected ? 700 : 500,
-                      }}
+                      className={`flex items-center gap-2.5 text-[0.82rem] cursor-pointer flex-1 ${selected ? "text-brand font-bold" : "text-[#c8c8e8] font-medium"}`}
                     >
                       <input
                         type="checkbox"
                         checked={selected}
                         onChange={() => onToggleParent(parent)}
-                        style={{ accentColor: "#00d4ff", width: "14px", height: "14px" }}
+                        className="accent-brand w-3.5 h-3.5"
                       />
                       {parent.name}
                       {selected && (
-                        <span
-                          style={{
-                            fontSize: "0.6rem",
-                            background: "rgba(0,212,255,0.15)",
-                            color: "#00d4ff",
-                            padding: "1px 6px",
-                            borderRadius: "10px",
-                            fontWeight: 800,
-                          }}
-                        >
+                        <span className="text-[0.6rem] bg-brand/15 text-brand px-1.5 py-px rounded-md font-extrabold">
                           ✓
                         </span>
                       )}
@@ -284,22 +170,7 @@ export default function CatalogFiltersSidebar({
                       <button
                         type="button"
                         onClick={() => onToggleParentExpanded(parent.id)}
-                        style={{
-                          width: "22px",
-                          height: "22px",
-                          borderRadius: "6px",
-                          border: "1px solid rgba(0,212,255,0.15)",
-                          background: "rgba(0,212,255,0.05)",
-                          color: "#00d4ff",
-                          fontSize: "0.7rem",
-                          fontWeight: 800,
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          flexShrink: 0,
-                          transition: "all 0.2s",
-                        }}
+                        className="w-[22px] h-[22px] rounded-sm border border-brand/15 bg-brand/[0.05] text-brand text-xs font-extrabold cursor-pointer flex items-center justify-center shrink-0 transition-all duration-200"
                         aria-label={expanded ? "Collapse" : "Expand"}
                       >
                         {expanded ? "−" : "+"}
@@ -308,37 +179,19 @@ export default function CatalogFiltersSidebar({
                   </div>
 
                   {expanded && subs.length > 0 && (
-                    <div
-                      style={{
-                        borderTop: "1px solid rgba(0,212,255,0.08)",
-                        padding: "8px 12px 10px 32px",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "7px",
-                        background: "rgba(0,0,0,0.2)",
-                      }}
-                    >
+                    <div className="border-t border-brand/[0.08] py-2 pr-3 pl-8 flex flex-col gap-[7px] bg-black/20">
                       {subs.map((sub) => {
                         const subSelected = selectedSubNames.includes(sub.name);
                         return (
                           <label
                             key={sub.id}
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "8px",
-                              fontSize: "0.78rem",
-                              color: subSelected ? "#00d4ff" : "#6868a0",
-                              cursor: "pointer",
-                              fontWeight: subSelected ? 600 : 400,
-                              transition: "color 0.15s",
-                            }}
+                            className={`flex items-center gap-2 text-[0.78rem] cursor-pointer transition-colors duration-150 ${subSelected ? "text-brand font-semibold" : "text-[#6868a0] font-normal"}`}
                           >
                             <input
                               type="checkbox"
                               checked={subSelected}
                               onChange={() => onToggleSub(sub)}
-                              style={{ accentColor: "#00d4ff", width: "12px", height: "12px" }}
+                              className="accent-brand w-3 h-3"
                             />
                             {sub.name}
                           </label>

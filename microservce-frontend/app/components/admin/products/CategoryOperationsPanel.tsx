@@ -140,8 +140,7 @@ export default function CategoryOperationsPanel({
               type="button"
               onClick={onResetCategoryForm}
               disabled={categoryMutationBusy}
-              className="rounded-lg border border-[var(--line)] px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-60"
-              style={{ background: "var(--surface-2)", color: "var(--ink-light)" }}
+              className="rounded-lg border border-[var(--line)] bg-surface-2 px-3 py-2 text-xs text-ink-light disabled:cursor-not-allowed disabled:opacity-60"
             >
               Reset
             </button>
@@ -162,8 +161,7 @@ export default function CategoryOperationsPanel({
                   type="button"
                   onClick={() => onEditCategory(c)}
                   disabled={categoryMutationBusy}
-                  className="rounded border border-[var(--line)] px-2 py-0.5 text-[10px] disabled:cursor-not-allowed disabled:opacity-60"
-                  style={{ background: "var(--surface-2)", color: "var(--ink-light)" }}
+                  className="rounded border border-[var(--line)] bg-surface-2 px-2 py-0.5 text-[10px] text-ink-light disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Edit
                 </button>
@@ -171,8 +169,7 @@ export default function CategoryOperationsPanel({
                   type="button"
                   onClick={() => onDeleteCategoryRequest(c)}
                   disabled={categoryMutationBusy}
-                  className="rounded border border-red-900/30 px-2 py-0.5 text-[10px] text-red-400 disabled:cursor-not-allowed disabled:opacity-60"
-                  style={{ background: "rgba(239,68,68,0.06)" }}
+                  className="rounded border border-red-900/30 bg-red-500/[0.06] px-2 py-0.5 text-[10px] text-red-400 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Delete
                 </button>

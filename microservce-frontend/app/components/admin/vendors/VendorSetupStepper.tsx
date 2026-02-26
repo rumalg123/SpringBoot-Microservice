@@ -9,17 +9,16 @@ type VendorSetupStepperProps = {
 type StepState = "done" | "current" | "pending";
 
 function StepBadge({ state, index }: { state: StepState; index: number }) {
-  const styles =
+  const cls =
     state === "done"
-      ? { background: "rgba(16,185,129,0.14)", border: "1px solid rgba(16,185,129,0.35)", color: "#34d399" }
+      ? "bg-[rgba(16,185,129,0.14)] border border-[rgba(16,185,129,0.35)] text-[#34d399]"
       : state === "current"
-        ? { background: "var(--brand-soft)", border: "1px solid rgba(0,212,255,0.25)", color: "var(--brand)" }
-        : { background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", color: "var(--muted)" };
+        ? "bg-brand-soft border border-[rgba(0,212,255,0.25)] text-brand"
+        : "bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.08)] text-muted";
 
   return (
     <span
-      className="inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold"
-      style={styles}
+      className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${cls}`}
     >
       {index}
     </span>
@@ -39,7 +38,7 @@ export default function VendorSetupStepper({
     selectedVendorName && vendorUserCount > 0 ? "current" : "pending";
 
   return (
-    <section className="rounded-2xl border border-[var(--line)] p-4" style={{ background: "var(--surface)" }}>
+    <section className="rounded-2xl border border-[var(--line)] bg-surface p-4">
       <div className="mb-3">
         <h2 className="text-sm font-semibold text-[var(--ink)]">Vendor Setup Flow</h2>
         <p className="mt-1 text-xs text-[var(--muted)]">

@@ -52,23 +52,24 @@ export default function PurchasePanel({
   onSignIn,
 }: Props) {
   return (
-    <div style={{ borderTop: "1px solid var(--brand-soft)", paddingTop: "20px" }}>
+    <div className="border-t border-brand-soft pt-5">
       {isAuthenticated ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+        <div className="flex flex-col gap-3.5">
           {/* Variation Selector */}
           {productType === "PARENT" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              <p style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--muted)", margin: 0 }}>Select Variation</p>
-              {parentAttributeNames.length === 0 && <p style={{ fontSize: "0.8rem", color: "var(--muted)" }}>No variation attributes configured.</p>}
+            <div className="flex flex-col gap-2.5">
+              <p className="text-[0.65rem] font-bold uppercase tracking-widest text-muted m-0">Select Variation</p>
+              {parentAttributeNames.length === 0 && <p className="text-sm text-muted">No variation attributes configured.</p>}
               {parentAttributeNames.map((attributeName) => (
                 <div key={attributeName}>
-                  <label style={{ display: "block", fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--muted)", marginBottom: "6px" }}>
+                  <label className="block text-[0.65rem] font-bold uppercase tracking-widest text-muted mb-1.5">
                     {attributeName}
                   </label>
                   <select
                     value={selectedAttributes[attributeName] || ""}
                     onChange={(e) => onAttributeChange(attributeName, e.target.value)}
                     disabled={addingToCart || (variationOptionsByAttribute[attributeName] || []).length === 0}
+                    aria-label={attributeName}
                     className="form-select"
                   >
                     <option value="">Select {attributeName}</option>
@@ -79,37 +80,31 @@ export default function PurchasePanel({
                 </div>
               ))}
               {variationsCount > 0 && !allAttributesSelected && (
-                <p style={{ fontSize: "0.78rem", color: "var(--muted)" }}>Select all attributes to continue.</p>
+                <p className="text-[0.78rem] text-muted">Select all attributes to continue.</p>
               )}
               {allAttributesSelected && !selectedVariationId && variationsCount > 0 && (
-                <p style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--danger)" }}>No variation matches the selected combination.</p>
+                <p className="text-[0.78rem] font-bold text-danger">No variation matches the selected combination.</p>
               )}
-              {variationsCount === 0 && <p style={{ fontSize: "0.78rem", color: "var(--muted)" }}>No variations available.</p>}
+              {variationsCount === 0 && <p className="text-[0.78rem] text-muted">No variations available.</p>}
             </div>
           )}
 
           {/* Quantity */}
           <div>
-            <label style={{ display: "block", fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--muted)", marginBottom: "8px" }}>Quantity</label>
-            <div className="qty-stepper">
-              <button disabled={addingToCart || buyingNow} onClick={() => onQuantityChange(Math.max(1, quantity - 1))}>-</button>
-              <span>{quantity}</span>
-              <button disabled={addingToCart || buyingNow} onClick={() => onQuantityChange(quantity + 1)}>+</button>
+            <label className="block text-[0.65rem] font-bold uppercase tracking-widest text-muted mb-2">Quantity</label>
+            <div className="qty-stepper" role="group" aria-label="Quantity">
+              <button aria-label="Decrease quantity" disabled={addingToCart || buyingNow} onClick={() => onQuantityChange(Math.max(1, quantity - 1))}>-</button>
+              <span aria-live="polite">{quantity}</span>
+              <button aria-label="Increase quantity" disabled={addingToCart || buyingNow} onClick={() => onQuantityChange(quantity + 1)}>+</button>
             </div>
           </div>
 
           {/* Action Buttons */}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
+          <div className="flex flex-wrap gap-2.5">
             <button
               disabled={!canAddToCart}
               onClick={onAddToCart}
-              style={{
-                flex: 1, minWidth: "120px", padding: "13px 20px", borderRadius: "12px",
-                border: "1px solid var(--line-bright)", background: canAddToCart ? "rgba(0,0,10,0.4)" : "var(--line-bright)",
-                color: canAddToCart ? "var(--brand)" : "var(--muted)", fontSize: "0.9rem", fontWeight: 800,
-                cursor: canAddToCart ? "pointer" : "not-allowed",
-                display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "8px",
-              }}
+              className={`flex-1 min-w-[120px] px-5 py-[13px] rounded-xl border border-line-bright text-[0.9rem] font-extrabold inline-flex items-center justify-center gap-2 ${canAddToCart ? "bg-[rgba(0,0,10,0.4)] text-brand cursor-pointer" : "bg-line-bright text-muted cursor-not-allowed"}`}
             >
               {addingToCart && <span className="spinner-sm" />}
               {addingToCart ? "Adding..." : "Add to Cart"}
@@ -117,14 +112,7 @@ export default function PurchasePanel({
             <button
               disabled={!canBuyNow}
               onClick={onBuyNow}
-              style={{
-                flex: 1, minWidth: "120px", padding: "13px 20px", borderRadius: "12px", border: "none",
-                background: canBuyNow ? "var(--gradient-brand)" : "var(--line-bright)",
-                color: "#fff", fontSize: "0.9rem", fontWeight: 800,
-                cursor: canBuyNow ? "pointer" : "not-allowed",
-                boxShadow: canBuyNow ? "0 0 20px var(--line-bright)" : "none",
-                display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "8px",
-              }}
+              className={`flex-1 min-w-[120px] px-5 py-[13px] rounded-xl border-none text-white text-[0.9rem] font-extrabold inline-flex items-center justify-center gap-2 ${canBuyNow ? "bg-[image:var(--gradient-brand)] cursor-pointer shadow-[0_0_20px_var(--line-bright)]" : "bg-line-bright cursor-not-allowed shadow-none"}`}
             >
               {buyingNow && <span className="spinner-sm" />}
               {buyingNow ? "Processing..." : "Buy Now"}
@@ -132,14 +120,7 @@ export default function PurchasePanel({
             <button
               disabled={wishlistPending}
               onClick={onToggleWishlist}
-              style={{
-                padding: "13px 18px", borderRadius: "12px",
-                border: wishlistItemId ? "1px solid var(--danger)" : "1px solid var(--line-bright)",
-                background: wishlistItemId ? "var(--danger-soft)" : "var(--brand-soft)",
-                color: wishlistItemId ? "var(--danger)" : "var(--brand)",
-                fontSize: "0.8rem", fontWeight: 700, cursor: wishlistPending ? "not-allowed" : "pointer",
-                display: "inline-flex", alignItems: "center", gap: "6px",
-              }}
+              className={`px-[18px] py-[13px] rounded-xl text-sm font-bold inline-flex items-center gap-1.5 ${wishlistItemId ? "border border-danger bg-danger-soft text-danger" : "border border-line-bright bg-brand-soft text-brand"} ${wishlistPending ? "cursor-not-allowed" : "cursor-pointer"}`}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill={wishlistItemId ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 21s-6.7-4.35-9.33-8.08C.8 10.23 1.2 6.7 4.02 4.82A5.42 5.42 0 0 1 12 6.09a5.42 5.42 0 0 1 7.98-1.27c2.82 1.88 3.22 5.41 1.35 8.1C18.7 16.65 12 21 12 21z" />
@@ -148,13 +129,7 @@ export default function PurchasePanel({
             </button>
             <Link
               href="/cart"
-              className="no-underline"
-              style={{
-                padding: "13px 18px", borderRadius: "12px",
-                border: "1px solid var(--line-bright)", background: "rgba(0,0,10,0.4)",
-                color: "var(--ink-light)", fontSize: "0.8rem", fontWeight: 700,
-                display: "inline-flex", alignItems: "center", gap: "6px",
-              }}
+              className="no-underline px-[18px] py-[13px] rounded-xl border border-line-bright bg-[rgba(0,0,10,0.4)] text-ink-light text-sm font-bold inline-flex items-center gap-1.5"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" />
@@ -165,17 +140,12 @@ export default function PurchasePanel({
           </div>
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          <p style={{ fontSize: "0.875rem", color: "var(--muted)", margin: 0 }}>Sign in to add this product to cart</p>
+        <div className="flex flex-col gap-3">
+          <p className="text-base text-muted m-0">Sign in to add this product to cart</p>
           <button
             disabled={signingInToBuy}
             onClick={onSignIn}
-            style={{
-              padding: "13px 20px", borderRadius: "12px", border: "none",
-              background: "var(--gradient-brand)",
-              color: "#fff", fontSize: "0.9rem", fontWeight: 800, cursor: "pointer",
-              display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "8px",
-            }}
+            className="px-5 py-[13px] rounded-xl border-none bg-[image:var(--gradient-brand)] text-white text-[0.9rem] font-extrabold cursor-pointer inline-flex items-center justify-center gap-2"
           >
             {signingInToBuy ? "Redirecting..." : "Sign In to Continue"}
           </button>

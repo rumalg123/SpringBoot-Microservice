@@ -469,17 +469,17 @@ export default function CategoryProductsPage() {
       )}
 
       {!isAuthenticated && (
-        <header style={{ background: "var(--header-bg)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(0,212,255,0.1)", position: "sticky", top: 0, zIndex: 50 }}>
-          <div style={{ maxWidth: "1280px", margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px" }}>
-            <Link href="/" style={{ display: "flex", alignItems: "center", gap: "10px", textDecoration: "none" }}>
-              <span style={{ width: "32px", height: "32px", borderRadius: "8px", background: "linear-gradient(135deg, #00d4ff, #7c3aed)", display: "grid", placeItems: "center" }}>
+        <header className="sticky top-0 z-50 border-b border-[rgba(0,212,255,0.1)] bg-header-bg backdrop-blur-[12px]">
+          <div className="mx-auto flex max-w-[1280px] items-center justify-between px-4 py-3">
+            <Link href="/" className="flex items-center gap-2.5 no-underline">
+              <span className="grid h-8 w-8 place-items-center rounded-[8px] bg-[linear-gradient(135deg,#00d4ff,#7c3aed)]">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" /><line x1="3" y1="6" x2="21" y2="6" /><path d="M16 10a4 4 0 0 1-8 0" />
                 </svg>
               </span>
-              <span style={{ fontSize: "1.1rem", fontWeight: 800, color: "#fff", fontFamily: "'Syne', sans-serif" }}>Rumal Store</span>
+              <span className="font-[Syne,sans-serif] text-[1.1rem] font-extrabold text-white">Rumal Store</span>
             </Link>
-            <Link href="/" style={{ padding: "8px 20px", borderRadius: "8px", background: "linear-gradient(135deg, #00d4ff, #7c3aed)", color: "#fff", fontWeight: 700, fontSize: "0.82rem", textDecoration: "none" }}>
+            <Link href="/" className="rounded-[8px] bg-[linear-gradient(135deg,#00d4ff,#7c3aed)] px-5 py-2 text-sm font-bold text-white no-underline">
               Sign In
             </Link>
           </div>

@@ -29,8 +29,7 @@ export default function VendorUsersList({
           type="button"
           onClick={onRefresh}
           disabled={!selectedVendorId || loadingUsers}
-          className="rounded-md border border-[var(--line)] px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
-          style={{ background: "var(--surface-2)", color: "var(--ink-light)" }}
+          className="rounded-md border border-[var(--line)] bg-surface-2 text-ink-light px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
         >
           {loadingUsers ? "Loading..." : "Refresh"}
         </button>
@@ -48,12 +47,7 @@ export default function VendorUsersList({
                 <p className="font-semibold text-[var(--ink)]">{user.displayName || user.email}</p>
                 <div className="flex items-center gap-2">
                   <span
-                    className="rounded px-2 py-0.5 text-[10px]"
-                    style={{
-                      background: "rgba(255,255,255,0.04)",
-                      color: "var(--ink-light)",
-                      border: "1px solid rgba(255,255,255,0.08)",
-                    }}
+                    className="rounded px-2 py-0.5 text-[10px] bg-[rgba(255,255,255,0.04)] text-ink-light border border-[rgba(255,255,255,0.08)]"
                   >
                     {user.role}
                   </span>
@@ -61,8 +55,7 @@ export default function VendorUsersList({
                     type="button"
                     onClick={() => onRemoveUser(user)}
                     disabled={removingMembershipId === user.id}
-                    className="rounded-md border border-red-500/40 px-2 py-1 text-[10px] disabled:cursor-not-allowed disabled:opacity-60"
-                    style={{ background: "rgba(239,68,68,0.08)", color: "#fca5a5" }}
+                    className="rounded-md border border-red-500/40 bg-[rgba(239,68,68,0.08)] text-[#fca5a5] px-2 py-1 text-[10px] disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {removingMembershipId === user.id ? "Removing..." : "Remove"}
                   </button>

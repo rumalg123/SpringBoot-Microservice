@@ -101,56 +101,27 @@ function FlashSaleCard({ promo }: { promo: PublicPromotion }) {
 
   return (
     <article
-      style={{
-        minWidth: "280px",
-        maxWidth: "340px",
-        flex: "0 0 auto",
-        background: "rgba(255,255,255,0.03)",
-        border: "1px solid transparent",
-        borderRadius: 16,
-        padding: "24px 20px",
-        position: "relative",
-        overflow: "hidden",
-        boxShadow: "0 0 20px rgba(0,212,255,0.08), inset 0 0 20px rgba(0,212,255,0.02)",
-      }}
+      className="relative shrink-0 overflow-hidden rounded-lg border border-transparent bg-[rgba(255,255,255,0.03)] px-5 py-6"
+      style={{ minWidth: "280px", maxWidth: "340px", boxShadow: "0 0 20px rgba(0,212,255,0.08), inset 0 0 20px rgba(0,212,255,0.02)" }}
     >
       {/* gradient border overlay */}
       <div
+        className="pointer-events-none absolute inset-0 rounded-lg p-px"
         style={{
-          position: "absolute",
-          inset: 0,
-          borderRadius: 16,
-          padding: "1px",
           background: "linear-gradient(135deg, var(--brand), var(--accent))",
           WebkitMask: "linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)",
           WebkitMaskComposite: "xor",
           maskComposite: "exclude",
-          pointerEvents: "none",
         }}
       />
       {/* flash badge */}
-      <div
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: "6px",
-          marginBottom: "12px",
-          padding: "4px 12px",
-          borderRadius: "20px",
-          background: "linear-gradient(135deg, rgba(251,191,36,0.15), rgba(244,114,182,0.15))",
-          border: "1px solid rgba(251,191,36,0.3)",
-          fontSize: "0.65rem",
-          fontWeight: 800,
-          letterSpacing: "0.1em",
-          textTransform: "uppercase",
-          color: "#fbbf24",
-        }}
-      >
+      <div className="mb-3 inline-flex items-center gap-1.5 rounded-xl border border-[rgba(251,191,36,0.3)] bg-[linear-gradient(135deg,rgba(251,191,36,0.15),rgba(244,114,182,0.15))] px-3 py-1 text-[0.65rem] font-extrabold uppercase tracking-[0.1em] text-[#fbbf24]">
+
         <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
         FLASH SALE
       </div>
 
-      <h3 style={{ fontFamily: "'Syne', sans-serif", fontSize: "1.05rem", fontWeight: 800, color: "#fff", margin: "0 0 8px 0", lineHeight: 1.3 }}>
+      <h3 className="mb-2 mt-0 font-[Syne,sans-serif] text-[1.05rem] font-extrabold leading-[1.3] text-white">
         {promo.name}
       </h3>
 
@@ -172,24 +143,13 @@ function FlashSaleCard({ promo }: { promo: PublicPromotion }) {
       </span>
 
       {/* countdown */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "8px",
-          marginTop: "4px",
-        }}
-      >
+      <div className="mt-1 flex items-center gap-2">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
         </svg>
         <span
-          style={{
-            fontSize: "0.85rem",
-            fontWeight: 700,
-            color: countdown === "Ended" ? "var(--danger)" : "var(--brand)",
-            fontVariantNumeric: "tabular-nums",
-          }}
+          className="text-sm font-bold tabular-nums"
+          style={{ color: countdown === "Ended" ? "var(--danger)" : "var(--brand)" }}
         >
           {countdown || "..."}
         </span>
@@ -297,10 +257,10 @@ export default function PromotionsPage() {
   /* loading state */
   if (sessionStatus === "loading" || sessionStatus === "idle") {
     return (
-      <div style={{ minHeight: "100vh", background: "var(--bg)", display: "grid", placeItems: "center" }}>
-        <div style={{ textAlign: "center" }}>
+      <div className="grid min-h-screen place-items-center bg-bg">
+        <div className="text-center">
           <div className="spinner-lg" />
-          <p style={{ marginTop: "16px", color: "var(--muted)", fontSize: "0.875rem" }}>Loading...</p>
+          <p className="mt-4 text-base text-muted">Loading...</p>
         </div>
       </div>
     );
@@ -309,21 +269,10 @@ export default function PromotionsPage() {
   /* ───── styles ───── */
 
 
-  const inputStyle: React.CSSProperties = {
-    flex: 1,
-    minWidth: "200px",
-    padding: "10px 14px 10px 40px",
-    borderRadius: "10px",
-    border: "1px solid var(--line-bright)",
-    background: "rgba(255,255,255,0.03)",
-    color: "#fff",
-    fontSize: "0.85rem",
-    fontWeight: 500,
-    outline: "none",
-  };
+  const inputCls = "flex-1 min-w-[200px] rounded-md border border-line-bright bg-[rgba(255,255,255,0.03)] py-2.5 pl-10 pr-3.5 text-sm font-medium text-white outline-none focus:border-brand";
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
+    <div className="min-h-screen bg-bg">
       <AppNav
         email={(profile?.email as string) || ""}
         isSuperAdmin={session.isSuperAdmin}
@@ -348,72 +297,35 @@ export default function PromotionsPage() {
         </nav>
 
         {/* Page Header */}
-        <div style={{ marginBottom: "32px" }}>
-          <h1
-            style={{
-              fontFamily: "'Syne', sans-serif",
-              fontSize: "1.75rem",
-              fontWeight: 800,
-              color: "#fff",
-              margin: 0,
-            }}
-          >
+        <div className="mb-8">
+          <h1 className="m-0 font-[Syne,sans-serif] text-[1.75rem] font-extrabold text-white">
             Promotions & Deals
           </h1>
-          <p style={{ marginTop: "6px", fontSize: "0.85rem", color: "var(--muted)" }}>
+          <p className="mt-1.5 text-sm text-muted">
             Discover current offers, flash sales, and savings across the platform.
           </p>
         </div>
 
         {/* ── Flash Sales Section ── */}
         {!flashLoading && flashSales.length > 0 && (
-          <section style={{ marginBottom: "40px" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <section className="mb-10">
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="#fbbf24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
-                <h2
-                  style={{
-                    fontFamily: "'Syne', sans-serif",
-                    fontSize: "1.2rem",
-                    fontWeight: 800,
-                    color: "#fff",
-                    margin: 0,
-                  }}
-                >
+                <h2 className="m-0 font-[Syne,sans-serif] text-[1.2rem] font-extrabold text-white">
                   Flash Sales
                 </h2>
-                <span
-                  style={{
-                    fontSize: "0.65rem",
-                    fontWeight: 700,
-                    letterSpacing: "0.08em",
-                    padding: "3px 10px",
-                    borderRadius: "20px",
-                    background: "rgba(251,191,36,0.12)",
-                    border: "1px solid rgba(251,191,36,0.25)",
-                    color: "#fbbf24",
-                  }}
-                >
+                <span className="rounded-xl border border-[rgba(251,191,36,0.25)] bg-[rgba(251,191,36,0.12)] px-2.5 py-[3px] text-[0.65rem] font-bold tracking-[0.08em] text-[#fbbf24]">
+
                   LIMITED TIME
                 </span>
               </div>
               {/* scroll arrows */}
-              <div style={{ display: "flex", gap: "6px" }}>
+              <div className="flex gap-1.5">
                 <button
                   type="button"
                   onClick={() => scrollFlash("left")}
-                  style={{
-                    width: "32px",
-                    height: "32px",
-                    borderRadius: "8px",
-                    border: "1px solid var(--line-bright)",
-                    background: "rgba(255,255,255,0.03)",
-                    color: "var(--muted)",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
+                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-[8px] border border-line-bright bg-[rgba(255,255,255,0.03)] text-muted"
                   aria-label="Scroll left"
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
@@ -421,18 +333,7 @@ export default function PromotionsPage() {
                 <button
                   type="button"
                   onClick={() => scrollFlash("right")}
-                  style={{
-                    width: "32px",
-                    height: "32px",
-                    borderRadius: "8px",
-                    border: "1px solid var(--line-bright)",
-                    background: "rgba(255,255,255,0.03)",
-                    color: "var(--muted)",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
+                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-[8px] border border-line-bright bg-[rgba(255,255,255,0.03)] text-muted"
                   aria-label="Scroll right"
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
@@ -443,14 +344,8 @@ export default function PromotionsPage() {
             {/* Horizontal scroll container */}
             <div
               ref={flashScrollRef}
-              style={{
-                display: "flex",
-                gap: "16px",
-                overflowX: "auto",
-                paddingBottom: "8px",
-                scrollbarWidth: "thin",
-                scrollbarColor: "var(--line-bright) transparent",
-              }}
+              className="flex gap-4 overflow-x-auto pb-2"
+              style={{ scrollbarWidth: "thin", scrollbarColor: "var(--line-bright) transparent" }}
             >
               {flashSales.map((fs) => (
                 <FlashSaleCard key={fs.id} promo={fs} />
@@ -461,30 +356,14 @@ export default function PromotionsPage() {
 
         {/* ── All Promotions Section ── */}
         <section>
-          <h2
-            style={{
-              fontFamily: "'Syne', sans-serif",
-              fontSize: "1.2rem",
-              fontWeight: 800,
-              color: "#fff",
-              margin: "0 0 16px 0",
-            }}
-          >
+          <h2 className="mb-4 mt-0 font-[Syne,sans-serif] text-[1.2rem] font-extrabold text-white">
             All Promotions
           </h2>
 
           {/* Search & Filters */}
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: "12px",
-              marginBottom: "24px",
-              alignItems: "center",
-            }}
-          >
+          <div className="mb-6 flex flex-wrap items-center gap-3">
             {/* Search input with icon */}
-            <div style={{ position: "relative", flex: 1, minWidth: "200px" }}>
+            <div className="relative min-w-[200px] flex-1">
               <svg
                 width="16"
                 height="16"
@@ -494,7 +373,7 @@ export default function PromotionsPage() {
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}
+                className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2"
               >
                 <circle cx="11" cy="11" r="8" />
                 <line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -504,9 +383,7 @@ export default function PromotionsPage() {
                 placeholder="Search promotions..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                style={inputStyle}
-                onFocus={(e) => { e.currentTarget.style.borderColor = "var(--brand)"; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = "var(--line-bright)"; }}
+                className={inputCls}
               />
             </div>
 
@@ -540,9 +417,9 @@ export default function PromotionsPage() {
 
           {/* Loading */}
           {loading && (
-            <div style={{ textAlign: "center", padding: "60px 0" }}>
+            <div className="py-[60px] text-center">
               <div className="spinner-lg" />
-              <p style={{ marginTop: "12px", color: "var(--muted)", fontSize: "0.82rem" }}>Loading promotions...</p>
+              <p className="mt-3 text-sm text-muted">Loading promotions...</p>
             </div>
           )}
 
@@ -566,13 +443,7 @@ export default function PromotionsPage() {
 
           {/* Promotion Cards Grid */}
           {!loading && promotions.length > 0 && (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
-                gap: "18px",
-              }}
-            >
+            <div className="grid gap-[18px]" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
               {promotions.map((promo) => {
                 const bc = benefitColor(promo.benefitType);
                 const hasDateRange = promo.startsAt || promo.endsAt;
@@ -580,60 +451,22 @@ export default function PromotionsPage() {
                 return (
                   <article
                     key={promo.id}
-                    className="animate-rise"
-                    style={{
-                      background: "rgba(255,255,255,0.03)",
-                      border: "1px solid var(--line)",
-                      borderRadius: 16,
-                      padding: "20px",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "12px",
-                      transition: "border-color 0.2s, box-shadow 0.2s",
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = "var(--line-bright)";
-                      e.currentTarget.style.boxShadow = "0 4px 24px rgba(0,0,0,0.3)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = "var(--line)";
-                      e.currentTarget.style.boxShadow = "none";
-                    }}
+                    className="animate-rise flex flex-col gap-3 rounded-lg border border-line bg-[rgba(255,255,255,0.03)] p-5 transition-all duration-200 hover:border-line-bright hover:shadow-[0_4px_24px_rgba(0,0,0,0.3)]"
                   >
                     {/* Top row: name + flash badge if applicable */}
                     <div>
-                      <h3
-                        style={{
-                          fontFamily: "'Syne', sans-serif",
-                          fontSize: "1rem",
-                          fontWeight: 800,
-                          color: "#fff",
-                          margin: 0,
-                          lineHeight: 1.35,
-                        }}
-                      >
+                      <h3 className="m-0 font-[Syne,sans-serif] text-lg font-extrabold leading-[1.35] text-white">
                         {promo.name}
                       </h3>
                       {promo.description && (
-                        <p
-                          style={{
-                            marginTop: "6px",
-                            fontSize: "0.8rem",
-                            lineHeight: 1.5,
-                            color: "var(--muted)",
-                            display: "-webkit-box",
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: "vertical",
-                            overflow: "hidden",
-                          }}
-                        >
+                        <p className="mt-1.5 line-clamp-2 text-sm leading-[1.5] text-muted">
                           {promo.description}
                         </p>
                       )}
                     </div>
 
                     {/* Badges row */}
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center" }}>
+                    <div className="flex flex-wrap items-center gap-1.5">
                       {/* Benefit badge */}
                       <span
                         style={{
@@ -735,12 +568,12 @@ export default function PromotionsPage() {
                     </div>
 
                     {/* Details row */}
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", fontSize: "0.75rem", color: "var(--muted)" }}>
+                    <div className="flex flex-wrap gap-3 text-xs text-muted">
                       {promo.minimumOrderAmount != null && promo.minimumOrderAmount > 0 && (
-                        <span>Min. order: <strong style={{ color: "var(--ink-light)" }}>${promo.minimumOrderAmount}</strong></span>
+                        <span>Min. order: <strong className="text-ink-light">${promo.minimumOrderAmount}</strong></span>
                       )}
                       {promo.maximumDiscountAmount != null && promo.maximumDiscountAmount > 0 && (
-                        <span>Max discount: <strong style={{ color: "var(--ink-light)" }}>${promo.maximumDiscountAmount}</strong></span>
+                        <span>Max discount: <strong className="text-ink-light">${promo.maximumDiscountAmount}</strong></span>
                       )}
                       {promo.benefitType === "TIERED_SPEND" && promo.spendTiers.length > 0 && (
                         <span>
@@ -751,23 +584,16 @@ export default function PromotionsPage() {
 
                     {/* Spend tiers detail */}
                     {promo.benefitType === "TIERED_SPEND" && promo.spendTiers.length > 0 && (
-                      <div
-                        style={{
-                          background: "rgba(244,114,182,0.05)",
-                          border: "1px solid rgba(244,114,182,0.15)",
-                          borderRadius: "10px",
-                          padding: "10px 14px",
-                        }}
-                      >
-                        <p style={{ fontSize: "0.7rem", fontWeight: 700, color: "#f472b6", margin: "0 0 6px 0", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                      <div className="rounded-md border border-[rgba(244,114,182,0.15)] bg-[rgba(244,114,182,0.05)] px-3.5 py-2.5">
+                        <p className="mb-1.5 mt-0 text-xs font-bold uppercase tracking-[0.06em] text-[#f472b6]">
                           Spend Tiers
                         </p>
                         {promo.spendTiers
                           .slice()
                           .sort((a, b) => a.thresholdAmount - b.thresholdAmount)
                           .map((tier, idx) => (
-                            <div key={idx} style={{ fontSize: "0.75rem", color: "var(--muted)", padding: "2px 0" }}>
-                              Spend <strong style={{ color: "var(--ink-light)" }}>${tier.thresholdAmount}</strong> &rarr; Save <strong style={{ color: "#f472b6" }}>${tier.discountAmount}</strong>
+                            <div key={idx} className="py-0.5 text-xs text-muted">
+                              Spend <strong className="text-ink-light">${tier.thresholdAmount}</strong> &rarr; Save <strong className="text-[#f472b6]">${tier.discountAmount}</strong>
                             </div>
                           ))}
                       </div>
@@ -775,7 +601,7 @@ export default function PromotionsPage() {
 
                     {/* Dates */}
                     {hasDateRange && (
-                      <div style={{ fontSize: "0.72rem", color: "var(--muted)", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <div className="flex items-center gap-1.5 text-xs text-muted">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
                         </svg>

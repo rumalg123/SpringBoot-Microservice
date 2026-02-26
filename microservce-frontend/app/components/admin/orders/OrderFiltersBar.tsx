@@ -8,17 +8,6 @@ type Props = {
   onClear: () => void | Promise<void>;
 };
 
-const darkInput: React.CSSProperties = {
-  flex: 1,
-  padding: "10px 14px",
-  borderRadius: "10px",
-  border: "1px solid rgba(0,212,255,0.15)",
-  background: "rgba(0,212,255,0.04)",
-  color: "#c8c8e8",
-  fontSize: "0.85rem",
-  outline: "none",
-};
-
 export default function OrderFiltersBar({
   customerEmailInput,
   filterBusy,
@@ -28,9 +17,9 @@ export default function OrderFiltersBar({
 }: Props) {
   return (
     <>
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
-        <div style={{ position: "relative", display: "flex", alignItems: "center", flex: 1, minWidth: "260px", ...darkInput, padding: 0, overflow: "hidden" }}>
-          <span style={{ padding: "0 12px", color: "var(--muted)", flexShrink: 0 }}>
+      <div className="mb-3 flex flex-wrap items-center gap-2.5">
+        <div className="relative flex min-w-[260px] flex-1 items-center overflow-hidden rounded-md border border-[rgba(0,212,255,0.15)] bg-[rgba(0,212,255,0.04)]">
+          <span className="shrink-0 px-3 text-muted">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
             </svg>
@@ -46,14 +35,14 @@ export default function OrderFiltersBar({
             }}
             placeholder="Filter by customer email..."
             disabled={filterBusy}
-            style={{ flex: 1, border: "none", background: "transparent", color: "#c8c8e8", fontSize: "0.85rem", outline: "none", padding: "10px 0" }}
+            className="flex-1 border-none bg-transparent py-2.5 text-base text-[#c8c8e8] outline-none"
           />
           {customerEmailInput && (
             <button
               type="button"
               onClick={() => { void onClear(); }}
               disabled={filterBusy}
-              style={{ marginRight: "10px", width: "20px", height: "20px", borderRadius: "50%", background: "rgba(0,212,255,0.15)", border: "none", color: "var(--muted)", fontSize: "0.75rem", cursor: "pointer", display: "grid", placeItems: "center", flexShrink: 0 }}
+              className="mr-2.5 grid h-5 w-5 shrink-0 cursor-pointer place-items-center rounded-full border-none bg-[rgba(0,212,255,0.15)] text-xs text-muted"
             >
               x
             </button>
@@ -63,17 +52,14 @@ export default function OrderFiltersBar({
           type="button"
           onClick={() => { void onSubmit(); }}
           disabled={filterBusy}
-          style={{
-            padding: "10px 20px", borderRadius: "10px", border: "none",
-            background: filterBusy ? "rgba(0,212,255,0.2)" : "linear-gradient(135deg, #00d4ff, #7c3aed)",
-            color: "#fff", fontSize: "0.82rem", fontWeight: 700,
-            cursor: filterBusy ? "not-allowed" : "pointer",
-          }}
+          className={`rounded-md border-none px-5 py-2.5 text-sm font-bold text-white ${
+            filterBusy ? "cursor-not-allowed bg-[rgba(0,212,255,0.2)]" : "cursor-pointer bg-[linear-gradient(135deg,#00d4ff,#7c3aed)]"
+          }`}
         >
           {filterBusy ? "Applying..." : "Apply Filter"}
         </button>
       </div>
-      <p style={{ fontSize: "0.68rem", color: "var(--muted-2)", marginBottom: "16px" }}>Use full customer email, e.g. user@example.com</p>
+      <p className="mb-4 text-[0.68rem] text-muted-2">Use full customer email, e.g. user@example.com</p>
     </>
   );
 }

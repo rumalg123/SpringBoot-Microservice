@@ -60,7 +60,7 @@ export default function CategoriesPage() {
   }, [categories]);
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
+    <div className="min-h-screen bg-bg">
       {session.isAuthenticated ? (
         <AppNav
           email={(session.profile?.email as string) || ""}
@@ -77,24 +77,24 @@ export default function CategoriesPage() {
           onLogout={() => { void session.logout(); }}
         />
       ) : (
-        <header style={{ background: "var(--header-bg)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(0,212,255,0.1)", position: "sticky", top: 0, zIndex: 50 }}>
-          <div style={{ maxWidth: "1280px", margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px" }}>
-            <Link href="/" style={{ display: "flex", alignItems: "center", gap: "10px", textDecoration: "none" }}>
-              <span style={{ width: "32px", height: "32px", borderRadius: "8px", background: "linear-gradient(135deg, #00d4ff, #7c3aed)", display: "grid", placeItems: "center" }}>
+        <header className="sticky top-0 z-50 border-b border-[rgba(0,212,255,0.1)] bg-header-bg backdrop-blur-[12px]">
+          <div className="mx-auto flex max-w-[1280px] items-center justify-between px-4 py-3">
+            <Link href="/" className="flex items-center gap-2.5 no-underline">
+              <span className="grid h-8 w-8 place-items-center rounded-[8px] bg-[linear-gradient(135deg,#00d4ff,#7c3aed)]">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" /><line x1="3" y1="6" x2="21" y2="6" /><path d="M16 10a4 4 0 0 1-8 0" />
                 </svg>
               </span>
-              <span style={{ fontSize: "1.1rem", fontWeight: 800, color: "#fff", fontFamily: "'Syne', sans-serif" }}>Rumal Store</span>
+              <span className="font-[Syne,sans-serif] text-[1.1rem] font-extrabold text-white">Rumal Store</span>
             </Link>
-            <Link href="/" style={{ padding: "8px 20px", borderRadius: "8px", background: "linear-gradient(135deg, #00d4ff, #7c3aed)", color: "#fff", fontWeight: 700, fontSize: "0.82rem", textDecoration: "none" }}>
+            <Link href="/" className="rounded-[8px] bg-[linear-gradient(135deg,#00d4ff,#7c3aed)] px-5 py-2 text-sm font-bold text-white no-underline">
               Sign In
             </Link>
           </div>
         </header>
       )}
 
-      <main style={{ maxWidth: "1280px", margin: "0 auto", padding: "16px 16px 48px" }}>
+      <main className="mx-auto max-w-[1280px] px-4 pb-12 pt-4">
         <nav className="breadcrumb">
           <Link href="/">Home</Link>
           <span className="breadcrumb-sep">›</span>
@@ -103,38 +103,28 @@ export default function CategoriesPage() {
 
         {/* Page Hero */}
         <section
-          className="animate-rise"
-          style={{
-            marginBottom: "28px",
-            borderRadius: "20px",
-            padding: "48px 32px",
-            textAlign: "center",
-            background: "linear-gradient(135deg, rgba(0,212,255,0.06) 0%, rgba(124,58,237,0.08) 100%)",
-            border: "1px solid rgba(0,212,255,0.12)",
-            position: "relative",
-            overflow: "hidden",
-          }}
+          className="animate-rise relative mb-7 overflow-hidden rounded-xl border border-[rgba(0,212,255,0.12)] bg-[linear-gradient(135deg,rgba(0,212,255,0.06)_0%,rgba(124,58,237,0.08)_100%)] px-8 py-12 text-center"
         >
-          <div style={{ position: "absolute", top: "-40px", right: "-40px", width: "160px", height: "160px", borderRadius: "50%", background: "rgba(0,212,255,0.06)", filter: "blur(40px)", pointerEvents: "none" }} />
-          <div style={{ position: "absolute", bottom: "-40px", left: "-40px", width: "160px", height: "160px", borderRadius: "50%", background: "rgba(124,58,237,0.08)", filter: "blur(40px)", pointerEvents: "none" }} />
-          <p style={{ fontSize: "0.65rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.15em", color: "#00d4ff", margin: "0 0 8px" }}>EXPLORE</p>
-          <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: "clamp(1.8rem, 4vw, 2.6rem)", fontWeight: 800, color: "#fff", margin: "0 0 10px" }}>
+          <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-[rgba(0,212,255,0.06)] blur-[40px]" />
+          <div className="pointer-events-none absolute -bottom-10 -left-10 h-40 w-40 rounded-full bg-[rgba(124,58,237,0.08)] blur-[40px]" />
+          <p className="mb-2 mt-0 text-[0.65rem] font-extrabold uppercase tracking-[0.15em] text-[#00d4ff]">EXPLORE</p>
+          <h1 className="mb-2.5 mt-0 font-[Syne,sans-serif] text-[clamp(1.8rem,4vw,2.6rem)] font-extrabold text-white">
             Browse Categories
           </h1>
-          <p style={{ fontSize: "0.9rem", color: "var(--muted)", margin: 0, maxWidth: "480px", marginLeft: "auto", marginRight: "auto" }}>
+          <p className="mx-auto m-0 max-w-[480px] text-[0.9rem] text-muted">
             Explore our wide range of product categories. Find exactly what you&apos;re looking for.
           </p>
         </section>
 
         {/* Loading Skeletons */}
         {status === "loading" && (
-          <div style={{ display: "grid", gap: "20px", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}>
+          <div className="grid gap-5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}>
             {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} style={{ borderRadius: "16px", overflow: "hidden" }}>
-                <div className="skeleton" style={{ height: "120px", width: "100%" }} />
-                <div style={{ padding: "16px", display: "grid", gap: "8px" }}>
-                  <div className="skeleton" style={{ height: "14px", width: "50%" }} />
-                  <div className="skeleton" style={{ height: "12px", width: "75%" }} />
+              <div key={i} className="overflow-hidden rounded-lg">
+                <div className="skeleton h-[120px] w-full" />
+                <div className="grid gap-2 p-4">
+                  <div className="skeleton h-3.5 w-1/2" />
+                  <div className="skeleton h-3 w-3/4" />
                 </div>
               </div>
             ))}
@@ -164,7 +154,7 @@ export default function CategoriesPage() {
             </div>
             <p className="empty-state-title">No categories yet</p>
             <p className="empty-state-desc">Categories will appear here once they are created</p>
-            <Link href="/products" className="btn-primary" style={{ marginTop: "8px", padding: "10px 24px", fontSize: "0.85rem", textDecoration: "none" }}>
+            <Link href="/products" className="btn-primary mt-2 px-6 py-2.5 text-sm no-underline">
               Browse All Products
             </Link>
           </div>
@@ -173,22 +163,17 @@ export default function CategoriesPage() {
         {/* Category Grid */}
         {status === "ready" && parents.length > 0 && (
           <>
-            <div style={{ display: "grid", gap: "20px", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}>
+            <div className="grid gap-5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}>
               {parents.map((parent, idx) => {
                 const meta = getCategoryMeta(parent.name);
                 const children = subsByParent.get(parent.id) || [];
                 return (
                   <div
                     key={parent.id}
-                    className="animate-rise"
+                    className="animate-rise overflow-hidden rounded-lg bg-[rgba(17,17,40,0.7)] backdrop-blur-[16px] transition-[box-shadow,border-color] duration-[250ms]"
                     style={{
                       animationDelay: `${idx * 55}ms`,
-                      borderRadius: "16px",
-                      overflow: "hidden",
-                      background: "rgba(17,17,40,0.7)",
-                      backdropFilter: "blur(16px)",
                       border: `1px solid ${meta.accent}22`,
-                      transition: "box-shadow 0.25s, border-color 0.25s",
                     }}
                     onMouseEnter={(e) => {
                       (e.currentTarget as HTMLElement).style.boxShadow = `0 0 28px ${meta.accent}22, 0 8px 32px rgba(0,0,0,0.5)`;
@@ -200,28 +185,23 @@ export default function CategoriesPage() {
                     }}
                   >
                     {/* Category Banner */}
-                    <Link href={`/categories/${encodeURIComponent(toCategorySlug(parent))}`} style={{ textDecoration: "none", display: "block" }}>
+                    <Link href={`/categories/${encodeURIComponent(toCategorySlug(parent))}`} className="block no-underline">
                       <div
+                        className="relative flex items-center gap-4 overflow-hidden px-5 py-6"
                         style={{
-                          padding: "24px 20px",
                           background: `linear-gradient(135deg, ${meta.accent}18 0%, ${meta.accent}08 100%)`,
                           borderBottom: `1px solid ${meta.accent}20`,
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "16px",
-                          position: "relative",
-                          overflow: "hidden",
                         }}
                       >
-                        <div style={{ position: "absolute", top: "-20px", right: "-20px", width: "80px", height: "80px", borderRadius: "50%", background: `${meta.accent}12`, filter: "blur(20px)", pointerEvents: "none" }} />
-                        <span style={{ color: meta.accent, flexShrink: 0, filter: `drop-shadow(0 0 8px ${meta.accent}60)` }}>
+                        <div className="pointer-events-none absolute -right-5 -top-5 h-20 w-20 rounded-full blur-[20px]" style={{ background: `${meta.accent}12` }} />
+                        <span className="shrink-0" style={{ color: meta.accent, filter: `drop-shadow(0 0 8px ${meta.accent}60)` }}>
                           {meta.icon}
                         </span>
                         <div>
-                          <h2 style={{ fontFamily: "'Syne', sans-serif", fontSize: "1.1rem", fontWeight: 800, color: "#fff", margin: "0 0 3px" }}>
+                          <h2 className="mb-[3px] mt-0 font-[Syne,sans-serif] text-[1.1rem] font-extrabold text-white">
                             {parent.name}
                           </h2>
-                          <p style={{ fontSize: "0.72rem", color: "var(--muted)", margin: 0 }}>
+                          <p className="m-0 text-xs text-muted">
                             {children.length} {children.length === 1 ? "subcategory" : "subcategories"}
                           </p>
                         </div>
@@ -230,26 +210,16 @@ export default function CategoriesPage() {
 
                     {/* Subcategory Pills */}
                     {children.length > 0 && (
-                      <div style={{ padding: "14px 16px", borderBottom: `1px solid rgba(255,255,255,0.04)` }}>
-                        <p style={{ fontSize: "0.6rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.14em", color: "var(--muted-2)", marginBottom: "10px" }}>
+                      <div className="border-b border-[rgba(255,255,255,0.04)] px-4 py-3.5">
+                        <p className="mb-2.5 text-[0.6rem] font-extrabold uppercase tracking-[0.14em] text-muted-2">
                           Subcategories
                         </p>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                        <div className="flex flex-wrap gap-1.5">
                           {children.map((sub) => (
                             <Link
                               key={sub.id}
                               href={`/categories/${encodeURIComponent(toCategorySlug(sub))}`}
-                              style={{
-                                padding: "4px 12px",
-                                borderRadius: "20px",
-                                border: "1px solid rgba(0,212,255,0.12)",
-                                background: "rgba(0,212,255,0.04)",
-                                color: "var(--ink-light)",
-                                fontSize: "0.75rem",
-                                fontWeight: 500,
-                                textDecoration: "none",
-                                transition: "all 0.18s",
-                              }}
+                              className="rounded-xl border border-[rgba(0,212,255,0.12)] bg-[rgba(0,212,255,0.04)] px-3 py-1 text-xs font-medium text-ink-light no-underline transition-all duration-[180ms]"
                               onMouseEnter={(e) => {
                                 (e.currentTarget as HTMLElement).style.borderColor = meta.accent;
                                 (e.currentTarget as HTMLElement).style.color = meta.accent;
@@ -269,10 +239,11 @@ export default function CategoriesPage() {
                     )}
 
                     {/* View All Footer */}
-                    <div style={{ padding: "12px 16px" }}>
+                    <div className="px-4 py-3">
                       <Link
                         href={`/categories/${encodeURIComponent(toCategorySlug(parent))}`}
-                        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", color: meta.accent, fontSize: "0.82rem", fontWeight: 700, textDecoration: "none", transition: "opacity 0.15s" }}
+                        className="flex items-center justify-between text-sm font-bold no-underline transition-opacity duration-150"
+                        style={{ color: meta.accent }}
                       >
                         View All Products
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -285,8 +256,8 @@ export default function CategoriesPage() {
               })}
             </div>
 
-            <div style={{ marginTop: "40px", textAlign: "center" }}>
-              <Link href="/products" className="btn-outline" style={{ padding: "12px 32px", fontSize: "0.875rem", textDecoration: "none" }}>
+            <div className="mt-10 text-center">
+              <Link href="/products" className="btn-outline px-8 py-3 text-base no-underline">
                 Browse All Products
               </Link>
             </div>

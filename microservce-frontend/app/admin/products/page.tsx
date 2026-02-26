@@ -1,12 +1,13 @@
 ﻿"use client";
 
-import { ChangeEvent, DragEvent, FormEvent, KeyboardEvent, WheelEvent, useCallback, useEffect, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, FormEvent, KeyboardEvent, WheelEvent, useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import toast from "react-hot-toast";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import ConfirmModal from "../../components/ConfirmModal";
 import { resolveImageUrl } from "../../../lib/image";
 import ExportButton from "../../components/ui/ExportButton";
+import AdminPageShell from "../../components/ui/AdminPageShell";
 import CategoryOperationsPanel from "../../components/admin/products/CategoryOperationsPanel";
 import ProductCatalogPanel from "../../components/admin/products/ProductCatalogPanel";
 import ProductEditorPanel from "../../components/admin/products/ProductEditorPanel";
@@ -242,21 +243,24 @@ function getPageMeta<T>(pageInfo: PagedResponse<T> | null) {
 
 export default function AdminProductsPage() {
   const session = useAuthSession();
-  const [activePage, setActivePage] = useState<PagedResponse<ProductSummary> | null>(null);
-  const [deletedPage, setDeletedPage] = useState<PagedResponse<ProductSummary> | null>(null);
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
   const [deletedPageIndex, setDeletedPageIndex] = useState(0);
   const [q, setQ] = useState("");
+  const [appliedQ, setAppliedQ] = useState("");
   const [sku, setSku] = useState("");
+  const [appliedSku, setAppliedSku] = useState("");
   const [category, setCategory] = useState("");
+  const [appliedCategory, setAppliedCategory] = useState("");
   const [vendorFilterId, setVendorFilterId] = useState("");
+  const [appliedVendorFilterId, setAppliedVendorFilterId] = useState("");
   const [vendorFilterSearch, setVendorFilterSearch] = useState("");
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [deletedCategories, setDeletedCategories] = useState<Category[]>([]);
-  const [vendors, setVendors] = useState<VendorSummary[]>([]);
   const [type, setType] = useState<ProductType | "">("");
+  const [appliedType, setAppliedType] = useState<ProductType | "">("");
   const [approvalStatusFilter, setApprovalStatusFilter] = useState<ApprovalStatus | "">("");
+  const [appliedApprovalStatusFilter, setAppliedApprovalStatusFilter] = useState<ApprovalStatus | "">("");
   const [activeFilter, setActiveFilter] = useState<"" | "true" | "false">("");
+  const [appliedActiveFilter, setAppliedActiveFilter] = useState<"" | "true" | "false">("");
   const [status, setStatus] = useState("Loading admin products...");
   const [showDeleted, setShowDeleted] = useState(false);
   const [form, setForm] = useState<ProductFormState>(emptyForm);
@@ -264,8 +268,7 @@ export default function AdminProductsPage() {
   const [newParentAttributeName, setNewParentAttributeName] = useState("");
   const [uploadingImages, setUploadingImages] = useState(false);
   const [dragImageIndex, setDragImageIndex] = useState<number | null>(null);
-  const [parentProducts, setParentProducts] = useState<ProductSummary[]>([]);
-  const [loadingParentProducts, setLoadingParentProducts] = useState(false);
+  // parentProducts, loadingParentProducts derived from parentProductsQuery above
   const [variationParentId, setVariationParentId] = useState("");
   const [selectedVariationParent, setSelectedVariationParent] = useState<ProductSummary | null>(null);
   const [parentSearch, setParentSearch] = useState("");
@@ -284,7 +287,6 @@ export default function AdminProductsPage() {
   const [categorySlugStatus, setCategorySlugStatus] = useState<SlugStatus>("idle");
   const [confirmAction, setConfirmAction] = useState<{ type: "product" | "category"; id: string; name: string } | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
-  const [filtersSubmitting, setFiltersSubmitting] = useState(false);
   const [loadingProductId, setLoadingProductId] = useState<string | null>(null);
   const [savingProduct, setSavingProduct] = useState(false);
   const [creatingQueuedVariationBatch, setCreatingQueuedVariationBatch] = useState(false);
@@ -292,9 +294,7 @@ export default function AdminProductsPage() {
   const [restoringProductId, setRestoringProductId] = useState<string | null>(null);
   const [savingCategory, setSavingCategory] = useState(false);
   const [restoringCategoryId, setRestoringCategoryId] = useState<string | null>(null);
-  const [loadingActiveList, setLoadingActiveList] = useState(false);
-  const [loadingDeletedList, setLoadingDeletedList] = useState(false);
-  const [loadingVendors, setLoadingVendors] = useState(false);
+  // loadingActiveList, loadingDeletedList, loadingVendors derived from queries above
 
   /* ---- Bulk operations & import/export state ---- */
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
@@ -320,144 +320,132 @@ export default function AdminProductsPage() {
   const canManageCategories = session.canManageAdminCategories;
   const canSelectAnyVendor = session.isSuperAdmin || session.isPlatformStaff;
 
-  const loadCategories = useCallback(async () => {
-    if (!session.apiClient) return;
-    const res = await session.apiClient.get(canManageCategories ? "/admin/categories" : "/categories");
-    setCategories((res.data as Category[]) || []);
-  }, [session.apiClient, canManageCategories]);
+  const canFetch = session.status === "ready" && Boolean(session.apiClient);
 
-  const loadDeletedCategories = useCallback(async () => {
-    if (!session.apiClient) return;
-    if (!canManageCategories) {
-      setDeletedCategories([]);
-      return;
-    }
-    const res = await session.apiClient.get("/admin/categories/deleted");
-    setDeletedCategories((res.data as Category[]) || []);
-  }, [session.apiClient, canManageCategories]);
+  // ---- React Query: Categories ----
+  const categoriesQuery = useQuery<Category[]>({
+    queryKey: ["admin-products-categories", canManageCategories],
+    queryFn: async () => {
+      const res = await session.apiClient!.get(canManageCategories ? "/admin/categories" : "/categories");
+      return (res.data as Category[]) || [];
+    },
+    enabled: canFetch,
+  });
+  const categories = categoriesQuery.data ?? [];
 
-  const loadVendors = useCallback(async () => {
-    if (!session.apiClient) return;
-    if (!canSelectAnyVendor) {
-      setVendors([]);
-      return;
-    }
-    setLoadingVendors(true);
-    try {
-      const res = await session.apiClient.get("/admin/vendors");
-      const vendorRows = ((res.data as VendorSummary[]) || [])
+  const deletedCategoriesQuery = useQuery<Category[]>({
+    queryKey: ["admin-products-deleted-categories"],
+    queryFn: async () => {
+      const res = await session.apiClient!.get("/admin/categories/deleted");
+      return (res.data as Category[]) || [];
+    },
+    enabled: canFetch && canManageCategories,
+  });
+  const deletedCategories = deletedCategoriesQuery.data ?? [];
+
+  // ---- React Query: Vendors ----
+  const vendorsQuery = useQuery<VendorSummary[]>({
+    queryKey: ["admin-products-vendors"],
+    queryFn: async () => {
+      const res = await session.apiClient!.get("/admin/vendors");
+      return ((res.data as VendorSummary[]) || [])
         .filter((vendor) => vendor && !vendor.deleted)
         .sort((a, b) => a.name.localeCompare(b.name));
-      setVendors(vendorRows);
-    } catch (err) {
-      setVendors([]);
-      const message = err instanceof Error ? err.message : "Failed to load vendors";
-      toast.error(message);
-    } finally {
-      setLoadingVendors(false);
-    }
-  }, [session.apiClient, canSelectAnyVendor]);
-
-  const loadActive = useCallback(
-    async (targetPage: number) => {
-      if (!session.apiClient) return;
-      setLoadingActiveList(true);
-      try {
-        const params = new URLSearchParams();
-        params.set("page", String(targetPage));
-        params.set("size", "12");
-        params.set("sort", "createdAt,DESC");
-        params.set("includeOrphanParents", "true");
-        if (q.trim()) params.set("q", q.trim());
-        if (sku.trim()) params.set("sku", sku.trim());
-        if (category.trim()) params.set("category", category.trim());
-        if (type) params.set("type", type);
-        if (vendorFilterId.trim()) params.set("vendorId", vendorFilterId.trim());
-        if (approvalStatusFilter) {
-          const backendStatus = approvalStatusFilter === "PENDING" ? "PENDING_REVIEW" : approvalStatusFilter === "NOT_REQUIRED" ? "DRAFT" : approvalStatusFilter;
-          params.set("approvalStatus", backendStatus);
-        }
-        if (activeFilter) params.set("active", activeFilter);
-
-        const res = await session.apiClient.get(`/admin/products?${params.toString()}`);
-        setActivePage(res.data as PagedResponse<ProductSummary>);
-        setPage(targetPage);
-      } finally {
-        setLoadingActiveList(false);
-      }
     },
-    [session.apiClient, q, sku, category, type, vendorFilterId, approvalStatusFilter, activeFilter]
-  );
+    enabled: canFetch && canSelectAnyVendor,
+  });
+  const vendors = vendorsQuery.data ?? [];
+  const loadingVendors = vendorsQuery.isLoading || vendorsQuery.isFetching;
 
-  const loadDeleted = useCallback(
-    async (targetPage: number) => {
-      if (!session.apiClient) return;
-      setLoadingDeletedList(true);
-      try {
-        const params = new URLSearchParams();
-        params.set("page", String(targetPage));
-        params.set("size", "12");
-        params.set("sort", "updatedAt,DESC");
-        if (q.trim()) params.set("q", q.trim());
-        if (sku.trim()) params.set("sku", sku.trim());
-        if (category.trim()) params.set("category", category.trim());
-        if (type) params.set("type", type);
-        if (vendorFilterId.trim()) params.set("vendorId", vendorFilterId.trim());
-
-        const res = await session.apiClient.get(`/admin/products/deleted?${params.toString()}`);
-        setDeletedPage(res.data as PagedResponse<ProductSummary>);
-        setDeletedPageIndex(targetPage);
-      } finally {
-        setLoadingDeletedList(false);
+  // ---- React Query: Active Products (paginated) ----
+  const activeProductsQuery = useQuery<PagedResponse<ProductSummary>>({
+    queryKey: ["admin-products-active", page, appliedQ, appliedSku, appliedCategory, appliedType, appliedVendorFilterId, appliedApprovalStatusFilter, appliedActiveFilter],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("size", "12");
+      params.set("sort", "createdAt,DESC");
+      params.set("includeOrphanParents", "true");
+      if (appliedQ.trim()) params.set("q", appliedQ.trim());
+      if (appliedSku.trim()) params.set("sku", appliedSku.trim());
+      if (appliedCategory.trim()) params.set("category", appliedCategory.trim());
+      if (appliedType) params.set("type", appliedType);
+      if (appliedVendorFilterId.trim()) params.set("vendorId", appliedVendorFilterId.trim());
+      if (appliedApprovalStatusFilter) {
+        const backendStatus = appliedApprovalStatusFilter === "PENDING" ? "PENDING_REVIEW" : appliedApprovalStatusFilter === "NOT_REQUIRED" ? "DRAFT" : appliedApprovalStatusFilter;
+        params.set("approvalStatus", backendStatus);
       }
+      if (appliedActiveFilter) params.set("active", appliedActiveFilter);
+      const res = await session.apiClient!.get(`/admin/products?${params.toString()}`);
+      return res.data as PagedResponse<ProductSummary>;
     },
-    [session.apiClient, q, sku, category, type, vendorFilterId]
-  );
+    enabled: canFetch,
+  });
+  const activePage = activeProductsQuery.data ?? null;
+  const loadingActiveList = activeProductsQuery.isLoading || activeProductsQuery.isFetching;
 
-  const loadParentProducts = useCallback(async () => {
-    if (!session.apiClient) return;
-    setLoadingParentProducts(true);
-    try {
+  // ---- React Query: Deleted Products (paginated) ----
+  const deletedProductsQuery = useQuery<PagedResponse<ProductSummary>>({
+    queryKey: ["admin-products-deleted", deletedPageIndex, appliedQ, appliedSku, appliedCategory, appliedType, appliedVendorFilterId],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("page", String(deletedPageIndex));
+      params.set("size", "12");
+      params.set("sort", "updatedAt,DESC");
+      if (appliedQ.trim()) params.set("q", appliedQ.trim());
+      if (appliedSku.trim()) params.set("sku", appliedSku.trim());
+      if (appliedCategory.trim()) params.set("category", appliedCategory.trim());
+      if (appliedType) params.set("type", appliedType);
+      if (appliedVendorFilterId.trim()) params.set("vendorId", appliedVendorFilterId.trim());
+      const res = await session.apiClient!.get(`/admin/products/deleted?${params.toString()}`);
+      return res.data as PagedResponse<ProductSummary>;
+    },
+    enabled: canFetch,
+  });
+  const deletedPage = deletedProductsQuery.data ?? null;
+  const loadingDeletedList = deletedProductsQuery.isLoading || deletedProductsQuery.isFetching;
+
+  // ---- React Query: Parent Products ----
+  const parentProductsQuery = useQuery<ProductSummary[]>({
+    queryKey: ["admin-products-parents"],
+    queryFn: async () => {
       const params = new URLSearchParams();
       params.set("page", "0");
       params.set("size", "1000");
       params.set("sort", "name,ASC");
       params.set("type", "PARENT");
       params.set("includeOrphanParents", "true");
-      const res = await session.apiClient.get(`/admin/products?${params.toString()}`);
+      const res = await session.apiClient!.get(`/admin/products?${params.toString()}`);
       const pageData = res.data as PagedResponse<ProductSummary>;
-      setParentProducts((pageData.content || []).filter((p) => p.active));
-    } finally {
-      setLoadingParentProducts(false);
-    }
-  }, [session.apiClient]);
+      return (pageData.content || []).filter((p) => p.active);
+    },
+    enabled: canFetch,
+  });
+  const parentProducts = parentProductsQuery.data ?? [];
+  const loadingParentProducts = parentProductsQuery.isLoading || parentProductsQuery.isFetching;
 
-  const reloadCurrentView = useCallback(async () => {
-    if (showDeleted) {
-      await loadDeleted(deletedPageIndex);
-    } else {
-      await loadActive(page);
-    }
-  }, [showDeleted, loadDeleted, deletedPageIndex, loadActive, page]);
-
+  // Set status once all initial queries settle
   useEffect(() => {
-    if (session.status !== "ready") return;
+    if (!canFetch) return;
+    const allSettled = !activeProductsQuery.isLoading && !deletedProductsQuery.isLoading && !categoriesQuery.isLoading && !parentProductsQuery.isLoading;
+    if (allSettled && activeProductsQuery.data) {
+      setStatus("Admin product catalog loaded.");
+    }
+    if (activeProductsQuery.error) {
+      setStatus(activeProductsQuery.error instanceof Error ? activeProductsQuery.error.message : "Failed to load products.");
+    }
+  }, [canFetch, activeProductsQuery.isLoading, activeProductsQuery.data, activeProductsQuery.error, deletedProductsQuery.isLoading, categoriesQuery.isLoading, parentProductsQuery.isLoading]);
 
-    const run = async () => {
-      try {
-        const startupTasks: Promise<unknown>[] = [loadActive(0), loadDeleted(0), loadCategories(), loadParentProducts()];
-        if (canManageCategories || canSelectAnyVendor) {
-          if (canManageCategories) startupTasks.push(loadDeletedCategories());
-          if (canSelectAnyVendor) startupTasks.push(loadVendors());
-        }
-        await Promise.all(startupTasks);
-        setStatus("Admin product catalog loaded.");
-      } catch (err) {
-        setStatus(err instanceof Error ? err.message : "Failed to load products.");
-      }
-    };
-    void run();
-  }, [session.status, session.canManageAdminProducts, canManageCategories, canSelectAnyVendor, loadActive, loadDeleted, loadCategories, loadDeletedCategories, loadParentProducts, loadVendors]);
+  // Helper functions to invalidate/reload queries
+  const reloadActiveProducts = () => void queryClient.invalidateQueries({ queryKey: ["admin-products-active"] });
+  const reloadDeletedProducts = () => void queryClient.invalidateQueries({ queryKey: ["admin-products-deleted"] });
+  const reloadCategories = () => void queryClient.invalidateQueries({ queryKey: ["admin-products-categories"] });
+  const reloadDeletedCategories = () => void queryClient.invalidateQueries({ queryKey: ["admin-products-deleted-categories"] });
+  const reloadParentProducts = () => void queryClient.invalidateQueries({ queryKey: ["admin-products-parents"] });
+  const reloadVendors = () => void queryClient.invalidateQueries({ queryKey: ["admin-products-vendors"] });
+  const reloadAllProducts = () => { reloadActiveProducts(); reloadDeletedProducts(); reloadParentProducts(); };
+  const reloadCurrentView = () => { if (showDeleted) { reloadDeletedProducts(); } else { reloadActiveProducts(); } };
+  const filtersSubmitting = loadingActiveList || loadingDeletedList;
 
   useEffect(() => {
     if (productSlugTouched) return;
@@ -521,8 +509,8 @@ export default function AdminProductsPage() {
 
   useEffect(() => {
     if (form.productType !== "VARIATION") return;
-    void loadParentProducts();
-  }, [form.productType, loadParentProducts]);
+    reloadParentProducts();
+  }, [form.productType]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (form.productType !== "VARIATION") return;
@@ -531,19 +519,18 @@ export default function AdminProductsPage() {
     setSelectedVariationParent(selected);
   }, [form.productType, variationParentId, parentProducts]);
 
-  const applyFilters = async (e: FormEvent) => {
+  const applyFilters = (e: FormEvent) => {
     e.preventDefault();
-    if (filtersSubmitting) return;
-    setFiltersSubmitting(true);
+    setAppliedQ(q);
+    setAppliedSku(sku);
+    setAppliedCategory(category);
+    setAppliedType(type);
+    setAppliedVendorFilterId(vendorFilterId);
+    setAppliedApprovalStatusFilter(approvalStatusFilter);
+    setAppliedActiveFilter(activeFilter);
+    setPage(0);
+    setDeletedPageIndex(0);
     setStatus("Applying filters...");
-    try {
-      await Promise.all([loadActive(0), loadDeleted(0)]);
-      setStatus("Filters applied.");
-    } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Failed to filter.");
-    } finally {
-      setFiltersSubmitting(false);
-    }
   };
 
   const loadToEdit = async (id: string) => {
@@ -914,7 +901,8 @@ export default function AdminProductsPage() {
       }));
       setProductSlugTouched(false);
       setProductSlugStatus("idle");
-      await Promise.all([reloadCurrentView(), loadParentProducts()]);
+      reloadCurrentView();
+      reloadParentProducts();
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Variation create failed.");
       toast.error(err instanceof Error ? err.message : "Variation create failed");
@@ -1016,7 +1004,9 @@ export default function AdminProductsPage() {
       setParentVariationAttributes([]);
       setVariationAttributeValues({});
       setVariationDrafts([]);
-      await Promise.all([loadActive(0), loadDeleted(0), loadParentProducts()]);
+      setPage(0);
+      setDeletedPageIndex(0);
+      reloadAllProducts();
       setShowDeleted(false);
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Save failed.");
@@ -1067,16 +1057,9 @@ export default function AdminProductsPage() {
     }
   };
 
-  const refreshVariationParents = async () => {
-    try {
-      setStatus("Refreshing parent products...");
-      await loadParentProducts();
-      setStatus("Parent products refreshed.");
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to refresh parent products";
-      setStatus(message);
-      toast.error(message);
-    }
+  const refreshVariationParents = () => {
+    setStatus("Refreshing parent products...");
+    reloadParentProducts();
   };
 
   const addParentAttribute = () => {
@@ -1101,7 +1084,9 @@ export default function AdminProductsPage() {
       await session.apiClient.delete(`/admin/products/${id}`);
       setStatus("Product soft deleted.");
       toast.success("Product moved to deleted list");
-      await Promise.all([loadActive(0), loadDeleted(0), loadParentProducts()]);
+      setPage(0);
+      setDeletedPageIndex(0);
+      reloadAllProducts();
       setShowDeleted(true);
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Delete failed.");
@@ -1118,7 +1103,9 @@ export default function AdminProductsPage() {
       await session.apiClient.post(`/admin/products/${id}/restore`);
       setStatus("Product restored.");
       toast.success("Product restored");
-      await Promise.all([loadActive(0), loadDeleted(0), loadParentProducts()]);
+      setPage(0);
+      setDeletedPageIndex(0);
+      reloadAllProducts();
       setShowDeleted(false);
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Restore failed.");
@@ -1163,7 +1150,8 @@ export default function AdminProductsPage() {
       setCategoryForm({ name: "", slug: "", type: "PARENT", parentCategoryId: "" });
       setCategorySlugTouched(false);
       setCategorySlugStatus("idle");
-      await Promise.all([loadCategories(), loadDeletedCategories()]);
+      reloadCategories();
+      reloadDeletedCategories();
       setStatus("Category operation complete.");
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Category save failed.");
@@ -1180,7 +1168,8 @@ export default function AdminProductsPage() {
     try {
       await session.apiClient.delete(`/admin/categories/${id}`);
       toast.success("Category deleted");
-      await Promise.all([loadCategories(), loadDeletedCategories()]);
+      reloadCategories();
+      reloadDeletedCategories();
       setStatus("Category deleted.");
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Delete category failed.");
@@ -1196,7 +1185,8 @@ export default function AdminProductsPage() {
     try {
       await session.apiClient.post(`/admin/categories/${id}/restore`);
       toast.success("Category restored");
-      await Promise.all([loadCategories(), loadDeletedCategories()]);
+      reloadCategories();
+      reloadDeletedCategories();
       setStatus("Category restored.");
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Restore category failed.");
@@ -1251,7 +1241,9 @@ export default function AdminProductsPage() {
         toast.success(successMsg);
       }
       setStatus(successMsg);
-      await Promise.all([loadActive(0), loadDeleted(0), loadParentProducts()]);
+      setPage(0);
+      setDeletedPageIndex(0);
+      reloadAllProducts();
     } catch (err) {
       const message = err instanceof Error ? err.message : "CSV import failed";
       setStatus(message);
@@ -1281,7 +1273,9 @@ export default function AdminProductsPage() {
       }
       setStatus(msg);
       setSelectedProductIds([]);
-      await Promise.all([loadActive(0), loadDeleted(0), loadParentProducts()]);
+      setPage(0);
+      setDeletedPageIndex(0);
+      reloadAllProducts();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Bulk delete failed";
       setStatus(message);
@@ -1331,7 +1325,8 @@ export default function AdminProductsPage() {
       setShowBulkPriceModal(false);
       setBulkRegularPrice("");
       setBulkDiscountedPrice("");
-      await Promise.all([loadActive(page), loadDeleted(deletedPageIndex)]);
+      reloadActiveProducts();
+      reloadDeletedProducts();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Bulk price update failed";
       setStatus(message);
@@ -1367,7 +1362,8 @@ export default function AdminProductsPage() {
       setSelectedProductIds([]);
       setShowBulkCategoryModal(false);
       setBulkTargetCategoryId("");
-      await Promise.all([loadActive(page), loadDeleted(deletedPageIndex)]);
+      reloadActiveProducts();
+      reloadDeletedProducts();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Bulk category reassign failed";
       setStatus(message);
@@ -1384,7 +1380,7 @@ export default function AdminProductsPage() {
     try {
       await session.apiClient.post(`/admin/products/${productId}/submit-for-review`);
       toast.success("Product submitted for review");
-      await reloadCurrentView();
+      reloadCurrentView();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to submit for review";
       toast.error(message);
@@ -1399,7 +1395,7 @@ export default function AdminProductsPage() {
     try {
       await session.apiClient.post(`/admin/products/${productId}/approve`);
       toast.success("Product approved");
-      await reloadCurrentView();
+      reloadCurrentView();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to approve product";
       toast.error(message);
@@ -1416,7 +1412,7 @@ export default function AdminProductsPage() {
       toast.success("Product rejected");
       setShowRejectModal(null);
       setRejectReason("");
-      await reloadCurrentView();
+      reloadCurrentView();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to reject product";
       toast.error(message);
@@ -1560,17 +1556,13 @@ export default function AdminProductsPage() {
 
   return (
     <>
-      <main className="mx-auto max-w-7xl px-4 py-4">
-        {/* Breadcrumbs */}
-        <nav className="breadcrumb">
-          <Link href="/">Home</Link>
-          <span className="breadcrumb-sep">&gt;</span>
-          <span className="breadcrumb-current">Admin Products</span>
-        </nav>
-
-        <section className="animate-rise space-y-4 rounded-xl p-5" style={{ background: "rgba(17,17,40,0.7)", border: "1px solid rgba(0,212,255,0.1)", backdropFilter: "blur(16px)" }}>
+      <AdminPageShell
+        title="Admin Products"
+        breadcrumbs={[{ label: "Admin", href: "/admin/dashboard" }, { label: "Products" }]}
+      >
+        <section className="animate-rise space-y-4 rounded-xl p-5 bg-[rgba(17,17,40,0.7)] border border-[rgba(0,212,255,0.1)] backdrop-blur-[16px]">
           {/* ---- Import / Export Toolbar ---- */}
-          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, marginBottom: 4 }}>
+          <div className="flex flex-wrap items-center gap-2.5 mb-1">
             <ExportButton
               apiClient={session.apiClient}
               endpoint="/admin/products/export"
@@ -1584,17 +1576,16 @@ export default function AdminProductsPage() {
               type="file"
               accept=".csv,text/csv"
               onChange={(e) => { void handleCsvImport(e); }}
-              style={{ display: "none" }}
+              className="hidden"
             />
             <button
               type="button"
               onClick={() => importFileRef.current?.click()}
               disabled={importingCsv || !session.apiClient}
-              className="btn-outline"
-              style={{ fontSize: "0.78rem", padding: "7px 14px", display: "inline-flex", alignItems: "center", gap: 6 }}
+              className="btn-outline text-sm px-3.5 py-[7px] inline-flex items-center gap-1.5"
             >
               {importingCsv ? (
-                <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid var(--brand)", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.6s linear infinite" }} />
+                <span className="inline-block w-3.5 h-3.5 border-2 border-brand border-t-transparent rounded-full animate-spin" />
               ) : (
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
               )}
@@ -1604,19 +1595,8 @@ export default function AdminProductsPage() {
 
           {/* ---- Bulk Actions Bar (when products selected) ---- */}
           {selectedProductIds.length > 0 && !showDeleted && (
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                alignItems: "center",
-                gap: 10,
-                padding: "10px 14px",
-                borderRadius: 12,
-                background: "rgba(0,212,255,0.06)",
-                border: "1px solid rgba(0,212,255,0.18)",
-              }}
-            >
-              <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--brand, #00d4ff)" }}>
+            <div className="flex flex-wrap items-center gap-2.5 px-3.5 py-2.5 rounded-lg bg-brand-soft border border-[rgba(0,212,255,0.18)]">
+              <span className="text-sm font-semibold text-brand">
                 {selectedProductIds.length} selected
               </span>
 
@@ -1624,16 +1604,7 @@ export default function AdminProductsPage() {
                 type="button"
                 onClick={() => setShowBulkDeleteConfirm(true)}
                 disabled={bulkOperationBusy}
-                style={{
-                  fontSize: "0.78rem",
-                  padding: "6px 12px",
-                  borderRadius: 8,
-                  border: "1px solid rgba(239,68,68,0.3)",
-                  background: "rgba(239,68,68,0.08)",
-                  color: "#f87171",
-                  cursor: bulkOperationBusy ? "not-allowed" : "pointer",
-                  opacity: bulkOperationBusy ? 0.5 : 1,
-                }}
+                className={`text-sm px-3 py-1.5 rounded-sm border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] text-[#f87171] ${bulkOperationBusy ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
               >
                 {bulkDeleting ? "Deleting..." : "Bulk Delete"}
               </button>
@@ -1642,16 +1613,7 @@ export default function AdminProductsPage() {
                 type="button"
                 onClick={() => { setBulkRegularPrice(""); setBulkDiscountedPrice(""); setShowBulkPriceModal(true); }}
                 disabled={bulkOperationBusy}
-                style={{
-                  fontSize: "0.78rem",
-                  padding: "6px 12px",
-                  borderRadius: 8,
-                  border: "1px solid rgba(0,212,255,0.2)",
-                  background: "rgba(0,212,255,0.06)",
-                  color: "var(--ink-light, #dfe7ff)",
-                  cursor: bulkOperationBusy ? "not-allowed" : "pointer",
-                  opacity: bulkOperationBusy ? 0.5 : 1,
-                }}
+                className={`text-sm px-3 py-1.5 rounded-sm border border-[rgba(0,212,255,0.2)] bg-brand-soft text-ink-light ${bulkOperationBusy ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
               >
                 {bulkPriceUpdating ? "Updating..." : "Bulk Price Update"}
               </button>
@@ -1660,16 +1622,7 @@ export default function AdminProductsPage() {
                 type="button"
                 onClick={() => { setBulkTargetCategoryId(""); setShowBulkCategoryModal(true); }}
                 disabled={bulkOperationBusy}
-                style={{
-                  fontSize: "0.78rem",
-                  padding: "6px 12px",
-                  borderRadius: 8,
-                  border: "1px solid rgba(124,58,237,0.25)",
-                  background: "rgba(124,58,237,0.08)",
-                  color: "#a78bfa",
-                  cursor: bulkOperationBusy ? "not-allowed" : "pointer",
-                  opacity: bulkOperationBusy ? 0.5 : 1,
-                }}
+                className={`text-sm px-3 py-1.5 rounded-sm border border-accent-soft bg-accent-soft text-[#a78bfa] ${bulkOperationBusy ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
               >
                 {bulkReassigning ? "Reassigning..." : "Bulk Reassign Category"}
               </button>
@@ -1678,16 +1631,7 @@ export default function AdminProductsPage() {
                 type="button"
                 onClick={() => setSelectedProductIds([])}
                 disabled={bulkOperationBusy}
-                style={{
-                  fontSize: "0.75rem",
-                  padding: "5px 10px",
-                  borderRadius: 8,
-                  border: "1px solid var(--line, rgba(255,255,255,0.1))",
-                  background: "transparent",
-                  color: "var(--muted)",
-                  cursor: "pointer",
-                  marginLeft: "auto",
-                }}
+                className="text-xs px-2.5 py-1 rounded-sm border border-line bg-transparent text-muted cursor-pointer ml-auto"
               >
                 Clear selection
               </button>
@@ -1740,9 +1684,10 @@ export default function AdminProductsPage() {
               onRestoreProduct={(id) => restore(id)}
               onPageChange={(nextPage) => {
                 if (showDeleted) {
-                  return loadDeleted(nextPage);
+                  setDeletedPageIndex(nextPage);
+                } else {
+                  setPage(nextPage);
                 }
-                return loadActive(nextPage);
               }}
               /* Approval workflow */
               canApproveReject={canSelectAnyVendor}
@@ -1811,7 +1756,7 @@ export default function AdminProductsPage() {
                   removeImage,
                   addParentAttribute,
                   removeParentAttribute,
-                  refreshVendors: loadVendors,
+                  refreshVendors: reloadVendors,
                   refreshVariationParents,
                   onSelectVariationParent,
                   addVariationDraft,
@@ -1888,7 +1833,7 @@ export default function AdminProductsPage() {
 
           <p className="mt-5 text-xs text-[var(--muted)]">{status}</p>
         </section>
-      </main>
+      </AdminPageShell>
 
       <ConfirmModal
         open={confirmAction !== null}
@@ -1931,37 +1876,21 @@ export default function AdminProductsPage() {
       {/* ---- Bulk Price Update Modal ---- */}
       {showBulkPriceModal && (
         <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 1000,
-            display: "grid",
-            placeItems: "center",
-            background: "rgba(0,0,0,0.6)",
-            backdropFilter: "blur(4px)",
-          }}
+          className="fixed inset-0 z-[1000] grid place-items-center bg-[rgba(0,0,0,0.6)] backdrop-blur-[4px]"
           onClick={() => { if (!bulkPriceUpdating) setShowBulkPriceModal(false); }}
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            style={{
-              background: "var(--surface, #16162a)",
-              border: "1px solid var(--line, rgba(255,255,255,0.1))",
-              borderRadius: 16,
-              padding: "24px 28px",
-              width: "100%",
-              maxWidth: 420,
-              color: "var(--ink, #fff)",
-            }}
+            className="bg-surface border border-line rounded-lg px-7 py-6 w-full max-w-[420px] text-ink"
           >
-            <h3 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: 4, color: "var(--ink, #fff)" }}>
+            <h3 className="text-lg font-bold mb-1 text-ink">
               Bulk Price Update
             </h3>
-            <p style={{ fontSize: "0.8rem", color: "var(--muted)", marginBottom: 16 }}>
+            <p className="text-sm text-muted mb-4">
               Update prices for {selectedProductIds.length} selected product(s).
             </p>
 
-            <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "var(--ink-light, #dfe7ff)", marginBottom: 4 }}>
+            <label className="block text-sm font-semibold text-ink-light mb-1">
               Regular Price *
             </label>
             <input
@@ -1971,20 +1900,10 @@ export default function AdminProductsPage() {
               value={bulkRegularPrice}
               onChange={(e) => setBulkRegularPrice(e.target.value)}
               placeholder="e.g. 29.99"
-              style={{
-                width: "100%",
-                padding: "10px 14px",
-                borderRadius: 10,
-                border: "1px solid var(--line, rgba(255,255,255,0.12))",
-                background: "var(--surface-2, rgba(255,255,255,0.04))",
-                color: "var(--ink, #fff)",
-                fontSize: "0.9rem",
-                marginBottom: 12,
-                outline: "none",
-              }}
+              className="form-input w-full mb-3"
             />
 
-            <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "var(--ink-light, #dfe7ff)", marginBottom: 4 }}>
+            <label className="block text-sm font-semibold text-ink-light mb-1">
               Discounted Price (optional)
             </label>
             <input
@@ -1994,26 +1913,15 @@ export default function AdminProductsPage() {
               value={bulkDiscountedPrice}
               onChange={(e) => setBulkDiscountedPrice(e.target.value)}
               placeholder="Leave blank to keep unchanged"
-              style={{
-                width: "100%",
-                padding: "10px 14px",
-                borderRadius: 10,
-                border: "1px solid var(--line, rgba(255,255,255,0.12))",
-                background: "var(--surface-2, rgba(255,255,255,0.04))",
-                color: "var(--ink, #fff)",
-                fontSize: "0.9rem",
-                marginBottom: 20,
-                outline: "none",
-              }}
+              className="form-input w-full mb-5"
             />
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+            <div className="flex justify-end gap-2.5">
               <button
                 type="button"
                 onClick={() => setShowBulkPriceModal(false)}
                 disabled={bulkPriceUpdating}
-                className="btn-outline"
-                style={{ fontSize: "0.82rem", padding: "8px 16px" }}
+                className="btn-outline text-base px-4 py-2"
               >
                 Cancel
               </button>
@@ -2021,11 +1929,10 @@ export default function AdminProductsPage() {
                 type="button"
                 onClick={() => { void handleBulkPriceUpdate(); }}
                 disabled={bulkPriceUpdating || !bulkRegularPrice.trim()}
-                className="btn-primary"
-                style={{ fontSize: "0.82rem", padding: "8px 16px", display: "inline-flex", alignItems: "center", gap: 6 }}
+                className="btn-primary text-base px-4 py-2 inline-flex items-center gap-1.5"
               >
                 {bulkPriceUpdating && (
-                  <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid #fff", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.6s linear infinite" }} />
+                  <span className="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 )}
                 {bulkPriceUpdating ? "Updating..." : "Update Prices"}
               </button>
@@ -2037,53 +1944,27 @@ export default function AdminProductsPage() {
       {/* ---- Bulk Category Reassign Modal ---- */}
       {showBulkCategoryModal && (
         <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 1000,
-            display: "grid",
-            placeItems: "center",
-            background: "rgba(0,0,0,0.6)",
-            backdropFilter: "blur(4px)",
-          }}
+          className="fixed inset-0 z-[1000] grid place-items-center bg-[rgba(0,0,0,0.6)] backdrop-blur-[4px]"
           onClick={() => { if (!bulkReassigning) setShowBulkCategoryModal(false); }}
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            style={{
-              background: "var(--surface, #16162a)",
-              border: "1px solid var(--line, rgba(255,255,255,0.1))",
-              borderRadius: 16,
-              padding: "24px 28px",
-              width: "100%",
-              maxWidth: 420,
-              color: "var(--ink, #fff)",
-            }}
+            className="bg-surface border border-line rounded-lg px-7 py-6 w-full max-w-[420px] text-ink"
           >
-            <h3 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: 4, color: "var(--ink, #fff)" }}>
+            <h3 className="text-lg font-bold mb-1 text-ink">
               Bulk Reassign Category
             </h3>
-            <p style={{ fontSize: "0.8rem", color: "var(--muted)", marginBottom: 16 }}>
+            <p className="text-sm text-muted mb-4">
               Reassign {selectedProductIds.length} selected product(s) to a new category.
             </p>
 
-            <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "var(--ink-light, #dfe7ff)", marginBottom: 4 }}>
+            <label className="block text-sm font-semibold text-ink-light mb-1">
               Target Category *
             </label>
             <select
               value={bulkTargetCategoryId}
               onChange={(e) => setBulkTargetCategoryId(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "10px 14px",
-                borderRadius: 10,
-                border: "1px solid var(--line, rgba(255,255,255,0.12))",
-                background: "var(--surface-2, rgba(255,255,255,0.04))",
-                color: "var(--ink, #fff)",
-                fontSize: "0.9rem",
-                marginBottom: 20,
-                outline: "none",
-              }}
+              className="form-select w-full mb-5"
             >
               <option value="">-- Select a category --</option>
               {categories.filter((c) => c.type === "PARENT").length > 0 && (
@@ -2108,13 +1989,12 @@ export default function AdminProductsPage() {
               )}
             </select>
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+            <div className="flex justify-end gap-2.5">
               <button
                 type="button"
                 onClick={() => setShowBulkCategoryModal(false)}
                 disabled={bulkReassigning}
-                className="btn-outline"
-                style={{ fontSize: "0.82rem", padding: "8px 16px" }}
+                className="btn-outline text-base px-4 py-2"
               >
                 Cancel
               </button>
@@ -2122,11 +2002,10 @@ export default function AdminProductsPage() {
                 type="button"
                 onClick={() => { void handleBulkCategoryReassign(); }}
                 disabled={bulkReassigning || !bulkTargetCategoryId.trim()}
-                className="btn-primary"
-                style={{ fontSize: "0.82rem", padding: "8px 16px", display: "inline-flex", alignItems: "center", gap: 6 }}
+                className="btn-primary text-base px-4 py-2 inline-flex items-center gap-1.5"
               >
                 {bulkReassigning && (
-                  <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid #fff", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.6s linear infinite" }} />
+                  <span className="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 )}
                 {bulkReassigning ? "Reassigning..." : "Reassign Category"}
               </button>

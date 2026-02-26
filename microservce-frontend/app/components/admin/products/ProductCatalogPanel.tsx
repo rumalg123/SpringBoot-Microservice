@@ -211,21 +211,18 @@ export default function ProductCatalogPanel({
           value={q}
           onChange={(e) => onQChange(e.target.value)}
           placeholder="Search text"
-          className="rounded-xl border border-[var(--line)] px-3 py-2 text-sm"
-          style={{ background: "var(--surface-2)", color: "var(--ink)" }}
+          className="rounded-xl border border-[var(--line)] bg-surface-2 px-3 py-2 text-sm text-ink"
         />
         <input
           value={sku}
           onChange={(e) => onSkuChange(e.target.value)}
           placeholder="SKU"
-          className="rounded-xl border border-[var(--line)] px-3 py-2 text-sm"
-          style={{ background: "var(--surface-2)", color: "var(--ink)" }}
+          className="rounded-xl border border-[var(--line)] bg-surface-2 px-3 py-2 text-sm text-ink"
         />
         <select
           value={category}
           onChange={(e) => onCategoryChange(e.target.value)}
-          className="rounded-xl border border-[var(--line)] px-3 py-2 text-sm"
-          style={{ background: "var(--surface-2)", color: "var(--ink)" }}
+          className="rounded-xl border border-[var(--line)] bg-surface-2 px-3 py-2 text-sm text-ink"
         >
           <option value="">All Categories</option>
           {parentCategories.length > 0 && (
@@ -256,8 +253,7 @@ export default function ProductCatalogPanel({
         <select
           value={type}
           onChange={(e) => onTypeChange(e.target.value as ProductType | "")}
-          className="rounded-xl border border-[var(--line)] px-3 py-2 text-sm"
-          style={{ background: "var(--surface-2)", color: "var(--ink)" }}
+          className="rounded-xl border border-[var(--line)] bg-surface-2 px-3 py-2 text-sm text-ink"
         >
           <option value="">All Types</option>
           <option value="SINGLE">SINGLE</option>
@@ -268,8 +264,7 @@ export default function ProductCatalogPanel({
           <select
             value={approvalStatus}
             onChange={(e) => onApprovalStatusChange(e.target.value as ApprovalStatus | "")}
-            className="rounded-xl border border-[var(--line)] px-3 py-2 text-sm"
-            style={{ background: "var(--surface-2)", color: "var(--ink)" }}
+            className="rounded-xl border border-[var(--line)] bg-surface-2 px-3 py-2 text-sm text-ink"
           >
             <option value="">All Approval</option>
             <option value="NOT_REQUIRED">DRAFT</option>
@@ -282,8 +277,7 @@ export default function ProductCatalogPanel({
           <select
             value={activeFilter}
             onChange={(e) => onActiveFilterChange(e.target.value as "" | "true" | "false")}
-            className="rounded-xl border border-[var(--line)] px-3 py-2 text-sm"
-            style={{ background: "var(--surface-2)", color: "var(--ink)" }}
+            className="rounded-xl border border-[var(--line)] bg-surface-2 px-3 py-2 text-sm text-ink"
           >
             <option value="">All Status</option>
             <option value="true">Active</option>
@@ -296,14 +290,12 @@ export default function ProductCatalogPanel({
               value={vendorSearch}
               onChange={(e) => onVendorSearchChange(e.target.value)}
               placeholder="Vendor search"
-              className="rounded-xl border border-[var(--line)] px-3 py-2 text-sm"
-              style={{ background: "var(--surface-2)", color: "var(--ink)" }}
+              className="rounded-xl border border-[var(--line)] bg-surface-2 px-3 py-2 text-sm text-ink"
             />
             <select
               value={vendorId}
               onChange={(e) => onVendorIdChange(e.target.value)}
-              className="rounded-xl border border-[var(--line)] px-3 py-2 text-sm"
-              style={{ background: "var(--surface-2)", color: "var(--ink)" }}
+              className="rounded-xl border border-[var(--line)] bg-surface-2 px-3 py-2 text-sm text-ink"
             >
               <option value="">{loadingVendors ? "Loading vendors..." : "All Vendors"}</option>
               {filteredVendors.map((vendor) => (
@@ -324,12 +316,12 @@ export default function ProductCatalogPanel({
       </form>
 
       <h2 className="mb-3 text-2xl text-[var(--ink)]">{title}</h2>
-      <div className="overflow-hidden rounded-2xl border border-[var(--line)]" style={{ background: "var(--surface)" }}>
+      <div className="overflow-hidden rounded-2xl border border-[var(--line)] bg-surface">
         <table className="w-full text-left text-sm">
-          <thead style={{ background: "var(--surface-2)", color: "var(--ink)" }}>
+          <thead className="bg-surface-2 text-ink">
             <tr>
               {selectionEnabled && (
-                <th className="px-3 py-2" style={{ width: 40 }}>
+                <th className="w-10 px-3 py-2">
                   <input
                     type="checkbox"
                     checked={allCurrentSelected}
@@ -363,8 +355,7 @@ export default function ProductCatalogPanel({
             {rows.map((p) => (
               <tr
                 key={p.id}
-                className="border-t border-[var(--line)]"
-                style={selectionEnabled && selectedSet.has(p.id) ? { background: "rgba(0,212,255,0.04)" } : undefined}
+                className={`border-t border-[var(--line)] ${selectionEnabled && selectedSet.has(p.id) ? "bg-[rgba(0,212,255,0.04)]" : ""}`}
               >
                 {selectionEnabled && (
                   <td className="px-3 py-2">
@@ -402,8 +393,7 @@ export default function ProductCatalogPanel({
                             void onEditProduct(p.id);
                           }}
                           disabled={productRowActionBusy}
-                          className="rounded-md border border-[var(--line)] px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
-                          style={{ background: "var(--surface-2)", color: "var(--ink-light)" }}
+                          className="rounded-md border border-[var(--line)] bg-surface-2 px-2 py-1 text-xs text-ink-light disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {loadingProductId === p.id ? "Loading..." : "Edit"}
                         </button>
@@ -411,8 +401,7 @@ export default function ProductCatalogPanel({
                           type="button"
                           onClick={() => onDeleteProductRequest(p)}
                           disabled={productRowActionBusy}
-                          className="rounded-md border border-red-900/30 px-2 py-1 text-xs text-red-400 disabled:cursor-not-allowed disabled:opacity-60"
-                          style={{ background: "rgba(239,68,68,0.06)" }}
+                          className="rounded-md border border-red-900/30 bg-red-500/[0.06] px-2 py-1 text-xs text-red-400 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           Delete
                         </button>
@@ -422,12 +411,7 @@ export default function ProductCatalogPanel({
                             type="button"
                             onClick={() => { void onSubmitForReview(p.id); }}
                             disabled={productRowActionBusy || submitForReviewProductId === p.id}
-                            className="rounded-md border px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
-                            style={{
-                              borderColor: "rgba(0,212,255,0.25)",
-                              background: "rgba(0,212,255,0.06)",
-                              color: "var(--brand, #00d4ff)",
-                            }}
+                            className="rounded-md border border-[rgba(0,212,255,0.25)] bg-[rgba(0,212,255,0.06)] px-2 py-1 text-xs text-brand disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {submitForReviewProductId === p.id ? "Submitting..." : "Submit for Review"}
                           </button>
@@ -438,12 +422,7 @@ export default function ProductCatalogPanel({
                             type="button"
                             onClick={() => { void onApproveProduct(p.id); }}
                             disabled={productRowActionBusy || approvingProductId === p.id}
-                            className="rounded-md border px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
-                            style={{
-                              borderColor: "rgba(34,197,94,0.3)",
-                              background: "rgba(34,197,94,0.08)",
-                              color: "var(--success, #22c55e)",
-                            }}
+                            className="rounded-md border border-green-500/30 bg-green-500/[0.08] px-2 py-1 text-xs text-success disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {approvingProductId === p.id ? "Approving..." : "Approve"}
                           </button>
@@ -454,12 +433,7 @@ export default function ProductCatalogPanel({
                             type="button"
                             onClick={() => onRejectProductRequest(p)}
                             disabled={productRowActionBusy || rejectingProductId === p.id}
-                            className="rounded-md border px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
-                            style={{
-                              borderColor: "rgba(239,68,68,0.25)",
-                              background: "rgba(239,68,68,0.06)",
-                              color: "#f87171",
-                            }}
+                            className="rounded-md border border-red-500/25 bg-red-500/[0.06] px-2 py-1 text-xs text-red-400 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {rejectingProductId === p.id ? "Rejecting..." : "Reject"}
                           </button>
@@ -473,8 +447,7 @@ export default function ProductCatalogPanel({
                           void onRestoreProduct(p.id);
                         }}
                         disabled={productRowActionBusy}
-                        className="rounded-md border border-emerald-900/30 px-2 py-1 text-xs text-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
-                        style={{ background: "rgba(16,185,129,0.06)" }}
+                        className="rounded-md border border-emerald-900/30 bg-emerald-500/[0.06] px-2 py-1 text-xs text-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {restoringProductId === p.id ? "Restoring..." : "Restore"}
                       </button>

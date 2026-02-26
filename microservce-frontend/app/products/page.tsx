@@ -194,18 +194,23 @@ function ProductsPageContent() {
           if (!res.ok) throw new Error("Failed to fetch search results");
           const data = (await res.json()) as SearchResponse;
           if (signal.aborted) return;
-          const mapped: ProductSummary[] = (data.content || []).map((hit) => ({
+          const mapped = (data.content || []).map((hit) => ({
             id: hit.id,
             slug: hit.slug,
             name: hit.name,
             shortDescription: hit.shortDescription,
+            brandName: hit.brandName,
             mainImage: hit.mainImage,
             regularPrice: hit.regularPrice,
             discountedPrice: hit.discountedPrice,
             sellingPrice: hit.sellingPrice,
             sku: hit.sku,
+            mainCategory: hit.mainCategory,
+            subCategories: hit.subCategories,
             categories: hit.categories,
-          }));
+            vendorId: hit.vendorId ?? "",
+            variations: hit.variations,
+          } as ProductSummary));
           setProducts(mapped);
           setTotalPages(Math.max(data.totalPages || 1, 1));
           setStatus(`Showing ${mapped.length} of ${data.totalElements} results for "${search.trim()}"${data.tookMs ? ` (${data.tookMs}ms)` : ""}`);
@@ -342,7 +347,7 @@ function ProductsPageContent() {
   }, [selectedParentNames, selectedSubNames, search, appliedMinPrice, appliedMaxPrice]);
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
+    <div className="min-h-screen bg-bg">
       {isAuthenticated && (
         <AppNav
           email={(profile?.email as string) || ""}
@@ -361,27 +366,17 @@ function ProductsPageContent() {
       )}
 
       {!isAuthenticated && (
-        <header
-          style={{
-            background: "var(--header-bg)",
-            backdropFilter: "blur(20px)",
-            borderBottom: "1px solid var(--line-bright)",
-            position: "sticky",
-            top: 0,
-            zIndex: 50,
-          }}
-        >
+        <header className="sticky top-0 z-50 border-b border-line-bright bg-header-bg backdrop-blur-[20px]">
           <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
             <Link href="/" className="flex items-center gap-3 no-underline">
-              <div style={{ width: "34px", height: "34px", borderRadius: "10px", background: "var(--gradient-brand)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: "0.7rem", color: "#fff", boxShadow: "0 0 14px var(--brand-glow)" }}>
+              <div className="flex h-[34px] w-[34px] items-center justify-center rounded-md bg-[var(--gradient-brand)] text-xs font-black text-white shadow-[0_0_14px_var(--brand-glow)]">
                 RS
               </div>
-              <p style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, color: "#fff", fontSize: "1rem", margin: 0 }}>Rumal Store</p>
+              <p className="m-0 font-[Syne,sans-serif] text-lg font-extrabold text-white">Rumal Store</p>
             </Link>
             <Link
               href="/"
-              className="no-underline rounded-xl px-5 py-2 text-sm font-bold transition"
-              style={{ background: "var(--gradient-brand)", color: "#fff", boxShadow: "0 0 14px var(--line-bright)" }}
+              className="rounded-xl bg-[var(--gradient-brand)] px-5 py-2 text-sm font-bold text-white shadow-[0_0_14px_var(--line-bright)] no-underline transition"
             >
               Sign In
             </Link>
@@ -415,7 +410,7 @@ function ProductsPageContent() {
         />
 
         {/* Sidebar + Grid Layout */}
-        <div style={{ display: "grid", gridTemplateColumns: "260px 1fr", gap: "20px", alignItems: "start" }}>
+        <div className="grid items-start gap-5" style={{ gridTemplateColumns: "260px 1fr" }}>
           {/* Left Filter Sidebar */}
           <CatalogFiltersSidebar
             parents={parents}
@@ -443,13 +438,13 @@ function ProductsPageContent() {
           <section>
             {/* Loading skeletons */}
             {productsLoading && (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "16px" }}>
+              <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
                 <ProductCardSkeleton count={6} />
               </div>
             )}
 
             {!productsLoading && (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "16px" }}>
+              <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
                 {products.map((p, idx) => (
                   <ProductCard
                     key={p.id}
@@ -477,8 +472,7 @@ function ProductsPageContent() {
                 <button
                   disabled={productsLoading}
                   onClick={clearAllFilters}
-                  className="btn-primary"
-                  style={{ marginTop: "8px" }}
+                  className="btn-primary mt-2"
                 >
                   Clear All Filters
                 </button>
@@ -498,17 +492,17 @@ function ProductsPageContent() {
 export default function ProductsPage() {
   return (
     <Suspense fallback={
-      <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
+      <div className="min-h-screen bg-bg">
         <div className="mx-auto max-w-7xl px-4 py-8">
-          <div style={{ display: "grid", gridTemplateColumns: "260px 1fr", gap: "20px" }}>
-            <div className="skeleton" style={{ height: "400px", borderRadius: "16px" }} />
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
+          <div className="grid gap-5" style={{ gridTemplateColumns: "260px 1fr" }}>
+            <div className="skeleton h-[400px] rounded-lg" />
+            <div className="grid grid-cols-3 gap-4">
               {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} style={{ borderRadius: "16px", overflow: "hidden" }}>
-                  <div className="skeleton" style={{ height: "200px", width: "100%", borderRadius: 0 }} />
-                  <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                    <div className="skeleton" style={{ height: "13px", width: "80%" }} />
-                    <div className="skeleton" style={{ height: "17px", width: "50%" }} />
+                <div key={i} className="overflow-hidden rounded-lg">
+                  <div className="skeleton h-[200px] w-full rounded-none" />
+                  <div className="flex flex-col gap-2 px-4 py-3.5">
+                    <div className="skeleton h-[13px] w-4/5" />
+                    <div className="skeleton h-[17px] w-1/2" />
                   </div>
                 </div>
               ))}

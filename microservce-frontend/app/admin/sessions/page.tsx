@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import toast from "react-hot-toast";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuthSession } from "../../../lib/authSession";
+import AdminPageShell from "../../components/ui/AdminPageShell";
 import TableSkeleton from "../../components/ui/TableSkeleton";
 
 type ActiveSession = {
@@ -20,36 +22,24 @@ export default function AdminSessionsPage() {
   const session = useAuthSession();
   const { status: sessionStatus, profile, apiClient } = session;
 
-  const [sessions, setSessions] = useState<ActiveSession[]>([]);
-  const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
-  const [totalElements, setTotalElements] = useState(0);
   const [lookupId, setLookupId] = useState("");
   const [searchKeycloakId, setSearchKeycloakId] = useState("");
   const [revokingId, setRevokingId] = useState<string | null>(null);
-  const [revokingAll, setRevokingAll] = useState(false);
 
-  const loadSessions = useCallback(async () => {
-    if (!apiClient || !searchKeycloakId.trim()) return;
-    setLoading(true);
-    try {
+  const { data: sessionsData, isLoading: loading, refetch } = useQuery({
+    queryKey: ["admin-sessions", searchKeycloakId, page],
+    queryFn: async () => {
       const params = new URLSearchParams({ page: String(page), size: "20" });
-      const res = await apiClient.get(`/admin/sessions/by-keycloak/${encodeURIComponent(searchKeycloakId.trim())}?${params}`);
-      const data = res.data as Paged<ActiveSession>;
-      setSessions(data.content || []);
-      setTotalPages(data.totalPages || 0);
-      setTotalElements(data.totalElements || 0);
-    } catch {
-      toast.error("Failed to load sessions");
-    } finally {
-      setLoading(false);
-    }
-  }, [apiClient, searchKeycloakId, page]);
+      const res = await apiClient!.get(`/admin/sessions/by-keycloak/${encodeURIComponent(searchKeycloakId.trim())}?${params}`);
+      return res.data as Paged<ActiveSession>;
+    },
+    enabled: sessionStatus === "ready" && !!apiClient && !!searchKeycloakId.trim(),
+  });
 
-  useEffect(() => {
-    if (searchKeycloakId.trim()) void loadSessions();
-  }, [searchKeycloakId, page, loadSessions]);
+  const sessions = sessionsData?.content ?? [];
+  const totalPages = sessionsData?.totalPages ?? 0;
+  const totalElements = sessionsData?.totalElements ?? 0;
 
   const handleSearch = () => {
     if (!lookupId.trim()) return;
@@ -65,36 +55,38 @@ export default function AdminSessionsPage() {
     setSearchKeycloakId(sub);
   };
 
-  const revokeSession = async (sessionId: string) => {
-    if (!apiClient || revokingId) return;
-    setRevokingId(sessionId);
-    try {
-      await apiClient.delete(`/admin/sessions/${sessionId}`);
-      setSessions((old) => old.filter((s) => s.id !== sessionId));
-      setTotalElements((t) => Math.max(0, t - 1));
+  const revokeSessionMutation = useMutation({
+    mutationFn: async (sessionId: string) => {
+      await apiClient!.delete(`/admin/sessions/${sessionId}`);
+      return sessionId;
+    },
+    onMutate: (sessionId) => {
+      setRevokingId(sessionId);
+    },
+    onSuccess: () => {
+      void refetch();
       toast.success("Session revoked");
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(err instanceof Error ? err.message : "Failed to revoke session");
-    } finally {
+    },
+    onSettled: () => {
       setRevokingId(null);
-    }
-  };
+    },
+  });
 
-  const revokeAll = async () => {
-    if (!apiClient || revokingAll || !searchKeycloakId.trim()) return;
-    setRevokingAll(true);
-    try {
-      await apiClient.delete(`/admin/sessions/by-keycloak/${encodeURIComponent(searchKeycloakId.trim())}`);
-      setSessions([]);
-      setTotalElements(0);
-      setTotalPages(0);
+  const revokeAllMutation = useMutation({
+    mutationFn: async () => {
+      await apiClient!.delete(`/admin/sessions/by-keycloak/${encodeURIComponent(searchKeycloakId.trim())}`);
+    },
+    onSuccess: () => {
+      void refetch();
       toast.success("All sessions revoked for this user");
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(err instanceof Error ? err.message : "Failed to revoke all sessions");
-    } finally {
-      setRevokingAll(false);
-    }
-  };
+    },
+  });
 
   const parseBrowser = (ua: string | null) => {
     if (!ua) return "Unknown";
@@ -106,51 +98,38 @@ export default function AdminSessionsPage() {
   };
 
   if (sessionStatus === "loading" || sessionStatus === "idle") {
-    return <div style={{ minHeight: "100vh", background: "var(--bg)", display: "grid", placeItems: "center" }}><p style={{ color: "var(--muted)" }}>Loading...</p></div>;
+    return <div className="min-h-screen bg-bg grid place-items-center"><p className="text-muted">Loading...</p></div>;
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-      <main className="mx-auto max-w-5xl px-4 py-10">
-        <div style={{ marginBottom: "24px" }}>
-          <h1 className="text-2xl font-bold" style={{ color: "#fff" }}>Active Sessions</h1>
-          <p style={{ color: "var(--muted)", fontSize: "0.85rem", marginTop: "4px" }}>View and manage active user sessions</p>
-        </div>
+    <AdminPageShell
+      title="Active Sessions"
+      breadcrumbs={[{ label: "Admin", href: "/admin/dashboard" }, { label: "Sessions" }]}
+    >
+        <p className="text-muted text-sm -mt-4 mb-6">View and manage active user sessions</p>
 
         {/* Search */}
-        <div style={{
-          marginBottom: "24px", padding: "20px", borderRadius: "14px",
-          background: "var(--card)", border: "1px solid var(--line-bright)",
-        }}>
-          <label style={{ display: "block", fontSize: "0.72rem", fontWeight: 700, color: "var(--muted)", marginBottom: "6px" }}>Keycloak User ID</label>
-          <div style={{ display: "flex", gap: "8px" }}>
+        <div className="mb-6 p-5 rounded-[14px] bg-[var(--card)] border border-line-bright">
+          <label className="block text-xs font-bold text-muted mb-1.5">Keycloak User ID</label>
+          <div className="flex gap-2">
             <input
               value={lookupId}
               onChange={(e) => setLookupId(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
               placeholder="Enter Keycloak user ID..."
-              style={{
-                flex: 1, padding: "8px 12px", borderRadius: "8px", fontSize: "0.82rem",
-                background: "var(--bg)", border: "1px solid var(--line-bright)", color: "#fff",
-              }}
+              className="flex-1 px-3 py-2 rounded-sm text-base bg-bg border border-line-bright text-white"
             />
             <button
               type="button"
               onClick={handleSearch}
-              style={{
-                padding: "8px 18px", borderRadius: "10px", fontSize: "0.82rem", fontWeight: 700,
-                background: "var(--gradient-brand)", color: "#fff", border: "none", cursor: "pointer",
-              }}
+              className="btn-primary px-4 py-2 rounded-md text-base font-bold"
             >
               Search
             </button>
             <button
               type="button"
               onClick={loadOwnSessions}
-              style={{
-                padding: "8px 18px", borderRadius: "10px", fontSize: "0.82rem", fontWeight: 700,
-                background: "var(--accent-soft)", color: "var(--accent)", border: "1px solid var(--accent-glow)", cursor: "pointer",
-              }}
+              className="px-4 py-2 rounded-md text-base font-bold bg-accent-soft text-accent border border-accent-glow cursor-pointer"
             >
               My Sessions
             </button>
@@ -159,41 +138,36 @@ export default function AdminSessionsPage() {
 
         {/* Results */}
         {!searchKeycloakId.trim() ? (
-          <div style={{ textAlign: "center", padding: "60px 20px", borderRadius: "14px", background: "var(--card)", border: "1px solid var(--line-bright)" }}>
-            <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>Enter a Keycloak user ID to view their active sessions.</p>
+          <div className="text-center px-5 py-[60px] rounded-[14px] bg-[var(--card)] border border-line-bright">
+            <p className="text-muted text-base">Enter a Keycloak user ID to view their active sessions.</p>
           </div>
         ) : loading ? (
           <TableSkeleton rows={3} cols={5} />
         ) : sessions.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "60px 20px", borderRadius: "14px", background: "var(--card)", border: "1px solid var(--line-bright)" }}>
-            <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>No active sessions found for this user.</p>
+          <div className="text-center px-5 py-[60px] rounded-[14px] bg-[var(--card)] border border-line-bright">
+            <p className="text-muted text-base">No active sessions found for this user.</p>
           </div>
         ) : (
           <>
             {/* Header with count + revoke all */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
-              <p style={{ fontSize: "0.8rem", color: "var(--muted)" }}>{totalElements} active session{totalElements !== 1 ? "s" : ""}</p>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm text-muted">{totalElements} active session{totalElements !== 1 ? "s" : ""}</p>
               <button
                 type="button"
-                disabled={revokingAll}
-                onClick={() => { void revokeAll(); }}
-                style={{
-                  padding: "6px 14px", borderRadius: "8px", fontSize: "0.72rem", fontWeight: 700,
-                  background: "var(--danger-soft)", color: "var(--danger)",
-                  border: "1px solid var(--danger-glow)", cursor: "pointer",
-                  opacity: revokingAll ? 0.6 : 1,
-                }}
+                disabled={revokeAllMutation.isPending}
+                onClick={() => { revokeAllMutation.mutate(); }}
+                className={`px-3.5 py-1.5 rounded-sm text-xs font-bold bg-danger-soft text-danger border border-danger-glow cursor-pointer ${revokeAllMutation.isPending ? "opacity-60" : ""}`}
               >
-                {revokingAll ? "Revoking..." : "Revoke All Sessions"}
+                {revokeAllMutation.isPending ? "Revoking..." : "Revoke All Sessions"}
               </button>
             </div>
 
-            <div style={{ borderRadius: "14px", overflow: "hidden", border: "1px solid var(--line-bright)" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <div className="rounded-[14px] overflow-hidden border border-line-bright">
+              <table className="admin-table w-full">
                 <thead>
-                  <tr style={{ background: "var(--card)" }}>
+                  <tr className="bg-[var(--card)]">
                     {["IP Address", "Browser", "Last Activity", "Created", "Actions"].map((h) => (
-                      <th key={h} style={{ padding: "10px 14px", fontSize: "0.68rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--muted)", textAlign: "left" }}>
+                      <th key={h} className="px-3.5 py-2.5 text-xs font-extrabold uppercase tracking-[0.1em] text-muted text-left">
                         {h}
                       </th>
                     ))}
@@ -201,22 +175,17 @@ export default function AdminSessionsPage() {
                 </thead>
                 <tbody>
                   {sessions.map((s) => (
-                    <tr key={s.id} style={{ borderTop: "1px solid var(--line-bright)" }}>
-                      <td style={{ padding: "12px 14px", fontSize: "0.82rem", color: "#fff", fontFamily: "monospace" }}>{s.ipAddress || "—"}</td>
-                      <td style={{ padding: "12px 14px", fontSize: "0.78rem", color: "var(--muted)" }}>{parseBrowser(s.userAgent)}</td>
-                      <td style={{ padding: "12px 14px", fontSize: "0.75rem", color: "var(--muted)" }}>{new Date(s.lastActivityAt).toLocaleString()}</td>
-                      <td style={{ padding: "12px 14px", fontSize: "0.75rem", color: "var(--muted)" }}>{new Date(s.createdAt).toLocaleString()}</td>
-                      <td style={{ padding: "12px 14px" }}>
+                    <tr key={s.id} className="border-t border-line-bright">
+                      <td className="px-3.5 py-3 text-base text-white font-mono">{s.ipAddress || "—"}</td>
+                      <td className="px-3.5 py-3 text-sm text-muted">{parseBrowser(s.userAgent)}</td>
+                      <td className="px-3.5 py-3 text-xs text-muted">{new Date(s.lastActivityAt).toLocaleString()}</td>
+                      <td className="px-3.5 py-3 text-xs text-muted">{new Date(s.createdAt).toLocaleString()}</td>
+                      <td className="px-3.5 py-3">
                         <button
                           type="button"
                           disabled={revokingId === s.id}
-                          onClick={() => { void revokeSession(s.id); }}
-                          style={{
-                            padding: "4px 12px", borderRadius: "6px", fontSize: "0.72rem", fontWeight: 600,
-                            background: "var(--danger-soft)", color: "var(--danger)",
-                            border: "1px solid var(--danger-glow)", cursor: "pointer",
-                            opacity: revokingId === s.id ? 0.6 : 1,
-                          }}
+                          onClick={() => { revokeSessionMutation.mutate(s.id); }}
+                          className={`px-3 py-1 rounded-sm text-xs font-semibold bg-danger-soft text-danger border border-danger-glow cursor-pointer ${revokingId === s.id ? "opacity-60" : ""}`}
                         >
                           {revokingId === s.id ? "Revoking..." : "Revoke"}
                         </button>
@@ -229,31 +198,23 @@ export default function AdminSessionsPage() {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div style={{ display: "flex", justifyContent: "center", gap: "8px", marginTop: "16px" }}>
+              <div className="flex justify-center gap-2 mt-4">
                 <button
                   type="button"
                   disabled={page === 0}
                   onClick={() => setPage((p) => p - 1)}
-                  style={{
-                    padding: "6px 14px", borderRadius: "8px", fontSize: "0.78rem", fontWeight: 600,
-                    background: "var(--card)", color: page === 0 ? "var(--muted)" : "#fff",
-                    border: "1px solid var(--line-bright)", cursor: page === 0 ? "default" : "pointer",
-                  }}
+                  className={`px-3.5 py-1.5 rounded-sm text-sm font-semibold bg-[var(--card)] border border-line-bright ${page === 0 ? "text-muted cursor-default" : "text-white cursor-pointer"}`}
                 >
                   Previous
                 </button>
-                <span style={{ padding: "6px 12px", fontSize: "0.78rem", color: "var(--muted)" }}>
+                <span className="px-3 py-1.5 text-sm text-muted">
                   {page + 1} / {totalPages}
                 </span>
                 <button
                   type="button"
                   disabled={page >= totalPages - 1}
                   onClick={() => setPage((p) => p + 1)}
-                  style={{
-                    padding: "6px 14px", borderRadius: "8px", fontSize: "0.78rem", fontWeight: 600,
-                    background: "var(--card)", color: page >= totalPages - 1 ? "var(--muted)" : "#fff",
-                    border: "1px solid var(--line-bright)", cursor: page >= totalPages - 1 ? "default" : "pointer",
-                  }}
+                  className={`px-3.5 py-1.5 rounded-sm text-sm font-semibold bg-[var(--card)] border border-line-bright ${page >= totalPages - 1 ? "text-muted cursor-default" : "text-white cursor-pointer"}`}
                 >
                   Next
                 </button>
@@ -261,7 +222,6 @@ export default function AdminSessionsPage() {
             )}
           </>
         )}
-      </main>
-    </div>
+    </AdminPageShell>
   );
 }

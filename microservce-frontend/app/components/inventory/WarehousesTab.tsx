@@ -18,14 +18,6 @@ type Props = {
   vendorId?: string;
 };
 
-const cardStyle: React.CSSProperties = {
-  background: "rgba(255,255,255,0.03)",
-  border: "1px solid var(--line)",
-  borderRadius: 16,
-  padding: 24,
-  marginBottom: 20,
-};
-
 export default function WarehousesTab({ apiClient, apiPrefix, isAdmin = false, vendorId }: Props) {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [page, setPage] = useState(0);
@@ -139,7 +131,7 @@ export default function WarehousesTab({ apiClient, apiPrefix, isAdmin = false, v
 
   if (showForm) {
     return (
-      <div style={cardStyle}>
+      <div className="bg-[rgba(255,255,255,0.03)] border border-line rounded-lg p-6 mb-5">
         <WarehouseForm
           form={form}
           onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
@@ -155,8 +147,8 @@ export default function WarehousesTab({ apiClient, apiPrefix, isAdmin = false, v
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
-        <button type="button" className="btn-primary" style={{ fontSize: "0.82rem", padding: "8px 18px" }} onClick={() => { setForm({ ...EMPTY_WAREHOUSE_FORM, vendorId: vendorId || "" }); setShowForm(true); }}>
+      <div className="flex justify-end mb-3">
+        <button type="button" className="btn-primary text-[0.82rem] px-4.5 py-2" onClick={() => { setForm({ ...EMPTY_WAREHOUSE_FORM, vendorId: vendorId || "" }); setShowForm(true); }}>
           + Add Warehouse
         </button>
       </div>
@@ -182,9 +174,9 @@ export default function WarehousesTab({ apiClient, apiPrefix, isAdmin = false, v
           const w = row as unknown as Warehouse;
           return (
             <>
-              <button type="button" className="btn-ghost" style={{ fontSize: "0.75rem", padding: "4px 10px" }} onClick={() => handleEdit(w)}>Edit</button>
+              <button type="button" className="btn-ghost text-[0.75rem] px-2.5 py-1" onClick={() => handleEdit(w)}>Edit</button>
               {isAdmin && (
-                <button type="button" className="btn-ghost" style={{ fontSize: "0.75rem", padding: "4px 10px", color: w.active ? "var(--danger)" : "var(--success)" }} onClick={() => setStatusTarget(w)}>
+                <button type="button" className={`btn-ghost text-[0.75rem] px-2.5 py-1 ${w.active ? "text-danger" : "text-success"}`} onClick={() => setStatusTarget(w)}>
                   {w.active ? "Deactivate" : "Activate"}
                 </button>
               )}

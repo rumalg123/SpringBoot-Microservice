@@ -68,8 +68,7 @@ export default function VariationParentSelectorPanel({ state, actions, helpers }
             void refreshVariationParents();
           }}
           disabled={isEditingVariation || loadingParentProducts || productMutationBusy || Boolean(selectingVariationParentId)}
-          className="rounded-lg border border-[var(--line)] px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-          style={{ background: "var(--surface-2)", color: "var(--ink-light)" }}
+          className="rounded-lg border border-[var(--line)] bg-surface-2 px-3 py-2 text-xs font-semibold text-ink-light disabled:cursor-not-allowed disabled:opacity-60"
         >
           {loadingParentProducts ? "Refreshing..." : "Refresh"}
         </button>
@@ -79,7 +78,7 @@ export default function VariationParentSelectorPanel({ state, actions, helpers }
           Showing {Math.min(filteredParentProducts.length, 20)} of {parentProducts.length} parent products
         </p>
       )}
-      <div className="mt-2 max-h-40 overflow-auto rounded-lg border border-[var(--line)]" style={{ background: "var(--surface)" }}>
+      <div className="mt-2 max-h-40 overflow-auto rounded-lg border border-[var(--line)] bg-surface">
         {loadingParentProducts && (
           <p className="px-3 py-2 text-xs text-[var(--muted)]">Loading parent products...</p>
         )}
@@ -123,8 +122,7 @@ export default function VariationParentSelectorPanel({ state, actions, helpers }
               {form.subCategoryNames.map((name) => (
                 <span
                   key={`variation-sub-${name}`}
-                  className="rounded-full border border-[var(--line)] px-2 py-0.5 text-[10px] text-[var(--ink)]"
-                  style={{ background: "var(--surface-2)" }}
+                  className="rounded-full border border-[var(--line)] bg-surface-2 px-2 py-0.5 text-[10px] text-[var(--ink)]"
                 >
                   {name}
                 </span>

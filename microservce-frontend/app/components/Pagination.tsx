@@ -23,7 +23,7 @@ export default function Pagination({
 
     if (totalPages <= 1) {
         return totalElements !== undefined ? (
-            <div style={{ marginTop: "16px", textAlign: "center", fontSize: "0.75rem", color: "var(--muted)" }}>
+            <div className="mt-4 text-center text-sm text-muted">
                 Showing all {totalElements} results
             </div>
         ) : null;
@@ -48,39 +48,26 @@ export default function Pagination({
 
     const pages = getPageNumbers();
 
-    const navBtnBase: React.CSSProperties = {
-        display: "inline-flex", alignItems: "center", gap: "4px",
-        padding: "8px 12px", borderRadius: "8px", fontSize: "0.8rem", fontWeight: 600,
-        border: "1px solid var(--line-bright)", background: "var(--brand-soft)",
-        color: "var(--ink-light)", cursor: "pointer", transition: "all 0.15s",
-    };
-
     return (
-        <div style={{ marginTop: "24px", display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
             {/* Results Info */}
-            <div style={{ fontSize: "0.75rem", color: "var(--muted)" }}>
-                Page <span style={{ fontWeight: 700, color: "var(--ink)" }}>{currentPage + 1}</span> of{" "}
-                <span style={{ fontWeight: 700, color: "var(--ink)" }}>{totalPages}</span>
+            <div className="text-sm text-muted">
+                Page <span className="font-bold text-ink">{currentPage + 1}</span> of{" "}
+                <span className="font-bold text-ink">{totalPages}</span>
                 {totalElements !== undefined && (
-                    <span style={{ marginLeft: "4px" }}>({totalElements} total result{totalElements !== 1 ? "s" : ""})</span>
+                    <span className="ml-1">({totalElements} total result{totalElements !== 1 ? "s" : ""})</span>
                 )}
             </div>
 
             {/* Page Controls */}
-            <nav style={{ display: "flex", alignItems: "center", gap: "4px" }} aria-label="Pagination">
+            <nav className="flex items-center gap-1" aria-label="Pagination">
                 {/* Previous */}
                 <button
                     type="button"
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={disabled || currentPage <= 0}
-                    style={{
-                        ...navBtnBase,
-                        opacity: disabled || currentPage <= 0 ? 0.4 : 1,
-                        cursor: disabled || currentPage <= 0 ? "not-allowed" : "pointer",
-                    }}
+                    className="inline-flex items-center gap-1 rounded-[8px] border border-line-bright bg-brand-soft px-3 py-2 text-sm font-semibold text-ink-light transition-all duration-150 hover:border-brand hover:text-brand disabled:cursor-not-allowed disabled:opacity-40"
                     aria-label="Go to previous page"
-                    onMouseEnter={(e) => { if (!(disabled || currentPage <= 0)) { (e.currentTarget as HTMLElement).style.borderColor = "var(--brand)"; (e.currentTarget as HTMLElement).style.color = "var(--brand)"; } }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--line-bright)"; (e.currentTarget as HTMLElement).style.color = "var(--ink-light)"; }}
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
                     <span>Prev</span>
@@ -90,7 +77,7 @@ export default function Pagination({
                 {pages.map((p, idx) => {
                     if (p === "ellipsis-left" || p === "ellipsis-right") {
                         return (
-                            <span key={p} style={{ padding: "0 4px", fontSize: "0.8rem", color: "var(--muted)" }}>···</span>
+                            <span key={p} className="px-1 text-sm text-muted">···</span>
                         );
                     }
                     const isActive = p === currentPage;
@@ -100,20 +87,14 @@ export default function Pagination({
                             type="button"
                             onClick={() => handlePageChange(p)}
                             disabled={disabled}
-                            style={{
-                                minWidth: "34px", padding: "7px 10px", borderRadius: "8px",
-                                fontSize: "0.8rem", fontWeight: isActive ? 800 : 600, cursor: disabled ? "not-allowed" : "pointer",
-                                border: isActive ? "none" : "1px solid var(--line-bright)",
-                                background: isActive ? "var(--gradient-brand)" : "var(--brand-soft)",
-                                color: isActive ? "#fff" : "var(--ink-light)",
-                                boxShadow: isActive ? "0 0 14px var(--line-bright)" : "none",
-                                opacity: disabled && !isActive ? 0.5 : 1,
-                                transition: "all 0.15s",
-                            }}
+                            className={`min-w-[34px] rounded-[8px] px-2.5 py-[7px] text-sm transition-all duration-150 ${
+                                isActive
+                                    ? "border-none font-extrabold text-white shadow-[0_0_14px_var(--line-bright)]"
+                                    : "border border-line-bright bg-brand-soft font-semibold text-ink-light hover:border-brand hover:text-brand"
+                            } ${disabled && !isActive ? "opacity-50" : ""} ${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}
+                            style={isActive ? { background: "var(--gradient-brand)" } : undefined}
                             aria-label={`Go to page ${p + 1}`}
                             aria-current={isActive ? "page" : undefined}
-                            onMouseEnter={(e) => { if (!isActive && !disabled) { (e.currentTarget as HTMLElement).style.borderColor = "var(--brand)"; (e.currentTarget as HTMLElement).style.color = "var(--brand)"; } }}
-                            onMouseLeave={(e) => { if (!isActive) { (e.currentTarget as HTMLElement).style.borderColor = "var(--line-bright)"; (e.currentTarget as HTMLElement).style.color = "var(--ink-light)"; } }}
                         >
                             {p + 1}
                         </button>
@@ -125,14 +106,8 @@ export default function Pagination({
                     type="button"
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={disabled || currentPage + 1 >= totalPages}
-                    style={{
-                        ...navBtnBase,
-                        opacity: disabled || currentPage + 1 >= totalPages ? 0.4 : 1,
-                        cursor: disabled || currentPage + 1 >= totalPages ? "not-allowed" : "pointer",
-                    }}
+                    className="inline-flex items-center gap-1 rounded-[8px] border border-line-bright bg-brand-soft px-3 py-2 text-sm font-semibold text-ink-light transition-all duration-150 hover:border-brand hover:text-brand disabled:cursor-not-allowed disabled:opacity-40"
                     aria-label="Go to next page"
-                    onMouseEnter={(e) => { if (!(disabled || currentPage + 1 >= totalPages)) { (e.currentTarget as HTMLElement).style.borderColor = "var(--brand)"; (e.currentTarget as HTMLElement).style.color = "var(--brand)"; } }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--line-bright)"; (e.currentTarget as HTMLElement).style.color = "var(--ink-light)"; }}
                 >
                     <span>Next</span>
                     <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>

@@ -52,8 +52,7 @@ export default function VendorFormPanel({
           type="button"
           onClick={onReset}
           disabled={saving}
-          className="rounded-md border border-[var(--line)] px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
-          style={{ background: "var(--surface-2)", color: "var(--ink-light)" }}
+          className="rounded-md border border-[var(--line)] bg-surface-2 px-2 py-1 text-xs text-ink-light disabled:cursor-not-allowed disabled:opacity-60"
         >
           Reset
         </button>

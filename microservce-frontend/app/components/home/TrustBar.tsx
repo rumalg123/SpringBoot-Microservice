@@ -1,5 +1,7 @@
 "use client";
 
+import React from "react";
+
 const TrustIcons = {
   ship: (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -35,9 +37,9 @@ const items = [
   { icon: TrustIcons.support, title: "24/7 Support", desc: "Always here to help you" },
 ];
 
-export default function TrustBar() {
+function TrustBarInner() {
   return (
-    <section className="animate-rise mx-auto max-w-7xl px-4 py-8" style={{ animationDelay: "100ms" }}>
+    <section className="animate-rise mx-auto max-w-7xl px-4 py-8 [animation-delay:100ms]">
       <div className="trust-bar">
         {items.map(({ icon, title, desc }) => (
           <div key={title} className="trust-item">
@@ -52,3 +54,5 @@ export default function TrustBar() {
     </section>
   );
 }
+
+export default React.memo(TrustBarInner);

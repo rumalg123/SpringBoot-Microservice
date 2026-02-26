@@ -159,30 +159,11 @@ export default function SearchableSelect({
     }
   };
 
-  const inputStyle: React.CSSProperties = {
-    width: "100%",
-    padding: "9px 32px 9px 12px",
-    borderRadius: 10,
-    border: "1px solid var(--line)",
-    background: "var(--surface-2)",
-    color: "var(--ink)",
-    fontSize: "0.82rem",
-    outline: "none",
-    transition: "border-color 0.15s",
-  };
-
   return (
-    <div ref={containerRef} style={{ position: "relative" }}>
+    <div ref={containerRef} className="relative">
       {value && selectedLabel && !open ? (
         <div
-          style={{
-            ...inputStyle,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            cursor: disabled ? "not-allowed" : "pointer",
-            opacity: disabled ? 0.6 : 1,
-          }}
+          className={`w-full py-[9px] pr-8 pl-3 rounded-md border border-line bg-surface-2 text-ink text-sm outline-none transition-colors duration-150 flex items-center justify-between ${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
           onClick={() => {
             if (!disabled) {
               setOpen(true);
@@ -190,7 +171,7 @@ export default function SearchableSelect({
             }
           }}
         >
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{selectedLabel}</span>
+          <span className="overflow-hidden text-ellipsis whitespace-nowrap">{selectedLabel}</span>
           {!disabled && (
             <button
               type="button"
@@ -198,19 +179,7 @@ export default function SearchableSelect({
                 e.stopPropagation();
                 handleClear();
               }}
-              style={{
-                width: 18,
-                height: 18,
-                borderRadius: "50%",
-                background: "rgba(255,255,255,0.08)",
-                border: "none",
-                color: "var(--muted)",
-                fontSize: "0.7rem",
-                cursor: "pointer",
-                display: "grid",
-                placeItems: "center",
-                flexShrink: 0,
-              }}
+              className="w-[18px] h-[18px] rounded-full bg-[rgba(255,255,255,0.08)] border-none text-muted text-xs cursor-pointer grid place-items-center shrink-0"
             >
               x
             </button>
@@ -225,7 +194,7 @@ export default function SearchableSelect({
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           disabled={disabled}
-          style={{ ...inputStyle, opacity: disabled ? 0.6 : 1, cursor: disabled ? "not-allowed" : "text" }}
+          className={`w-full py-[9px] pr-8 pl-3 rounded-md border border-line bg-surface-2 text-ink text-sm outline-none transition-colors duration-150 ${disabled ? "opacity-60 cursor-not-allowed" : "cursor-text"}`}
         />
       )}
 
@@ -233,39 +202,16 @@ export default function SearchableSelect({
       {open && !disabled && (
         <div
           ref={listRef}
-          style={{
-            position: "absolute",
-            top: "calc(100% + 4px)",
-            left: 0,
-            right: 0,
-            maxHeight: 220,
-            overflowY: "auto",
-            borderRadius: 10,
-            border: "1px solid var(--line-bright)",
-            background: "var(--surface-2)",
-            boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
-            zIndex: 50,
-            padding: 4,
-          }}
+          className="absolute top-[calc(100%+4px)] left-0 right-0 max-h-[220px] overflow-y-auto rounded-md border border-line-bright bg-surface-2 shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-50 p-1"
         >
           {loading && (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "16px 12px", gap: 8 }}>
-              <span
-                style={{
-                  display: "inline-block",
-                  width: 14,
-                  height: 14,
-                  border: "2px solid var(--brand)",
-                  borderTopColor: "transparent",
-                  borderRadius: "50%",
-                  animation: "spin 0.6s linear infinite",
-                }}
-              />
-              <span style={{ fontSize: "0.78rem", color: "var(--muted)" }}>Searching...</span>
+            <div className="flex items-center justify-center py-4 px-3 gap-2">
+              <span className="inline-block w-3.5 h-3.5 border-2 border-brand border-t-transparent rounded-full animate-spin" />
+              <span className="text-sm text-muted">Searching...</span>
             </div>
           )}
           {!loading && results.length === 0 && (
-            <div style={{ padding: "16px 12px", textAlign: "center", fontSize: "0.78rem", color: "var(--muted)" }}>
+            <div className="py-4 px-3 text-center text-sm text-muted">
               No results found
             </div>
           )}
@@ -280,20 +226,7 @@ export default function SearchableSelect({
                   key={itemValue || index}
                   onClick={() => handleSelect(item)}
                   onMouseEnter={() => setHighlightIndex(index)}
-                  style={{
-                    padding: "8px 10px",
-                    borderRadius: 8,
-                    fontSize: "0.82rem",
-                    cursor: "pointer",
-                    color: isSelected ? "var(--brand)" : "var(--ink)",
-                    fontWeight: isSelected ? 700 : 500,
-                    background: isHighlighted
-                      ? "var(--brand-soft)"
-                      : isSelected
-                        ? "rgba(0,212,255,0.06)"
-                        : "transparent",
-                    transition: "background 0.1s",
-                  }}
+                  className={`py-2 px-2.5 rounded-[8px] text-sm cursor-pointer font-medium transition-[background] duration-100 ${isSelected ? "text-brand font-bold" : "text-ink"} ${isHighlighted ? "bg-brand-soft" : isSelected ? "bg-[rgba(0,212,255,0.06)]" : "bg-transparent"}`}
                 >
                   {itemLabel}
                 </div>

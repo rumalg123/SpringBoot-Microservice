@@ -74,16 +74,8 @@ export default function ConfirmModal({
                 </h3>
                 <p className="confirm-modal-message">{message}</p>
                 {reasonEnabled && (
-                    <div style={{ marginBottom: "0.9rem" }}>
-                        <label
-                            style={{
-                                display: "block",
-                                marginBottom: "0.35rem",
-                                fontSize: "0.8rem",
-                                color: "var(--ink-light, #dfe7ff)",
-                                fontWeight: 600,
-                            }}
-                        >
+                    <div className="mb-3.5">
+                        <label className="mb-1.5 block text-sm font-semibold text-ink-light">
                             {reasonLabel}
                         </label>
                         <textarea
@@ -91,15 +83,7 @@ export default function ConfirmModal({
                             onChange={(e) => onReasonChange?.(e.target.value)}
                             placeholder={reasonPlaceholder}
                             rows={3}
-                            style={{
-                                width: "100%",
-                                borderRadius: 10,
-                                border: "1px solid var(--line, rgba(255,255,255,0.12))",
-                                background: "var(--surface-2, rgba(255,255,255,0.04))",
-                                color: "var(--ink, #fff)",
-                                padding: "0.65rem 0.75rem",
-                                resize: "vertical",
-                            }}
+                            className="form-input w-full resize-y rounded-md border border-line bg-surface-2 px-3 py-2.5 text-ink"
                         />
                     </div>
                 )}
@@ -127,4 +111,3 @@ export default function ConfirmModal({
         </div>
     );
 }
-

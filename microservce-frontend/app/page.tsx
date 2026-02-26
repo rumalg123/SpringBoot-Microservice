@@ -54,9 +54,9 @@ export default function LandingPage() {
     if (session.status !== "ready" && session.status !== "error") return;
     const token = session.isAuthenticated ? session.token : null;
     getOrCreateSessionId();
-    fetchTrending(8).then(setTrending).catch(() => {});
-    fetchRecommended(8, token).then(setRecommended).catch(() => {});
-    fetchRecentlyViewed(8, token).then(setRecentlyViewed).catch(() => {});
+    fetchTrending(8).then(setTrending).catch((e) => console.error("Failed to load trending:", e));
+    fetchRecommended(8, token).then(setRecommended).catch((e) => console.error("Failed to load recommended:", e));
+    fetchRecentlyViewed(8, token).then(setRecentlyViewed).catch((e) => console.error("Failed to load recently viewed:", e));
   }, [session.status, session.isAuthenticated, session.token]);
 
   useEffect(() => {
@@ -98,36 +98,19 @@ export default function LandingPage() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
+    <div className="min-h-screen bg-bg">
       {/* --- Header --- */}
-      <header
-        style={{
-          background: "var(--header-bg)",
-          backdropFilter: "blur(20px)",
-          WebkitBackdropFilter: "blur(20px)",
-          borderBottom: "1px solid var(--line-bright)",
-          position: "sticky",
-          top: 0,
-          zIndex: 50,
-        }}
-      >
+      <header className="sticky top-0 z-50 border-b border-line-bright bg-header-bg backdrop-blur-[20px]">
+
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-3 no-underline" style={{ flexShrink: 0 }}>
-            <div
-              style={{
-                width: "36px", height: "36px", borderRadius: "10px",
-                background: "var(--gradient-brand)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontWeight: 900, fontSize: "0.7rem", color: "#fff",
-                boxShadow: "0 0 16px var(--brand-glow)",
-              }}
-            >RS</div>
+          <Link href="/" className="flex shrink-0 items-center gap-3 no-underline">
+            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-[var(--gradient-brand)] text-xs font-black text-white shadow-[0_0_16px_var(--brand-glow)]">RS</div>
             <div>
-              <p style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, color: "#fff", fontSize: "1rem", margin: 0 }}>
+              <p className="m-0 font-[Syne,sans-serif] text-lg font-extrabold text-white">
                 Rumal Store
               </p>
-              <p style={{ fontSize: "9px", color: "var(--brand)", letterSpacing: "0.18em", margin: 0, opacity: 0.55 }}>
+              <p className="m-0 text-[9px] tracking-[0.18em] text-brand opacity-55">
                 ONLINE MARKETPLACE
               </p>
             </div>
@@ -144,22 +127,19 @@ export default function LandingPage() {
               <WishlistNavWidget apiClient={session.apiClient} />
               <CartNavWidget apiClient={session.apiClient} emailVerified={session.emailVerified} />
               <span
-                className="hidden md:inline-block rounded-full px-3 py-1.5 text-xs font-medium"
-                style={{ background: "var(--brand-soft)", border: "1px solid var(--line-bright)", color: "var(--brand)" }}
+                className="hidden md:inline-block rounded-full border border-line-bright bg-brand-soft px-3 py-1.5 text-xs font-medium text-brand"
               >
                 {(session.profile?.email as string) || "User"}
               </span>
               {session.canViewAdmin ? (
                 <Link href="/admin/orders"
-                  className="rounded-xl px-4 py-2 text-xs font-bold no-underline transition"
-                  style={{ border: "1px solid var(--accent-glow)", color: "#a78bfa", background: "var(--accent-soft)" }}
+                  className="rounded-xl border border-accent-glow bg-accent-soft px-4 py-2 text-xs font-bold text-accent-light no-underline transition"
                 >
                   Admin
                 </Link>
               ) : (
                 <Link href="/profile"
-                  className="rounded-xl px-4 py-2 text-xs font-bold no-underline transition"
-                  style={{ border: "1px solid var(--line-bright)", color: "var(--brand)", background: "var(--brand-soft)" }}
+                  className="rounded-xl border border-line-bright bg-brand-soft px-4 py-2 text-xs font-bold text-brand no-underline transition"
                 >
                   Profile
                 </Link>
@@ -167,8 +147,7 @@ export default function LandingPage() {
               <button
                 onClick={() => { void startLogout(); }}
                 disabled={logoutPending}
-                className="rounded-xl px-4 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
-                style={{ background: "var(--gradient-brand)", color: "#fff", border: "none", cursor: "pointer", boxShadow: "0 0 14px var(--line-bright)" }}
+                className="cursor-pointer rounded-xl border-none bg-[var(--gradient-brand)] px-4 py-2 text-xs font-bold text-white shadow-[0_0_14px_var(--line-bright)] transition disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {logoutPending ? "Logging out..." : "Logout"}
               </button>
@@ -178,24 +157,21 @@ export default function LandingPage() {
               <button
                 onClick={() => { void startLogin(); }}
                 disabled={authBusy}
-                className="rounded-xl px-5 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
-                style={{ background: "var(--gradient-brand)", color: "#fff", border: "none", cursor: "pointer", boxShadow: "0 0 14px var(--line-bright)" }}
+                className="cursor-pointer rounded-xl border-none bg-[var(--gradient-brand)] px-5 py-2 text-xs font-bold text-white shadow-[0_0_14px_var(--line-bright)] transition disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {authActionPending === "login" ? "Redirecting..." : "Login"}
               </button>
               <button
                 onClick={() => { void startSignup(); }}
                 disabled={authBusy}
-                className="rounded-xl px-5 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
-                style={{ border: "1px solid var(--line-bright)", color: "var(--brand)", background: "var(--brand-soft)", cursor: "pointer" }}
+                className="cursor-pointer rounded-xl border border-line-bright bg-brand-soft px-5 py-2 text-xs font-bold text-brand transition disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {authActionPending === "signup" ? "Redirecting..." : "Sign Up"}
               </button>
               <button
                 onClick={() => { void startForgotPassword(); }}
                 disabled={authBusy}
-                className="px-2 py-1 text-xs transition disabled:cursor-not-allowed disabled:opacity-50"
-                style={{ color: "var(--muted)", background: "none", border: "none", textDecoration: "underline", textDecorationColor: "rgba(104,104,160,0.4)", cursor: "pointer" }}
+                className="cursor-pointer border-none bg-transparent px-2 py-1 text-xs text-muted underline decoration-[rgba(104,104,160,0.4)] transition disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {authActionPending === "forgot" ? "Redirecting..." : "Forgot Password?"}
               </button>
@@ -228,7 +204,7 @@ export default function LandingPage() {
 
         {session.status === "error" && (
           <div className="mx-auto max-w-7xl px-4">
-            <p style={{ borderRadius: "10px", border: "1px solid var(--danger-glow)", background: "var(--danger-soft)", padding: "12px 16px", fontSize: "0.875rem", color: "var(--danger)", marginBottom: "16px" }}>
+            <p className="mb-4 rounded-md border border-danger-glow bg-danger-soft px-4 py-3 text-base text-danger">
               {session.error}
             </p>
           </div>
@@ -256,7 +232,7 @@ export default function LandingPage() {
                   Limited Time
                 </span>
               </div>
-              <Link href="/products" className="no-underline" style={{ color: "var(--brand)", fontWeight: 700, fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "4px" }}>
+              <Link href="/products" className="flex items-center gap-1 text-sm font-bold text-brand no-underline">
                 View All {"->"}
               </Link>
             </div>
@@ -275,7 +251,7 @@ export default function LandingPage() {
         >
           <div className="section-header">
             <h2>Trending Products</h2>
-            <Link href="/products" className="no-underline" style={{ color: "var(--brand)", fontWeight: 700, fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "4px" }}>
+            <Link href="/products" className="flex items-center gap-1 text-sm font-bold text-brand no-underline">
               View All {"->"}
             </Link>
           </div>
@@ -287,13 +263,13 @@ export default function LandingPage() {
           )}
 
           {status === "error" && (
-            <p style={{ borderRadius: "12px", border: "1px solid var(--warning-border)", background: "var(--warning-soft)", padding: "14px 16px", fontSize: "0.875rem", color: "var(--warning-text)" }}>
+            <p className="rounded-[12px] border border-warning-border bg-warning-soft px-4 py-3.5 text-base text-warning-text">
               Warning: Product catalog is unavailable right now. Please try again later.
             </p>
           )}
 
           {status === "ready" && trendingProducts.length === 0 && (
-            <p style={{ borderRadius: "12px", border: "1px dashed var(--line-bright)", padding: "24px", textAlign: "center", fontSize: "0.875rem", color: "var(--muted)" }}>
+            <p className="rounded-[12px] border border-dashed border-line-bright p-6 text-center text-base text-muted">
               No products available yet. Check back soon!
             </p>
           )}
@@ -310,7 +286,7 @@ export default function LandingPage() {
           <section className="animate-rise mx-auto max-w-7xl px-4 pb-12" style={{ animationDelay: "350ms" }}>
             <div className="section-header">
               <h2>Recommended For You</h2>
-              <Link href="/products" className="no-underline" style={{ color: "var(--brand)", fontWeight: 700, fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "4px" }}>
+              <Link href="/products" className="flex items-center gap-1 text-sm font-bold text-brand no-underline">
                 View All {"->"}
               </Link>
             </div>
@@ -328,7 +304,7 @@ export default function LandingPage() {
             <div className="section-header">
               <h2>Recently Viewed</h2>
             </div>
-            <div style={{ display: "flex", gap: "16px", overflowX: "auto", paddingBottom: "8px" }}>
+            <div className="flex gap-4 overflow-x-auto pb-2">
               {recentlyViewed.map((product, idx) => {
                 const discount = calcDiscount(product.regularPrice, product.sellingPrice);
                 const imgUrl = resolveImageUrl(product.mainImage);
@@ -336,20 +312,20 @@ export default function LandingPage() {
                   <Link
                     href={`/products/${encodeURIComponent((product.slug || product.id).trim())}`}
                     key={product.id}
-                    className="product-card animate-rise no-underline"
-                    style={{ animationDelay: `${idx * 40}ms`, minWidth: "200px", maxWidth: "220px", flexShrink: 0 }}
+                    className="product-card animate-rise shrink-0 no-underline"
+                    style={{ animationDelay: `${idx * 40}ms`, minWidth: "200px", maxWidth: "220px" }}
                   >
                     {discount && <span className="badge-sale">-{discount}%</span>}
-                    <div style={{ position: "relative", aspectRatio: "1/1", overflow: "hidden", background: "var(--surface-2)" }}>
+                    <div className="relative aspect-square overflow-hidden bg-surface-2">
                       {imgUrl ? (
                         <Image src={imgUrl} alt={product.name} width={300} height={300} className="product-card-img" unoptimized />
                       ) : (
-                        <div style={{ display: "grid", placeItems: "center", width: "100%", height: "100%", background: "linear-gradient(135deg, var(--surface), #1c1c38)", color: "var(--muted-2)", fontSize: "0.75rem", fontWeight: 600 }}>No Image</div>
+                        <div className="grid h-full w-full place-items-center bg-[linear-gradient(135deg,var(--surface),#1c1c38)] text-xs font-semibold text-muted-2">No Image</div>
                       )}
                     </div>
                     <div className="product-card-body">
-                      <p style={{ margin: "0 0 4px", fontSize: "0.8rem", fontWeight: 600, color: "var(--ink)", display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{product.name}</p>
-                      <span className="price-current" style={{ fontSize: "0.85rem" }}>{money(product.sellingPrice)}</span>
+                      <p className="mb-1 line-clamp-1 text-sm font-semibold text-ink">{product.name}</p>
+                      <span className="price-current text-sm">{money(product.sellingPrice)}</span>
                     </div>
                   </Link>
                 );

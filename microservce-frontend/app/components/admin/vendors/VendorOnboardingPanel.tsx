@@ -65,8 +65,7 @@ export default function VendorOnboardingPanel({
           <button
             type="button"
             onClick={onFillFromVendor}
-            className="rounded-md border border-[var(--line)] px-2 py-1 text-xs"
-            style={{ background: "var(--surface-2)", color: "var(--ink-light)" }}
+            className="rounded-md border border-[var(--line)] bg-surface-2 px-2 py-1 text-xs text-ink-light"
           >
             Use Vendor Info
           </button>
@@ -75,8 +74,7 @@ export default function VendorOnboardingPanel({
 
       <div className="mb-3 rounded-lg border border-[var(--line)] p-3">
         <div
-          className="mb-3 rounded-lg border border-[var(--line)] p-3 text-xs"
-          style={{ background: "rgba(0,212,255,0.03)" }}
+          className="mb-3 rounded-lg border border-[var(--line)] bg-[rgba(0,212,255,0.03)] p-3 text-xs"
         >
           <p className="font-semibold text-[var(--ink)]">What happens on onboarding</p>
           <ul className="mt-2 list-disc space-y-1 pl-4 text-[var(--muted)]">
@@ -135,8 +133,7 @@ export default function VendorOnboardingPanel({
 
         {hasLinkedKeycloakUser && (
           <div
-            className="rounded-lg border px-3 py-2 text-xs"
-            style={{ background: "rgba(59,130,246,0.06)", borderColor: "rgba(59,130,246,0.22)" }}
+            className="rounded-lg border border-blue-500/[0.22] bg-blue-500/[0.06] px-3 py-2 text-xs"
           >
             <p className="font-semibold text-[var(--ink)]">Existing Keycloak user selected</p>
             <p className="mt-1 text-[var(--muted)]">
@@ -218,8 +215,7 @@ export default function VendorOnboardingPanel({
                     keycloakUserId: "",
                   }))
                 }
-                className="rounded-md border border-[var(--line)] px-2 py-1 text-[11px]"
-                style={{ background: "var(--surface-2)", color: "var(--ink-light)" }}
+                className="rounded-md border border-[var(--line)] bg-surface-2 px-2 py-1 text-[11px] text-ink-light"
                 disabled={onboarding}
               >
                 Clear Linked User
@@ -263,18 +259,12 @@ export default function VendorOnboardingPanel({
 
       {lastOnboardResult && (
         <div
-          className="mt-3 rounded-lg border p-3 text-xs"
-          style={{ background: "rgba(16,185,129,0.06)", borderColor: "rgba(16,185,129,0.25)" }}
+          className="mt-3 rounded-lg border border-emerald-500/25 bg-emerald-500/[0.06] p-3 text-xs"
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="font-semibold text-[var(--ink)]">Last onboarding result</p>
             <span
-              className="rounded px-2 py-0.5 text-[10px]"
-              style={{
-                background: "rgba(16,185,129,0.14)",
-                border: "1px solid rgba(16,185,129,0.25)",
-                color: "#34d399",
-              }}
+              className="rounded border border-emerald-500/25 bg-emerald-500/[0.14] px-2 py-0.5 text-[10px] text-emerald-400"
             >
               {lastOnboardResult.keycloakUserCreated ? "KEYCLOAK USER CREATED" : "EXISTING USER LINKED"}
             </span>

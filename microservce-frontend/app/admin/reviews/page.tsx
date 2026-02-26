@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import toast from "react-hot-toast";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuthSession } from "../../../lib/authSession";
 import type { Review } from "../../../lib/types/review";
+import AdminPageShell from "../../components/ui/AdminPageShell";
 
 type PagedReviews = { content: Review[]; totalPages: number; totalElements: number; number: number };
 
@@ -30,117 +32,110 @@ export default function AdminReviewsPage() {
 
   const [tab, setTab] = useState<Tab>("reviews");
 
-  // Reviews state
-  const [reviews, setReviews] = useState<Review[]>([]);
+  // Reviews UI state
   const [reviewPage, setReviewPage] = useState(0);
-  const [reviewTotalPages, setReviewTotalPages] = useState(0);
-  const [reviewTotal, setReviewTotal] = useState(0);
-  const [reviewLoading, setReviewLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<string>("all");
   const [ratingFilter, setRatingFilter] = useState<string>("all");
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // Reports state
-  const [reports, setReports] = useState<ReviewReport[]>([]);
+  // Reports UI state
   const [reportPage, setReportPage] = useState(0);
-  const [reportTotalPages, setReportTotalPages] = useState(0);
-  const [reportTotal, setReportTotal] = useState(0);
-  const [reportLoading, setReportLoading] = useState(true);
   const [reportStatusFilter, setReportStatusFilter] = useState<string>("PENDING");
   const [updatingReportId, setUpdatingReportId] = useState<string | null>(null);
   const [reportAdminNotes, setReportAdminNotes] = useState("");
   const [reportNewStatus, setReportNewStatus] = useState<"REVIEWED" | "DISMISSED">("REVIEWED");
-  const [savingReport, setSavingReport] = useState(false);
 
-  const loadReviews = useCallback(async () => {
-    if (!apiClient) return;
-    setReviewLoading(true);
-    try {
+  // Reviews query
+  const { data: reviewsData, isLoading: reviewLoading, refetch: refetchReviews } = useQuery({
+    queryKey: ["admin-reviews", reviewPage, activeFilter, ratingFilter],
+    queryFn: async () => {
       const params = new URLSearchParams({ page: String(reviewPage), size: "20" });
       if (activeFilter !== "all") params.set("active", activeFilter);
       if (ratingFilter !== "all") params.set("rating", ratingFilter);
-      const res = await apiClient.get(`/admin/reviews?${params.toString()}`);
-      const data = res.data as PagedReviews;
-      setReviews(data.content || []);
-      setReviewTotalPages(data.totalPages || 0);
-      setReviewTotal(data.totalElements || 0);
-    } catch {
-      toast.error("Failed to load reviews");
-    } finally {
-      setReviewLoading(false);
-    }
-  }, [apiClient, reviewPage, activeFilter, ratingFilter]);
+      const res = await apiClient!.get(`/admin/reviews?${params.toString()}`);
+      return res.data as PagedReviews;
+    },
+    enabled: sessionStatus === "ready" && !!apiClient,
+  });
 
-  const loadReports = useCallback(async () => {
-    if (!apiClient) return;
-    setReportLoading(true);
-    try {
+  const reviews = reviewsData?.content ?? [];
+  const reviewTotalPages = reviewsData?.totalPages ?? 0;
+  const reviewTotal = reviewsData?.totalElements ?? 0;
+
+  // Reports query
+  const { data: reportsData, isLoading: reportLoading, refetch: refetchReports } = useQuery({
+    queryKey: ["admin-review-reports", reportPage, reportStatusFilter],
+    queryFn: async () => {
       const params = new URLSearchParams({ page: String(reportPage), size: "20" });
       if (reportStatusFilter !== "all") params.set("status", reportStatusFilter);
-      const res = await apiClient.get(`/admin/reviews/reports?${params.toString()}`);
-      const data = res.data as PagedReports;
-      setReports(data.content || []);
-      setReportTotalPages(data.totalPages || 0);
-      setReportTotal(data.totalElements || 0);
-    } catch {
-      toast.error("Failed to load reports");
-    } finally {
-      setReportLoading(false);
-    }
-  }, [apiClient, reportPage, reportStatusFilter]);
+      const res = await apiClient!.get(`/admin/reviews/reports?${params.toString()}`);
+      return res.data as PagedReports;
+    },
+    enabled: sessionStatus === "ready" && !!apiClient,
+  });
 
-  useEffect(() => {
-    if (sessionStatus !== "ready") return;
-    void loadReviews();
-    void loadReports();
-  }, [sessionStatus, loadReviews, loadReports]);
+  const reports = reportsData?.content ?? [];
+  const reportTotalPages = reportsData?.totalPages ?? 0;
+  const reportTotal = reportsData?.totalElements ?? 0;
 
-  const toggleActive = async (reviewId: string, currentlyActive: boolean) => {
-    if (!apiClient || togglingId) return;
-    setTogglingId(reviewId);
-    try {
+  // Mutations
+  const toggleActiveMutation = useMutation({
+    mutationFn: async ({ reviewId, currentlyActive }: { reviewId: string; currentlyActive: boolean }) => {
       const action = currentlyActive ? "deactivate" : "activate";
-      await apiClient.put(`/admin/reviews/${reviewId}/${action}`);
-      setReviews((old) => old.map((r) => (r.id === reviewId ? { ...r, active: !currentlyActive } : r)));
+      await apiClient!.put(`/admin/reviews/${reviewId}/${action}`);
+      return { reviewId, currentlyActive };
+    },
+    onMutate: ({ reviewId }) => {
+      setTogglingId(reviewId);
+    },
+    onSuccess: ({ currentlyActive }) => {
+      void refetchReviews();
       toast.success(currentlyActive ? "Review deactivated" : "Review activated");
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(err instanceof Error ? err.message : "Failed to update review");
-    } finally {
+    },
+    onSettled: () => {
       setTogglingId(null);
-    }
-  };
+    },
+  });
 
-  const deleteReview = async (reviewId: string) => {
-    if (!apiClient || deletingId) return;
-    setDeletingId(reviewId);
-    try {
-      await apiClient.delete(`/admin/reviews/${reviewId}`);
-      setReviews((old) => old.filter((r) => r.id !== reviewId));
-      setReviewTotal((t) => t - 1);
+  const deleteReviewMutation = useMutation({
+    mutationFn: async (reviewId: string) => {
+      await apiClient!.delete(`/admin/reviews/${reviewId}`);
+      return reviewId;
+    },
+    onMutate: (reviewId) => {
+      setDeletingId(reviewId);
+    },
+    onSuccess: () => {
+      void refetchReviews();
       toast.success("Review deleted");
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(err instanceof Error ? err.message : "Failed to delete review");
-    } finally {
+    },
+    onSettled: () => {
       setDeletingId(null);
-    }
-  };
+    },
+  });
 
-  const updateReport = async (reportId: string) => {
-    if (!apiClient || savingReport) return;
-    setSavingReport(true);
-    try {
-      await apiClient.put(`/admin/reviews/reports/${reportId}`, { status: reportNewStatus, adminNotes: reportAdminNotes.trim() || null });
-      setReports((old) => old.map((r) => (r.id === reportId ? { ...r, status: reportNewStatus, adminNotes: reportAdminNotes.trim() || null } : r)));
+  const updateReportMutation = useMutation({
+    mutationFn: async (reportId: string) => {
+      await apiClient!.put(`/admin/reviews/reports/${reportId}`, { status: reportNewStatus, adminNotes: reportAdminNotes.trim() || null });
+      return reportId;
+    },
+    onSuccess: () => {
       setUpdatingReportId(null);
       setReportAdminNotes("");
+      void refetchReports();
       toast.success("Report updated");
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(err instanceof Error ? err.message : "Failed to update report");
-    } finally {
-      setSavingReport(false);
-    }
-  };
+    },
+  });
 
   const stars = (rating: number) => "★".repeat(rating) + "☆".repeat(5 - rating);
 
@@ -149,72 +144,60 @@ export default function AdminReviewsPage() {
 
   if (sessionStatus === "loading" || sessionStatus === "idle") {
     return (
-      <div style={{ minHeight: "100vh", background: "var(--bg)", display: "grid", placeItems: "center" }}>
-        <p style={{ color: "var(--muted)" }}>Loading...</p>
+      <div className="min-h-screen bg-bg grid place-items-center">
+        <p className="text-muted">Loading...</p>
       </div>
     );
   }
 
-  const tabStyle = (t: Tab) => ({
-    padding: "10px 20px",
-    borderRadius: "10px 10px 0 0",
-    border: "1px solid var(--line-bright)",
-    borderBottom: tab === t ? "none" : "1px solid var(--line-bright)",
-    background: tab === t ? "rgba(17,17,40,0.7)" : "transparent",
-    color: tab === t ? "#fff" : "var(--muted)",
-    fontSize: "0.85rem",
-    fontWeight: 700 as const,
-    cursor: "pointer" as const,
-    marginBottom: "-1px",
-  });
+  const tabClass = (t: Tab) =>
+    `px-5 py-2.5 rounded-t-md border border-line-bright text-sm font-bold cursor-pointer -mb-px ${
+      tab === t
+        ? "bg-[rgba(17,17,40,0.7)] text-white border-b-transparent"
+        : "bg-transparent text-muted"
+    }`;
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-8">
-        <nav className="breadcrumb">
-          <Link href="/">Home</Link>
-          <span className="breadcrumb-sep">›</span>
-          <span className="breadcrumb-current">Admin Reviews</span>
-        </nav>
-
-        <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: "1.5rem", fontWeight: 900, color: "#fff", margin: "0 0 20px" }}>
-          Review Moderation
-        </h1>
+    <AdminPageShell
+      title="Review Moderation"
+      breadcrumbs={[{ label: "Admin", href: "/admin/dashboard" }, { label: "Reviews" }]}
+    >
 
         {/* Tabs */}
-        <div style={{ display: "flex", gap: "4px", marginBottom: "0" }}>
-          <button onClick={() => setTab("reviews")} style={tabStyle("reviews")}>
+        <div className="flex gap-1">
+          <button onClick={() => setTab("reviews")} className={tabClass("reviews")}>
             Reviews ({reviewTotal})
           </button>
-          <button onClick={() => setTab("reports")} style={tabStyle("reports")}>
+          <button onClick={() => setTab("reports")} className={tabClass("reports")}>
             Reports ({reportTotal})
           </button>
         </div>
 
-        <div style={{ background: "rgba(17,17,40,0.7)", backdropFilter: "blur(16px)", border: "1px solid var(--line-bright)", borderRadius: "0 16px 16px 16px", padding: "24px" }}>
+        <div className="bg-[rgba(17,17,40,0.7)] backdrop-blur-[16px] border border-line-bright rounded-[0_16px_16px_16px] p-6">
 
           {/* ── REVIEWS TAB ── */}
           {tab === "reviews" && (
             <>
               {/* Filters */}
-              <div style={{ display: "flex", gap: "12px", marginBottom: "20px", flexWrap: "wrap" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.8rem", color: "var(--muted)" }}>
+              <div className="flex gap-3 mb-5 flex-wrap">
+                <label className="flex items-center gap-1.5 text-sm text-muted">
                   Status:
                   <select
                     value={activeFilter}
                     onChange={(e) => { setActiveFilter(e.target.value); setReviewPage(0); }}
-                    style={{ padding: "6px 10px", borderRadius: "8px", border: "1px solid var(--line-bright)", background: "rgba(255,255,255,0.04)", color: "#fff", fontSize: "0.8rem" }}
+                    className="filter-select"
                   >
                     <option value="all">All</option>
                     <option value="true">Active</option>
                     <option value="false">Inactive</option>
                   </select>
                 </label>
-                <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.8rem", color: "var(--muted)" }}>
+                <label className="flex items-center gap-1.5 text-sm text-muted">
                   Rating:
                   <select
                     value={ratingFilter}
                     onChange={(e) => { setRatingFilter(e.target.value); setReviewPage(0); }}
-                    style={{ padding: "6px 10px", borderRadius: "8px", border: "1px solid var(--line-bright)", background: "rgba(255,255,255,0.04)", color: "#fff", fontSize: "0.8rem" }}
+                    className="filter-select"
                   >
                     <option value="all">All</option>
                     {[1, 2, 3, 4, 5].map((r) => <option key={r} value={String(r)}>{r} star{r !== 1 && "s"}</option>)}
@@ -223,58 +206,50 @@ export default function AdminReviewsPage() {
               </div>
 
               {reviewLoading ? (
-                <p style={{ textAlign: "center", color: "var(--muted)", padding: "32px 0" }}>Loading reviews...</p>
+                <p className="text-center text-muted py-8">Loading reviews...</p>
               ) : reviews.length === 0 ? (
-                <p style={{ textAlign: "center", color: "var(--muted)", padding: "32px 0" }}>No reviews match the current filters.</p>
+                <p className="text-center text-muted py-8">No reviews match the current filters.</p>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div className="flex flex-col gap-3">
                   {reviews.map((review) => (
-                    <div key={review.id} style={{ border: "1px solid var(--line-bright)", borderRadius: "12px", padding: "16px 20px", background: review.active ? "transparent" : "rgba(255,0,0,0.03)" }}>
-                      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px" }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px", flexWrap: "wrap" }}>
-                            <span style={{ color: "var(--brand-glow)", fontSize: "0.85rem" }}>{stars(review.rating)}</span>
-                            <span style={{ fontSize: "0.72rem", padding: "2px 8px", borderRadius: "6px", fontWeight: 700, background: review.active ? "rgba(52,211,153,0.1)" : "rgba(239,68,68,0.1)", color: review.active ? "var(--success)" : "var(--error)" }}>
+                    <div key={review.id} className={`border border-line-bright rounded-lg px-5 py-4 ${review.active ? "bg-transparent" : "bg-[rgba(255,0,0,0.03)]"}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <span className="text-brand-glow text-sm">{stars(review.rating)}</span>
+                            <span className={`text-xs px-2 py-0.5 rounded-sm font-bold ${review.active ? "bg-success-soft text-success" : "bg-[rgba(239,68,68,0.1)] text-[var(--error)]"}`}>
                               {review.active ? "Active" : "Inactive"}
                             </span>
                             {review.verifiedPurchase && (
-                              <span style={{ fontSize: "0.65rem", fontWeight: 700, color: "var(--brand)", background: "rgba(0,212,255,0.08)", padding: "2px 8px", borderRadius: "6px" }}>
+                              <span className="text-[0.65rem] font-bold text-brand bg-brand-soft px-2 py-0.5 rounded-sm">
                                 Verified
                               </span>
                             )}
                           </div>
-                          <p style={{ margin: "0 0 4px", fontSize: "0.78rem", color: "var(--muted)" }}>
+                          <p className="mb-1 text-sm text-muted">
                             by {review.customerDisplayName} · {new Date(review.createdAt).toLocaleDateString()}
                           </p>
-                          {review.title && <p style={{ margin: "0 0 4px", fontSize: "0.9rem", fontWeight: 700, color: "#fff" }}>{review.title}</p>}
-                          <p style={{ margin: 0, fontSize: "0.82rem", color: "var(--ink-light)", lineHeight: 1.5 }}>{review.comment}</p>
+                          {review.title && <p className="mb-1 text-base font-bold text-white">{review.title}</p>}
+                          <p className="text-base text-ink-light leading-relaxed">{review.comment}</p>
                         </div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "6px", flexShrink: 0 }}>
+                        <div className="flex flex-col gap-1.5 shrink-0">
                           <button
-                            onClick={() => void toggleActive(review.id, review.active)}
+                            onClick={() => toggleActiveMutation.mutate({ reviewId: review.id, currentlyActive: review.active })}
                             disabled={togglingId === review.id}
-                            style={{
-                              padding: "5px 12px", borderRadius: "8px", fontSize: "0.72rem", fontWeight: 700, cursor: togglingId === review.id ? "not-allowed" : "pointer",
-                              border: "1px solid var(--line-bright)", background: review.active ? "rgba(239,68,68,0.08)" : "rgba(52,211,153,0.08)",
-                              color: review.active ? "var(--error)" : "var(--success)", opacity: togglingId === review.id ? 0.5 : 1,
-                            }}
+                            className={`px-3 py-1 rounded-sm text-xs font-bold border border-line-bright ${togglingId === review.id ? "cursor-not-allowed opacity-50" : "cursor-pointer"} ${review.active ? "bg-[rgba(239,68,68,0.08)] text-[var(--error)]" : "bg-success-soft text-success"}`}
                           >
                             {togglingId === review.id ? "..." : review.active ? "Deactivate" : "Activate"}
                           </button>
                           <button
-                            onClick={() => void deleteReview(review.id)}
+                            onClick={() => deleteReviewMutation.mutate(review.id)}
                             disabled={deletingId === review.id}
-                            style={{
-                              padding: "5px 12px", borderRadius: "8px", fontSize: "0.72rem", fontWeight: 700, cursor: deletingId === review.id ? "not-allowed" : "pointer",
-                              border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.08)", color: "var(--error)",
-                              opacity: deletingId === review.id ? 0.5 : 1,
-                            }}
+                            className={`px-3 py-1 rounded-sm text-xs font-bold border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] text-[var(--error)] ${deletingId === review.id ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
                           >
                             {deletingId === review.id ? "Deleting..." : "Delete"}
                           </button>
                           <Link
                             href={`/products/${encodeURIComponent(review.productId)}`}
-                            style={{ fontSize: "0.68rem", color: "var(--brand)", textDecoration: "none", textAlign: "center" }}
+                            className="text-xs text-brand no-underline text-center"
                           >
                             View Product
                           </Link>
@@ -287,23 +262,23 @@ export default function AdminReviewsPage() {
 
               {/* Pagination */}
               {reviewTotalPages > 1 && (
-                <div style={{ display: "flex", justifyContent: "center", gap: "8px", marginTop: "20px" }}>
+                <div className="flex justify-center gap-2 mt-5">
                   <button
                     onClick={() => setReviewPage((p) => Math.max(0, p - 1))}
                     disabled={reviewPage === 0}
-                    style={{ padding: "8px 16px", borderRadius: "10px", border: "1px solid var(--line-bright)", background: reviewPage === 0 ? "transparent" : "rgba(0,212,255,0.08)", color: reviewPage === 0 ? "var(--muted-2)" : "var(--brand)", fontSize: "0.8rem", fontWeight: 600, cursor: reviewPage === 0 ? "not-allowed" : "pointer" }}
+                    className={`px-4 py-2 rounded-md border border-line-bright text-sm font-semibold ${reviewPage === 0 ? "bg-transparent text-muted-2 cursor-not-allowed" : "bg-brand-soft text-brand cursor-pointer"}`}
                   >
-                    ← Prev
+                    &larr; Prev
                   </button>
-                  <span style={{ display: "flex", alignItems: "center", fontSize: "0.8rem", color: "var(--muted)" }}>
+                  <span className="flex items-center text-sm text-muted">
                     {reviewPage + 1} / {reviewTotalPages}
                   </span>
                   <button
                     onClick={() => setReviewPage((p) => Math.min(reviewTotalPages - 1, p + 1))}
                     disabled={reviewPage >= reviewTotalPages - 1}
-                    style={{ padding: "8px 16px", borderRadius: "10px", border: "1px solid var(--line-bright)", background: reviewPage >= reviewTotalPages - 1 ? "transparent" : "rgba(0,212,255,0.08)", color: reviewPage >= reviewTotalPages - 1 ? "var(--muted-2)" : "var(--brand)", fontSize: "0.8rem", fontWeight: 600, cursor: reviewPage >= reviewTotalPages - 1 ? "not-allowed" : "pointer" }}
+                    className={`px-4 py-2 rounded-md border border-line-bright text-sm font-semibold ${reviewPage >= reviewTotalPages - 1 ? "bg-transparent text-muted-2 cursor-not-allowed" : "bg-brand-soft text-brand cursor-pointer"}`}
                   >
-                    Next →
+                    Next &rarr;
                   </button>
                 </div>
               )}
@@ -314,13 +289,13 @@ export default function AdminReviewsPage() {
           {tab === "reports" && (
             <>
               {/* Filter */}
-              <div style={{ display: "flex", gap: "12px", marginBottom: "20px" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.8rem", color: "var(--muted)" }}>
+              <div className="flex gap-3 mb-5">
+                <label className="flex items-center gap-1.5 text-sm text-muted">
                   Status:
                   <select
                     value={reportStatusFilter}
                     onChange={(e) => { setReportStatusFilter(e.target.value); setReportPage(0); }}
-                    style={{ padding: "6px 10px", borderRadius: "8px", border: "1px solid var(--line-bright)", background: "rgba(255,255,255,0.04)", color: "#fff", fontSize: "0.8rem" }}
+                    className="filter-select"
                   >
                     <option value="all">All</option>
                     <option value="PENDING">Pending</option>
@@ -331,33 +306,33 @@ export default function AdminReviewsPage() {
               </div>
 
               {reportLoading ? (
-                <p style={{ textAlign: "center", color: "var(--muted)", padding: "32px 0" }}>Loading reports...</p>
+                <p className="text-center text-muted py-8">Loading reports...</p>
               ) : reports.length === 0 ? (
-                <p style={{ textAlign: "center", color: "var(--muted)", padding: "32px 0" }}>No reports match the current filter.</p>
+                <p className="text-center text-muted py-8">No reports match the current filter.</p>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div className="flex flex-col gap-3">
                   {reports.map((report) => (
-                    <div key={report.id} style={{ border: "1px solid var(--line-bright)", borderRadius: "12px", padding: "16px 20px" }}>
-                      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px" }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px", flexWrap: "wrap" }}>
-                            <span style={{ fontSize: "0.72rem", fontWeight: 700, padding: "2px 8px", borderRadius: "6px", background: "rgba(239,68,68,0.1)", color: "var(--error)" }}>
+                    <div key={report.id} className="border border-line-bright rounded-lg px-5 py-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                            <span className="text-xs font-bold px-2 py-0.5 rounded-sm bg-[rgba(239,68,68,0.1)] text-[var(--error)]">
                               {reasonLabel[report.reason] || report.reason}
                             </span>
-                            <span style={{ fontSize: "0.72rem", fontWeight: 700, padding: "2px 8px", borderRadius: "6px", border: "1px solid var(--line-bright)", color: statusColor[report.status] || "var(--muted)" }}>
+                            <span className="text-xs font-bold px-2 py-0.5 rounded-sm border border-line-bright" style={{ color: statusColor[report.status] || "var(--muted)" }}>
                               {report.status}
                             </span>
                           </div>
                           {report.description && (
-                            <p style={{ margin: "0 0 6px", fontSize: "0.82rem", color: "var(--ink-light)", lineHeight: 1.5 }}>
+                            <p className="mb-1.5 text-base text-ink-light leading-relaxed">
                               {report.description}
                             </p>
                           )}
-                          <p style={{ margin: 0, fontSize: "0.72rem", color: "var(--muted-2)" }}>
+                          <p className="text-xs text-muted-2">
                             Review ID: {report.reviewId.slice(0, 8)}... · Reported {new Date(report.createdAt).toLocaleDateString()}
                           </p>
                           {report.adminNotes && (
-                            <p style={{ margin: "6px 0 0", fontSize: "0.78rem", color: "var(--brand)", fontStyle: "italic" }}>
+                            <p className="mt-1.5 text-sm text-brand italic">
                               Admin notes: {report.adminNotes}
                             </p>
                           )}
@@ -366,10 +341,7 @@ export default function AdminReviewsPage() {
                         {report.status === "PENDING" && updatingReportId !== report.id && (
                           <button
                             onClick={() => { setUpdatingReportId(report.id); setReportAdminNotes(""); setReportNewStatus("REVIEWED"); }}
-                            style={{
-                              padding: "5px 12px", borderRadius: "8px", fontSize: "0.72rem", fontWeight: 700,
-                              border: "1px solid var(--line-bright)", background: "rgba(0,212,255,0.08)", color: "var(--brand)", cursor: "pointer", whiteSpace: "nowrap",
-                            }}
+                            className="px-3 py-1 rounded-sm text-xs font-bold border border-line-bright bg-brand-soft text-brand cursor-pointer whitespace-nowrap"
                           >
                             Review Report
                           </button>
@@ -378,26 +350,26 @@ export default function AdminReviewsPage() {
 
                       {/* Update report form */}
                       {updatingReportId === report.id && (
-                        <div style={{ marginTop: "12px", padding: "12px", borderRadius: "10px", border: "1px solid var(--line-bright)", background: "rgba(0,212,255,0.03)" }}>
-                          <div style={{ display: "flex", gap: "12px", marginBottom: "8px", alignItems: "center" }}>
-                            <label style={{ fontSize: "0.8rem", color: "var(--muted)" }}>Action:</label>
-                            <label style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "0.8rem", cursor: "pointer" }}>
+                        <div className="mt-3 p-3 rounded-md border border-line-bright bg-[rgba(0,212,255,0.03)]">
+                          <div className="flex gap-3 mb-2 items-center">
+                            <label className="text-sm text-muted">Action:</label>
+                            <label className="flex items-center gap-1 text-sm cursor-pointer">
                               <input
                                 type="radio"
                                 name={`report-${report.id}`}
                                 checked={reportNewStatus === "REVIEWED"}
                                 onChange={() => setReportNewStatus("REVIEWED")}
                               />
-                              <span style={{ color: "var(--success)" }}>Mark Reviewed</span>
+                              <span className="text-success">Mark Reviewed</span>
                             </label>
-                            <label style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "0.8rem", cursor: "pointer" }}>
+                            <label className="flex items-center gap-1 text-sm cursor-pointer">
                               <input
                                 type="radio"
                                 name={`report-${report.id}`}
                                 checked={reportNewStatus === "DISMISSED"}
                                 onChange={() => setReportNewStatus("DISMISSED")}
                               />
-                              <span style={{ color: "var(--muted)" }}>Dismiss</span>
+                              <span className="text-muted">Dismiss</span>
                             </label>
                           </div>
                           <textarea
@@ -406,29 +378,21 @@ export default function AdminReviewsPage() {
                             maxLength={500}
                             rows={2}
                             placeholder="Admin notes (optional)..."
-                            style={{
-                              width: "100%", padding: "8px 12px", borderRadius: "8px",
-                              border: "1px solid var(--line-bright)", background: "rgba(255,255,255,0.04)",
-                              color: "#fff", fontSize: "0.82rem", resize: "vertical", outline: "none",
-                            }}
+                            className="form-input w-full text-base resize-y"
                           />
-                          <div style={{ display: "flex", gap: "8px", marginTop: "8px", justifyContent: "flex-end" }}>
+                          <div className="flex gap-2 mt-2 justify-end">
                             <button
                               onClick={() => setUpdatingReportId(null)}
-                              style={{ padding: "6px 14px", borderRadius: "8px", border: "1px solid var(--line-bright)", background: "transparent", color: "var(--muted)", fontSize: "0.8rem", cursor: "pointer" }}
+                              className="btn-ghost px-3.5 py-1.5 text-sm"
                             >
                               Cancel
                             </button>
                             <button
-                              onClick={() => void updateReport(report.id)}
-                              disabled={savingReport}
-                              style={{
-                                padding: "6px 14px", borderRadius: "8px", border: "none",
-                                background: "var(--gradient-brand)", color: "#fff", fontSize: "0.8rem", fontWeight: 700,
-                                cursor: savingReport ? "not-allowed" : "pointer", opacity: savingReport ? 0.6 : 1,
-                              }}
+                              onClick={() => updateReportMutation.mutate(report.id)}
+                              disabled={updateReportMutation.isPending}
+                              className={`btn-primary px-3.5 py-1.5 text-sm font-bold ${updateReportMutation.isPending ? "cursor-not-allowed opacity-60" : ""}`}
                             >
-                              {savingReport ? "Saving..." : "Save"}
+                              {updateReportMutation.isPending ? "Saving..." : "Save"}
                             </button>
                           </div>
                         </div>
@@ -440,29 +404,29 @@ export default function AdminReviewsPage() {
 
               {/* Pagination */}
               {reportTotalPages > 1 && (
-                <div style={{ display: "flex", justifyContent: "center", gap: "8px", marginTop: "20px" }}>
+                <div className="flex justify-center gap-2 mt-5">
                   <button
                     onClick={() => setReportPage((p) => Math.max(0, p - 1))}
                     disabled={reportPage === 0}
-                    style={{ padding: "8px 16px", borderRadius: "10px", border: "1px solid var(--line-bright)", background: reportPage === 0 ? "transparent" : "rgba(0,212,255,0.08)", color: reportPage === 0 ? "var(--muted-2)" : "var(--brand)", fontSize: "0.8rem", fontWeight: 600, cursor: reportPage === 0 ? "not-allowed" : "pointer" }}
+                    className={`px-4 py-2 rounded-md border border-line-bright text-sm font-semibold ${reportPage === 0 ? "bg-transparent text-muted-2 cursor-not-allowed" : "bg-brand-soft text-brand cursor-pointer"}`}
                   >
-                    ← Prev
+                    &larr; Prev
                   </button>
-                  <span style={{ display: "flex", alignItems: "center", fontSize: "0.8rem", color: "var(--muted)" }}>
+                  <span className="flex items-center text-sm text-muted">
                     {reportPage + 1} / {reportTotalPages}
                   </span>
                   <button
                     onClick={() => setReportPage((p) => Math.min(reportTotalPages - 1, p + 1))}
                     disabled={reportPage >= reportTotalPages - 1}
-                    style={{ padding: "8px 16px", borderRadius: "10px", border: "1px solid var(--line-bright)", background: reportPage >= reportTotalPages - 1 ? "transparent" : "rgba(0,212,255,0.08)", color: reportPage >= reportTotalPages - 1 ? "var(--muted-2)" : "var(--brand)", fontSize: "0.8rem", fontWeight: 600, cursor: reportPage >= reportTotalPages - 1 ? "not-allowed" : "pointer" }}
+                    className={`px-4 py-2 rounded-md border border-line-bright text-sm font-semibold ${reportPage >= reportTotalPages - 1 ? "bg-transparent text-muted-2 cursor-not-allowed" : "bg-brand-soft text-brand cursor-pointer"}`}
                   >
-                    Next →
+                    Next &rarr;
                   </button>
                 </div>
               )}
             </>
           )}
         </div>
-    </main>
+    </AdminPageShell>
   );
 }

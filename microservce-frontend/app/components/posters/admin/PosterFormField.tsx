@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 export default function PosterFormField({
   label,
@@ -13,7 +13,7 @@ export default function PosterFormField({
     <div className="form-group">
       <label className="form-label">{label}</label>
       {children}
-      {hint ? <div style={{ fontSize: "0.72rem", color: "var(--muted)" }}>{hint}</div> : null}
+      {hint ? <div className="text-xs text-muted">{hint}</div> : null}
     </div>
   );
 }

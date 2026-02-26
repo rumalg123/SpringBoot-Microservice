@@ -1,57 +1,39 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import toast from "react-hot-toast";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuthSession } from "../../../lib/authSession";
 import VendorPageShell from "../../components/ui/VendorPageShell";
 import WarehousesTab from "../../components/inventory/WarehousesTab";
 import StockTab from "../../components/inventory/StockTab";
 import MovementsTab from "../../components/inventory/MovementsTab";
-import { getErrorMessage } from "../../../lib/error";
 
 const TABS = ["Warehouses", "Stock", "Movements"] as const;
 type Tab = (typeof TABS)[number];
 
-const tabBtnBase: React.CSSProperties = {
-  padding: "10px 20px",
-  background: "transparent",
-  border: "none",
-  cursor: "pointer",
-  fontSize: "0.85rem",
-  fontWeight: 600,
-  transition: "color 0.2s",
-  borderBottom: "2px solid transparent",
-};
-
 export default function VendorInventoryPage() {
   const session = useAuthSession();
   const [activeTab, setActiveTab] = useState<Tab>("Stock");
-  const [vendorId, setVendorId] = useState<string>("");
-  const [loadingVendor, setLoadingVendor] = useState(true);
+
+  const ready = session.status === "ready" && !!session.apiClient && session.isVendorAdmin;
 
   /* ── Resolve vendor ID ── */
-  useEffect(() => {
-    if (session.status !== "ready" || !session.apiClient || !session.isVendorAdmin) return;
-    const fetchVendor = async () => {
-      try {
-        const res = await session.apiClient!.get("/vendor/me");
-        const data = res.data as { id?: string };
-        setVendorId(data.id || "");
-      } catch (err) {
-        toast.error(getErrorMessage(err));
-      } finally {
-        setLoadingVendor(false);
-      }
-    };
-    void fetchVendor();
-  }, [session.status, session.apiClient, session.isVendorAdmin]);
+  const { data: vendorId = "", isLoading: loadingVendor } = useQuery({
+    queryKey: ["vendor-inventory-id"],
+    queryFn: async () => {
+      const res = await session.apiClient!.get("/vendor/me");
+      const data = res.data as { id?: string };
+      return data.id || "";
+    },
+    enabled: ready,
+  });
 
   /* ── Guards ── */
   if (session.status === "loading" || session.status === "idle") {
     return (
       <VendorPageShell title="Inventory" breadcrumbs={[{ label: "Vendor", href: "/vendor" }, { label: "Inventory" }]}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300 }}>
-          <p style={{ color: "var(--muted)", fontSize: "0.875rem" }}>Loading session...</p>
+        <div className="flex items-center justify-center min-h-[300px]">
+          <p className="text-muted text-base">Loading session...</p>
         </div>
       </VendorPageShell>
     );
@@ -60,9 +42,9 @@ export default function VendorInventoryPage() {
   if (!session.isVendorAdmin) {
     return (
       <VendorPageShell title="Inventory" breadcrumbs={[{ label: "Vendor", href: "/vendor" }, { label: "Inventory" }]}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300, flexDirection: "column", gap: 12 }}>
-          <p style={{ color: "var(--danger)", fontSize: "1.1rem", fontWeight: 700, fontFamily: "var(--font-display, Syne, sans-serif)" }}>Unauthorized</p>
-          <p style={{ color: "var(--muted)", fontSize: "0.8rem" }}>Only vendor admins can manage inventory.</p>
+        <div className="flex items-center justify-center min-h-[300px] flex-col gap-3">
+          <p className="text-danger text-[1.1rem] font-bold font-[var(--font-display,Syne,sans-serif)]">Unauthorized</p>
+          <p className="text-muted text-sm">Only vendor admins can manage inventory.</p>
         </div>
       </VendorPageShell>
     );
@@ -71,8 +53,8 @@ export default function VendorInventoryPage() {
   if (loadingVendor) {
     return (
       <VendorPageShell title="Inventory" breadcrumbs={[{ label: "Vendor", href: "/vendor" }, { label: "Inventory" }]}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300 }}>
-          <p style={{ color: "var(--muted)", fontSize: "0.875rem" }}>Loading vendor profile...</p>
+        <div className="flex items-center justify-center min-h-[300px]">
+          <p className="text-muted text-base">Loading vendor profile...</p>
         </div>
       </VendorPageShell>
     );
@@ -81,16 +63,16 @@ export default function VendorInventoryPage() {
   return (
     <VendorPageShell title="Inventory" breadcrumbs={[{ label: "Vendor", href: "/vendor" }, { label: "Inventory" }]}>
       {/* ── Tab bar ── */}
-      <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--line)", marginBottom: 20 }}>
+      <div className="flex border-b border-line mb-5">
         {TABS.map((tab) => (
           <button
             key={tab}
             type="button"
             onClick={() => setActiveTab(tab)}
+            className="px-5 py-2.5 bg-transparent border-none cursor-pointer text-base font-semibold transition-colors duration-200"
             style={{
-              ...tabBtnBase,
               color: activeTab === tab ? "#34d399" : "var(--muted)",
-              borderBottomColor: activeTab === tab ? "#34d399" : "transparent",
+              borderBottom: activeTab === tab ? "2px solid #34d399" : "2px solid transparent",
             }}
           >
             {tab}

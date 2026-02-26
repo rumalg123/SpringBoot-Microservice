@@ -40,8 +40,7 @@ export default function VariationRowsEditor({
                 void createQueuedVariations();
               }}
               disabled={!canCreateQueuedVariations}
-              className="rounded-lg border border-[var(--line)] px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-              style={{ background: "var(--surface-2)", color: "var(--ink-light)" }}
+              className="rounded-lg border border-[var(--line)] bg-surface-2 px-3 py-2 text-xs font-semibold text-ink-light disabled:cursor-not-allowed disabled:opacity-50"
             >
               {creatingQueuedVariationBatch
                 ? `Creating... (${variationDrafts.length})`
@@ -52,8 +51,7 @@ export default function VariationRowsEditor({
                 type="button"
                 onClick={() => setVariationDrafts([])}
                 disabled={creatingQueuedVariationBatch}
-                className="rounded-lg border border-red-900/30 px-3 py-2 text-xs text-red-400 disabled:cursor-not-allowed disabled:opacity-60"
-                style={{ background: "rgba(239,68,68,0.06)" }}
+                className="rounded-lg border border-red-900/30 bg-red-500/[0.06] px-3 py-2 text-xs text-red-400 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Clear Queue
               </button>
@@ -71,7 +69,7 @@ export default function VariationRowsEditor({
           </p>
           <div className="grid gap-2">
             {variationDrafts.map((draft) => (
-              <div key={draft.id} className="rounded-md border border-[var(--line)] p-2 text-xs" style={{ background: "var(--surface-2)" }}>
+              <div key={draft.id} className="rounded-md border border-[var(--line)] bg-surface-2 p-2 text-xs">
                 <div className="flex items-center justify-between gap-2">
                   <p className="truncate text-[var(--ink)]">
                     Parent: <span className="font-semibold">{draft.parentLabel}</span>
@@ -81,8 +79,7 @@ export default function VariationRowsEditor({
                       type="button"
                       onClick={() => loadVariationDraftToForm(draft.id)}
                       disabled={creatingQueuedVariationBatch || savingProduct}
-                      className="rounded border border-[var(--line)] px-2 py-0.5 text-[10px] disabled:cursor-not-allowed disabled:opacity-60"
-                      style={{ background: "var(--surface-3)", color: "var(--ink-light)" }}
+                      className="rounded border border-[var(--line)] bg-surface-3 px-2 py-0.5 text-[10px] text-ink-light disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       Load To Form
                     </button>
@@ -90,8 +87,7 @@ export default function VariationRowsEditor({
                       type="button"
                       onClick={() => removeVariationDraft(draft.id)}
                       disabled={creatingQueuedVariationBatch || savingProduct}
-                      className="rounded border border-red-900/30 px-2 py-0.5 text-[10px] text-red-400 disabled:cursor-not-allowed disabled:opacity-60"
-                      style={{ background: "rgba(239,68,68,0.06)" }}
+                      className="rounded border border-red-900/30 bg-red-500/[0.06] px-2 py-0.5 text-[10px] text-red-400 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       Remove
                     </button>

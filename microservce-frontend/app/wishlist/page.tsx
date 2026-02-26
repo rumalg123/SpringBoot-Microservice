@@ -2,31 +2,57 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import AppNav from "../components/AppNav";
 import Footer from "../components/Footer";
 import { useAuthSession } from "../../lib/authSession";
 import { emitCartUpdate, emitWishlistUpdate } from "../../lib/navEvents";
-import { money } from "../../lib/format";
-import type { WishlistItem, WishlistResponse, WishlistCollection, WishlistApiRaw } from "../../lib/types/wishlist";
-import EmptyState from "../components/ui/EmptyState";
+import type { WishlistItem, WishlistCollection } from "../../lib/types/wishlist";
 import { emptyWishlist } from "../../lib/types/wishlist";
+import EmptyState from "../components/ui/EmptyState";
+import CollectionTabs from "../components/wishlist/CollectionTabs";
+import CollectionHeader from "../components/wishlist/CollectionHeader";
+import WishlistItemCard from "../components/wishlist/WishlistItemCard";
+import {
+  useWishlist,
+  useWishlistCollections,
+  useRemoveWishlistItem,
+  useMoveWishlistItemToCart,
+  useClearWishlist,
+  useCreateCollection,
+  useUpdateCollection,
+  useDeleteCollection,
+  useToggleCollectionShare,
+  useUpdateItemNote,
+  useMoveItemToCollection,
+} from "../../lib/hooks/queries/useWishlist";
 
 export default function WishlistPage() {
   const router = useRouter();
   const session = useAuthSession();
   const { status: sessionStatus, isAuthenticated, profile, logout, canViewAdmin, apiClient, emailVerified } = session;
 
-  const [wishlist, setWishlist] = useState<WishlistResponse>(emptyWishlist);
-  const [status, setStatus] = useState("Loading wishlist...");
-  const [loading, setLoading] = useState(false);
+  // --- React Query: data fetching ---
+  const { data: wishlist = emptyWishlist, isLoading: wishlistLoading } = useWishlist(apiClient);
+  const { data: collections = [] } = useWishlistCollections(apiClient);
+
+  // --- React Query: mutations ---
+  const removeItemMutation = useRemoveWishlistItem(apiClient);
+  const moveToCartMutation = useMoveWishlistItemToCart(apiClient);
+  const clearWishlistMutation = useClearWishlist(apiClient);
+  const createCollectionMutation = useCreateCollection(apiClient);
+  const updateCollectionMutation = useUpdateCollection(apiClient);
+  const deleteCollectionMutation = useDeleteCollection(apiClient);
+  const toggleShareMutation = useToggleCollectionShare(apiClient);
+  const updateItemNoteMutation = useUpdateItemNote(apiClient);
+  const moveItemToCollectionMutation = useMoveItemToCollection(apiClient);
+
+  // --- Item-level tracking state ---
   const [removingItemId, setRemovingItemId] = useState<string | null>(null);
   const [movingItemId, setMovingItemId] = useState<string | null>(null);
-  const [clearing, setClearing] = useState(false);
 
   // Collection state
-  const [collections, setCollections] = useState<WishlistCollection[]>([]);
   const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null);
   const [creatingCollection, setCreatingCollection] = useState(false);
   const [newCollectionName, setNewCollectionName] = useState("");
@@ -40,193 +66,146 @@ export default function WishlistPage() {
   const [editingCollectionDesc, setEditingCollectionDesc] = useState(false);
   const [collectionNameDraft, setCollectionNameDraft] = useState("");
   const [collectionDescDraft, setCollectionDescDraft] = useState("");
-  const [deletingCollection, setDeletingCollection] = useState(false);
-  const [togglingShare, setTogglingShare] = useState(false);
-  const [savingNote, setSavingNote] = useState(false);
-  const [savingCollection, setSavingCollection] = useState(false);
 
   const newCollectionInputRef = useRef<HTMLInputElement>(null);
 
-  const loadWishlist = useCallback(async () => {
-    if (!apiClient) return;
-    setLoading(true);
-    try {
-      const res = await apiClient.get<WishlistApiRaw>("/wishlist/me");
-      const raw = res.data;
-      const items: WishlistItem[] = raw.content ?? raw.items ?? [];
-      const itemCount = Number(raw.page?.totalElements ?? raw.itemCount ?? items.length);
-      setWishlist({ keycloakId: raw.keycloakId ?? "", items, itemCount });
-      setStatus("Wishlist ready.");
-    } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Failed to load wishlist");
-      setWishlist(emptyWishlist);
-    } finally {
-      setLoading(false);
-    }
-  }, [apiClient]);
-
-  const loadCollections = useCallback(async () => {
-    if (!apiClient) return;
-    try {
-      const res = await apiClient.get<WishlistCollection[]>("/wishlist/me/collections");
-      const data = res.data ?? [];
-      setCollections(data);
-    } catch {
-      // silently ignore - collections are optional enhancement
-    }
-  }, [apiClient]);
-
+  // --- Auth redirect ---
   useEffect(() => {
-    if (sessionStatus !== "ready") return;
-    if (!isAuthenticated) { router.replace("/"); return; }
-    void loadWishlist();
-    void loadCollections();
-  }, [sessionStatus, isAuthenticated, router, loadWishlist, loadCollections]);
+    if (sessionStatus === "ready" && !isAuthenticated) {
+      router.replace("/");
+    }
+  }, [sessionStatus, isAuthenticated, router]);
 
-  const busy = removingItemId !== null || movingItemId !== null || clearing || loading;
+  // --- Derived busy state ---
+  const busy =
+    removingItemId !== null ||
+    movingItemId !== null ||
+    clearWishlistMutation.isPending ||
+    wishlistLoading;
 
-  const removeItem = async (itemId: string) => {
+  // --- Status message ---
+  const status = wishlistLoading
+    ? "Loading wishlist..."
+    : "Wishlist ready.";
+
+  // --- Mutation wrappers ---
+
+  const removeItem = (itemId: string) => {
     if (!apiClient || busy) return;
     setRemovingItemId(itemId);
-    try {
-      await apiClient.delete(`/wishlist/me/items/${itemId}`);
-      setWishlist((old) => {
-        const nextItems = old.items.filter((item) => item.id !== itemId);
-        return { ...old, items: nextItems, itemCount: nextItems.length };
-      });
-      // Also remove from collections local state
-      setCollections((old) =>
-        old.map((c) => ({
-          ...c,
-          items: c.items.filter((i) => i.id !== itemId),
-          itemCount: c.items.filter((i) => i.id !== itemId).length,
-        }))
-      );
-      toast.success("Removed from wishlist");
-      emitWishlistUpdate();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to remove wishlist item");
-    } finally { setRemovingItemId(null); }
+    removeItemMutation.mutate(itemId, {
+      onSuccess: () => {
+        toast.success("Removed from wishlist");
+        emitWishlistUpdate();
+      },
+      onError: (err) => {
+        toast.error(err instanceof Error ? err.message : "Failed to remove wishlist item");
+      },
+      onSettled: () => setRemovingItemId(null),
+    });
   };
 
-  const clearWishlist = async () => {
+  const clearWishlist = () => {
     if (!apiClient || busy || wishlist.itemCount === 0) return;
-    setClearing(true);
-    try {
-      await apiClient.delete("/wishlist/me");
-      setWishlist(emptyWishlist);
-      setCollections([]);
-      setActiveCollectionId(null);
-      emitWishlistUpdate();
-      toast.success("Wishlist cleared");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to clear wishlist");
-    } finally { setClearing(false); }
+    clearWishlistMutation.mutate(undefined, {
+      onSuccess: () => {
+        setActiveCollectionId(null);
+        emitWishlistUpdate();
+        toast.success("Wishlist cleared");
+      },
+      onError: (err) => {
+        toast.error(err instanceof Error ? err.message : "Failed to clear wishlist");
+      },
+    });
   };
 
-  const moveToCart = async (item: WishlistItem) => {
+  const moveToCart = (item: WishlistItem) => {
     if (!apiClient || busy) return;
     if ((item.productType || "").toUpperCase() === "PARENT") {
       toast.error("Parent products cannot be bought directly. Select a variation.");
       return;
     }
     setMovingItemId(item.id);
-    try {
-      await apiClient.post(`/wishlist/me/items/${item.id}/move-to-cart`);
-      setWishlist((old) => {
-        const nextItems = old.items.filter((e) => e.id !== item.id);
-        return { ...old, items: nextItems, itemCount: nextItems.length };
-      });
-      setCollections((old) =>
-        old.map((c) => ({
-          ...c,
-          items: c.items.filter((i) => i.id !== item.id),
-          itemCount: c.items.filter((i) => i.id !== item.id).length,
-        }))
-      );
-      toast.success("Moved to cart");
-      emitCartUpdate();
-      emitWishlistUpdate();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to move item to cart");
-    } finally { setMovingItemId(null); }
+    moveToCartMutation.mutate(item, {
+      onSuccess: () => {
+        toast.success("Moved to cart");
+        emitCartUpdate();
+        emitWishlistUpdate();
+      },
+      onError: (err) => {
+        toast.error(err instanceof Error ? err.message : "Failed to move item to cart");
+      },
+      onSettled: () => setMovingItemId(null),
+    });
   };
 
-  const moveToCollection = async (item: WishlistItem, collectionId: string) => {
+  const moveToCollection = (item: WishlistItem, collectionId: string) => {
     if (!apiClient || busy) return;
     setMovingItemId(item.id);
-    try {
-      await apiClient.post("/wishlist/me/items", { productId: item.productId, collectionId });
-      await apiClient.delete(`/wishlist/me/items/${item.id}`);
-      await Promise.all([loadWishlist(), loadCollections()]);
-      toast.success("Moved to collection");
-      emitWishlistUpdate();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to move item");
-    } finally { setMovingItemId(null); }
+    moveItemToCollectionMutation.mutate({ itemId: item.id, collectionId }, {
+      onSuccess: () => {
+        toast.success("Moved to collection");
+        emitWishlistUpdate();
+      },
+      onError: (err) => {
+        toast.error(err instanceof Error ? err.message : "Failed to move item");
+      },
+      onSettled: () => setMovingItemId(null),
+    });
   };
 
   // --- Collection handlers ---
 
-  const createCollection = async () => {
+  const createCollection = () => {
     if (!apiClient || !newCollectionName.trim()) return;
     setCreatingCollection(true);
-    try {
-      const res = await apiClient.post<WishlistCollection>("/wishlist/me/collections", { name: newCollectionName.trim() });
-      const created = res.data;
-      setCollections((old) => [...old, created]);
-      setNewCollectionName("");
-      toast.success("Collection created");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to create collection");
-    } finally { setCreatingCollection(false); }
+    createCollectionMutation.mutate(newCollectionName.trim(), {
+      onSuccess: () => {
+        setNewCollectionName("");
+        toast.success("Collection created");
+      },
+      onError: (err) => {
+        toast.error(err instanceof Error ? err.message : "Failed to create collection");
+      },
+      onSettled: () => setCreatingCollection(false),
+    });
   };
 
-  const updateCollection = async (id: string, body: { name?: string; description?: string }) => {
+  const updateCollection = (id: string, body: { name?: string; description?: string }) => {
     if (!apiClient) return;
-    setSavingCollection(true);
-    try {
-      const res = await apiClient.put<WishlistCollection>(`/wishlist/me/collections/${id}`, body);
-      const updated = res.data;
-      setCollections((old) => old.map((c) => (c.id === id ? updated : c)));
-      toast.success("Collection updated");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to update collection");
-    } finally { setSavingCollection(false); }
+    updateCollectionMutation.mutate({ collectionId: id, body }, {
+      onSuccess: () => {
+        toast.success("Collection updated");
+      },
+      onError: (err) => {
+        toast.error(err instanceof Error ? err.message : "Failed to update collection");
+      },
+    });
   };
 
-  const deleteCollection = async (id: string) => {
+  const deleteCollection = (id: string) => {
     if (!apiClient) return;
-    setDeletingCollection(true);
-    try {
-      await apiClient.delete(`/wishlist/me/collections/${id}`);
-      setCollections((old) => old.filter((c) => c.id !== id));
-      setActiveCollectionId(null);
-      toast.success("Collection deleted");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete collection");
-    } finally { setDeletingCollection(false); }
+    deleteCollectionMutation.mutate(id, {
+      onSuccess: () => {
+        setActiveCollectionId(null);
+        toast.success("Collection deleted");
+      },
+      onError: (err) => {
+        toast.error(err instanceof Error ? err.message : "Failed to delete collection");
+      },
+    });
   };
 
-  const toggleShare = async (collection: WishlistCollection) => {
+  const toggleShare = (collection: WishlistCollection) => {
     if (!apiClient) return;
-    setTogglingShare(true);
-    try {
-      if (collection.shared) {
-        await apiClient.delete(`/wishlist/me/collections/${collection.id}/share`);
-        setCollections((old) =>
-          old.map((c) => (c.id === collection.id ? { ...c, shared: false, shareToken: null } : c))
-        );
-        toast.success("Sharing disabled");
-      } else {
-        const res = await apiClient.post<WishlistCollection>(`/wishlist/me/collections/${collection.id}/share`);
-        const updated = res.data;
-        setCollections((old) => old.map((c) => (c.id === collection.id ? updated : c)));
-        toast.success("Sharing enabled");
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to toggle sharing");
-    } finally { setTogglingShare(false); }
+    toggleShareMutation.mutate({ collectionId: collection.id, shared: !collection.shared }, {
+      onSuccess: () => {
+        toast.success(collection.shared ? "Sharing disabled" : "Sharing enabled");
+      },
+      onError: (err) => {
+        toast.error(err instanceof Error ? err.message : "Failed to toggle sharing");
+      },
+    });
   };
 
   const copyShareLink = (shareToken: string) => {
@@ -237,30 +216,18 @@ export default function WishlistPage() {
 
   // --- Note handlers ---
 
-  const saveNote = async (itemId: string) => {
+  const saveNote = (itemId: string) => {
     if (!apiClient) return;
-    setSavingNote(true);
-    try {
-      const res = await apiClient.put(`/wishlist/me/items/${itemId}/note`, { note: noteText });
-      const updatedItem = res.data as WishlistItem;
-      // Update in flat wishlist
-      setWishlist((old) => ({
-        ...old,
-        items: old.items.map((i) => (i.id === itemId ? { ...i, note: updatedItem.note } : i)),
-      }));
-      // Update in collections
-      setCollections((old) =>
-        old.map((c) => ({
-          ...c,
-          items: c.items.map((i) => (i.id === itemId ? { ...i, note: updatedItem.note } : i)),
-        }))
-      );
-      setEditingNote(null);
-      setNoteText("");
-      toast.success("Note saved");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save note");
-    } finally { setSavingNote(false); }
+    updateItemNoteMutation.mutate({ itemId, note: noteText }, {
+      onSuccess: () => {
+        setEditingNote(null);
+        setNoteText("");
+        toast.success("Note saved");
+      },
+      onError: (err) => {
+        toast.error(err instanceof Error ? err.message : "Failed to save note");
+      },
+    });
   };
 
   // --- Derived data ---
@@ -291,10 +258,10 @@ export default function WishlistPage() {
 
   if (sessionStatus === "loading" || sessionStatus === "idle") {
     return (
-      <div style={{ minHeight: "100vh", background: "var(--bg)", display: "grid", placeItems: "center" }}>
-        <div style={{ textAlign: "center" }}>
+      <div className="grid min-h-screen place-items-center bg-bg">
+        <div className="text-center">
           <div className="spinner-lg" />
-          <p style={{ marginTop: "16px", color: "var(--muted)", fontSize: "0.875rem" }}>Loading...</p>
+          <p className="mt-4 text-base text-muted">Loading...</p>
         </div>
       </div>
     );
@@ -303,7 +270,7 @@ export default function WishlistPage() {
   if (!isAuthenticated) return null;
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
+    <div className="min-h-screen bg-bg">
       <AppNav
         email={(profile?.email as string) || ""}
         isSuperAdmin={session.isSuperAdmin}
@@ -329,464 +296,83 @@ export default function WishlistPage() {
         {/* Header */}
         <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: "1.75rem", fontWeight: 800, color: "#fff", margin: 0 }}>
+            <h1 className="m-0 font-[Syne,sans-serif] text-[1.75rem] font-extrabold text-white">
               My Wishlist
             </h1>
-            <p style={{ marginTop: "4px", fontSize: "0.8rem", color: "var(--muted)" }}>
+            <p className="mt-1 text-sm text-muted">
               {status} {wishlist.itemCount > 0 && `\u00b7 ${wishlist.itemCount} item${wishlist.itemCount !== 1 ? "s" : ""}`}
             </p>
           </div>
-          <div style={{ display: "flex", gap: "10px" }}>
+          <div className="flex gap-2.5">
             <Link
               href="/products"
-              className="no-underline"
-              style={{ padding: "9px 18px", borderRadius: "10px", border: "1px solid var(--line-bright)", color: "var(--brand)", background: "var(--brand-soft)", fontSize: "0.8rem", fontWeight: 700 }}
+              className="rounded-md border border-line-bright bg-brand-soft px-[18px] py-[9px] text-sm font-bold text-brand no-underline"
             >
               Continue Shopping
             </Link>
             <button
               onClick={() => { void clearWishlist(); }}
               disabled={busy || wishlist.itemCount === 0}
-              style={{
-                padding: "9px 18px", borderRadius: "10px",
-                border: "1px solid var(--danger-glow)", background: "var(--danger-soft)",
-                color: "var(--danger)", fontSize: "0.8rem", fontWeight: 700,
-                cursor: busy || wishlist.itemCount === 0 ? "not-allowed" : "pointer",
-                opacity: wishlist.itemCount === 0 ? 0.4 : 1,
-              }}
+              className="rounded-md border border-danger-glow bg-danger-soft px-[18px] py-[9px] text-sm font-bold text-danger disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {clearing ? "Clearing..." : "Clear Wishlist"}
+              {clearWishlistMutation.isPending ? "Clearing..." : "Clear Wishlist"}
             </button>
           </div>
         </div>
 
         {/* Collection Tabs */}
-        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
-          {/* All Items tab */}
-          <button
-            onClick={() => { setActiveCollectionId(null); setConfirmDelete(false); }}
-            style={{
-              padding: "8px 16px",
-              borderRadius: "10px",
-              border: activeCollectionId === null ? "1px solid var(--brand)" : "1px solid var(--line-bright)",
-              background: activeCollectionId === null ? "var(--brand-soft)" : "transparent",
-              color: activeCollectionId === null ? "var(--brand)" : "var(--muted)",
-              fontSize: "0.8rem",
-              fontWeight: 700,
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              transition: "all 0.15s ease",
-            }}
-          >
-            All Items
-            <span
-              style={{
-                fontSize: "0.65rem",
-                fontWeight: 700,
-                padding: "1px 7px",
-                borderRadius: "20px",
-                background: activeCollectionId === null ? "var(--brand)" : "var(--line-bright)",
-                color: activeCollectionId === null ? "#fff" : "var(--muted)",
-              }}
-            >
-              {wishlist.itemCount}
-            </span>
-          </button>
-
-          {/* Collection tabs */}
-          {collections.map((col) => (
-            <button
-              key={col.id}
-              onClick={() => { setActiveCollectionId(col.id); setConfirmDelete(false); setEditingCollectionName(false); setEditingCollectionDesc(false); }}
-              style={{
-                padding: "8px 16px",
-                borderRadius: "10px",
-                border: activeCollectionId === col.id ? "1px solid var(--brand)" : "1px solid var(--line-bright)",
-                background: activeCollectionId === col.id ? "var(--brand-soft)" : "transparent",
-                color: activeCollectionId === col.id ? "var(--brand)" : "var(--muted)",
-                fontSize: "0.8rem",
-                fontWeight: 700,
-                cursor: "pointer",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                transition: "all 0.15s ease",
-              }}
-            >
-              {col.name}
-              <span
-                style={{
-                  fontSize: "0.65rem",
-                  fontWeight: 700,
-                  padding: "1px 7px",
-                  borderRadius: "20px",
-                  background: activeCollectionId === col.id ? "var(--brand)" : "var(--line-bright)",
-                  color: activeCollectionId === col.id ? "#fff" : "var(--muted)",
-                }}
-              >
-                {col.itemCount}
-              </span>
-            </button>
-          ))}
-
-          {/* New collection button / input */}
-          {!showNewCollectionInput ? (
-            <button
-              onClick={() => { setShowNewCollectionInput(true); }}
-              style={{
-                padding: "8px 12px",
-                borderRadius: "10px",
-                border: "1px dashed var(--line-bright)",
-                background: "transparent",
-                color: "var(--muted)",
-                fontSize: "0.8rem",
-                fontWeight: 700,
-                cursor: "pointer",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "4px",
-                transition: "all 0.15s ease",
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--brand)"; e.currentTarget.style.color = "var(--brand)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--line-bright)"; e.currentTarget.style.color = "var(--muted)"; }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-              New Collection
-            </button>
-          ) : (
-            <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-              <input
-                ref={newCollectionInputRef}
-                type="text"
-                value={newCollectionName}
-                onChange={(e) => setNewCollectionName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && newCollectionName.trim()) void createCollection();
-                  if (e.key === "Escape") { setShowNewCollectionInput(false); setNewCollectionName(""); }
-                }}
-                placeholder="Collection name..."
-                style={{
-                  padding: "7px 12px",
-                  borderRadius: "10px",
-                  border: "1px solid var(--line-bright)",
-                  background: "var(--bg-card)",
-                  color: "#fff",
-                  fontSize: "0.8rem",
-                  outline: "none",
-                  width: "160px",
-                }}
-              />
-              <button
-                onClick={() => { void createCollection(); }}
-                disabled={creatingCollection || !newCollectionName.trim()}
-                style={{
-                  padding: "7px 14px",
-                  borderRadius: "10px",
-                  border: "none",
-                  background: !newCollectionName.trim() ? "var(--line-bright)" : "var(--gradient-brand)",
-                  color: "#fff",
-                  fontSize: "0.75rem",
-                  fontWeight: 700,
-                  cursor: !newCollectionName.trim() ? "not-allowed" : "pointer",
-                }}
-              >
-                {creatingCollection ? "Creating..." : "Add"}
-              </button>
-              <button
-                onClick={() => { setShowNewCollectionInput(false); setNewCollectionName(""); }}
-                style={{
-                  padding: "7px 10px",
-                  borderRadius: "10px",
-                  border: "1px solid var(--line-bright)",
-                  background: "transparent",
-                  color: "var(--muted)",
-                  fontSize: "0.75rem",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          )}
-        </div>
+        <CollectionTabs
+          collections={collections}
+          activeCollectionId={activeCollectionId}
+          onSelectCollection={(id) => { setActiveCollectionId(id); setConfirmDelete(false); setEditingCollectionName(false); setEditingCollectionDesc(false); }}
+          wishlistItemCount={wishlist.itemCount}
+          newCollectionName={newCollectionName}
+          onNewCollectionNameChange={setNewCollectionName}
+          showNewCollectionInput={showNewCollectionInput}
+          onToggleNewInput={setShowNewCollectionInput}
+          creatingCollection={creatingCollection}
+          onCreate={createCollection}
+          newCollectionInputRef={newCollectionInputRef}
+        />
 
         {/* Collection Management Panel */}
         {activeCollection && (
-          <div
-            className="glass-card"
-            style={{
-              border: "1px solid var(--line-bright)",
-              borderRadius: "16px",
-              padding: "18px 20px",
-              marginBottom: "16px",
+          <CollectionHeader
+            collection={activeCollection}
+            editingName={editingCollectionName}
+            nameDraft={collectionNameDraft}
+            onNameDraftChange={setCollectionNameDraft}
+            onStartEditName={() => { setEditingCollectionName(true); setCollectionNameDraft(activeCollection.name); }}
+            onCancelEditName={() => setEditingCollectionName(false)}
+            onSaveName={() => {
+              if (collectionNameDraft.trim()) {
+                void updateCollection(activeCollection.id, { name: collectionNameDraft.trim() });
+                setEditingCollectionName(false);
+              }
             }}
-          >
-            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: "12px" }}>
-              <div style={{ flex: 1, minWidth: "200px" }}>
-                {/* Editable collection name */}
-                {editingCollectionName ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-                    <input
-                      type="text"
-                      value={collectionNameDraft}
-                      onChange={(e) => setCollectionNameDraft(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && collectionNameDraft.trim()) {
-                          void updateCollection(activeCollection.id, { name: collectionNameDraft.trim() });
-                          setEditingCollectionName(false);
-                        }
-                        if (e.key === "Escape") setEditingCollectionName(false);
-                      }}
-                      autoFocus
-                      style={{
-                        padding: "4px 10px",
-                        borderRadius: "8px",
-                        border: "1px solid var(--line-bright)",
-                        background: "var(--bg-card)",
-                        color: "#fff",
-                        fontSize: "1rem",
-                        fontWeight: 700,
-                        outline: "none",
-                        fontFamily: "'Syne', sans-serif",
-                      }}
-                    />
-                    <button
-                      onClick={() => {
-                        if (collectionNameDraft.trim()) {
-                          void updateCollection(activeCollection.id, { name: collectionNameDraft.trim() });
-                          setEditingCollectionName(false);
-                        }
-                      }}
-                      disabled={savingCollection || !collectionNameDraft.trim()}
-                      style={{
-                        padding: "4px 12px", borderRadius: "8px", border: "none",
-                        background: "var(--gradient-brand)", color: "#fff",
-                        fontSize: "0.72rem", fontWeight: 700, cursor: "pointer",
-                      }}
-                    >
-                      {savingCollection ? "Saving..." : "Save"}
-                    </button>
-                    <button
-                      onClick={() => setEditingCollectionName(false)}
-                      style={{
-                        padding: "4px 10px", borderRadius: "8px",
-                        border: "1px solid var(--line-bright)", background: "transparent",
-                        color: "var(--muted)", fontSize: "0.72rem", fontWeight: 700, cursor: "pointer",
-                      }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
-                  <h2
-                    onClick={() => { setEditingCollectionName(true); setCollectionNameDraft(activeCollection.name); }}
-                    style={{
-                      fontFamily: "'Syne', sans-serif", fontSize: "1.1rem", fontWeight: 700, color: "#fff",
-                      margin: "0 0 4px 0", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px",
-                    }}
-                    title="Click to edit name"
-                  >
-                    {activeCollection.name}
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.6 }}>
-                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                    </svg>
-                  </h2>
-                )}
-
-                {/* Editable description */}
-                {editingCollectionDesc ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <input
-                      type="text"
-                      value={collectionDescDraft}
-                      onChange={(e) => setCollectionDescDraft(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          void updateCollection(activeCollection.id, { description: collectionDescDraft.trim() || undefined });
-                          setEditingCollectionDesc(false);
-                        }
-                        if (e.key === "Escape") setEditingCollectionDesc(false);
-                      }}
-                      autoFocus
-                      placeholder="Add a description..."
-                      style={{
-                        padding: "4px 10px",
-                        borderRadius: "8px",
-                        border: "1px solid var(--line-bright)",
-                        background: "var(--bg-card)",
-                        color: "var(--muted)",
-                        fontSize: "0.8rem",
-                        outline: "none",
-                        flex: 1,
-                        maxWidth: "320px",
-                      }}
-                    />
-                    <button
-                      onClick={() => {
-                        void updateCollection(activeCollection.id, { description: collectionDescDraft.trim() || undefined });
-                        setEditingCollectionDesc(false);
-                      }}
-                      disabled={savingCollection}
-                      style={{
-                        padding: "4px 12px", borderRadius: "8px", border: "none",
-                        background: "var(--gradient-brand)", color: "#fff",
-                        fontSize: "0.72rem", fontWeight: 700, cursor: "pointer",
-                      }}
-                    >
-                      {savingCollection ? "Saving..." : "Save"}
-                    </button>
-                    <button
-                      onClick={() => setEditingCollectionDesc(false)}
-                      style={{
-                        padding: "4px 10px", borderRadius: "8px",
-                        border: "1px solid var(--line-bright)", background: "transparent",
-                        color: "var(--muted)", fontSize: "0.72rem", fontWeight: 700, cursor: "pointer",
-                      }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
-                  <p
-                    onClick={() => { setEditingCollectionDesc(true); setCollectionDescDraft(activeCollection.description || ""); }}
-                    style={{
-                      fontSize: "0.8rem", color: "var(--muted)", margin: 0, cursor: "pointer",
-                      display: "inline-flex", alignItems: "center", gap: "4px",
-                    }}
-                    title="Click to edit description"
-                  >
-                    {activeCollection.description || "No description"}
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4 }}>
-                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                    </svg>
-                  </p>
-                )}
-              </div>
-
-              {/* Share + Delete actions */}
-              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px" }}>
-                {/* Share toggle */}
-                <button
-                  onClick={() => { void toggleShare(activeCollection); }}
-                  disabled={togglingShare}
-                  style={{
-                    padding: "8px 14px",
-                    borderRadius: "10px",
-                    border: activeCollection.shared ? "1px solid var(--brand)" : "1px solid var(--line-bright)",
-                    background: activeCollection.shared ? "var(--brand-soft)" : "transparent",
-                    color: activeCollection.shared ? "var(--brand)" : "var(--muted)",
-                    fontSize: "0.75rem",
-                    fontWeight: 700,
-                    cursor: togglingShare ? "not-allowed" : "pointer",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    transition: "all 0.15s ease",
-                  }}
-                >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
-                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-                    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-                  </svg>
-                  {togglingShare ? "Updating..." : activeCollection.shared ? "Shared" : "Share"}
-                </button>
-
-                {/* Copy share link */}
-                {activeCollection.shared && activeCollection.shareToken && (
-                  <button
-                    onClick={() => copyShareLink(activeCollection.shareToken!)}
-                    style={{
-                      padding: "8px 14px",
-                      borderRadius: "10px",
-                      border: "1px solid var(--line-bright)",
-                      background: "transparent",
-                      color: "var(--brand)",
-                      fontSize: "0.75rem",
-                      fontWeight: 700,
-                      cursor: "pointer",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "6px",
-                    }}
-                  >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                    </svg>
-                    Copy Link
-                  </button>
-                )}
-
-                {/* Delete collection */}
-                {!activeCollection.isDefault && (
-                  <>
-                    {confirmDelete ? (
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                        <span style={{ fontSize: "0.72rem", color: "var(--danger)", fontWeight: 600 }}>Delete this collection?</span>
-                        <button
-                          onClick={() => { void deleteCollection(activeCollection.id); setConfirmDelete(false); }}
-                          disabled={deletingCollection}
-                          style={{
-                            padding: "6px 12px", borderRadius: "8px", border: "none",
-                            background: "var(--danger)", color: "#fff",
-                            fontSize: "0.72rem", fontWeight: 700,
-                            cursor: deletingCollection ? "not-allowed" : "pointer",
-                          }}
-                        >
-                          {deletingCollection ? "Deleting..." : "Yes, Delete"}
-                        </button>
-                        <button
-                          onClick={() => setConfirmDelete(false)}
-                          style={{
-                            padding: "6px 12px", borderRadius: "8px",
-                            border: "1px solid var(--line-bright)", background: "transparent",
-                            color: "var(--muted)", fontSize: "0.72rem", fontWeight: 700, cursor: "pointer",
-                          }}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => setConfirmDelete(true)}
-                        style={{
-                          padding: "8px 14px",
-                          borderRadius: "10px",
-                          border: "1px solid var(--danger-glow)",
-                          background: "var(--danger-soft)",
-                          color: "var(--danger)",
-                          fontSize: "0.75rem",
-                          fontWeight: 700,
-                          cursor: "pointer",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "6px",
-                        }}
-                      >
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="3 6 5 6 21 6" />
-                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                        </svg>
-                        Delete
-                      </button>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
+            editingDesc={editingCollectionDesc}
+            descDraft={collectionDescDraft}
+            onDescDraftChange={setCollectionDescDraft}
+            onStartEditDesc={() => { setEditingCollectionDesc(true); setCollectionDescDraft(activeCollection.description || ""); }}
+            onCancelEditDesc={() => setEditingCollectionDesc(false)}
+            onSaveDesc={() => {
+              void updateCollection(activeCollection.id, { description: collectionDescDraft.trim() || undefined });
+              setEditingCollectionDesc(false);
+            }}
+            savingCollection={updateCollectionMutation.isPending}
+            togglingShare={toggleShareMutation.isPending}
+            onToggleShare={() => { void toggleShare(activeCollection); }}
+            onCopyShareLink={() => copyShareLink(activeCollection.shareToken!)}
+            confirmDelete={confirmDelete}
+            onConfirmDelete={() => { void deleteCollection(activeCollection.id); setConfirmDelete(false); }}
+            onCancelDelete={() => setConfirmDelete(false)}
+            onRequestDelete={() => setConfirmDelete(true)}
+            deletingCollection={deleteCollectionMutation.isPending}
+          />
         )}
 
         {/* Empty state */}
-        {displayedItemCount === 0 && !loading && (
+        {displayedItemCount === 0 && !wishlistLoading && (
           <EmptyState
             icon={
               <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -801,188 +387,28 @@ export default function WishlistPage() {
         )}
 
         {/* Wishlist Items */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          {displayedItems.map((item) => {
-            const isParent = (item.productType || "").toUpperCase() === "PARENT";
-            const isEditingThisNote = editingNote === item.id;
-            return (
-              <article
-                key={item.id}
-                className="animate-rise glass-card"
-                style={{
-                  border: "1px solid var(--line-bright)",
-                  borderRadius: "16px",
-                  padding: "18px 20px",
-                }}
-              >
-                <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
-                  <div style={{ flex: 1, minWidth: "200px" }}>
-                    <Link
-                      href={`/products/${encodeURIComponent(item.productSlug)}`}
-                      className="no-underline"
-                      style={{ fontWeight: 700, color: "#fff", fontSize: "0.95rem" }}
-                      onMouseEnter={(e) => { e.currentTarget.style.color = "var(--brand)"; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.color = "#fff"; }}
-                    >
-                      {item.productName}
-                    </Link>
-
-                    {/* Display existing note below item name */}
-                    {item.note && !isEditingThisNote && (
-                      <p style={{ margin: "4px 0 0 0", fontSize: "0.78rem", color: "var(--muted)", fontStyle: "italic" }}>
-                        {item.note}
-                      </p>
-                    )}
-
-                    <div style={{ marginTop: "6px", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px" }}>
-                      <span
-                        style={{
-                          fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase",
-                          padding: "2px 10px", borderRadius: "20px",
-                          background: "var(--brand-soft)", border: "1px solid var(--line-bright)", color: "var(--brand)",
-                        }}
-                      >
-                        {item.productType}
-                      </span>
-                      <span style={{ fontSize: "0.875rem", fontWeight: 700, color: "var(--brand)" }}>
-                        {money(item.sellingPriceSnapshot)}
-                      </span>
-                    </div>
-
-                    {/* Inline note editor */}
-                    {isEditingThisNote && (
-                      <div style={{ marginTop: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
-                        <input
-                          type="text"
-                          value={noteText}
-                          onChange={(e) => setNoteText(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") void saveNote(item.id);
-                            if (e.key === "Escape") { setEditingNote(null); setNoteText(""); }
-                          }}
-                          autoFocus
-                          placeholder="Add a note..."
-                          style={{
-                            padding: "6px 10px",
-                            borderRadius: "8px",
-                            border: "1px solid var(--line-bright)",
-                            background: "var(--bg-card)",
-                            color: "#fff",
-                            fontSize: "0.78rem",
-                            outline: "none",
-                            flex: 1,
-                            maxWidth: "300px",
-                          }}
-                        />
-                        <button
-                          onClick={() => { void saveNote(item.id); }}
-                          disabled={savingNote}
-                          style={{
-                            padding: "6px 12px", borderRadius: "8px", border: "none",
-                            background: "var(--gradient-brand)", color: "#fff",
-                            fontSize: "0.72rem", fontWeight: 700,
-                            cursor: savingNote ? "not-allowed" : "pointer",
-                          }}
-                        >
-                          {savingNote ? "Saving..." : "Save"}
-                        </button>
-                        <button
-                          onClick={() => { setEditingNote(null); setNoteText(""); }}
-                          style={{
-                            padding: "6px 10px", borderRadius: "8px",
-                            border: "1px solid var(--line-bright)", background: "transparent",
-                            color: "var(--muted)", fontSize: "0.72rem", fontWeight: 700, cursor: "pointer",
-                          }}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px" }}>
-                    {/* Note icon button */}
-                    <button
-                      onClick={() => {
-                        if (isEditingThisNote) {
-                          setEditingNote(null);
-                          setNoteText("");
-                        } else {
-                          setEditingNote(item.id);
-                          setNoteText(item.note || "");
-                        }
-                      }}
-                      title={item.note ? "Edit note" : "Add note"}
-                      style={{
-                        padding: "8px 10px",
-                        borderRadius: "10px",
-                        border: "1px solid var(--line-bright)",
-                        background: isEditingThisNote ? "var(--brand-soft)" : "transparent",
-                        color: item.note ? "var(--brand)" : "var(--muted)",
-                        fontSize: "0.78rem",
-                        cursor: "pointer",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "4px",
-                        transition: "all 0.15s ease",
-                      }}
-                    >
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                        <polyline points="14 2 14 8 20 8" />
-                        <line x1="16" y1="13" x2="8" y2="13" />
-                        <line x1="16" y1="17" x2="8" y2="17" />
-                        <polyline points="10 9 9 9 8 9" />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={() => { void moveToCart(item); }}
-                      disabled={busy || isParent}
-                      style={{
-                        padding: "8px 16px", borderRadius: "10px", border: "none",
-                        background: busy || isParent ? "var(--line-bright)" : "var(--gradient-brand)",
-                        color: "#fff", fontSize: "0.78rem", fontWeight: 700,
-                        cursor: busy || isParent ? "not-allowed" : "pointer",
-                        display: "inline-flex", alignItems: "center", gap: "6px",
-                      }}
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" />
-                        <path d="M16 10a4 4 0 0 1-8 0" />
-                      </svg>
-                      {movingItemId === item.id ? "Moving..." : isParent ? "Select Variation" : "Move to Cart"}
-                    </button>
-                    <button
-                      onClick={() => { void removeItem(item.id); }}
-                      disabled={busy}
-                      style={{
-                        padding: "8px 14px", borderRadius: "10px",
-                        border: "1px solid var(--danger-glow)", background: "var(--danger-soft)",
-                        color: "var(--danger)", fontSize: "0.72rem", fontWeight: 700,
-                        cursor: busy ? "not-allowed" : "pointer", opacity: busy ? 0.5 : 1,
-                      }}
-                    >
-                      {removingItemId === item.id ? "Removing..." : "Remove"}
-                    </button>
-                    {!activeCollection && collections.length > 0 && (
-                      <select
-                        value=""
-                        onChange={(e) => { if (e.target.value) void moveToCollection(item, e.target.value); }}
-                        disabled={!!movingItemId || !!removingItemId}
-                        className="filter-select"
-                        style={{ minWidth: "auto", fontSize: "0.72rem" }}
-                      >
-                        <option value="">Move to collection…</option>
-                        {collections.map((c) => (
-                          <option key={c.id} value={c.id}>{c.name}</option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
-                </div>
-              </article>
-            );
-          })}
+        <div className="flex flex-col gap-3">
+          {displayedItems.map((item) => (
+            <WishlistItemCard
+              key={item.id}
+              item={item}
+              busy={busy}
+              isEditingNote={editingNote === item.id}
+              noteText={noteText}
+              onNoteTextChange={setNoteText}
+              onStartEditNote={() => { setEditingNote(item.id); setNoteText(item.note || ""); }}
+              onCancelEditNote={() => { setEditingNote(null); setNoteText(""); }}
+              onSaveNote={() => { void saveNote(item.id); }}
+              savingNote={updateItemNoteMutation.isPending}
+              movingItemId={movingItemId}
+              removingItemId={removingItemId}
+              onMoveToCart={() => { void moveToCart(item); }}
+              onRemove={() => { void removeItem(item.id); }}
+              collections={collections}
+              activeCollection={activeCollection}
+              onMoveToCollection={(collectionId) => { void moveToCollection(item, collectionId); }}
+            />
+          ))}
         </div>
       </main>
 

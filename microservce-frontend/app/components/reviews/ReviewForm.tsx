@@ -43,21 +43,21 @@ export default function ReviewForm({ productId, vendorId, apiClient, onSuccess, 
   };
 
   return (
-    <div style={{ padding: "24px", borderRadius: "16px", border: "1px solid var(--line-bright)", background: "var(--surface)" }}>
-      <h3 style={{ fontSize: "1rem", fontWeight: 700, color: "var(--ink)", margin: "0 0 16px" }}>Write a Review</h3>
+    <div className="p-6 rounded-lg border border-line-bright bg-surface">
+      <h3 className="text-lg font-bold text-ink mb-4">Write a Review</h3>
 
       {/* Star rating */}
-      <div style={{ marginBottom: "16px" }}>
-        <label style={{ display: "block", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--muted)", marginBottom: "6px" }}>
+      <div className="mb-4">
+        <label className="block text-[0.72rem] font-bold uppercase tracking-[0.1em] text-muted mb-[6px]">
           Rating
         </label>
         <StarRating value={rating} onChange={setRating} size={28} interactive />
-        {rating === 0 && <p style={{ fontSize: "0.72rem", color: "var(--muted)", margin: "4px 0 0" }}>Click to rate</p>}
+        {rating === 0 && <p className="text-[0.72rem] text-muted mt-1">Click to rate</p>}
       </div>
 
       {/* Title */}
-      <div style={{ marginBottom: "16px" }}>
-        <label style={{ display: "block", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--muted)", marginBottom: "6px" }}>
+      <div className="mb-4">
+        <label className="block text-[0.72rem] font-bold uppercase tracking-[0.1em] text-muted mb-[6px]">
           Title (optional)
         </label>
         <input
@@ -66,14 +66,13 @@ export default function ReviewForm({ productId, vendorId, apiClient, onSuccess, 
           onChange={(e) => setTitle(e.target.value)}
           maxLength={150}
           placeholder="Summarize your experience"
-          className="form-input"
-          style={{ width: "100%", padding: "10px 14px", borderRadius: "10px", border: "1px solid var(--line)", background: "var(--bg)", color: "var(--ink)", fontSize: "0.85rem" }}
+          className="form-input w-full px-[14px] py-[10px] rounded-md border border-line bg-bg text-ink text-[0.85rem]"
         />
       </div>
 
       {/* Comment */}
-      <div style={{ marginBottom: "16px" }}>
-        <label style={{ display: "block", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--muted)", marginBottom: "6px" }}>
+      <div className="mb-4">
+        <label className="block text-[0.72rem] font-bold uppercase tracking-[0.1em] text-muted mb-[6px]">
           Your Review
         </label>
         <textarea
@@ -82,29 +81,24 @@ export default function ReviewForm({ productId, vendorId, apiClient, onSuccess, 
           maxLength={2000}
           rows={4}
           placeholder="Share your experience with this product..."
-          style={{ width: "100%", padding: "10px 14px", borderRadius: "10px", border: "1px solid var(--line)", background: "var(--bg)", color: "var(--ink)", fontSize: "0.85rem", resize: "vertical", fontFamily: "inherit" }}
+          className="w-full px-[14px] py-[10px] rounded-md border border-line bg-bg text-ink text-[0.85rem] resize-y font-[inherit]"
         />
-        <p style={{ fontSize: "0.68rem", color: "var(--muted)", margin: "4px 0 0", textAlign: "right" }}>{comment.length}/2000</p>
+        <p className="text-[0.68rem] text-muted mt-1 text-right">{comment.length}/2000</p>
       </div>
 
       {/* Actions */}
-      <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+      <div className="flex gap-[10px] justify-end">
         <button
           onClick={onCancel}
           disabled={submitting}
-          style={{ padding: "10px 20px", borderRadius: "10px", border: "1px solid var(--line)", background: "transparent", color: "var(--ink-light)", fontSize: "0.85rem", fontWeight: 600, cursor: "pointer" }}
+          className="px-5 py-[10px] rounded-md border border-line bg-transparent text-ink-light text-[0.85rem] font-semibold cursor-pointer"
         >
           Cancel
         </button>
         <button
           onClick={handleSubmit}
           disabled={!canSubmit}
-          style={{
-            padding: "10px 20px", borderRadius: "10px", border: "none",
-            background: canSubmit ? "var(--gradient-brand)" : "var(--line-bright)",
-            color: canSubmit ? "#fff" : "var(--muted)",
-            fontSize: "0.85rem", fontWeight: 700, cursor: canSubmit ? "pointer" : "not-allowed",
-          }}
+          className={`px-5 py-[10px] rounded-md border-none text-[0.85rem] font-bold ${canSubmit ? "bg-[image:var(--gradient-brand)] text-white cursor-pointer" : "bg-line-bright text-muted cursor-not-allowed"}`}
         >
           {submitting ? "Submitting..." : "Submit Review"}
         </button>

@@ -96,88 +96,35 @@ export default function DataTable<T extends Record<string, unknown> = Record<str
   return (
     <div>
       <style>{shimmerKeyframes}</style>
-      <div
-        className="glass-card"
-        style={{
-          overflow: "hidden",
-          borderRadius: 12,
-          border: "1px solid var(--line)",
-        }}
-      >
-        <div style={{ overflowX: "auto" }}>
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              minWidth: 700,
-            }}
-          >
+      <div className="glass-card overflow-hidden rounded-[12px] border border-line">
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse min-w-[700px]">
             <thead>
               <tr>
                 {selectable && (
-                  <th
-                    style={{
-                      width: 44,
-                      padding: "12px 10px",
-                      position: "sticky",
-                      top: 0,
-                      background: "var(--surface-2)",
-                      borderBottom: "1px solid var(--line)",
-                      textAlign: "center",
-                      zIndex: 2,
-                    }}
-                  >
+                  <th className="w-[44px] py-3 px-2.5 sticky top-0 bg-surface-2 border-b border-line text-center z-[2]">
                     <input
                       ref={checkboxAllRef}
                       type="checkbox"
                       checked={allSelected}
                       onChange={(e) => handleSelectAll(e.target.checked)}
                       disabled={loading || data.length === 0}
-                      style={{ cursor: loading ? "not-allowed" : "pointer", accentColor: "var(--brand)" }}
+                      className={loading ? "cursor-not-allowed" : "cursor-pointer"}
+                      style={{ accentColor: "var(--brand)" }}
                     />
                   </th>
                 )}
                 {columns.map((col) => (
                   <th
                     key={col.key}
-                    style={{
-                      padding: "12px 14px",
-                      position: "sticky",
-                      top: 0,
-                      background: "var(--surface-2)",
-                      borderBottom: "1px solid var(--line)",
-                      textAlign: "left",
-                      fontSize: "0.72rem",
-                      fontWeight: 700,
-                      color: "var(--muted)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.06em",
-                      whiteSpace: "nowrap",
-                      width: col.width || "auto",
-                      zIndex: 2,
-                    }}
+                    className="py-3 px-3.5 sticky top-0 bg-surface-2 border-b border-line text-left text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap z-[2]"
+                    style={{ width: col.width || "auto" }}
                   >
                     {col.header}
                   </th>
                 ))}
                 {renderActions && (
-                  <th
-                    style={{
-                      padding: "12px 14px",
-                      position: "sticky",
-                      top: 0,
-                      background: "var(--surface-2)",
-                      borderBottom: "1px solid var(--line)",
-                      textAlign: "right",
-                      fontSize: "0.72rem",
-                      fontWeight: 700,
-                      color: "var(--muted)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.06em",
-                      whiteSpace: "nowrap",
-                      zIndex: 2,
-                    }}
-                  >
+                  <th className="py-3 px-3.5 sticky top-0 bg-surface-2 border-b border-line text-right text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap z-[2]">
                     Actions
                   </th>
                 )}
@@ -189,17 +136,17 @@ export default function DataTable<T extends Record<string, unknown> = Record<str
                 Array.from({ length: 6 }).map((_, rowIdx) => (
                   <tr key={`skeleton-${rowIdx}`}>
                     {selectable && (
-                      <td style={{ padding: "14px 10px", borderBottom: "1px solid var(--line)", textAlign: "center" }}>
+                      <td className="py-3.5 px-2.5 border-b border-line text-center">
                         <div style={{ ...skeletonBarStyle, width: 16, height: 16, borderRadius: 4, margin: "0 auto" }} />
                       </td>
                     )}
                     {columns.map((col) => (
-                      <td key={col.key} style={{ padding: "14px 14px", borderBottom: "1px solid var(--line)" }}>
+                      <td key={col.key} className="py-3.5 px-3.5 border-b border-line">
                         <div style={{ ...skeletonBarStyle, width: `${55 + Math.random() * 35}%` }} />
                       </td>
                     ))}
                     {renderActions && (
-                      <td style={{ padding: "14px 14px", borderBottom: "1px solid var(--line)", textAlign: "right" }}>
+                      <td className="py-3.5 px-3.5 border-b border-line text-right">
                         <div style={{ ...skeletonBarStyle, width: 60, marginLeft: "auto" }} />
                       </td>
                     )}
@@ -209,17 +156,17 @@ export default function DataTable<T extends Record<string, unknown> = Record<str
               {/* Empty state */}
               {!loading && data.length === 0 && (
                 <tr>
-                  <td colSpan={totalColumns} style={{ padding: 0 }}>
-                    <div style={{ textAlign: "center", padding: "60px 24px", color: "var(--muted)" }}>
-                      <div style={{ marginBottom: 10 }}>
-                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4 }}>
+                  <td colSpan={totalColumns} className="p-0">
+                    <div className="text-center py-[60px] px-6 text-muted">
+                      <div className="mb-2.5">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="opacity-40">
                           <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
                         </svg>
                       </div>
-                      <h3 style={{ fontSize: "1rem", fontWeight: 700, color: "var(--ink-light)", marginBottom: 4 }}>
+                      <h3 className="text-lg font-bold text-ink-light mb-1">
                         {emptyTitle}
                       </h3>
-                      <p style={{ fontSize: "0.82rem", maxWidth: 360, margin: "0 auto", lineHeight: 1.5 }}>
+                      <p className="text-sm max-w-[360px] mx-auto leading-relaxed">
                         {emptyDescription}
                       </p>
                     </div>
@@ -235,30 +182,16 @@ export default function DataTable<T extends Record<string, unknown> = Record<str
                   return (
                     <tr
                       key={rowId}
-                      style={{
-                        background: isSelected ? "rgba(0,212,255,0.04)" : "transparent",
-                        transition: "background 0.15s",
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!isSelected) (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.02)";
-                      }}
-                      onMouseLeave={(e) => {
-                        (e.currentTarget as HTMLElement).style.background = isSelected ? "rgba(0,212,255,0.04)" : "transparent";
-                      }}
+                      className={`transition-[background] duration-150 ${isSelected ? "bg-[rgba(0,212,255,0.04)]" : "hover:bg-[rgba(255,255,255,0.02)]"}`}
                     >
                       {selectable && (
-                        <td
-                          style={{
-                            padding: "12px 10px",
-                            borderBottom: "1px solid var(--line)",
-                            textAlign: "center",
-                          }}
-                        >
+                        <td className="py-3 px-2.5 border-b border-line text-center">
                           <input
                             type="checkbox"
                             checked={isSelected || false}
                             onChange={(e) => handleSelectRow(rowId, e.target.checked)}
-                            style={{ cursor: "pointer", accentColor: "var(--brand)" }}
+                            className="cursor-pointer"
+                            style={{ accentColor: "var(--brand)" }}
                           />
                         </td>
                       )}
@@ -267,28 +200,15 @@ export default function DataTable<T extends Record<string, unknown> = Record<str
                         return (
                           <td
                             key={col.key}
-                            style={{
-                              padding: "12px 14px",
-                              borderBottom: "1px solid var(--line)",
-                              fontSize: "0.82rem",
-                              color: "var(--ink)",
-                              verticalAlign: "middle",
-                            }}
+                            className="py-3 px-3.5 border-b border-line text-sm text-ink align-middle"
                           >
                             {col.render ? col.render(cellValue, row) : (cellValue != null ? String(cellValue) : "-")}
                           </td>
                         );
                       })}
                       {renderActions && (
-                        <td
-                          style={{
-                            padding: "12px 14px",
-                            borderBottom: "1px solid var(--line)",
-                            textAlign: "right",
-                            verticalAlign: "middle",
-                          }}
-                        >
-                          <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
+                        <td className="py-3 px-3.5 border-b border-line text-right align-middle">
+                          <div className="flex gap-1.5 justify-end items-center">
                             {renderActions(row)}
                           </div>
                         </td>

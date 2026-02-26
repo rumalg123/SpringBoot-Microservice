@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AxiosInstance } from "axios";
 import toast from "react-hot-toast";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   emptyOnboardForm,
   type OnboardForm,
@@ -27,8 +28,7 @@ export function useVendorOnboarding({
   selectedVendorId,
   setSelectedVendorId,
 }: UseVendorOnboardingArgs) {
-  const [vendorUsers, setVendorUsers] = useState<VendorUser[]>([]);
-  const [loadingUsers, setLoadingUsers] = useState(false);
+  const queryClient = useQueryClient();
   const [onboardForm, setOnboardForm] = useState<OnboardForm>(emptyOnboardForm);
   const [onboarding, setOnboarding] = useState(false);
   const [onboardStatus, setOnboardStatus] = useState(DEFAULT_ONBOARD_STATUS);
@@ -42,19 +42,30 @@ export function useVendorOnboarding({
     [vendors, selectedVendorId]
   );
 
+  const vendorUsersQuery = useQuery<VendorUser[]>({
+    queryKey: ["admin-vendor-users", selectedVendorId],
+    queryFn: async () => {
+      const res = await apiClient!.get(`/admin/vendors/${selectedVendorId}/users`);
+      return (res.data as VendorUser[]) || [];
+    },
+    enabled: Boolean(apiClient) && Boolean(selectedVendorId),
+  });
+
+  const vendorUsers = vendorUsersQuery.data ?? [];
+  const loadingUsers = vendorUsersQuery.isLoading || vendorUsersQuery.isFetching;
+
+  useEffect(() => {
+    if (vendorUsersQuery.data && selectedVendorId) {
+      setOnboardStatus("Vendor users loaded.");
+    }
+    if (vendorUsersQuery.error && selectedVendorId) {
+      setOnboardStatus(getApiErrorMessage(vendorUsersQuery.error, "Failed to load vendor users."));
+    }
+  }, [vendorUsersQuery.data, vendorUsersQuery.error, selectedVendorId]);
+
   const loadVendorUsers = async (vendorId: string) => {
     if (!apiClient || !vendorId) return;
-    setLoadingUsers(true);
-    try {
-      const res = await apiClient.get(`/admin/vendors/${vendorId}/users`);
-      setVendorUsers((res.data as VendorUser[]) || []);
-      setOnboardStatus("Vendor users loaded.");
-    } catch (err) {
-      setVendorUsers([]);
-      setOnboardStatus(getApiErrorMessage(err, "Failed to load vendor users."));
-    } finally {
-      setLoadingUsers(false);
-    }
+    await queryClient.invalidateQueries({ queryKey: ["admin-vendor-users", vendorId] });
   };
 
   const fillOnboardFromVendor = (vendor: Vendor) => {
@@ -72,26 +83,24 @@ export function useVendorOnboarding({
     setSelectedVendorId(vendor.id);
     fillOnboardFromVendor(vendor);
     setLastVendorSelectedAt(Date.now());
-    void loadVendorUsers(vendor.id);
+    // Users will be loaded automatically by the query since selectedVendorId changed
   };
 
   const handleSelectVendorId = (vendorId: string) => {
     setSelectedVendorId(vendorId);
     const vendor = vendors.find((v) => v.id === vendorId);
     if (!vendor) {
-      setVendorUsers([]);
       setOnboardStatus(DEFAULT_ONBOARD_STATUS);
       setLastOnboardResult(null);
       return;
     }
     fillOnboardFromVendor(vendor);
     setLastVendorSelectedAt(Date.now());
-    void loadVendorUsers(vendorId);
+    // Users will be loaded automatically by the query since selectedVendorId changed
   };
 
   const clearSelectedVendorContext = () => {
     setSelectedVendorId("");
-    setVendorUsers([]);
     setOnboardStatus(DEFAULT_ONBOARD_STATUS);
     setLastOnboardResult(null);
   };
@@ -114,7 +123,7 @@ export function useVendorOnboarding({
         createIfMissing: onboardForm.createIfMissing,
       });
       const data = (res.data as VendorOnboardResponse | undefined) || undefined;
-      await loadVendorUsers(selectedVendorId);
+      await queryClient.invalidateQueries({ queryKey: ["admin-vendor-users", selectedVendorId] });
       setLastOnboardResult(data ?? null);
       const emailStatus = data?.keycloakUserCreated
         ? data.keycloakActionEmailSent
@@ -145,7 +154,7 @@ export function useVendorOnboarding({
     try {
       await apiClient.delete(`/admin/vendors/${vendorId}/users/${user.id}`);
       if (selectedVendorId === vendorId) {
-        await loadVendorUsers(vendorId);
+        await queryClient.invalidateQueries({ queryKey: ["admin-vendor-users", vendorId] });
       }
       setOnboardStatus("Vendor user removed.");
     } finally {
@@ -167,7 +176,9 @@ export function useVendorOnboarding({
 
     setOnboardForm,
     setOnboardStatus,
-    setVendorUsers,
+    setVendorUsers: (_users: VendorUser[]) => {
+      // Compatibility stub - data managed by React Query
+    },
 
     loadVendorUsers,
     fillOnboardFromVendor,

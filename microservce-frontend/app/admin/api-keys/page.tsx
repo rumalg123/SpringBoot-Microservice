@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import toast from "react-hot-toast";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuthSession } from "../../../lib/authSession";
+import AdminPageShell from "../../components/ui/AdminPageShell";
 import TableSkeleton from "../../components/ui/TableSkeleton";
 
 type ApiKey = {
@@ -22,43 +24,28 @@ export default function AdminApiKeysPage() {
   const session = useAuthSession();
   const { status: sessionStatus, profile, apiClient } = session;
 
-  const [keys, setKeys] = useState<ApiKey[]>([]);
-  const [loading, setLoading] = useState(true);
-
   // Create form
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
   const [newScope, setNewScope] = useState<"PLATFORM" | "VENDOR">("PLATFORM");
   const [newPermissions, setNewPermissions] = useState("");
   const [newExpiry, setNewExpiry] = useState("");
-  const [creating, setCreating] = useState(false);
   const [rawKeyRevealed, setRawKeyRevealed] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const keycloakId = (profile?.sub as string) || "";
 
-  const loadKeys = useCallback(async () => {
-    if (!apiClient || !keycloakId) return;
-    setLoading(true);
-    try {
-      const res = await apiClient.get(`/admin/api-keys/by-keycloak/${keycloakId}`);
-      setKeys((res.data as ApiKey[]) || []);
-    } catch {
-      toast.error("Failed to load API keys");
-    } finally {
-      setLoading(false);
-    }
-  }, [apiClient, keycloakId]);
+  const { data: keys = [], isLoading: loading, refetch } = useQuery({
+    queryKey: ["admin-api-keys", keycloakId],
+    queryFn: async () => {
+      const res = await apiClient!.get(`/admin/api-keys/by-keycloak/${keycloakId}`);
+      return (res.data as ApiKey[]) || [];
+    },
+    enabled: sessionStatus === "ready" && !!apiClient && !!keycloakId,
+  });
 
-  useEffect(() => {
-    if (sessionStatus !== "ready") return;
-    void loadKeys();
-  }, [sessionStatus, loadKeys]);
-
-  const createKey = async () => {
-    if (!apiClient || creating || !newName.trim()) return;
-    setCreating(true);
-    try {
+  const createMutation = useMutation({
+    mutationFn: async () => {
       const body: Record<string, unknown> = {
         keycloakId,
         name: newName.trim(),
@@ -68,98 +55,91 @@ export default function AdminApiKeysPage() {
       if (perms.length > 0) body.permissions = perms;
       if (newExpiry) body.expiresAt = new Date(newExpiry).toISOString();
 
-      const res = await apiClient.post("/admin/api-keys", body);
-      const created = res.data as CreateApiKeyResponse;
+      const res = await apiClient!.post("/admin/api-keys", body);
+      return res.data as CreateApiKeyResponse;
+    },
+    onSuccess: (created) => {
       setRawKeyRevealed(created.rawKey);
-      setKeys((old) => [{ ...created }, ...old]);
       setNewName("");
       setNewPermissions("");
       setNewExpiry("");
+      void refetch();
       toast.success("API key created");
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(err instanceof Error ? err.message : "Failed to create key");
-    } finally {
-      setCreating(false);
-    }
-  };
+    },
+  });
 
-  const deleteKey = async (id: string) => {
-    if (!apiClient || deletingId) return;
-    setDeletingId(id);
-    try {
-      await apiClient.delete(`/admin/api-keys/${id}`);
-      setKeys((old) => old.map((k) => (k.id === id ? { ...k, active: false } : k)));
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiClient!.delete(`/admin/api-keys/${id}`);
+      return id;
+    },
+    onMutate: (id) => {
+      setDeletingId(id);
+    },
+    onSuccess: () => {
+      void refetch();
       toast.success("API key revoked");
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error(err instanceof Error ? err.message : "Failed to revoke key");
-    } finally {
+    },
+    onSettled: () => {
       setDeletingId(null);
-    }
-  };
+    },
+  });
 
   const statusBadge = (active: boolean, expiresAt: string | null) => {
     const expired = expiresAt && new Date(expiresAt) < new Date();
     if (!active || expired) {
       return (
-        <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "2px 8px", borderRadius: "6px", background: "var(--danger-soft)", color: "var(--danger)" }}>
+        <span className="text-[0.68rem] font-bold py-0.5 px-2 rounded-sm bg-danger-soft text-danger">
           {expired ? "EXPIRED" : "REVOKED"}
         </span>
       );
     }
     return (
-      <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "2px 8px", borderRadius: "6px", background: "var(--success-soft)", color: "var(--success)" }}>
+      <span className="text-[0.68rem] font-bold py-0.5 px-2 rounded-sm bg-success-soft text-success">
         ACTIVE
       </span>
     );
   };
 
   if (sessionStatus === "loading" || sessionStatus === "idle") {
-    return <div style={{ minHeight: "100vh", background: "var(--bg)", display: "grid", placeItems: "center" }}><p style={{ color: "var(--muted)" }}>Loading...</p></div>;
+    return <div className="min-h-screen bg-bg grid place-items-center"><p className="text-muted">Loading...</p></div>;
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-      <main className="mx-auto max-w-5xl px-4 py-10">
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "24px" }}>
-          <div>
-            <h1 className="text-2xl font-bold" style={{ color: "#fff" }}>API Keys</h1>
-            <p style={{ color: "var(--muted)", fontSize: "0.85rem", marginTop: "4px" }}>Manage API keys for programmatic access</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => { setShowCreate(!showCreate); setRawKeyRevealed(null); }}
-            style={{
-              padding: "8px 18px", borderRadius: "10px", fontSize: "0.82rem", fontWeight: 700,
-              background: "var(--gradient-brand)", color: "#fff", border: "none", cursor: "pointer",
-            }}
-          >
-            {showCreate ? "Cancel" : "+ New Key"}
-          </button>
-        </div>
+    <AdminPageShell
+      title="API Keys"
+      breadcrumbs={[{ label: "Admin", href: "/admin/dashboard" }, { label: "API Keys" }]}
+      actions={
+        <button
+          type="button"
+          onClick={() => { setShowCreate(!showCreate); setRawKeyRevealed(null); }}
+          className="py-2 px-[18px] rounded-md text-[0.82rem] font-bold bg-[var(--gradient-brand)] text-white border-none cursor-pointer"
+        >
+          {showCreate ? "Cancel" : "+ New Key"}
+        </button>
+      }
+    >
+        <p className="text-muted text-base -mt-4 mb-6">Manage API keys for programmatic access</p>
 
         {/* Raw Key Alert */}
         {rawKeyRevealed && (
-          <div style={{
-            marginBottom: "20px", padding: "16px", borderRadius: "12px",
-            background: "var(--warning-soft)", border: "1px solid var(--warning-border)",
-          }}>
-            <p style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--warning-text)", marginBottom: "8px" }}>
+          <div className="mb-5 p-4 rounded-[12px] bg-warning-soft border border-warning-border">
+            <p className="text-sm font-bold text-warning-text mb-2">
               Copy your API key now — it won&apos;t be shown again!
             </p>
-            <code style={{
-              display: "block", padding: "10px 14px", borderRadius: "8px",
-              background: "rgba(0,0,0,0.3)", color: "#fff", fontSize: "0.78rem",
-              wordBreak: "break-all", userSelect: "all",
-            }}>
+            <code className="block py-2.5 px-3.5 rounded-[8px] bg-[rgba(0,0,0,0.3)] text-white text-[0.78rem] break-all select-all">
               {rawKeyRevealed}
             </code>
             <button
               type="button"
               onClick={() => { void navigator.clipboard.writeText(rawKeyRevealed); toast.success("Copied!"); }}
-              style={{
-                marginTop: "8px", padding: "4px 12px", borderRadius: "6px", fontSize: "0.72rem", fontWeight: 600,
-                background: "var(--accent-soft)", color: "var(--accent)", border: "1px solid var(--accent-glow)", cursor: "pointer",
-              }}
+              className="mt-2 py-1 px-3 rounded-sm text-[0.72rem] font-semibold bg-accent-soft text-accent border border-accent-glow cursor-pointer"
             >
               Copy to Clipboard
             </button>
@@ -168,77 +148,58 @@ export default function AdminApiKeysPage() {
 
         {/* Create Form */}
         {showCreate && (
-          <div style={{
-            marginBottom: "24px", padding: "20px", borderRadius: "14px",
-            background: "var(--card)", border: "1px solid var(--line-bright)",
-          }}>
-            <h3 style={{ color: "#fff", fontSize: "0.95rem", fontWeight: 700, marginBottom: "16px" }}>Create New API Key</h3>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+          <div className="mb-6 p-5 rounded-[14px] bg-[var(--card)] border border-line-bright">
+            <h3 className="text-white text-[0.95rem] font-bold mb-4">Create New API Key</h3>
+            <div className="grid grid-cols-2 gap-3 mb-3">
               <div>
-                <label style={{ display: "block", fontSize: "0.72rem", fontWeight: 700, color: "var(--muted)", marginBottom: "4px" }}>Name *</label>
+                <label className="block text-[0.72rem] font-bold text-muted mb-1">Name *</label>
                 <input
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   placeholder="My API Key"
                   maxLength={120}
-                  style={{
-                    width: "100%", padding: "8px 12px", borderRadius: "8px", fontSize: "0.82rem",
-                    background: "var(--bg)", border: "1px solid var(--line-bright)", color: "#fff",
-                  }}
+                  className="w-full py-2 px-3 rounded-[8px] text-[0.82rem] bg-bg border border-line-bright text-white"
                 />
               </div>
               <div>
-                <label style={{ display: "block", fontSize: "0.72rem", fontWeight: 700, color: "var(--muted)", marginBottom: "4px" }}>Scope</label>
+                <label className="block text-[0.72rem] font-bold text-muted mb-1">Scope</label>
                 <select
                   value={newScope}
                   onChange={(e) => setNewScope(e.target.value as "PLATFORM" | "VENDOR")}
-                  style={{
-                    width: "100%", padding: "8px 12px", borderRadius: "8px", fontSize: "0.82rem",
-                    background: "var(--bg)", border: "1px solid var(--line-bright)", color: "#fff",
-                  }}
+                  className="w-full py-2 px-3 rounded-[8px] text-[0.82rem] bg-bg border border-line-bright text-white"
                 >
                   <option value="PLATFORM">Platform</option>
                   <option value="VENDOR">Vendor</option>
                 </select>
               </div>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "16px" }}>
+            <div className="grid grid-cols-2 gap-3 mb-4">
               <div>
-                <label style={{ display: "block", fontSize: "0.72rem", fontWeight: 700, color: "var(--muted)", marginBottom: "4px" }}>Permissions (comma-separated)</label>
+                <label className="block text-[0.72rem] font-bold text-muted mb-1">Permissions (comma-separated)</label>
                 <input
                   value={newPermissions}
                   onChange={(e) => setNewPermissions(e.target.value)}
                   placeholder="read:products, write:orders"
-                  style={{
-                    width: "100%", padding: "8px 12px", borderRadius: "8px", fontSize: "0.82rem",
-                    background: "var(--bg)", border: "1px solid var(--line-bright)", color: "#fff",
-                  }}
+                  className="w-full py-2 px-3 rounded-[8px] text-[0.82rem] bg-bg border border-line-bright text-white"
                 />
               </div>
               <div>
-                <label style={{ display: "block", fontSize: "0.72rem", fontWeight: 700, color: "var(--muted)", marginBottom: "4px" }}>Expires At (optional)</label>
+                <label className="block text-[0.72rem] font-bold text-muted mb-1">Expires At (optional)</label>
                 <input
                   type="datetime-local"
                   value={newExpiry}
                   onChange={(e) => setNewExpiry(e.target.value)}
-                  style={{
-                    width: "100%", padding: "8px 12px", borderRadius: "8px", fontSize: "0.82rem",
-                    background: "var(--bg)", border: "1px solid var(--line-bright)", color: "#fff",
-                  }}
+                  className="w-full py-2 px-3 rounded-[8px] text-[0.82rem] bg-bg border border-line-bright text-white"
                 />
               </div>
             </div>
             <button
               type="button"
-              disabled={creating || !newName.trim()}
-              onClick={() => { void createKey(); }}
-              style={{
-                padding: "8px 24px", borderRadius: "10px", fontSize: "0.82rem", fontWeight: 700,
-                background: "var(--gradient-brand)", color: "#fff", border: "none",
-                cursor: creating ? "not-allowed" : "pointer", opacity: creating ? 0.6 : 1,
-              }}
+              disabled={createMutation.isPending || !newName.trim()}
+              onClick={() => { createMutation.mutate(); }}
+              className={`py-2 px-6 rounded-md text-[0.82rem] font-bold bg-[var(--gradient-brand)] text-white border-none ${createMutation.isPending ? "cursor-not-allowed opacity-60" : "cursor-pointer opacity-100"}`}
             >
-              {creating ? "Creating..." : "Create API Key"}
+              {createMutation.isPending ? "Creating..." : "Create API Key"}
             </button>
           </div>
         )}
@@ -247,16 +208,16 @@ export default function AdminApiKeysPage() {
         {loading ? (
           <TableSkeleton rows={3} cols={7} />
         ) : keys.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "60px 20px", borderRadius: "14px", background: "var(--card)", border: "1px solid var(--line-bright)" }}>
-            <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>No API keys found. Create one to get started.</p>
+          <div className="text-center py-[60px] px-5 rounded-[14px] bg-[var(--card)] border border-line-bright">
+            <p className="text-muted text-[0.9rem]">No API keys found. Create one to get started.</p>
           </div>
         ) : (
-          <div style={{ borderRadius: "14px", overflow: "hidden", border: "1px solid var(--line-bright)" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <div className="rounded-[14px] overflow-hidden border border-line-bright">
+            <table className="w-full border-collapse">
               <thead>
-                <tr style={{ background: "var(--card)" }}>
+                <tr className="bg-[var(--card)]">
                   {["Name", "Scope", "Permissions", "Status", "Created", "Expires", "Actions"].map((h) => (
-                    <th key={h} style={{ padding: "10px 14px", fontSize: "0.68rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--muted)", textAlign: "left" }}>
+                    <th key={h} className="py-2.5 px-3.5 text-[0.68rem] font-extrabold uppercase tracking-[0.1em] text-muted text-left">
                       {h}
                     </th>
                   ))}
@@ -264,35 +225,26 @@ export default function AdminApiKeysPage() {
               </thead>
               <tbody>
                 {keys.map((key) => (
-                  <tr key={key.id} style={{ borderTop: "1px solid var(--line-bright)" }}>
-                    <td style={{ padding: "12px 14px", fontSize: "0.82rem", fontWeight: 600, color: "#fff" }}>{key.name}</td>
-                    <td style={{ padding: "12px 14px" }}>
-                      <span style={{
-                        fontSize: "0.68rem", fontWeight: 700, padding: "2px 8px", borderRadius: "6px",
-                        background: key.scope === "PLATFORM" ? "var(--accent-soft)" : "rgba(52,211,153,0.1)",
-                        color: key.scope === "PLATFORM" ? "var(--accent)" : "#34d399",
-                      }}>
+                  <tr key={key.id} className="border-t border-line-bright">
+                    <td className="py-3 px-3.5 text-[0.82rem] font-semibold text-white">{key.name}</td>
+                    <td className="py-3 px-3.5">
+                      <span className={`text-[0.68rem] font-bold py-0.5 px-2 rounded-sm ${key.scope === "PLATFORM" ? "bg-accent-soft text-accent" : "bg-[rgba(52,211,153,0.1)] text-[#34d399]"}`}>
                         {key.scope}
                       </span>
                     </td>
-                    <td style={{ padding: "12px 14px", fontSize: "0.75rem", color: "var(--muted)", maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <td className="py-3 px-3.5 text-[0.75rem] text-muted max-w-[180px] overflow-hidden text-ellipsis whitespace-nowrap">
                       {key.permissions.length > 0 ? key.permissions.join(", ") : "—"}
                     </td>
-                    <td style={{ padding: "12px 14px" }}>{statusBadge(key.active, key.expiresAt)}</td>
-                    <td style={{ padding: "12px 14px", fontSize: "0.75rem", color: "var(--muted)" }}>{new Date(key.createdAt).toLocaleDateString()}</td>
-                    <td style={{ padding: "12px 14px", fontSize: "0.75rem", color: "var(--muted)" }}>{key.expiresAt ? new Date(key.expiresAt).toLocaleDateString() : "Never"}</td>
-                    <td style={{ padding: "12px 14px" }}>
+                    <td className="py-3 px-3.5">{statusBadge(key.active, key.expiresAt)}</td>
+                    <td className="py-3 px-3.5 text-[0.75rem] text-muted">{new Date(key.createdAt).toLocaleDateString()}</td>
+                    <td className="py-3 px-3.5 text-[0.75rem] text-muted">{key.expiresAt ? new Date(key.expiresAt).toLocaleDateString() : "Never"}</td>
+                    <td className="py-3 px-3.5">
                       {key.active && (
                         <button
                           type="button"
                           disabled={deletingId === key.id}
-                          onClick={() => { void deleteKey(key.id); }}
-                          style={{
-                            padding: "4px 12px", borderRadius: "6px", fontSize: "0.72rem", fontWeight: 600,
-                            background: "var(--danger-soft)", color: "var(--danger)",
-                            border: "1px solid var(--danger-glow)", cursor: "pointer",
-                            opacity: deletingId === key.id ? 0.6 : 1,
-                          }}
+                          onClick={() => { deleteMutation.mutate(key.id); }}
+                          className={`py-1 px-3 rounded-sm text-[0.72rem] font-semibold bg-danger-soft text-danger border border-danger-glow cursor-pointer ${deletingId === key.id ? "opacity-60" : "opacity-100"}`}
                         >
                           {deletingId === key.id ? "Revoking..." : "Revoke"}
                         </button>
@@ -304,7 +256,6 @@ export default function AdminApiKeysPage() {
             </table>
           </div>
         )}
-      </main>
-    </div>
+    </AdminPageShell>
   );
 }

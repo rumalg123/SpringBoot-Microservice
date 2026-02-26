@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { useAuthSession } from "../../../lib/authSession";
 import { getErrorMessage } from "../../../lib/error";
@@ -45,10 +46,7 @@ function normalizeSlug(value: string): string {
 
 export default function AdminCategoriesPage() {
   const session = useAuthSession();
-
-  /* ── category lists ── */
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [deletedCategories, setDeletedCategories] = useState<Category[]>([]);
+  const queryClient = useQueryClient();
 
   /* ── form state ── */
   const [categoryForm, setCategoryForm] = useState<CategoryFormState>(emptyCategoryForm);
@@ -59,11 +57,33 @@ export default function AdminCategoriesPage() {
   const [savingCategory, setSavingCategory] = useState(false);
   const [restoringCategoryId, setRestoringCategoryId] = useState<string | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(true);
 
   /* ── delete confirm modal ── */
   const [deleteTarget, setDeleteTarget] = useState<Category | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  const isReady = session.status === "ready" && session.isAuthenticated && !!session.canManageAdminCategories && !!session.apiClient;
+
+  /* ── queries ── */
+  const { data: categories = [], isLoading: categoriesLoading } = useQuery<Category[]>({
+    queryKey: ["admin-categories"],
+    queryFn: async () => {
+      const res = await session.apiClient!.get("/admin/categories");
+      return (res.data as Category[]) || [];
+    },
+    enabled: isReady,
+  });
+
+  const { data: deletedCategories = [], isLoading: deletedLoading } = useQuery<Category[]>({
+    queryKey: ["admin-categories", "deleted"],
+    queryFn: async () => {
+      const res = await session.apiClient!.get("/admin/categories/deleted");
+      return (res.data as Category[]) || [];
+    },
+    enabled: isReady,
+  });
+
+  const initialLoading = categoriesLoading || deletedLoading;
 
   /* ── derived ── */
   const categoryMutationBusy = savingCategory || confirmLoading || Boolean(restoringCategoryId);
@@ -75,36 +95,6 @@ export default function AdminCategoriesPage() {
     () => categories.filter((c) => c.type === "PARENT"),
     [categories],
   );
-
-  /* ── data loaders ── */
-  const loadCategories = useCallback(async () => {
-    if (!session.apiClient) return;
-    const res = await session.apiClient.get("/admin/categories");
-    setCategories((res.data as Category[]) || []);
-  }, [session.apiClient]);
-
-  const loadDeletedCategories = useCallback(async () => {
-    if (!session.apiClient) return;
-    const res = await session.apiClient.get("/admin/categories/deleted");
-    setDeletedCategories((res.data as Category[]) || []);
-  }, [session.apiClient]);
-
-  /* ── initial load ── */
-  useEffect(() => {
-    if (session.status !== "ready") return;
-    if (!session.isAuthenticated || !session.canManageAdminCategories) return;
-
-    const run = async () => {
-      try {
-        await Promise.all([loadCategories(), loadDeletedCategories()]);
-      } catch (err) {
-        toast.error(getErrorMessage(err));
-      } finally {
-        setInitialLoading(false);
-      }
-    };
-    void run();
-  }, [session.status, session.isAuthenticated, session.canManageAdminCategories, loadCategories, loadDeletedCategories]);
 
   /* ── auto-generate slug from name ── */
   useEffect(() => {
@@ -138,7 +128,30 @@ export default function AdminCategoriesPage() {
     return () => clearTimeout(timer);
   }, [session.apiClient, categoryForm.slug, categoryForm.id]);
 
-  /* ── CRUD operations ── */
+  /* ── save category mutation ── */
+  const saveCategoryMutation = useMutation({
+    mutationFn: async (payload: { name: string; slug: string; type: string; parentCategoryId: string | null }) => {
+      if (categoryForm.id) {
+        await session.apiClient!.put(`/admin/categories/${categoryForm.id}`, payload);
+      } else {
+        await session.apiClient!.post("/admin/categories", payload);
+      }
+    },
+    onSuccess: () => {
+      toast.success(categoryForm.id ? "Category updated" : "Category created");
+      setCategoryForm(emptyCategoryForm);
+      setCategorySlugTouched(false);
+      setCategorySlugStatus("idle");
+      void queryClient.invalidateQueries({ queryKey: ["admin-categories"] });
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err));
+    },
+    onSettled: () => {
+      setSavingCategory(false);
+    },
+  });
+
   const saveCategory = async () => {
     if (!session.apiClient) return;
     if (savingCategory) return;
@@ -165,55 +178,57 @@ export default function AdminCategoriesPage() {
       type: categoryForm.type,
       parentCategoryId: categoryForm.type === "SUB" ? categoryForm.parentCategoryId || null : null,
     };
-    try {
-      if (categoryForm.id) {
-        await session.apiClient.put(`/admin/categories/${categoryForm.id}`, payload);
-        toast.success("Category updated");
-      } else {
-        await session.apiClient.post("/admin/categories", payload);
-        toast.success("Category created");
-      }
-      setCategoryForm(emptyCategoryForm);
-      setCategorySlugTouched(false);
-      setCategorySlugStatus("idle");
-      await Promise.all([loadCategories(), loadDeletedCategories()]);
-    } catch (err) {
-      toast.error(getErrorMessage(err));
-    } finally {
-      setSavingCategory(false);
-    }
+    saveCategoryMutation.mutate(payload);
   };
+
+  /* ── delete category mutation ── */
+  const deleteCategoryMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await session.apiClient!.delete(`/admin/categories/${id}`);
+    },
+    onSuccess: () => {
+      toast.success("Category deleted");
+      void queryClient.invalidateQueries({ queryKey: ["admin-categories"] });
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err));
+    },
+    onSettled: () => {
+      setConfirmLoading(false);
+      setDeleteTarget(null);
+      setShowDeleteConfirm(false);
+    },
+  });
 
   const deleteCategory = async (id: string) => {
     if (!session.apiClient) return;
     if (confirmLoading) return;
     setConfirmLoading(true);
-    try {
-      await session.apiClient.delete(`/admin/categories/${id}`);
-      toast.success("Category deleted");
-      await Promise.all([loadCategories(), loadDeletedCategories()]);
-    } catch (err) {
-      toast.error(getErrorMessage(err));
-    } finally {
-      setConfirmLoading(false);
-      setDeleteTarget(null);
-      setShowDeleteConfirm(false);
-    }
+    deleteCategoryMutation.mutate(id);
   };
+
+  /* ── restore category mutation ── */
+  const restoreCategoryMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await session.apiClient!.post(`/admin/categories/${id}/restore`);
+    },
+    onSuccess: () => {
+      toast.success("Category restored");
+      void queryClient.invalidateQueries({ queryKey: ["admin-categories"] });
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err));
+    },
+    onSettled: () => {
+      setRestoringCategoryId(null);
+    },
+  });
 
   const restoreCategory = async (id: string) => {
     if (!session.apiClient) return;
     if (restoringCategoryId) return;
     setRestoringCategoryId(id);
-    try {
-      await session.apiClient.post(`/admin/categories/${id}/restore`);
-      toast.success("Category restored");
-      await Promise.all([loadCategories(), loadDeletedCategories()]);
-    } catch (err) {
-      toast.error(getErrorMessage(err));
-    } finally {
-      setRestoringCategoryId(null);
-    }
+    restoreCategoryMutation.mutate(id);
   };
 
   /* ── form handlers ── */
@@ -271,8 +286,8 @@ export default function AdminCategoriesPage() {
           { label: "Categories" },
         ]}
       >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300 }}>
-          <p style={{ color: "var(--muted)", fontSize: "0.875rem" }}>Loading session...</p>
+        <div className="flex items-center justify-center min-h-[300px]">
+          <p className="text-muted text-base">Loading session...</p>
         </div>
       </AdminPageShell>
     );
@@ -287,27 +302,11 @@ export default function AdminCategoriesPage() {
           { label: "Categories" },
         ]}
       >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            minHeight: 300,
-            flexDirection: "column",
-            gap: 12,
-          }}
-        >
-          <p
-            style={{
-              color: "var(--danger, #ef4444)",
-              fontSize: "1.1rem",
-              fontWeight: 700,
-              fontFamily: "var(--font-display, Syne, sans-serif)",
-            }}
-          >
+        <div className="flex items-center justify-center min-h-[300px] flex-col gap-3">
+          <p className="text-danger text-[1.1rem] font-bold font-[var(--font-display,Syne,sans-serif)]">
             Unauthorized
           </p>
-          <p style={{ color: "var(--muted)", fontSize: "0.8rem" }}>
+          <p className="text-muted text-sm">
             You do not have permission to manage categories.
           </p>
         </div>
@@ -324,11 +323,11 @@ export default function AdminCategoriesPage() {
       ]}
     >
       {initialLoading ? (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300 }}>
-          <p style={{ color: "var(--muted)", fontSize: "0.875rem" }}>Loading categories...</p>
+        <div className="flex items-center justify-center min-h-[300px]">
+          <p className="text-muted text-base">Loading categories...</p>
         </div>
       ) : (
-        <div style={{ maxWidth: 640 }}>
+        <div className="max-w-[640px]">
           <CategoryOperationsPanel
             categoryForm={categoryForm}
             categorySlugStatus={categorySlugStatus}

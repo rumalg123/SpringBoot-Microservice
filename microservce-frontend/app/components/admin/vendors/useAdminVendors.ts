@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { AxiosInstance } from "axios";
 import toast from "react-hot-toast";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Vendor, VendorDeletionEligibility, VendorLifecycleAudit, VendorUser } from "./types";
 import { getApiErrorMessage } from "./vendorUtils";
 import { useVendorForm } from "./useVendorForm";
@@ -21,6 +22,7 @@ export type VendorConfirmState =
   | null;
 
 export function useAdminVendors(apiClient: AxiosInstance | null) {
+  const queryClient = useQueryClient();
   const vendorList = useVendorList(apiClient);
   const vendorOnboarding = useVendorOnboarding({
     apiClient,
@@ -42,12 +44,10 @@ export function useAdminVendors(apiClient: AxiosInstance | null) {
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [confirmReason, setConfirmReason] = useState("");
   const [vendorDeletionEligibilityById, setVendorDeletionEligibilityById] = useState<Record<string, VendorDeletionEligibility>>({});
-  const [vendorLifecycleAuditById, setVendorLifecycleAuditById] = useState<Record<string, VendorLifecycleAudit[]>>({});
-  const [eligibilityLoadingVendorId, setEligibilityLoadingVendorId] = useState<string | null>(null);
-  const [lifecycleAuditLoadingVendorId, setLifecycleAuditLoadingVendorId] = useState<string | null>(null);
   const [orderToggleVendorId, setOrderToggleVendorId] = useState<string | null>(null);
   const [verifyingVendorId, setVerifyingVendorId] = useState<string | null>(null);
   const [rejectingVerificationId, setRejectingVerificationId] = useState<string | null>(null);
+  const [eligibilityLoadingVendorId, setEligibilityLoadingVendorId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!confirmState) {
@@ -55,6 +55,21 @@ export function useAdminVendors(apiClient: AxiosInstance | null) {
     }
   }, [confirmState]);
 
+  // ---- React Query: Lifecycle audit for selected vendor ----
+  const selectedVendorId = vendorList.selectedVendorId;
+
+  const lifecycleAuditQuery = useQuery<VendorLifecycleAudit[]>({
+    queryKey: ["admin-vendor-lifecycle-audit", selectedVendorId],
+    queryFn: async () => {
+      const res = await apiClient!.get(`/admin/vendors/${selectedVendorId}/lifecycle-audit`);
+      return ((res.data as VendorLifecycleAudit[]) || []).slice();
+    },
+    enabled: Boolean(apiClient) && Boolean(selectedVendorId) && !vendorList.showDeleted,
+  });
+
+  const lifecycleAuditLoadingVendorId = lifecycleAuditQuery.isFetching ? selectedVendorId : null;
+
+  // Imperative eligibility loading (needed for confirm flow checks)
   const loadVendorDeletionEligibility = async (vendorId: string) => {
     if (!apiClient || !vendorId) return null;
     setEligibilityLoadingVendorId(vendorId);
@@ -73,20 +88,11 @@ export function useAdminVendors(apiClient: AxiosInstance | null) {
 
   const loadVendorLifecycleAudit = async (vendorId: string) => {
     if (!apiClient || !vendorId) return [] as VendorLifecycleAudit[];
-    setLifecycleAuditLoadingVendorId(vendorId);
-    try {
-      const res = await apiClient.get(`/admin/vendors/${vendorId}/lifecycle-audit`);
-      const rows = ((res.data as VendorLifecycleAudit[]) || []).slice();
-      setVendorLifecycleAuditById((prev) => ({ ...prev, [vendorId]: rows }));
-      return rows;
-    } catch (err) {
-      toast.error(getApiErrorMessage(err, "Failed to load vendor lifecycle audit."));
-      return [];
-    } finally {
-      setLifecycleAuditLoadingVendorId((current) => (current === vendorId ? null : current));
-    }
+    await queryClient.invalidateQueries({ queryKey: ["admin-vendor-lifecycle-audit", vendorId] });
+    return lifecycleAuditQuery.data ?? [];
   };
 
+  // Background eligibility fetch for visible vendors
   useEffect(() => {
     if (!apiClient || vendorList.showDeleted || vendorList.vendors.length === 0) return;
     const missing = vendorList.vendors
@@ -113,16 +119,12 @@ export function useAdminVendors(apiClient: AxiosInstance | null) {
     };
   }, [apiClient, vendorList.showDeleted, vendorList.vendors, vendorDeletionEligibilityById]);
 
+  // Load eligibility for selected vendor if not already loaded
   useEffect(() => {
     if (!apiClient || !vendorList.selectedVendorId || vendorList.showDeleted) return;
     if (vendorDeletionEligibilityById[vendorList.selectedVendorId]) return;
     void loadVendorDeletionEligibility(vendorList.selectedVendorId);
-  }, [apiClient, vendorList.selectedVendorId, vendorList.showDeleted, vendorDeletionEligibilityById]);
-
-  useEffect(() => {
-    if (!apiClient || !vendorList.selectedVendorId || vendorList.showDeleted) return;
-    void loadVendorLifecycleAudit(vendorList.selectedVendorId);
-  }, [apiClient, vendorList.selectedVendorId, vendorList.showDeleted]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [apiClient, vendorList.selectedVendorId, vendorList.showDeleted, vendorDeletionEligibilityById]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openDeleteVendorConfirm = async (vendor: Vendor) => {
     const existing = vendorDeletionEligibilityById[vendor.id];
@@ -162,7 +164,7 @@ export function useAdminVendors(apiClient: AxiosInstance | null) {
         await vendorList.loadDeletedVendors();
       }
       await loadVendorDeletionEligibility(vendor.id);
-      await loadVendorLifecycleAudit(vendor.id);
+      await queryClient.invalidateQueries({ queryKey: ["admin-vendor-lifecycle-audit", vendor.id] });
       vendorList.setStatus(`Stopped new orders for ${vendor.name}.`);
       toast.success("Vendor stopped receiving orders");
     } catch (err) {
@@ -182,7 +184,7 @@ export function useAdminVendors(apiClient: AxiosInstance | null) {
         await vendorList.loadDeletedVendors();
       }
       await loadVendorDeletionEligibility(vendor.id);
-      await loadVendorLifecycleAudit(vendor.id);
+      await queryClient.invalidateQueries({ queryKey: ["admin-vendor-lifecycle-audit", vendor.id] });
       vendorList.setStatus(`Resumed orders for ${vendor.name}.`);
       toast.success("Vendor resumed receiving orders");
     } catch (err) {
@@ -260,7 +262,7 @@ export function useAdminVendors(apiClient: AxiosInstance | null) {
           await vendorList.loadDeletedVendors();
         }
         await loadVendorDeletionEligibility(vendor.id);
-        await loadVendorLifecycleAudit(vendor.id);
+        await queryClient.invalidateQueries({ queryKey: ["admin-vendor-lifecycle-audit", vendor.id] });
         vendorList.setStatus("Vendor delete request created.");
         toast.success("Delete request created");
       } else if (confirmState.kind === "confirmDeleteVendor") {
@@ -287,11 +289,6 @@ export function useAdminVendors(apiClient: AxiosInstance | null) {
           delete next[vendor.id];
           return next;
         });
-        setVendorLifecycleAuditById((prev) => {
-          const next = { ...prev };
-          delete next[vendor.id];
-          return next;
-        });
         vendorList.setStatus("Vendor deleted.");
         toast.success("Vendor soft deleted");
       } else if (confirmState.kind === "restoreVendor") {
@@ -302,7 +299,7 @@ export function useAdminVendors(apiClient: AxiosInstance | null) {
           await vendorList.loadDeletedVendors();
         }
         await loadVendorDeletionEligibility(vendor.id);
-        await loadVendorLifecycleAudit(vendor.id);
+        await queryClient.invalidateQueries({ queryKey: ["admin-vendor-lifecycle-audit", vendor.id] });
         vendorList.setStatus("Vendor restored.");
         toast.success("Vendor restored");
       } else if (confirmState.kind === "removeVendorUser") {
@@ -439,10 +436,9 @@ export function useAdminVendors(apiClient: AxiosInstance | null) {
       ? (vendorDeletionEligibilityById[vendorOnboarding.selectedVendor.id] ?? null)
       : null,
     selectedVendorLifecycleAudit: vendorOnboarding.selectedVendor
-      ? (vendorLifecycleAuditById[vendorOnboarding.selectedVendor.id] ?? [])
+      ? (lifecycleAuditQuery.data ?? [])
       : [],
     vendorDeletionEligibilityById,
-    vendorLifecycleAuditById,
     eligibilityLoadingVendorId,
     lifecycleAuditLoadingVendorId,
     orderToggleVendorId,

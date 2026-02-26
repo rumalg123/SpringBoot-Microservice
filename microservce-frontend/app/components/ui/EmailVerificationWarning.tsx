@@ -18,12 +18,7 @@ export default function EmailVerificationWarning({
 
   return (
     <section
-      className="mb-4 flex items-center gap-3 rounded-xl px-4 py-3 text-sm"
-      style={{
-        border: "1px solid var(--warning-border)",
-        background: "var(--warning-soft)",
-        color: "var(--warning-text)",
-      }}
+      className="mb-4 flex items-center gap-3 rounded-xl px-4 py-3 text-sm border border-warning-border bg-warning-soft text-warning-text"
     >
       <svg
         width="16"
@@ -43,7 +38,7 @@ export default function EmailVerificationWarning({
 
       <div className="flex-1">
         <p className="m-0 font-bold">Email Not Verified</p>
-        <p className="m-0" style={{ fontSize: "0.75rem", opacity: 0.8 }}>
+        <p className="m-0 text-sm opacity-80">
           {message}
         </p>
       </div>
@@ -52,18 +47,7 @@ export default function EmailVerificationWarning({
         type="button"
         onClick={onResend}
         disabled={resending}
-        className="btn-ghost"
-        style={{
-          background: "rgba(245,158,11,0.2)",
-          border: "1px solid rgba(245,158,11,0.4)",
-          color: "var(--warning-text)",
-          padding: "6px 14px",
-          borderRadius: "8px",
-          fontSize: "0.75rem",
-          fontWeight: 700,
-          cursor: resending ? "not-allowed" : "pointer",
-          opacity: resending ? 0.5 : 1,
-        }}
+        className={`btn-ghost text-sm font-bold rounded-[8px] py-1.5 px-3.5 border border-[rgba(245,158,11,0.4)] bg-[rgba(245,158,11,0.2)] text-warning-text ${resending ? "cursor-not-allowed opacity-50" : "cursor-pointer opacity-100"}`}
       >
         {resending ? "Sending..." : "Resend Email"}
       </button>

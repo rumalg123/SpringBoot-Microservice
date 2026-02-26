@@ -35,29 +35,8 @@ export default class ErrorBoundary extends Component<Props, State> {
       if (this.props.fallback) return this.props.fallback;
 
       return (
-        <div
-          style={{
-            minHeight: "300px",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "40px 24px",
-            textAlign: "center",
-          }}
-        >
-          <div
-            style={{
-              width: "56px",
-              height: "56px",
-              borderRadius: "50%",
-              background: "rgba(239,68,68,0.1)",
-              border: "1px solid rgba(239,68,68,0.25)",
-              display: "grid",
-              placeItems: "center",
-              marginBottom: "16px",
-            }}
-          >
+        <div className="min-h-[300px] flex flex-col items-center justify-center px-6 py-10 text-center">
+          <div className="mb-4 grid h-14 w-14 place-items-center rounded-full border border-[rgba(239,68,68,0.25)] bg-[rgba(239,68,68,0.1)]">
             <svg
               width="24"
               height="24"
@@ -73,38 +52,15 @@ export default class ErrorBoundary extends Component<Props, State> {
               <line x1="12" y1="16" x2="12.01" y2="16" />
             </svg>
           </div>
-          <p
-            style={{
-              fontSize: "1rem",
-              fontWeight: 700,
-              color: "var(--ink)",
-              margin: "0 0 6px",
-            }}
-          >
+          <p className="mb-1.5 text-lg font-bold text-ink">
             Something went wrong
           </p>
-          <p
-            style={{
-              fontSize: "0.82rem",
-              color: "var(--muted)",
-              margin: "0 0 20px",
-              maxWidth: "400px",
-            }}
-          >
+          <p className="mb-5 max-w-[400px] text-sm text-muted">
             {this.state.error?.message || "An unexpected error occurred."}
           </p>
           <button
             onClick={this.handleRetry}
-            style={{
-              padding: "10px 24px",
-              borderRadius: "10px",
-              border: "none",
-              background: "var(--gradient-brand)",
-              color: "#fff",
-              fontSize: "0.85rem",
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
+            className="btn-primary cursor-pointer rounded-md border-none px-6 py-2.5 text-sm font-bold text-white"
           >
             Try Again
           </button>
