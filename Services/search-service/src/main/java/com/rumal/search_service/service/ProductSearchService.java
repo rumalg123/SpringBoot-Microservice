@@ -81,12 +81,12 @@ public class ProductSearchService {
                 Aggregation.of(a -> a.terms(t -> t.field("mainCategory.keyword").size(20))));
         queryBuilder.withAggregation("priceRanges",
                 Aggregation.of(a -> a.range(r -> r.field("sellingPrice").ranges(List.of(
-                        co.elastic.clients.elasticsearch._types.aggregations.AggregationRange.of(ar -> ar.key("0-25").from("0").to("25")),
-                        co.elastic.clients.elasticsearch._types.aggregations.AggregationRange.of(ar -> ar.key("25-50").from("25").to("50")),
-                        co.elastic.clients.elasticsearch._types.aggregations.AggregationRange.of(ar -> ar.key("50-100").from("50").to("100")),
-                        co.elastic.clients.elasticsearch._types.aggregations.AggregationRange.of(ar -> ar.key("100-250").from("100").to("250")),
-                        co.elastic.clients.elasticsearch._types.aggregations.AggregationRange.of(ar -> ar.key("250-500").from("250").to("500")),
-                        co.elastic.clients.elasticsearch._types.aggregations.AggregationRange.of(ar -> ar.key("500+").from("500"))
+                        co.elastic.clients.elasticsearch._types.aggregations.AggregationRange.of(ar -> ar.key("0-25").from(0.0).to(25.0)),
+                        co.elastic.clients.elasticsearch._types.aggregations.AggregationRange.of(ar -> ar.key("25-50").from(25.0).to(50.0)),
+                        co.elastic.clients.elasticsearch._types.aggregations.AggregationRange.of(ar -> ar.key("50-100").from(50.0).to(100.0)),
+                        co.elastic.clients.elasticsearch._types.aggregations.AggregationRange.of(ar -> ar.key("100-250").from(100.0).to(250.0)),
+                        co.elastic.clients.elasticsearch._types.aggregations.AggregationRange.of(ar -> ar.key("250-500").from(250.0).to(500.0)),
+                        co.elastic.clients.elasticsearch._types.aggregations.AggregationRange.of(ar -> ar.key("500+").from(500.0))
                 )))));
 
         // Sorting
@@ -242,7 +242,7 @@ public class ProductSearchService {
 
                     // Categories facet
                     if (aggMap.containsKey("categories")) {
-                        var catAgg = aggMap.get("categories").aggregation().sterms();
+                        var catAgg = aggMap.get("categories").aggregation().getAggregate().sterms();
                         List<FacetBucket> buckets = catAgg.buckets().array().stream()
                                 .map(b -> new FacetBucket(b.key().stringValue(), b.docCount()))
                                 .toList();
@@ -251,7 +251,7 @@ public class ProductSearchService {
 
                     // Brands facet
                     if (aggMap.containsKey("brands")) {
-                        var brandAgg = aggMap.get("brands").aggregation().sterms();
+                        var brandAgg = aggMap.get("brands").aggregation().getAggregate().sterms();
                         List<FacetBucket> buckets = brandAgg.buckets().array().stream()
                                 .map(b -> new FacetBucket(b.key().stringValue(), b.docCount()))
                                 .toList();
@@ -260,7 +260,7 @@ public class ProductSearchService {
 
                     // Main categories facet
                     if (aggMap.containsKey("mainCategories")) {
-                        var mcAgg = aggMap.get("mainCategories").aggregation().sterms();
+                        var mcAgg = aggMap.get("mainCategories").aggregation().getAggregate().sterms();
                         List<FacetBucket> buckets = mcAgg.buckets().array().stream()
                                 .map(b -> new FacetBucket(b.key().stringValue(), b.docCount()))
                                 .toList();
@@ -269,7 +269,7 @@ public class ProductSearchService {
 
                     // Price ranges facet
                     if (aggMap.containsKey("priceRanges")) {
-                        var priceAgg = aggMap.get("priceRanges").aggregation().range();
+                        var priceAgg = aggMap.get("priceRanges").aggregation().getAggregate().range();
                         List<FacetBucket> buckets = priceAgg.buckets().array().stream()
                                 .filter(b -> b.docCount() > 0)
                                 .map(b -> new FacetBucket(b.key(), b.docCount()))

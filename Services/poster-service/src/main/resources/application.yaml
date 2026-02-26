@@ -19,16 +19,20 @@ server:
   port: 8095
   servlet:
     multipart:
-      max-file-size: ${POSTER_IMAGE_MAX_FILE_SIZE:2MB}
-      max-request-size: ${POSTER_IMAGE_MAX_REQUEST_SIZE:10MB}
+      max-file-size: ${POSTER_IMAGE_MAX_FILE_SIZE:5MB}
+      max-request-size: ${POSTER_IMAGE_MAX_REQUEST_SIZE:50MB}
 
 eureka:
   client:
     service-url:
       defaultZone: ${EUREKA_URL:http://discovery-server:8761/eureka/}
 
+poster:
+  rate-limit:
+    max-clicks-per-minute: ${POSTER_RATE_LIMIT_MAX_CLICKS_PER_MINUTE:10}
+
 cache:
-  posters-by-placement-ttl: ${CACHE_POSTERS_BY_PLACEMENT_TTL:60s}
+  posters-by-placement-ttl: ${CACHE_POSTERS_BY_PLACEMENT_TTL:15s}
 
 object-storage:
   enabled: ${OBJECT_STORAGE_ENABLED:false}

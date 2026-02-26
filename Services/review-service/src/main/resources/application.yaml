@@ -118,7 +118,6 @@ cache:
   review-by-id-ttl: ${CACHE_REVIEW_BY_ID_TTL:120s}
   reviews-by-product-ttl: ${CACHE_REVIEWS_BY_PRODUCT_TTL:60s}
   review-summary-ttl: ${CACHE_REVIEW_SUMMARY_TTL:300s}
-  admin-reviews-list-ttl: ${CACHE_ADMIN_REVIEWS_LIST_TTL:45s}
 
 object-storage:
   enabled: ${OBJECT_STORAGE_ENABLED:false}

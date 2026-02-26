@@ -28,6 +28,8 @@ logging:
     level: "%5p [${spring.application.name},traceId=%X{traceId},spanId=%X{spanId}]"
 
 search:
+  query:
+    timeout-seconds: ${SEARCH_QUERY_TIMEOUT_SECONDS:10}
   index:
     name: ${SEARCH_INDEX_NAME:products}
   sync:

@@ -108,12 +108,19 @@ resilience4j:
           - org.springframework.web.client.ResourceAccessException
           - org.springframework.web.client.HttpServerErrorException
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: ${MANAGEMENT_ENDPOINTS_INCLUDE:health,info,metrics}
+
 cache:
   clear-on-startup: ${CACHE_CLEAR_ON_STARTUP:true}
   key-prefix: ${CACHE_KEY_PREFIX:promo:v1::}
   promotion-by-id-ttl: ${CACHE_PROMOTION_BY_ID_TTL:120s}
   promotion-admin-list-ttl: ${CACHE_PROMOTION_ADMIN_LIST_TTL:45s}
-  quote-preview-ttl: ${CACHE_PROMOTION_QUOTE_TTL:30s}
+  public-promotion-list-ttl: ${CACHE_PUBLIC_PROMOTION_LIST_TTL:90s}
+  public-promotion-by-id-ttl: ${CACHE_PUBLIC_PROMOTION_BY_ID_TTL:120s}
 
 internal:
   auth:

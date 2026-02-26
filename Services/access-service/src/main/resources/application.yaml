@@ -1,6 +1,11 @@
 spring:
   application:
     name: access-service
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      timeout: ${REDIS_TIMEOUT:2s}
   datasource:
     url: ${ACCESS_DB_URL:jdbc:postgresql://access-db:5432/access_db}
     username: ${ACCESS_DB_USER:access_user}

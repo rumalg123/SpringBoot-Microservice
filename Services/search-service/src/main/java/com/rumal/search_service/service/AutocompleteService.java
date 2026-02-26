@@ -37,7 +37,7 @@ public class AutocompleteService {
                                     .analyzer("standard")))
                             .filter(f -> f.term(t -> t.field("active").value(true)))
                     ))
-                    .withSourceFilter(new FetchSourceFilter(
+                    .withSourceFilter(new FetchSourceFilter(true,
                             new String[]{"id", "slug", "name", "mainImage"}, null))
                     .withPageable(PageRequest.of(0, limit))
                     .withTimeout(java.time.Duration.ofSeconds(5))
