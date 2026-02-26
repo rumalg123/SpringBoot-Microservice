@@ -159,7 +159,7 @@ public class PosterServiceImpl implements PosterService {
         return posterVariantRepository
                 .findByPosterIdInOrderByCreatedAtAsc(posters.stream().map(Poster::getId).toList())
                 .stream()
-                .collect(Collectors.groupingBy(PosterVariant::getPosterId));
+                .collect(Collectors.groupingBy(v -> v.getPoster().getId()));
     }
 
     @Override
