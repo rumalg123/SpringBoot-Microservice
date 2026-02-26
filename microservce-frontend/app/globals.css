@@ -35,6 +35,12 @@
   --color-accent-glow: rgba(124, 58, 237, 0.35);
   --color-accent-light: #a78bfa;
 
+  /* Vendor (emerald green) */
+  --color-vendor: #34d399;
+  --color-vendor-hover: #2cc58d;
+  --color-vendor-soft: rgba(52, 211, 153, 0.08);
+  --color-vendor-glow: rgba(52, 211, 153, 0.3);
+
   /* Semantic colors */
   --color-success: #10b981;
   --color-success-glow: rgba(16, 185, 129, 0.25);
@@ -98,6 +104,12 @@
   --accent-hover: #6d28d9;
   --accent-soft: rgba(124, 58, 237, 0.12);
   --accent-glow: rgba(124, 58, 237, 0.35);
+
+  /* Vendor (emerald green) */
+  --vendor: #34d399;
+  --vendor-hover: #2cc58d;
+  --vendor-soft: rgba(52, 211, 153, 0.08);
+  --vendor-glow: rgba(52, 211, 153, 0.3);
 
   /* Semantic */
   --success: #10b981;
@@ -1250,6 +1262,16 @@ textarea:focus {
 
 .glow-ring:hover::before {
   opacity: 0.6;
+}
+
+/* --- Popup Dropdown --- */
+.popup-dropdown {
+  border: 1px solid var(--popup-accent, var(--line-bright));
+  background: rgba(13, 13, 31, 0.97);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--popup-accent, rgba(0, 212, 255, 0.06));
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
 /* --- Mobile --- */

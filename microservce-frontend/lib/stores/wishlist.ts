@@ -1,3 +1,8 @@
+/**
+ * Zustand wishlist store — provides optimistic UI updates for interactive widgets
+ * (nav badges, toggle buttons). For server-synchronized data fetching in page
+ * components, use the React Query hooks in `lib/hooks/queries/useWishlist.ts`.
+ */
 import { create } from "zustand";
 import type { AxiosInstance } from "axios";
 import type { WishlistResponse, WishlistItem } from "../types/wishlist";

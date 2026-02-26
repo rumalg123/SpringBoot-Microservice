@@ -1,6 +1,6 @@
 import Keycloak, { KeycloakInstance, KeycloakTokenParsed } from "keycloak-js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createApiClient } from "./apiClient";
+import { createApiClient, clearIdempotencyCache } from "./apiClient";
 import { API_BASE } from "./constants";
 import type { LoadingStatus } from "./types/status";
 
@@ -521,6 +521,7 @@ export function useAuthSession() {
     if (typeof localStorage !== "undefined") {
       localStorage.removeItem("_ps_merged");
     }
+    clearIdempotencyCache();
     await client.logout({
       redirectUri: typeof window === "undefined" ? undefined : window.location.origin,
     });

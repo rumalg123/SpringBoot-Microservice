@@ -16,13 +16,9 @@ const popupStyle: React.CSSProperties = {
   top: "calc(100% + 8px)",
   zIndex: 50,
   width: "290px",
-  borderRadius: "16px",
-  border: "1px solid rgba(124,58,237,0.2)",
-  background: "rgba(13,13,31,0.97)",
-  backdropFilter: "blur(20px)",
-  boxShadow: "0 20px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(124,58,237,0.08)",
   padding: "14px",
-};
+  "--popup-accent": "rgba(124,58,237,0.2)",
+} as React.CSSProperties;
 
 export default function WishlistNavWidget({ apiClient }: Props) {
   const pathname = usePathname();
@@ -91,7 +87,7 @@ export default function WishlistNavWidget({ apiClient }: Props) {
       </Link>
 
       {desktop && open && (
-        <div style={popupStyle} role="dialog" aria-label="Wishlist preview" aria-hidden={!open}>
+        <div className="popup-dropdown" style={popupStyle} role="dialog" aria-label="Wishlist preview" aria-hidden={!open}>
           <div className="mb-3 flex items-center justify-between">
             <p className="m-0 font-[Syne,sans-serif] text-base font-extrabold text-white">Wishlist</p>
             <Link href="/wishlist" className="text-[0.72rem] font-bold text-accent-light no-underline">Open Wishlist →</Link>

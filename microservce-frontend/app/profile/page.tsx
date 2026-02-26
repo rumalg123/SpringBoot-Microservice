@@ -24,7 +24,11 @@ function splitDisplayName(name: string) {
   const normalized = name.trim().replace(/\s+/g, " ");
   if (!normalized) return { firstName: "", lastName: "" };
   const firstSpace = normalized.indexOf(" ");
-  if (firstSpace < 0) return { firstName: normalized, lastName: "" };
+  if (firstSpace < 0) {
+    // Single-word names: pre-fill both fields so the user can correct them.
+    // Backend requires both firstName and lastName to be non-blank.
+    return { firstName: normalized, lastName: normalized };
+  }
   return { firstName: normalized.slice(0, firstSpace).trim(), lastName: normalized.slice(firstSpace + 1).trim() };
 }
 

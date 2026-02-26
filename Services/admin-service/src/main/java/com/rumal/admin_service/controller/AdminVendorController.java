@@ -51,7 +51,7 @@ public class AdminVendorController {
     }
 
     @GetMapping("/{id}/lifecycle-audit")
-    public List<Map<String, Object>> listLifecycleAudit(
+    public Map<String, Object> listLifecycleAudit(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @PathVariable UUID id
     ) {

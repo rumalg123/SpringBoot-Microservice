@@ -38,6 +38,13 @@ export const queryKeys = {
   reviews: {
     all: ["reviews"] as const,
     byProduct: (productId: string, page: number) => [...queryKeys.reviews.all, productId, page] as const,
+    summary: (productId: string) => [...queryKeys.reviews.all, "summary", productId] as const,
+  },
+  search: {
+    all: ["search"] as const,
+    products: (params: Record<string, unknown>) => [...queryKeys.search.all, "products", params] as const,
+    autocomplete: (prefix: string) => [...queryKeys.search.all, "autocomplete", prefix] as const,
+    popular: () => [...queryKeys.search.all, "popular"] as const,
   },
   insights: {
     all: ["insights"] as const,

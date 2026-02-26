@@ -4,8 +4,11 @@ export type CartItem = {
   productSlug: string;
   productName: string;
   productSku: string;
+  vendorId: string;
   mainImage: string | null;
   categoryIds: string[];
+  regularPrice: number;
+  discountedPrice: number | null;
   unitPrice: number;
   quantity: number;
   lineTotal: number;

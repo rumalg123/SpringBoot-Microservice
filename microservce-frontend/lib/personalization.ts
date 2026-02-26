@@ -38,15 +38,15 @@ const FLUSH_INTERVAL = 2000;
 function flushEvents(): void {
   if (eventQueue.length === 0) return;
   const batch = eventQueue.splice(0);
-  for (const { payload, token } of batch) {
-    try {
-      fetch(`${API_BASE}/personalization/events`, {
-        method: "POST",
-        headers: buildHeaders(token),
-        body: JSON.stringify(payload),
-      }).catch(() => {});
-    } catch {}
-  }
+  const token = batch.find((e) => e.token)?.token;
+  const payloads = batch.map((e) => e.payload);
+  try {
+    fetch(`${API_BASE}/personalization/events`, {
+      method: "POST",
+      headers: buildHeaders(token),
+      body: JSON.stringify(payloads),
+    }).catch(() => {});
+  } catch {}
 }
 
 function scheduleFlush(): void {
@@ -61,18 +61,18 @@ if (typeof window !== "undefined") {
   const onUnload = () => {
     if (eventQueue.length === 0) return;
     const batch = eventQueue.splice(0);
-    for (const { payload, token } of batch) {
-      const headers: Record<string, string> = { type: "application/json" };
-      const sessionId = getSessionId();
-      if (sessionId) headers["X-Session-Id"] = sessionId;
-      if (token) headers["Authorization"] = `Bearer ${token}`;
-      try {
-        navigator.sendBeacon(
-          `${API_BASE}/personalization/events`,
-          new Blob([JSON.stringify(payload)], { type: "application/json" })
-        );
-      } catch {}
-    }
+    const token = batch.find((e) => e.token)?.token;
+    const payloads = batch.map((e) => e.payload);
+    try {
+      // Use fetch with keepalive instead of sendBeacon so custom headers
+      // (Authorization, X-Session-Id) are actually transmitted.
+      fetch(`${API_BASE}/personalization/events`, {
+        method: "POST",
+        headers: buildHeaders(token),
+        body: JSON.stringify(payloads),
+        keepalive: true,
+      }).catch(() => {});
+    } catch {}
   };
   window.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") onUnload();
@@ -169,7 +169,7 @@ export async function fetchTrending(
 ): Promise<PersonalizationProduct[]> {
   try {
     const res = await fetch(`${API_BASE}/personalization/trending?limit=${limit}`, {
-      cache: "no-store",
+      next: { revalidate: 60 },
     });
     if (!res.ok) return [];
     return await res.json();

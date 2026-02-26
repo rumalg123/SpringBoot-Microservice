@@ -29,6 +29,7 @@ export type Order = {
   id: string;
   orderNumber?: string;
   customerId: string;
+  /** Display-friendly summary string, e.g. "Product A + 2 more". Not an iterable — see OrderDetail.items for the full list. */
   item: string;
   quantity: number;
   itemCount: number;

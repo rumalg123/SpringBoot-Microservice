@@ -20,8 +20,20 @@ export type PagedResponse<T> = {
   };
 };
 
+/** Normalised page with all fields guaranteed present. */
+export type NormalizedPage<T> = {
+  content: T[];
+  number: number;
+  totalPages: number;
+  totalElements: number;
+  size: number;
+  first: boolean;
+  last: boolean;
+  empty: boolean;
+};
+
 /** Normalise a raw Spring Page response into consistent fields. */
-export function normalizePage<T>(raw: PagedResponse<T>) {
+export function normalizePage<T>(raw: PagedResponse<T>): NormalizedPage<T> {
   return {
     content: raw.content,
     number: raw.number ?? raw.page?.number ?? 0,

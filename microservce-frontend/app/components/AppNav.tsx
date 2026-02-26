@@ -26,9 +26,9 @@ type Props = {
 type NavItem = { href: string; label: string; show: boolean; color: "brand" | "vendor" | "admin" };
 
 const colorMap = {
-  brand: { active: "var(--brand)", inactive: "rgba(255,255,255,0.6)", bg: "rgba(0,212,255,0.1)", border: "rgba(0,212,255,0.25)" },
-  vendor: { active: "#34d399", inactive: "rgba(52,211,153,0.6)", bg: "rgba(52,211,153,0.1)", border: "rgba(52,211,153,0.25)" },
-  admin: { active: "#a78bfa", inactive: "rgba(167,139,250,0.6)", bg: "var(--accent-soft)", border: "var(--accent-glow)" },
+  brand: { active: "var(--brand)", inactive: "rgba(255,255,255,0.6)", bg: "var(--brand-soft)", border: "var(--brand-glow)" },
+  vendor: { active: "var(--vendor)", inactive: "rgba(52,211,153,0.6)", bg: "var(--vendor-soft)", border: "var(--vendor-glow)" },
+  admin: { active: "var(--accent-light)", inactive: "rgba(167,139,250,0.6)", bg: "var(--accent-soft)", border: "var(--accent-glow)" },
 };
 
 function NavLink({ href, label, color, isActive }: { href: string; label: string; color: "brand" | "vendor" | "admin"; isActive: boolean }) {

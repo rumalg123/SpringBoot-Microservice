@@ -23,7 +23,7 @@ export function useSaveAddress(apiClient: AxiosInstance | null) {
         recipientName: form.recipientName.trim(),
         phone: form.phone.trim(),
         line1: form.line1.trim(),
-        line2: form.line2.trim() || null,
+        line2: form.line2?.trim() || null,
         city: form.city.trim(),
         state: form.state.trim(),
         postalCode: form.postalCode.trim(),

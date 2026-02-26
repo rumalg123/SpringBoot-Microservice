@@ -1,3 +1,8 @@
+/**
+ * Zustand cart store — provides optimistic UI updates for interactive widgets
+ * (nav badges, quick-add buttons). For server-synchronized data fetching in
+ * page components, use the React Query hooks in `lib/hooks/queries/useCart.ts`.
+ */
 import { create } from "zustand";
 import type { AxiosInstance } from "axios";
 import type { CartResponse } from "../types/cart";
@@ -50,13 +55,12 @@ export const useCartStore = create<CartState>((set, get) => ({
   },
 
   removeItem: async (api, itemId) => {
-    await api.delete(`/cart/me/items/${itemId}`);
-    // Optimistically remove the item from local state
-    const current = get().cart;
-    const updatedItems = current.items.filter((i) => i.id !== itemId);
+    // Optimistically remove the item BEFORE the API call to avoid race conditions
+    const previous = get().cart;
+    const updatedItems = previous.items.filter((i) => i.id !== itemId);
     set({
       cart: {
-        ...current,
+        ...previous,
         items: updatedItems,
         itemCount: updatedItems.length,
         totalQuantity: updatedItems.reduce((sum, i) => sum + i.quantity, 0),
@@ -64,6 +68,13 @@ export const useCartStore = create<CartState>((set, get) => ({
       },
       fetchedAt: new Date().toISOString(),
     });
+    try {
+      await api.delete(`/cart/me/items/${itemId}`);
+    } catch (err) {
+      // Rollback to previous state on failure
+      set({ cart: previous });
+      throw err;
+    }
   },
 
   saveForLater: async (api, itemId) => {

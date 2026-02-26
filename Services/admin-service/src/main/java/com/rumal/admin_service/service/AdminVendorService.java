@@ -33,7 +33,7 @@ public class AdminVendorService {
         return vendorClient.listDeleted(internalAuth);
     }
 
-    public List<Map<String, Object>> listLifecycleAudit(UUID id, String internalAuth) {
+    public Map<String, Object> listLifecycleAudit(UUID id, String internalAuth) {
         return vendorClient.listLifecycleAudit(id, internalAuth);
     }
 

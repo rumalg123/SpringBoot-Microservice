@@ -79,6 +79,10 @@ function resolveIdempotencyKeyForFingerprint(fingerprint: string, windowMs: numb
   return created;
 }
 
+export function clearIdempotencyCache(): void {
+  idempotencyKeyCache.clear();
+}
+
 export function createApiClient(options: CreateApiClientOptions): AxiosInstance {
   const client = axios.create({
     baseURL: options.baseURL,
@@ -132,7 +136,22 @@ export function createApiClient(options: CreateApiClientOptions): AxiosInstance 
         if (payload && typeof payload === "object") {
           const obj = payload as Record<string, unknown>;
           if (typeof obj.message === "string" && obj.message.trim()) return obj.message;
+          if (typeof obj.detail === "string" && obj.detail.trim()) return obj.detail;
           if (typeof obj.error === "string" && obj.error.trim()) return obj.error;
+          // Spring Boot validation errors: { errors: { field: "message" } }
+          if (obj.errors && typeof obj.errors === "object" && !Array.isArray(obj.errors)) {
+            const fieldErrors = Object.entries(obj.errors as Record<string, unknown>)
+              .filter(([, v]) => typeof v === "string")
+              .map(([k, v]) => `${k}: ${v}`);
+            if (fieldErrors.length) return fieldErrors.join("; ");
+          }
+          // Spring constraint violations: { violations: [{ field, message }] }
+          if (Array.isArray(obj.violations)) {
+            const msgs = (obj.violations as { field?: string; message?: string }[])
+              .filter((v) => v.message)
+              .map((v) => v.field ? `${v.field}: ${v.message}` : v.message!);
+            if (msgs.length) return msgs.join("; ");
+          }
         }
         return "";
       };

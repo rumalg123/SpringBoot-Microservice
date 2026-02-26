@@ -182,8 +182,8 @@ public class VendorClient {
         return getList("/admin/vendors/" + vendorId + "/users", internalAuth);
     }
 
-    public List<Map<String, Object>> listLifecycleAudit(UUID vendorId, String internalAuth) {
-        return getList("/admin/vendors/" + vendorId + "/lifecycle-audit", internalAuth);
+    public Map<String, Object> listLifecycleAudit(UUID vendorId, String internalAuth) {
+        return getMap("/admin/vendors/" + vendorId + "/lifecycle-audit", internalAuth);
     }
 
     public Map<String, Object> requestDelete(UUID vendorId, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {

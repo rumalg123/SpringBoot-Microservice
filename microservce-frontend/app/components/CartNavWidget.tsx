@@ -25,13 +25,9 @@ const popupStyle: React.CSSProperties = {
   top: "calc(100% + 8px)",
   zIndex: 50,
   width: "300px",
-  borderRadius: "16px",
-  border: "1px solid rgba(0,212,255,0.15)",
-  background: "rgba(13,13,31,0.97)",
-  backdropFilter: "blur(20px)",
-  boxShadow: "0 20px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(0,212,255,0.06)",
   padding: "14px",
-};
+  "--popup-accent": "rgba(0,212,255,0.15)",
+} as React.CSSProperties;
 
 export default function CartNavWidget({ apiClient, emailVerified }: Props) {
   const pathname = usePathname();
@@ -121,7 +117,7 @@ export default function CartNavWidget({ apiClient, emailVerified }: Props) {
           <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
         </svg>
         <span
-          className="absolute -right-1.5 -top-1.5 grid min-h-[18px] min-w-[18px] place-items-center rounded-[20px] bg-[linear-gradient(135deg,#00d4ff,#7c3aed)] px-1 text-[10px] font-extrabold text-white"
+          className="absolute -right-1.5 -top-1.5 grid min-h-[18px] min-w-[18px] place-items-center rounded-[20px] bg-[image:var(--gradient-brand)] px-1 text-[10px] font-extrabold text-white"
           aria-live="polite"
           aria-atomic="true"
         >
@@ -130,7 +126,7 @@ export default function CartNavWidget({ apiClient, emailVerified }: Props) {
       </Link>
 
       {desktop && open && (
-        <div style={popupStyle} role="dialog" aria-label="Cart preview" aria-hidden={!open}>
+        <div className="popup-dropdown" style={popupStyle} role="dialog" aria-label="Cart preview" aria-hidden={!open}>
           <div className="mb-3 flex items-center justify-between">
             <p className="m-0 font-[Syne,sans-serif] text-base font-extrabold text-white">Cart</p>
             <Link href="/cart" className="text-[0.72rem] font-bold text-[#00d4ff] no-underline">Open Cart →</Link>
