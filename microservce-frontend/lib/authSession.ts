@@ -2,8 +2,9 @@ import Keycloak, { KeycloakInstance, KeycloakTokenParsed } from "keycloak-js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createApiClient } from "./apiClient";
 import { API_BASE } from "./constants";
+import type { LoadingStatus } from "./types/status";
 
-type SessionStatus = "idle" | "loading" | "ready" | "error";
+type SessionStatus = LoadingStatus;
 type UserProfile = Record<string, unknown> | null;
 type TokenClaims = KeycloakTokenParsed & Record<string, unknown>;
 

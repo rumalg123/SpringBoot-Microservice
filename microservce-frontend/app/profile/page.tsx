@@ -79,8 +79,8 @@ export default function ProfilePage() {
     if (!apiClient) return;
     setAddressLoading(true);
     try {
-      const response = await apiClient.get("/customers/me/addresses");
-      setAddresses((response.data as CustomerAddress[]) || []);
+      const response = await apiClient.get<CustomerAddress[]>("/customers/me/addresses");
+      setAddresses(response.data ?? []);
     } finally { setAddressLoading(false); }
   }, [apiClient]);
 
@@ -164,8 +164,8 @@ export default function ProfilePage() {
     if (!apiClient || commPrefsLoading) return;
     setCommPrefsLoading(true);
     try {
-      const response = await apiClient.get("/customers/me/communication-preferences");
-      setCommPrefs(response.data as CommunicationPreferences);
+      const response = await apiClient.get<CommunicationPreferences>("/customers/me/communication-preferences");
+      setCommPrefs(response.data);
       setCommPrefsLoaded(true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to load communication preferences");
@@ -179,8 +179,8 @@ export default function ProfilePage() {
     // Optimistic update
     setCommPrefs({ ...commPrefs, [key]: newValue });
     try {
-      const response = await apiClient.put("/customers/me/communication-preferences", { [key]: newValue });
-      setCommPrefs(response.data as CommunicationPreferences);
+      const response = await apiClient.put<CommunicationPreferences>("/customers/me/communication-preferences", { [key]: newValue });
+      setCommPrefs(response.data);
     } catch (err) {
       // Revert on failure
       setCommPrefs({ ...commPrefs, [key]: !newValue });
@@ -193,8 +193,8 @@ export default function ProfilePage() {
     if (!apiClient || linkedAccountsLoading) return;
     setLinkedAccountsLoading(true);
     try {
-      const response = await apiClient.get("/customers/me/linked-accounts");
-      setLinkedAccounts(response.data as LinkedAccounts);
+      const response = await apiClient.get<LinkedAccounts>("/customers/me/linked-accounts");
+      setLinkedAccounts(response.data);
       setLinkedAccountsLoaded(true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to load linked accounts");
@@ -206,8 +206,8 @@ export default function ProfilePage() {
     if (!apiClient) return;
     setActivityLogLoading(true);
     try {
-      const response = await apiClient.get(`/customers/me/activity-log?page=${page}&size=20`);
-      const raw = response.data as PagedResponse<ActivityLogEntry>;
+      const response = await apiClient.get<PagedResponse<ActivityLogEntry>>(`/customers/me/activity-log?page=${page}&size=20`);
+      const raw = response.data;
       const page_ = normalizePage(raw);
       setActivityLog({
         content: page_.content,
@@ -226,8 +226,8 @@ export default function ProfilePage() {
     if (!apiClient) return;
     setCouponUsageLoading(true);
     try {
-      const response = await apiClient.get(`/promotions/me/coupon-usage?page=${page}&size=20`);
-      const raw = response.data as PagedResponse<CouponUsageEntry>;
+      const response = await apiClient.get<PagedResponse<CouponUsageEntry>>(`/promotions/me/coupon-usage?page=${page}&size=20`);
+      const raw = response.data;
       const page_ = normalizePage(raw);
       setCouponUsage({
         content: page_.content,
@@ -298,8 +298,8 @@ export default function ProfilePage() {
       if (!apiClient) return;
       try {
         await ensureCustomer();
-        const response = await apiClient.get("/customers/me");
-        const loaded = response.data as Customer;
+        const response = await apiClient.get<Customer>("/customers/me");
+        const loaded = response.data;
         setCustomer(loaded);
         const nameParts = splitDisplayName(loaded.name || "");
         setEditFirstName(nameParts.firstName);
@@ -331,8 +331,8 @@ export default function ProfilePage() {
     if (f === initialNameParts.firstName && l === initialNameParts.lastName) { setStatus("No changes to save."); return; }
     setSavingProfile(true);
     try {
-      const response = await apiClient.put("/customers/me", { firstName: f, lastName: l });
-      const updated = response.data as Customer;
+      const response = await apiClient.put<Customer>("/customers/me", { firstName: f, lastName: l });
+      const updated = response.data;
       setCustomer(updated);
       const parts = splitDisplayName(updated.name || `${f} ${l}`);
       setEditFirstName(parts.firstName); setEditLastName(parts.lastName);

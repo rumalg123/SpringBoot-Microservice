@@ -2,12 +2,10 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import AppNav from "../../components/AppNav";
-import Footer from "../../components/Footer";
 import { useAuthSession } from "../../../lib/authSession";
 import { money } from "../../../lib/format";
+import TableSkeleton from "../../components/ui/TableSkeleton";
 
 type Payment = {
   id: string; orderId: string; customerId: string; amount: number; currency: string;
@@ -29,12 +27,8 @@ type Paged<T> = { content: T[]; totalPages: number; totalElements: number };
 type Tab = "payments" | "refunds" | "payouts";
 
 export default function AdminPaymentsPage() {
-  const router = useRouter();
   const session = useAuthSession();
-  const { status: sessionStatus, isAuthenticated, canViewAdmin, profile, logout,
-    canManageAdminOrders, canManageAdminProducts, canManageAdminCategories,
-    canManageAdminVendors, canManageAdminPosters, apiClient, emailVerified, isSuperAdmin, isVendorAdmin,
-  } = session;
+  const { status: sessionStatus, apiClient } = session;
 
   const [tab, setTab] = useState<Tab>("payments");
 
@@ -114,11 +108,10 @@ export default function AdminPaymentsPage() {
 
   useEffect(() => {
     if (sessionStatus !== "ready") return;
-    if (!isAuthenticated || !canViewAdmin) { router.replace("/"); return; }
     void loadPayments();
     void loadRefunds();
     void loadPayouts();
-  }, [sessionStatus, isAuthenticated, canViewAdmin, router, loadPayments, loadRefunds, loadPayouts]);
+  }, [sessionStatus, loadPayments, loadRefunds, loadPayouts]);
 
   const finalizeRefund = async (refundId: string) => {
     if (!apiClient || savingFinalize) return;
@@ -178,8 +171,6 @@ export default function AdminPaymentsPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-      <AppNav email={(profile?.email as string) || ""} isSuperAdmin={isSuperAdmin} isVendorAdmin={isVendorAdmin} canViewAdmin={canViewAdmin} canManageAdminOrders={canManageAdminOrders} canManageAdminProducts={canManageAdminProducts} canManageAdminCategories={canManageAdminCategories} canManageAdminVendors={canManageAdminVendors} canManageAdminPosters={canManageAdminPosters} apiClient={apiClient} emailVerified={emailVerified} onLogout={() => { void logout(); }} />
-
       <main className="mx-auto max-w-7xl px-4 py-8">
         <nav className="breadcrumb"><Link href="/">Home</Link><span className="breadcrumb-sep">›</span><span className="breadcrumb-current">Admin Payments</span></nav>
         <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: "1.5rem", fontWeight: 900, color: "#fff", margin: "0 0 20px" }}>Payment Management</h1>
@@ -205,7 +196,7 @@ export default function AdminPaymentsPage() {
                   </select>
                 </label>
               </div>
-              {paymentLoading ? <p style={{ textAlign: "center", color: "var(--muted)", padding: "32px 0" }}>Loading...</p> : payments.length === 0 ? <p style={{ textAlign: "center", color: "var(--muted)", padding: "32px 0" }}>No payments found.</p> : (
+              {paymentLoading ? <TableSkeleton rows={4} cols={6} /> : payments.length === 0 ? <p style={{ textAlign: "center", color: "var(--muted)", padding: "32px 0" }}>No payments found.</p> : (
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
                     <thead><tr style={{ borderBottom: "1px solid var(--line-bright)" }}>
@@ -243,7 +234,7 @@ export default function AdminPaymentsPage() {
                   </select>
                 </label>
               </div>
-              {refundLoading ? <p style={{ textAlign: "center", color: "var(--muted)", padding: "32px 0" }}>Loading...</p> : refunds.length === 0 ? <p style={{ textAlign: "center", color: "var(--muted)", padding: "32px 0" }}>No refunds found.</p> : (
+              {refundLoading ? <TableSkeleton rows={4} cols={6} /> : refunds.length === 0 ? <p style={{ textAlign: "center", color: "var(--muted)", padding: "32px 0" }}>No refunds found.</p> : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                   {refunds.map((r) => (
                     <div key={r.id} style={{ border: "1px solid var(--line-bright)", borderRadius: "12px", padding: "16px 20px" }}>
@@ -295,7 +286,7 @@ export default function AdminPaymentsPage() {
                   </select>
                 </label>
               </div>
-              {payoutLoading ? <p style={{ textAlign: "center", color: "var(--muted)", padding: "32px 0" }}>Loading...</p> : payouts.length === 0 ? <p style={{ textAlign: "center", color: "var(--muted)", padding: "32px 0" }}>No payouts found.</p> : (
+              {payoutLoading ? <TableSkeleton rows={4} cols={6} /> : payouts.length === 0 ? <p style={{ textAlign: "center", color: "var(--muted)", padding: "32px 0" }}>No payouts found.</p> : (
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
                     <thead><tr style={{ borderBottom: "1px solid var(--line-bright)" }}>
@@ -329,7 +320,6 @@ export default function AdminPaymentsPage() {
           )}
         </div>
       </main>
-      <Footer />
     </div>
   );
 }

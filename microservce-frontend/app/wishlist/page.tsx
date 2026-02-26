@@ -9,7 +9,8 @@ import Footer from "../components/Footer";
 import { useAuthSession } from "../../lib/authSession";
 import { emitCartUpdate, emitWishlistUpdate } from "../../lib/navEvents";
 import { money } from "../../lib/format";
-import type { WishlistItem, WishlistResponse, WishlistCollection } from "../../lib/types/wishlist";
+import type { WishlistItem, WishlistResponse, WishlistCollection, WishlistApiRaw } from "../../lib/types/wishlist";
+import EmptyState from "../components/ui/EmptyState";
 import { emptyWishlist } from "../../lib/types/wishlist";
 
 export default function WishlistPage() {
@@ -50,11 +51,11 @@ export default function WishlistPage() {
     if (!apiClient) return;
     setLoading(true);
     try {
-      const res = await apiClient.get("/wishlist/me");
-      const raw = res.data as Record<string, unknown>;
-      const items = (Array.isArray(raw.content) ? raw.content : raw.items || []) as WishlistItem[];
-      const itemCount = Number((raw.page as Record<string, unknown> | undefined)?.totalElements ?? raw.itemCount ?? items.length);
-      setWishlist({ keycloakId: (raw.keycloakId as string) || "", items, itemCount });
+      const res = await apiClient.get<WishlistApiRaw>("/wishlist/me");
+      const raw = res.data;
+      const items: WishlistItem[] = raw.content ?? raw.items ?? [];
+      const itemCount = Number(raw.page?.totalElements ?? raw.itemCount ?? items.length);
+      setWishlist({ keycloakId: raw.keycloakId ?? "", items, itemCount });
       setStatus("Wishlist ready.");
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Failed to load wishlist");
@@ -67,8 +68,8 @@ export default function WishlistPage() {
   const loadCollections = useCallback(async () => {
     if (!apiClient) return;
     try {
-      const res = await apiClient.get("/wishlist/me/collections");
-      const data = (res.data as WishlistCollection[]) || [];
+      const res = await apiClient.get<WishlistCollection[]>("/wishlist/me/collections");
+      const data = res.data ?? [];
       setCollections(data);
     } catch {
       // silently ignore - collections are optional enhancement
@@ -171,8 +172,8 @@ export default function WishlistPage() {
     if (!apiClient || !newCollectionName.trim()) return;
     setCreatingCollection(true);
     try {
-      const res = await apiClient.post("/wishlist/me/collections", { name: newCollectionName.trim() });
-      const created = res.data as WishlistCollection;
+      const res = await apiClient.post<WishlistCollection>("/wishlist/me/collections", { name: newCollectionName.trim() });
+      const created = res.data;
       setCollections((old) => [...old, created]);
       setNewCollectionName("");
       toast.success("Collection created");
@@ -185,8 +186,8 @@ export default function WishlistPage() {
     if (!apiClient) return;
     setSavingCollection(true);
     try {
-      const res = await apiClient.put(`/wishlist/me/collections/${id}`, body);
-      const updated = res.data as WishlistCollection;
+      const res = await apiClient.put<WishlistCollection>(`/wishlist/me/collections/${id}`, body);
+      const updated = res.data;
       setCollections((old) => old.map((c) => (c.id === id ? updated : c)));
       toast.success("Collection updated");
     } catch (err) {
@@ -218,8 +219,8 @@ export default function WishlistPage() {
         );
         toast.success("Sharing disabled");
       } else {
-        const res = await apiClient.post(`/wishlist/me/collections/${collection.id}/share`);
-        const updated = res.data as WishlistCollection;
+        const res = await apiClient.post<WishlistCollection>(`/wishlist/me/collections/${collection.id}/share`);
+        const updated = res.data;
         setCollections((old) => old.map((c) => (c.id === collection.id ? updated : c)));
         toast.success("Sharing enabled");
       }
@@ -786,20 +787,17 @@ export default function WishlistPage() {
 
         {/* Empty state */}
         {displayedItemCount === 0 && !loading && (
-          <div className="empty-state">
-            <div className="empty-state-icon">
+          <EmptyState
+            icon={
               <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 21s-6.7-4.35-9.33-8.08C.8 10.23 1.2 6.7 4.02 4.82A5.42 5.42 0 0 1 12 6.09a5.42 5.42 0 0 1 7.98-1.27c2.82 1.88 3.22 5.41 1.35 8.1C18.7 16.65 12 21 12 21z" />
               </svg>
-            </div>
-            <p className="empty-state-title">
-              {activeCollection ? "This collection is empty" : "Wishlist is empty"}
-            </p>
-            <p className="empty-state-desc">
-              {activeCollection ? "Add items to this collection from your wishlist." : "Save products here and revisit them anytime."}
-            </p>
-            <Link href="/products" className="btn-primary no-underline px-6 py-2.5 text-sm">Browse Products</Link>
-          </div>
+            }
+            title={activeCollection ? "This collection is empty" : "Wishlist is empty"}
+            description={activeCollection ? "Add items to this collection from your wishlist." : "Save products here and revisit them anytime."}
+            actionLabel="Browse Products"
+            onAction={() => router.push("/products")}
+          />
         )}
 
         {/* Wishlist Items */}

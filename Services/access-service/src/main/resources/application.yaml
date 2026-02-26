@@ -30,7 +30,7 @@ internal:
 sample:
   access:
     seed:
-      enabled: ${SAMPLE_ACCESS_SEED_ENABLED:true}
+      enabled: ${SAMPLE_ACCESS_SEED_ENABLED:false}
 
 cache:
   platform-access-lookup-ttl: ${CACHE_PLATFORM_ACCESS_LOOKUP_TTL:20s}

@@ -48,8 +48,8 @@ export default function CartNavWidget({ apiClient, emailVerified }: Props) {
     if (!apiClient) return;
     setLoadingCart(true);
     try {
-      const res = await apiClient.get("/cart/me");
-      const data = (res.data as CartResponse) || emptyCart;
+      const res = await apiClient.get<CartResponse>("/cart/me");
+      const data = res.data ?? emptyCart;
       setCart({ items: data.items || [], itemCount: Number(data.itemCount || 0), subtotal: Number(data.subtotal || 0) });
     } catch { setCart(emptyCart); }
     finally { setLoadingCart(false); }
@@ -59,8 +59,8 @@ export default function CartNavWidget({ apiClient, emailVerified }: Props) {
     if (!apiClient) return;
     setLoadingAddresses(true);
     try {
-      const res = await apiClient.get("/customers/me/addresses");
-      const data = (res.data as CustomerAddress[]) || [];
+      const res = await apiClient.get<CustomerAddress[]>("/customers/me/addresses");
+      const data = res.data ?? [];
       setHasAddresses(data.length > 0);
       setAddressesFetchedAt(Date.now());
     } catch { setHasAddresses(false); setAddressesFetchedAt(Date.now()); }

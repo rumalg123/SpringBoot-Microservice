@@ -5,7 +5,7 @@ import toast from "react-hot-toast";
 import { useAuthSession } from "../../../lib/authSession";
 import { getErrorMessage } from "../../../lib/error";
 import { money } from "../../../lib/format";
-import AdminPageShell from "../../components/ui/AdminPageShell";
+import VendorPageShell from "../../components/ui/VendorPageShell";
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -120,11 +120,11 @@ export default function VendorAnalyticsPage() {
 
   if (session.status === "ready" && !session.isVendorAdmin && !session.isVendorStaff) {
     return (
-      <AdminPageShell title="Vendor Analytics" breadcrumbs={[{ label: "Vendor Portal", href: "/vendor" }, { label: "Analytics" }]}>
+      <VendorPageShell title="Vendor Analytics" breadcrumbs={[{ label: "Vendor Portal", href: "/vendor" }, { label: "Analytics" }]}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 320 }}>
           <p style={{ color: "var(--muted)" }}>Unauthorized.</p>
         </div>
-      </AdminPageShell>
+      </VendorPageShell>
     );
   }
 
@@ -135,7 +135,7 @@ export default function VendorAnalyticsPage() {
   const promo = data?.promotionSummary;
 
   return (
-    <AdminPageShell title="Vendor Analytics" breadcrumbs={[{ label: "Vendor Portal", href: "/vendor" }, { label: "Analytics" }]}>
+    <VendorPageShell title="Vendor Analytics" breadcrumbs={[{ label: "Vendor Portal", href: "/vendor" }, { label: "Analytics" }]}>
       {loading && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 14 }}>
           {Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton" style={{ ...cardStyle, height: 100, background: "rgba(255,255,255,0.02)" }} />)}
@@ -280,6 +280,6 @@ export default function VendorAnalyticsPage() {
           <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>No analytics data available.</p>
         </div>
       )}
-    </AdminPageShell>
+    </VendorPageShell>
   );
 }

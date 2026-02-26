@@ -17,6 +17,7 @@ import { emptyCart } from "../../lib/types/cart";
 import type { CustomerAddress } from "../../lib/types/customer";
 import Image from "next/image";
 import CheckoutSidebar from "../components/cart/CheckoutSidebar";
+import EmptyState from "../components/ui/EmptyState";
 
 
 export default function CartPage() {
@@ -49,8 +50,8 @@ export default function CartPage() {
 
   const loadCart = useCallback(async () => {
     if (!apiClient) return;
-    const res = await apiClient.get("/cart/me");
-    const data = (res.data as CartResponse) || emptyCart;
+    const res = await apiClient.get<CartResponse>("/cart/me");
+    const data = res.data ?? emptyCart;
     setCart({ ...emptyCart, ...data, items: data.items || [] });
   }, [apiClient]);
 
@@ -58,8 +59,8 @@ export default function CartPage() {
     if (!apiClient) return;
     setAddressLoading(true);
     try {
-      const res = await apiClient.get("/customers/me/addresses");
-      const loaded = (res.data as CustomerAddress[]) || [];
+      const res = await apiClient.get<CustomerAddress[]>("/customers/me/addresses");
+      const loaded = res.data ?? [];
       setAddresses(loaded);
       const defaultShipping = loaded.find((a) => a.defaultShipping)?.id || loaded[0]?.id || "";
       const defaultBilling = loaded.find((a) => a.defaultBilling)?.id || defaultShipping;
@@ -103,8 +104,8 @@ export default function CartPage() {
     if (!apiClient || busy || quantity < 1) return;
     setUpdatingItemId(itemId);
     try {
-      const res = await apiClient.put(`/cart/me/items/${itemId}`, { quantity });
-      setCart((res.data as CartResponse) || emptyCart);
+      const res = await apiClient.put<CartResponse>(`/cart/me/items/${itemId}`, { quantity });
+      setCart(res.data ?? emptyCart);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to update quantity");
     } finally { setUpdatingItemId(null); }
@@ -126,8 +127,8 @@ export default function CartPage() {
     if (!apiClient || busy) return;
     setSavingItemId(itemId);
     try {
-      const res = await apiClient.post(`/cart/me/items/${itemId}/save-for-later`);
-      setCart((res.data as CartResponse) || emptyCart);
+      const res = await apiClient.post<CartResponse>(`/cart/me/items/${itemId}/save-for-later`);
+      setCart(res.data ?? emptyCart);
       toast.success("Item saved for later");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save item");
@@ -138,8 +139,8 @@ export default function CartPage() {
     if (!apiClient || busy) return;
     setMovingItemId(itemId);
     try {
-      const res = await apiClient.post(`/cart/me/items/${itemId}/move-to-cart`);
-      setCart((res.data as CartResponse) || emptyCart);
+      const res = await apiClient.post<CartResponse>(`/cart/me/items/${itemId}/move-to-cart`);
+      setCart(res.data ?? emptyCart);
       toast.success("Item moved to cart");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to move item to cart");
@@ -163,11 +164,11 @@ export default function CartPage() {
     setPreviewing(true);
     setCouponError("");
     try {
-      const res = await apiClient.post("/cart/me/checkout/preview", {
+      const res = await apiClient.post<CheckoutPreviewResponse>("/cart/me/checkout/preview", {
         couponCode: couponCode.trim() || null,
         shippingAmount: 0,
       });
-      setPreview(res.data as CheckoutPreviewResponse);
+      setPreview(res.data);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Preview failed";
       if (couponCode.trim() && msg.toLowerCase().includes("coupon")) {
@@ -187,21 +188,21 @@ export default function CartPage() {
     setCheckingOut(true);
     setStatus("Placing order...");
     try {
-      const res = await apiClient.post("/cart/me/checkout", {
+      const res = await apiClient.post<CheckoutResponse>("/cart/me/checkout", {
         shippingAddressId: resolvedShipping,
         billingAddressId: resolvedBilling,
         couponCode: couponCode.trim() || null,
         shippingAmount: 0,
       });
-      const data = res.data as CheckoutResponse;
+      const data = res.data;
       await loadCart();
       setPreview(null);
 
       setStatus("Redirecting to payment...");
       toast.success(`Order placed! Total: ${money(data.grandTotal)}`);
       trackPurchase(cart.items.map((item) => ({ id: item.productId, price: item.unitPrice })), session.token);
-      const payRes = await apiClient.post("/payments/me/initiate", { orderId: data.orderId });
-      submitToPayHere(payRes.data as PayHereFormData);
+      const payRes = await apiClient.post<PayHereFormData>("/payments/me/initiate", { orderId: data.orderId });
+      submitToPayHere(payRes.data);
     } catch (err) {
       const message = getErrorMessage(err);
       setStatus(message);
@@ -344,19 +345,18 @@ export default function CartPage() {
           {/* Cart Items */}
           <section style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             {cart.items.length === 0 && (
-              <div className="empty-state">
-                <div className="empty-state-icon">
+              <EmptyState
+                icon={
                   <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" />
                     <path d="M16 10a4 4 0 0 1-8 0" />
                   </svg>
-                </div>
-                <p className="empty-state-title">Cart is empty</p>
-                <p className="empty-state-desc">Add products to your cart before checkout.</p>
-                <Link href="/products" className="btn-primary no-underline px-6 py-2.5 text-sm">
-                  Browse Products
-                </Link>
-              </div>
+                }
+                title="Cart is empty"
+                description="Add products to your cart before checkout."
+                actionLabel="Browse Products"
+                onAction={() => router.push("/products")}
+              />
             )}
 
             {cart.items.map((item) => (

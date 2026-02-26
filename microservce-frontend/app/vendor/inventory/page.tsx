@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { useAuthSession } from "../../../lib/authSession";
-import AdminPageShell from "../../components/ui/AdminPageShell";
+import VendorPageShell from "../../components/ui/VendorPageShell";
 import WarehousesTab from "../../components/inventory/WarehousesTab";
 import StockTab from "../../components/inventory/StockTab";
 import MovementsTab from "../../components/inventory/MovementsTab";
@@ -49,37 +49,37 @@ export default function VendorInventoryPage() {
   /* ── Guards ── */
   if (session.status === "loading" || session.status === "idle") {
     return (
-      <AdminPageShell title="Inventory" breadcrumbs={[{ label: "Vendor", href: "/vendor" }, { label: "Inventory" }]}>
+      <VendorPageShell title="Inventory" breadcrumbs={[{ label: "Vendor", href: "/vendor" }, { label: "Inventory" }]}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300 }}>
           <p style={{ color: "var(--muted)", fontSize: "0.875rem" }}>Loading session...</p>
         </div>
-      </AdminPageShell>
+      </VendorPageShell>
     );
   }
 
   if (!session.isVendorAdmin) {
     return (
-      <AdminPageShell title="Inventory" breadcrumbs={[{ label: "Vendor", href: "/vendor" }, { label: "Inventory" }]}>
+      <VendorPageShell title="Inventory" breadcrumbs={[{ label: "Vendor", href: "/vendor" }, { label: "Inventory" }]}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300, flexDirection: "column", gap: 12 }}>
           <p style={{ color: "var(--danger)", fontSize: "1.1rem", fontWeight: 700, fontFamily: "var(--font-display, Syne, sans-serif)" }}>Unauthorized</p>
           <p style={{ color: "var(--muted)", fontSize: "0.8rem" }}>Only vendor admins can manage inventory.</p>
         </div>
-      </AdminPageShell>
+      </VendorPageShell>
     );
   }
 
   if (loadingVendor) {
     return (
-      <AdminPageShell title="Inventory" breadcrumbs={[{ label: "Vendor", href: "/vendor" }, { label: "Inventory" }]}>
+      <VendorPageShell title="Inventory" breadcrumbs={[{ label: "Vendor", href: "/vendor" }, { label: "Inventory" }]}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300 }}>
           <p style={{ color: "var(--muted)", fontSize: "0.875rem" }}>Loading vendor profile...</p>
         </div>
-      </AdminPageShell>
+      </VendorPageShell>
     );
   }
 
   return (
-    <AdminPageShell title="Inventory" breadcrumbs={[{ label: "Vendor", href: "/vendor" }, { label: "Inventory" }]}>
+    <VendorPageShell title="Inventory" breadcrumbs={[{ label: "Vendor", href: "/vendor" }, { label: "Inventory" }]}>
       {/* ── Tab bar ── */}
       <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--line)", marginBottom: 20 }}>
         {TABS.map((tab) => (
@@ -108,6 +108,6 @@ export default function VendorInventoryPage() {
       {session.apiClient && activeTab === "Movements" && (
         <MovementsTab apiClient={session.apiClient} apiPrefix="/inventory/vendor/me" />
       )}
-    </AdminPageShell>
+    </VendorPageShell>
   );
 }

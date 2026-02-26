@@ -124,7 +124,7 @@ cache:
 sample:
   catalog:
     seed:
-      enabled: ${SAMPLE_CATALOG_SEED_ENABLED:true}
+      enabled: ${SAMPLE_CATALOG_SEED_ENABLED:false}
 
 object-storage:
   enabled: ${OBJECT_STORAGE_ENABLED:false}

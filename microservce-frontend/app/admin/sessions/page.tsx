@@ -1,11 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import AppNav from "../../components/AppNav";
-import Footer from "../../components/Footer";
 import { useAuthSession } from "../../../lib/authSession";
+import TableSkeleton from "../../components/ui/TableSkeleton";
 
 type ActiveSession = {
   id: string;
@@ -19,13 +17,8 @@ type ActiveSession = {
 type Paged<T> = { content: T[]; totalPages: number; totalElements: number };
 
 export default function AdminSessionsPage() {
-  const router = useRouter();
   const session = useAuthSession();
-  const {
-    status: sessionStatus, isAuthenticated, canViewAdmin, profile, logout,
-    canManageAdminOrders, canManageAdminProducts, canManageAdminCategories,
-    canManageAdminVendors, canManageAdminPosters, apiClient, emailVerified, isSuperAdmin, isVendorAdmin,
-  } = session;
+  const { status: sessionStatus, profile, apiClient } = session;
 
   const [sessions, setSessions] = useState<ActiveSession[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,11 +46,6 @@ export default function AdminSessionsPage() {
       setLoading(false);
     }
   }, [apiClient, searchKeycloakId, page]);
-
-  useEffect(() => {
-    if (sessionStatus !== "ready") return;
-    if (!isAuthenticated || !isSuperAdmin) { router.replace("/"); return; }
-  }, [sessionStatus, isAuthenticated, isSuperAdmin, router]);
 
   useEffect(() => {
     if (searchKeycloakId.trim()) void loadSessions();
@@ -123,14 +111,6 @@ export default function AdminSessionsPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-      <AppNav
-        email={(profile?.email as string) || ""} isSuperAdmin={isSuperAdmin} isVendorAdmin={isVendorAdmin}
-        canViewAdmin={canViewAdmin} canManageAdminOrders={canManageAdminOrders}
-        canManageAdminProducts={canManageAdminProducts} canManageAdminCategories={canManageAdminCategories}
-        canManageAdminVendors={canManageAdminVendors} canManageAdminPosters={canManageAdminPosters}
-        apiClient={apiClient} emailVerified={emailVerified} onLogout={logout}
-      />
-
       <main className="mx-auto max-w-5xl px-4 py-10">
         <div style={{ marginBottom: "24px" }}>
           <h1 className="text-2xl font-bold" style={{ color: "#fff" }}>Active Sessions</h1>
@@ -183,7 +163,7 @@ export default function AdminSessionsPage() {
             <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>Enter a Keycloak user ID to view their active sessions.</p>
           </div>
         ) : loading ? (
-          <p style={{ color: "var(--muted)", textAlign: "center", padding: "40px 0" }}>Loading sessions...</p>
+          <TableSkeleton rows={3} cols={5} />
         ) : sessions.length === 0 ? (
           <div style={{ textAlign: "center", padding: "60px 20px", borderRadius: "14px", background: "var(--card)", border: "1px solid var(--line-bright)" }}>
             <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>No active sessions found for this user.</p>
@@ -282,8 +262,6 @@ export default function AdminSessionsPage() {
           </>
         )}
       </main>
-
-      <Footer />
     </div>
   );
 }

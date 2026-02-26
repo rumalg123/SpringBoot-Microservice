@@ -2,9 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import AppNav from "@/app/components/AppNav";
 import ConfirmModal from "@/app/components/ConfirmModal";
 import AccessAuditPanel from "@/app/components/admin/access/AccessAuditPanel";
 import KeycloakUserLookupField from "@/app/components/admin/access/KeycloakUserLookupField";
@@ -51,7 +49,6 @@ const PLATFORM_PERMISSION_OPTIONS = [
 
 
 export default function AdminPlatformStaffPage() {
-  const router = useRouter();
   const session = useAuthSession();
 
   const [rows, setRows] = useState<PlatformStaffRow[]>([]);
@@ -105,17 +102,9 @@ export default function AdminPlatformStaffPage() {
   }, [session.apiClient]);
 
   useEffect(() => {
-    if (session.status !== "ready") return;
-    if (!session.isAuthenticated) {
-      router.replace("/");
-      return;
-    }
-    if (!session.canManageAdminVendors) {
-      router.replace("/products");
-      return;
-    }
+    if (session.status !== "ready" || !session.isAuthenticated) return;
     void loadActive();
-  }, [router, session.status, session.isAuthenticated, session.canManageAdminVendors, loadActive]);
+  }, [session.status, session.isAuthenticated, loadActive]);
 
   useEffect(() => {
     if (!showDeleted || deletedLoaded) return;
@@ -208,20 +197,6 @@ export default function AdminPlatformStaffPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-      <AppNav
-        email={(session.profile?.email as string) || ""}
-        isSuperAdmin={session.isSuperAdmin}
-        isVendorAdmin={session.isVendorAdmin}
-        canViewAdmin={session.canViewAdmin}
-        canManageAdminOrders={session.canManageAdminOrders}
-        canManageAdminProducts={session.canManageAdminProducts}
-        canManageAdminVendors={session.canManageAdminVendors}
-        canManageAdminPosters={session.canManageAdminPosters}
-        apiClient={session.apiClient}
-        emailVerified={session.emailVerified}
-        onLogout={() => { void session.logout(); }}
-      />
-
       <main className="mx-auto max-w-7xl px-4 py-4">
         <nav className="breadcrumb">
           <Link href="/">Home</Link><span className="breadcrumb-sep">›</span>

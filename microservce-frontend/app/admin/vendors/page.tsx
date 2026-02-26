@@ -2,10 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import AppNav from "../../components/AppNav";
 import ConfirmModal from "../../components/ConfirmModal";
-import Footer from "../../components/Footer";
 import VendorFormPanel from "../../components/admin/vendors/VendorFormPanel";
 import VendorListPanel from "../../components/admin/vendors/VendorListPanel";
 import VendorDeletionEligibilityPanel from "../../components/admin/vendors/VendorDeletionEligibilityPanel";
@@ -16,7 +13,6 @@ import { useAdminVendors } from "../../components/admin/vendors/useAdminVendors"
 import { useAuthSession } from "../../../lib/authSession";
 
 export default function AdminVendorsPage() {
-  const router = useRouter();
   const session = useAuthSession();
   const vendors = useAdminVendors(session.apiClient);
   const [highlightTarget, setHighlightTarget] = useState<"vendor-list" | "onboarding" | "users" | null>(null);
@@ -61,16 +57,8 @@ export default function AdminVendorsPage() {
 
   useEffect(() => {
     if (session.status !== "ready") return;
-    if (!session.isAuthenticated) {
-      router.replace("/");
-      return;
-    }
-    if (!session.isSuperAdmin) {
-      router.replace("/products");
-      return;
-    }
     void vendors.loadVendors();
-  }, [router, session.status, session.isAuthenticated, session.isSuperAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [session.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!vendors.lastVendorSavedAt) return;
@@ -98,26 +86,8 @@ export default function AdminVendorsPage() {
   if (session.status === "loading" || session.status === "idle") {
     return <div style={{ minHeight: "100vh", background: "var(--bg)" }} />;
   }
-  if (!session.isAuthenticated) return null;
-
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-      <AppNav
-        email={(session.profile?.email as string) || ""}
-        isSuperAdmin={session.isSuperAdmin}
-        isVendorAdmin={session.isVendorAdmin}
-        canViewAdmin={session.canViewAdmin}
-        canManageAdminOrders={session.canManageAdminOrders}
-        canManageAdminProducts={session.canManageAdminProducts}
-        canManageAdminVendors={session.canManageAdminVendors}
-        canManageAdminPosters={session.canManageAdminPosters}
-        apiClient={session.apiClient}
-        emailVerified={session.emailVerified}
-        onLogout={() => {
-          void session.logout();
-        }}
-      />
-
+    <>
       <main className="mx-auto max-w-7xl px-4 py-4">
         <nav className="breadcrumb">
           <Link href="/">Home</Link>
@@ -317,8 +287,6 @@ export default function AdminVendorsPage() {
         </section>
       </main>
 
-      <Footer />
-
       <ConfirmModal
         open={Boolean(vendors.confirmState)}
         title={vendors.confirmUi.title}
@@ -346,6 +314,6 @@ export default function AdminVendorsPage() {
           void vendors.handleConfirmAction();
         }}
       />
-    </div>
+    </>
   );
 }

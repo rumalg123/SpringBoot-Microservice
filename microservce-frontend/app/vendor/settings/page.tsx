@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { useAuthSession } from "../../../lib/authSession";
-import AdminPageShell from "../../components/ui/AdminPageShell";
+import VendorPageShell from "../../components/ui/VendorPageShell";
 import StatusBadge, { VENDOR_STATUS_COLORS } from "../../components/ui/StatusBadge";
 import ConfirmModal from "../../components/ConfirmModal";
 
@@ -361,25 +361,25 @@ export default function VendorSettingsPage() {
 
   if (session.status !== "ready") {
     return (
-      <AdminPageShell
+      <VendorPageShell
         title="Vendor Settings"
         breadcrumbs={[{ label: "Vendor Portal", href: "/vendor" }, { label: "Settings" }]}
       >
         <div style={{ textAlign: "center", padding: 48, color: "var(--muted)" }}>Loading...</div>
-      </AdminPageShell>
+      </VendorPageShell>
     );
   }
 
   if (!session.isVendorAdmin && !session.isVendorStaff) {
     return (
-      <AdminPageShell
+      <VendorPageShell
         title="Vendor Settings"
         breadcrumbs={[{ label: "Vendor Portal", href: "/vendor" }, { label: "Settings" }]}
       >
         <div style={{ textAlign: "center", padding: 48, color: "var(--muted)", fontSize: "1.1rem" }}>
           Unauthorized
         </div>
-      </AdminPageShell>
+      </VendorPageShell>
     );
   }
 
@@ -779,7 +779,7 @@ export default function VendorSettingsPage() {
   ];
 
   return (
-    <AdminPageShell
+    <VendorPageShell
       title="Vendor Settings"
       breadcrumbs={[{ label: "Vendor Portal", href: "/vendor" }, { label: "Settings" }]}
     >
@@ -812,6 +812,6 @@ export default function VendorSettingsPage() {
       {activeTab === "profile" && renderProfileTab()}
       {activeTab === "payout" && renderPayoutTab()}
       {activeTab === "actions" && renderActionsTab()}
-    </AdminPageShell>
+    </VendorPageShell>
   );
 }

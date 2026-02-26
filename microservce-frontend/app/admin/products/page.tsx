@@ -1,12 +1,9 @@
 ﻿"use client";
 
 import { ChangeEvent, DragEvent, FormEvent, KeyboardEvent, WheelEvent, useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import toast from "react-hot-toast";
-import AppNav from "../../components/AppNav";
-import Footer from "../../components/Footer";
 import ConfirmModal from "../../components/ConfirmModal";
 import { resolveImageUrl } from "../../../lib/image";
 import ExportButton from "../../components/ui/ExportButton";
@@ -244,7 +241,6 @@ function getPageMeta<T>(pageInfo: PagedResponse<T> | null) {
 }
 
 export default function AdminProductsPage() {
-  const router = useRouter();
   const session = useAuthSession();
   const [activePage, setActivePage] = useState<PagedResponse<ProductSummary> | null>(null);
   const [deletedPage, setDeletedPage] = useState<PagedResponse<ProductSummary> | null>(null);
@@ -446,14 +442,6 @@ export default function AdminProductsPage() {
 
   useEffect(() => {
     if (session.status !== "ready") return;
-    if (!session.isAuthenticated) {
-      router.replace("/");
-      return;
-    }
-    if (!session.canManageAdminProducts) {
-      router.replace("/products");
-      return;
-    }
 
     const run = async () => {
       try {
@@ -469,7 +457,7 @@ export default function AdminProductsPage() {
       }
     };
     void run();
-  }, [router, session.status, session.isAuthenticated, session.canManageAdminProducts, canManageCategories, canSelectAnyVendor, loadActive, loadDeleted, loadCategories, loadDeletedCategories, loadParentProducts, loadVendors]);
+  }, [session.status, session.canManageAdminProducts, canManageCategories, canSelectAnyVendor, loadActive, loadDeleted, loadCategories, loadDeletedCategories, loadParentProducts, loadVendors]);
 
   useEffect(() => {
     if (productSlugTouched) return;
@@ -1511,10 +1499,6 @@ export default function AdminProductsPage() {
     );
   }
 
-  if (!session.isAuthenticated) {
-    return null;
-  }
-
   const rows = showDeleted ? deletedPage?.content || [] : activePage?.content || [];
   const pageInfo = showDeleted ? deletedPage : activePage;
   const parentCategories = categories.filter((c) => c.type === "PARENT");
@@ -1575,24 +1559,7 @@ export default function AdminProductsPage() {
     && !savingProduct;
 
   return (
-    <div className="min-h-screen bg-[var(--bg)]">
-      <AppNav
-        email={(session.profile?.email as string) || ""}
-        isSuperAdmin={session.isSuperAdmin}
-        isVendorAdmin={session.isVendorAdmin}
-        canViewAdmin={session.canViewAdmin}
-        canManageAdminOrders={session.canManageAdminOrders}
-        canManageAdminProducts={session.canManageAdminProducts}
-        canManageAdminCategories={session.canManageAdminCategories}
-        canManageAdminVendors={session.canManageAdminVendors}
-        canManageAdminPosters={session.canManageAdminPosters}
-        apiClient={session.apiClient}
-        emailVerified={session.emailVerified}
-        onLogout={() => {
-          void session.logout();
-        }}
-      />
-
+    <>
       <main className="mx-auto max-w-7xl px-4 py-4">
         {/* Breadcrumbs */}
         <nav className="breadcrumb">
@@ -2196,8 +2163,7 @@ export default function AdminProductsPage() {
         }}
       />
 
-      <Footer />
-    </div>
+    </>
   );
 }
 

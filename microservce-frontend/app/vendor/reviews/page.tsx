@@ -2,23 +2,15 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import AppNav from "../../components/AppNav";
-import Footer from "../../components/Footer";
 import { useAuthSession } from "../../../lib/authSession";
 import type { Review, VendorReply } from "../../../lib/types/review";
 
 type PagedReviews = { content: Review[]; totalPages: number; totalElements: number; number: number };
 
 export default function VendorReviewsPage() {
-  const router = useRouter();
   const session = useAuthSession();
-  const {
-    status: sessionStatus, isAuthenticated, isVendorAdmin, profile, logout,
-    canViewAdmin, canManageAdminOrders, canManageAdminProducts, canManageAdminCategories,
-    canManageAdminVendors, canManageAdminPosters, apiClient, emailVerified, isSuperAdmin,
-  } = session;
+  const { status: sessionStatus, isAuthenticated, isVendorAdmin, apiClient } = session;
 
   const [reviews, setReviews] = useState<Review[]>([]);
   const [page, setPage] = useState(0);
@@ -56,10 +48,9 @@ export default function VendorReviewsPage() {
   }, [apiClient, page]);
 
   useEffect(() => {
-    if (sessionStatus !== "ready") return;
-    if (!isAuthenticated || !isVendorAdmin) { router.replace("/"); return; }
+    if (sessionStatus !== "ready" || !isAuthenticated || !isVendorAdmin) return;
     void loadReviews();
-  }, [sessionStatus, isAuthenticated, isVendorAdmin, router, loadReviews]);
+  }, [sessionStatus, isAuthenticated, isVendorAdmin, loadReviews]);
 
   const submitReply = async (reviewId: string) => {
     if (!apiClient || !replyText.trim() || submittingReply) return;
@@ -120,22 +111,6 @@ export default function VendorReviewsPage() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-      <AppNav
-        email={(profile?.email as string) || ""}
-        isSuperAdmin={isSuperAdmin}
-        isVendorAdmin={isVendorAdmin}
-        canViewAdmin={canViewAdmin}
-        canManageAdminOrders={canManageAdminOrders}
-        canManageAdminProducts={canManageAdminProducts}
-        canManageAdminCategories={canManageAdminCategories}
-        canManageAdminVendors={canManageAdminVendors}
-        canManageAdminPosters={canManageAdminPosters}
-        apiClient={apiClient}
-        emailVerified={emailVerified}
-        onLogout={() => { void logout(); }}
-      />
-
       <main className="mx-auto max-w-7xl px-4 py-8">
         <nav className="breadcrumb">
           <Link href="/">Home</Link>
@@ -370,8 +345,5 @@ export default function VendorReviewsPage() {
           </div>
         )}
       </main>
-
-      <Footer />
-    </div>
   );
 }

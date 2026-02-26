@@ -52,4 +52,13 @@ export type UpdateItemNoteRequest = {
   note?: string;
 };
 
+/** Raw API shape — may be paginated ({ content, page }) or flat ({ items, itemCount }) */
+export type WishlistApiRaw = {
+  keycloakId?: string;
+  content?: WishlistItem[];
+  items?: WishlistItem[];
+  itemCount?: number;
+  page?: { totalElements?: number };
+};
+
 export const emptyWishlist: WishlistResponse = { keycloakId: "", items: [], itemCount: 0 };

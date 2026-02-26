@@ -1,10 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import AppNav from "../../components/AppNav";
-import Footer from "../../components/Footer";
 import { useAuthSession } from "../../../lib/authSession";
 
 type BankAccount = {
@@ -34,13 +31,8 @@ type FormData = {
 const emptyForm: FormData = { bankName: "", branchName: "", branchCode: "", accountNumber: "", accountHolderName: "", swiftCode: "" };
 
 export default function VendorBankAccountsPage() {
-  const router = useRouter();
   const session = useAuthSession();
-  const {
-    status: sessionStatus, isAuthenticated, canViewAdmin, profile, logout,
-    canManageAdminOrders, canManageAdminProducts, canManageAdminCategories,
-    canManageAdminVendors, canManageAdminPosters, apiClient, emailVerified, isSuperAdmin, isVendorAdmin,
-  } = session;
+  const { status: sessionStatus, isAuthenticated, isVendorAdmin, apiClient } = session;
 
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,10 +58,9 @@ export default function VendorBankAccountsPage() {
   }, [apiClient]);
 
   useEffect(() => {
-    if (sessionStatus !== "ready") return;
-    if (!isAuthenticated || !isVendorAdmin) { router.replace("/"); return; }
+    if (sessionStatus !== "ready" || !isAuthenticated || !isVendorAdmin) return;
     void loadAccounts();
-  }, [sessionStatus, isAuthenticated, isVendorAdmin, router, loadAccounts]);
+  }, [sessionStatus, isAuthenticated, isVendorAdmin, loadAccounts]);
 
   const openCreate = () => {
     setEditingId(null);
@@ -170,15 +161,6 @@ export default function VendorBankAccountsPage() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-      <AppNav
-        email={(profile?.email as string) || ""} isSuperAdmin={isSuperAdmin} isVendorAdmin={isVendorAdmin}
-        canViewAdmin={canViewAdmin} canManageAdminOrders={canManageAdminOrders}
-        canManageAdminProducts={canManageAdminProducts} canManageAdminCategories={canManageAdminCategories}
-        canManageAdminVendors={canManageAdminVendors} canManageAdminPosters={canManageAdminPosters}
-        apiClient={apiClient} emailVerified={emailVerified} onLogout={logout}
-      />
-
       <main className="mx-auto max-w-4xl px-4 py-10">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "24px" }}>
           <div>
@@ -352,8 +334,5 @@ export default function VendorBankAccountsPage() {
           </div>
         )}
       </main>
-
-      <Footer />
-    </div>
   );
 }

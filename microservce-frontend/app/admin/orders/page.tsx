@@ -1,8 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import AppNav from "../../components/AppNav";
-import Footer from "../../components/Footer";
 import Pagination from "../../components/Pagination";
 import ExportButton from "../../components/ui/ExportButton";
 import OrderBulkActionsBar from "../../components/admin/orders/OrderBulkActionsBar";
@@ -104,26 +102,8 @@ export default function AdminOrdersPage() {
       </div>
     );
   }
-  if (!session.isAuthenticated) return null;
-
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-      <AppNav
-        email={(session.profile?.email as string) || ""}
-        isSuperAdmin={session.isSuperAdmin}
-        isVendorAdmin={session.isVendorAdmin}
-        canViewAdmin={session.canViewAdmin}
-        canManageAdminOrders={session.canManageAdminOrders}
-        canManageAdminProducts={session.canManageAdminProducts}
-        canManageAdminCategories={session.canManageAdminCategories}
-        canManageAdminVendors={session.canManageAdminVendors}
-        canManageAdminPosters={session.canManageAdminPosters}
-        apiClient={session.apiClient}
-        emailVerified={session.emailVerified}
-        onLogout={() => { void session.logout(); }}
-      />
-
-      <main className="mx-auto max-w-7xl px-4 py-4">
+    <main className="mx-auto max-w-7xl px-4 py-4">
         <nav className="breadcrumb">
           <Link href="/">Home</Link>
           <span className="breadcrumb-sep">{">"}</span>
@@ -264,9 +244,6 @@ export default function AdminOrdersPage() {
           </div>
           <p style={{ marginTop: "10px", fontSize: "0.72rem", color: "var(--muted-2)" }}>{status}</p>
         </section>
-      </main>
-
-      <Footer />
-    </div>
+    </main>
   );
 }

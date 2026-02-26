@@ -2,10 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import AppNav from "../../components/AppNav";
-import Footer from "../../components/Footer";
 import ConfirmModal from "../../components/ConfirmModal";
 import SearchableSelect from "../../components/ui/SearchableSelect";
 import MultiSearchSelect from "../../components/ui/MultiSearchSelect";
@@ -200,7 +197,6 @@ const fieldBase: React.CSSProperties = {
 /* ───── component ───── */
 
 export default function AdminPromotionsPage() {
-  const router = useRouter();
   const session = useAuthSession();
 
   /* list state */
@@ -300,11 +296,9 @@ export default function AdminPromotionsPage() {
   };
 
   useEffect(() => {
-    if (session.status !== "ready") return;
-    if (!session.isAuthenticated) { router.replace("/"); return; }
-    if (!session.canViewAdmin) { router.replace("/products"); return; }
+    if (session.status !== "ready" || !session.isAuthenticated) return;
     void load();
-  }, [session.status, session.isAuthenticated, session.canViewAdmin, router]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [session.status, session.isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { void load(0); }, [filterLifecycle, filterApproval, filterScope, filterBenefit]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -522,20 +516,6 @@ export default function AdminPromotionsPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-      <AppNav
-        email={(session.profile?.email as string) || ""}
-        isSuperAdmin={session.isSuperAdmin}
-        isVendorAdmin={session.isVendorAdmin}
-        canViewAdmin={session.canViewAdmin}
-        canManageAdminOrders={session.canManageAdminOrders}
-        canManageAdminProducts={session.canManageAdminProducts}
-        canManageAdminCategories={session.canManageAdminCategories}
-        canManageAdminVendors={session.canManageAdminVendors}
-        canManageAdminPosters={session.canManageAdminPosters}
-        apiClient={session.apiClient}
-        emailVerified={session.emailVerified}
-        onLogout={() => { void session.logout(); }}
-      />
       <main className="mx-auto max-w-7xl px-4 py-4">
         <nav className="breadcrumb">
           <Link href="/">Home</Link><span className="breadcrumb-sep">&gt;</span>
@@ -1176,7 +1156,6 @@ export default function AdminPromotionsPage() {
           </section>
         )}
       </main>
-      <Footer />
     </div>
   );
 }

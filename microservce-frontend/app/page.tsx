@@ -14,6 +14,7 @@ import { API_BASE } from "../lib/constants";
 import { money, calcDiscount } from "../lib/format";
 import { resolveImageUrl } from "../lib/image";
 import type { ProductSummary, PagedResponse } from "../lib/types";
+import type { LoadingStatus } from "../lib/types/status";
 import { fetchTrending, fetchRecommended, fetchRecentlyViewed, getOrCreateSessionId, type PersonalizationProduct } from "../lib/personalization";
 import ProductCard from "./components/catalog/ProductCard";
 import ProductCardSkeleton from "./components/catalog/ProductCardSkeleton";
@@ -24,7 +25,7 @@ import CTABanner from "./components/home/CTABanner";
 export default function LandingPage() {
   const session = useAuthSession();
   const [products, setProducts] = useState<ProductSummary[]>([]);
-  const [status, setStatus] = useState("loading");
+  const [status, setStatus] = useState<LoadingStatus>("loading");
   const [authActionPending, setAuthActionPending] = useState<"login" | "signup" | "forgot" | null>(null);
   const [logoutPending, setLogoutPending] = useState(false);
   const [trending, setTrending] = useState<PersonalizationProduct[]>([]);

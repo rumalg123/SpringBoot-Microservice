@@ -8,6 +8,7 @@ import AppNav from "../components/AppNav";
 import Footer from "../components/Footer";
 import { useAuthSession } from "../../lib/authSession";
 import { PayHereFormData, submitToPayHere } from "../../lib/payhere";
+import EmptyState from "../components/ui/EmptyState";
 import { money } from "../../lib/format";
 import type { Order, OrderDetail } from "../../lib/types/order";
 import type { CustomerAddress } from "../../lib/types/customer";
@@ -20,6 +21,7 @@ const CANCELLABLE = new Set(["PENDING", "PAYMENT_PENDING", "PAYMENT_FAILED", "CO
 
 type PagedOrder = { content: Order[] };
 type ProductPageResponse = { content: ProductSummary[] };
+type PaymentInfo = { status: string; paymentMethod: string; cardNoMasked: string | null; paidAt: string | null };
 
 export default function OrdersPage() {
   const router = useRouter();
@@ -40,12 +42,12 @@ export default function OrdersPage() {
   const [payingOrderId, setPayingOrderId] = useState<string | null>(null);
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState("");
-  const [paymentInfo, setPaymentInfo] = useState<{ status: string; paymentMethod: string; cardNoMasked: string | null; paidAt: string | null } | null>(null);
+  const [paymentInfo, setPaymentInfo] = useState<PaymentInfo | null>(null);
 
   const loadOrders = useCallback(async () => {
     if (!apiClient) return;
-    const res = await apiClient.get("/orders/me");
-    setOrders(((res.data as PagedOrder).content || []));
+    const res = await apiClient.get<PagedOrder>("/orders/me");
+    setOrders(res.data.content ?? []);
   }, [apiClient]);
 
   const loadProducts = useCallback(async () => {
@@ -58,8 +60,8 @@ export default function OrdersPage() {
 
   const loadAddresses = useCallback(async () => {
     if (!apiClient) return;
-    const res = await apiClient.get("/customers/me/addresses");
-    const loaded = (res.data as CustomerAddress[]) || [];
+    const res = await apiClient.get<CustomerAddress[]>("/customers/me/addresses");
+    const loaded = res.data ?? [];
     setAddresses(loaded);
     const defaultShipping = loaded.find((a) => a.defaultShipping)?.id || loaded[0]?.id || "";
     const defaultBilling = loaded.find((a) => a.defaultBilling)?.id || defaultShipping;
@@ -112,14 +114,13 @@ export default function OrdersPage() {
     setPaymentInfo(null);
     try {
       const [orderRes, paymentRes] = await Promise.all([
-        apiClient.get(`/orders/me/${targetId}`),
-        apiClient.get(`/payments/me/order/${targetId}`).catch(() => null),
+        apiClient.get<OrderDetail>(`/orders/me/${targetId}`),
+        apiClient.get<PaymentInfo>(`/payments/me/order/${targetId}`).catch(() => null),
       ]);
-      setSelectedDetail(orderRes.data as OrderDetail);
+      setSelectedDetail(orderRes.data);
       setSelectedId(targetId);
       if (paymentRes?.data) {
-        const p = paymentRes.data as { status: string; paymentMethod: string; cardNoMasked: string | null; paidAt: string | null };
-        setPaymentInfo(p);
+        setPaymentInfo(paymentRes.data);
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to load detail");
@@ -141,8 +142,8 @@ export default function OrdersPage() {
     if (!apiClient || payingOrderId) return;
     setPayingOrderId(orderId);
     try {
-      const res = await apiClient.post("/payments/me/initiate", { orderId });
-      submitToPayHere(res.data as PayHereFormData);
+      const res = await apiClient.post<PayHereFormData>("/payments/me/initiate", { orderId });
+      submitToPayHere(res.data);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to initiate payment");
       setPayingOrderId(null);
@@ -281,16 +282,17 @@ export default function OrdersPage() {
             </div>
 
             {orders.length === 0 && (
-              <div className="empty-state">
-                <div className="empty-state-icon">
+              <EmptyState
+                icon={
                   <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v11m0 0H3m6 0h6m0 0V5m0 11v3a2 2 0 0 1-2 2H9m6-5h3a2 2 0 0 1 2 2v3" />
                   </svg>
-                </div>
-                <p className="empty-state-title">No orders yet</p>
-                <p className="empty-state-desc">Place your first order to get started!</p>
-                <Link href="/products" className="btn-primary no-underline inline-block px-6 py-2.5 text-sm">Browse Products</Link>
-              </div>
+                }
+                title="No orders yet"
+                description="Place your first order to get started!"
+                actionLabel="Browse Products"
+                onAction={() => router.push("/products")}
+              />
             )}
 
             {orders.map((order, idx) => {

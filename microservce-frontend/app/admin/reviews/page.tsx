@@ -2,10 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import AppNav from "../../components/AppNav";
-import Footer from "../../components/Footer";
 import { useAuthSession } from "../../../lib/authSession";
 import type { Review } from "../../../lib/types/review";
 
@@ -28,13 +25,8 @@ type PagedReports = { content: ReviewReport[]; totalPages: number; totalElements
 type Tab = "reviews" | "reports";
 
 export default function AdminReviewsPage() {
-  const router = useRouter();
   const session = useAuthSession();
-  const {
-    status: sessionStatus, isAuthenticated, canViewAdmin, profile, logout,
-    canManageAdminOrders, canManageAdminProducts, canManageAdminCategories,
-    canManageAdminVendors, canManageAdminPosters, apiClient, emailVerified, isSuperAdmin, isVendorAdmin,
-  } = session;
+  const { status: sessionStatus, apiClient } = session;
 
   const [tab, setTab] = useState<Tab>("reviews");
 
@@ -100,10 +92,9 @@ export default function AdminReviewsPage() {
 
   useEffect(() => {
     if (sessionStatus !== "ready") return;
-    if (!isAuthenticated || !canViewAdmin) { router.replace("/"); return; }
     void loadReviews();
     void loadReports();
-  }, [sessionStatus, isAuthenticated, canViewAdmin, router, loadReviews, loadReports]);
+  }, [sessionStatus, loadReviews, loadReports]);
 
   const toggleActive = async (reviewId: string, currentlyActive: boolean) => {
     if (!apiClient || togglingId) return;
@@ -178,23 +169,7 @@ export default function AdminReviewsPage() {
   });
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-      <AppNav
-        email={(profile?.email as string) || ""}
-        isSuperAdmin={isSuperAdmin}
-        isVendorAdmin={isVendorAdmin}
-        canViewAdmin={canViewAdmin}
-        canManageAdminOrders={canManageAdminOrders}
-        canManageAdminProducts={canManageAdminProducts}
-        canManageAdminCategories={canManageAdminCategories}
-        canManageAdminVendors={canManageAdminVendors}
-        canManageAdminPosters={canManageAdminPosters}
-        apiClient={apiClient}
-        emailVerified={emailVerified}
-        onLogout={() => { void logout(); }}
-      />
-
-      <main className="mx-auto max-w-7xl px-4 py-8">
+    <main className="mx-auto max-w-7xl px-4 py-8">
         <nav className="breadcrumb">
           <Link href="/">Home</Link>
           <span className="breadcrumb-sep">›</span>
@@ -488,9 +463,6 @@ export default function AdminReviewsPage() {
             </>
           )}
         </div>
-      </main>
-
-      <Footer />
-    </div>
+    </main>
   );
 }

@@ -1,11 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import AppNav from "../../components/AppNav";
-import Footer from "../../components/Footer";
 import { useAuthSession } from "../../../lib/authSession";
+import TableSkeleton from "../../components/ui/TableSkeleton";
 
 type ApiKey = {
   id: string;
@@ -21,13 +19,8 @@ type ApiKey = {
 type CreateApiKeyResponse = ApiKey & { rawKey: string };
 
 export default function AdminApiKeysPage() {
-  const router = useRouter();
   const session = useAuthSession();
-  const {
-    status: sessionStatus, isAuthenticated, canViewAdmin, profile, logout,
-    canManageAdminOrders, canManageAdminProducts, canManageAdminCategories,
-    canManageAdminVendors, canManageAdminPosters, apiClient, emailVerified, isSuperAdmin, isVendorAdmin,
-  } = session;
+  const { status: sessionStatus, profile, apiClient } = session;
 
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,9 +52,8 @@ export default function AdminApiKeysPage() {
 
   useEffect(() => {
     if (sessionStatus !== "ready") return;
-    if (!isAuthenticated || !isSuperAdmin) { router.replace("/"); return; }
     void loadKeys();
-  }, [sessionStatus, isAuthenticated, isSuperAdmin, router, loadKeys]);
+  }, [sessionStatus, loadKeys]);
 
   const createKey = async () => {
     if (!apiClient || creating || !newName.trim()) return;
@@ -127,14 +119,6 @@ export default function AdminApiKeysPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-      <AppNav
-        email={(profile?.email as string) || ""} isSuperAdmin={isSuperAdmin} isVendorAdmin={isVendorAdmin}
-        canViewAdmin={canViewAdmin} canManageAdminOrders={canManageAdminOrders}
-        canManageAdminProducts={canManageAdminProducts} canManageAdminCategories={canManageAdminCategories}
-        canManageAdminVendors={canManageAdminVendors} canManageAdminPosters={canManageAdminPosters}
-        apiClient={apiClient} emailVerified={emailVerified} onLogout={logout}
-      />
-
       <main className="mx-auto max-w-5xl px-4 py-10">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "24px" }}>
           <div>
@@ -261,7 +245,7 @@ export default function AdminApiKeysPage() {
 
         {/* Keys Table */}
         {loading ? (
-          <p style={{ color: "var(--muted)", textAlign: "center", padding: "40px 0" }}>Loading API keys...</p>
+          <TableSkeleton rows={3} cols={7} />
         ) : keys.length === 0 ? (
           <div style={{ textAlign: "center", padding: "60px 20px", borderRadius: "14px", background: "var(--card)", border: "1px solid var(--line-bright)" }}>
             <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>No API keys found. Create one to get started.</p>
@@ -321,8 +305,6 @@ export default function AdminApiKeysPage() {
           </div>
         )}
       </main>
-
-      <Footer />
     </div>
   );
 }

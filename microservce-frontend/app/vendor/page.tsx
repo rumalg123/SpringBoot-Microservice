@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { useAuthSession } from "../../lib/authSession";
-import AdminPageShell from "../components/ui/AdminPageShell";
+import VendorPageShell from "../components/ui/VendorPageShell";
 import StatusBadge, { VENDOR_STATUS_COLORS } from "../components/ui/StatusBadge";
 
 /* ───── types ───── */
@@ -147,7 +147,7 @@ export default function VendorDashboardPage() {
   /* ── unauthorized guard ── */
   if (session.status === "ready" && !session.isVendorAdmin && !session.isVendorStaff) {
     return (
-      <AdminPageShell
+      <VendorPageShell
         title="Vendor Portal"
         breadcrumbs={[{ label: "Vendor Portal" }]}
       >
@@ -169,12 +169,12 @@ export default function VendorDashboardPage() {
             Unauthorized. You do not have permission to access the vendor portal.
           </p>
         </div>
-      </AdminPageShell>
+      </VendorPageShell>
     );
   }
 
   return (
-    <AdminPageShell
+    <VendorPageShell
       title="Vendor Portal"
       breadcrumbs={[{ label: "Vendor Portal" }]}
     >
@@ -371,6 +371,6 @@ export default function VendorDashboardPage() {
           </p>
         </div>
       )}
-    </AdminPageShell>
+    </VendorPageShell>
   );
 }

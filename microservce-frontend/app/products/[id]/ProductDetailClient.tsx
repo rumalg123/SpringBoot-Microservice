@@ -181,9 +181,8 @@ export default function ProductDetailClient() {
     let cancelled = false;
     const run = async () => {
       try {
-        const res = await apiClient.get("/wishlist/me");
-        const raw = res.data as Record<string, unknown>;
-        const items = (Array.isArray(raw.content) ? raw.content : raw.items || []) as WishlistItem[];
+        const res = await apiClient.get<{ content?: WishlistItem[]; items?: WishlistItem[] }>("/wishlist/me");
+        const items: WishlistItem[] = res.data.content ?? res.data.items ?? [];
         if (cancelled) return;
         const matched = items.find((item) => item.productId === targetProductId);
         setWishlistItemId(matched?.id || "");
@@ -247,8 +246,8 @@ export default function ProductDetailClient() {
         toast.success("Removed from wishlist");
         emitWishlistUpdate();
       } else {
-        const res = await apiClient.post("/wishlist/me/items", { productId: targetProductId });
-        const data = (res.data as WishlistResponse) || { items: [], itemCount: 0 };
+        const res = await apiClient.post<WishlistResponse>("/wishlist/me/items", { productId: targetProductId });
+        const data = res.data ?? { items: [], itemCount: 0 };
         const matched = (data.items || []).find((item) => item.productId === targetProductId);
         setWishlistItemId(matched?.id || "");
         toast.success("Added to wishlist");

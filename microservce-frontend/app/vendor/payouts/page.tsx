@@ -1,10 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import AppNav from "../../components/AppNav";
-import Footer from "../../components/Footer";
 import { useAuthSession } from "../../../lib/authSession";
 import { money } from "../../../lib/format";
 
@@ -29,13 +26,8 @@ type VendorPayout = {
 type Paged<T> = { content: T[]; totalPages: number; totalElements: number };
 
 export default function VendorPayoutsPage() {
-  const router = useRouter();
   const session = useAuthSession();
-  const {
-    status: sessionStatus, isAuthenticated, canViewAdmin, profile, logout,
-    canManageAdminOrders, canManageAdminProducts, canManageAdminCategories,
-    canManageAdminVendors, canManageAdminPosters, apiClient, emailVerified, isSuperAdmin, isVendorAdmin,
-  } = session;
+  const { status: sessionStatus, isAuthenticated, isVendorAdmin, apiClient } = session;
 
   const [payouts, setPayouts] = useState<VendorPayout[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,10 +55,9 @@ export default function VendorPayoutsPage() {
   }, [apiClient, page, statusFilter]);
 
   useEffect(() => {
-    if (sessionStatus !== "ready") return;
-    if (!isAuthenticated || !isVendorAdmin) { router.replace("/"); return; }
+    if (sessionStatus !== "ready" || !isAuthenticated || !isVendorAdmin) return;
     void loadPayouts();
-  }, [sessionStatus, isAuthenticated, isVendorAdmin, router, loadPayouts]);
+  }, [sessionStatus, isAuthenticated, isVendorAdmin, loadPayouts]);
 
   const statusBadge = (status: string) => {
     const s = status.toUpperCase();
@@ -86,15 +77,6 @@ export default function VendorPayoutsPage() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-      <AppNav
-        email={(profile?.email as string) || ""} isSuperAdmin={isSuperAdmin} isVendorAdmin={isVendorAdmin}
-        canViewAdmin={canViewAdmin} canManageAdminOrders={canManageAdminOrders}
-        canManageAdminProducts={canManageAdminProducts} canManageAdminCategories={canManageAdminCategories}
-        canManageAdminVendors={canManageAdminVendors} canManageAdminPosters={canManageAdminPosters}
-        apiClient={apiClient} emailVerified={emailVerified} onLogout={logout}
-      />
-
       <main className="mx-auto max-w-5xl px-4 py-10">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "24px" }}>
           <div>
@@ -193,8 +175,5 @@ export default function VendorPayoutsPage() {
           </>
         )}
       </main>
-
-      <Footer />
-    </div>
   );
 }

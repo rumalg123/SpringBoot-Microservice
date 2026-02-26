@@ -61,7 +61,7 @@ export default function CustomerInsightsPage() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await api.get("/customers/me");
+        const res = await api.get<{ id: string }>("/customers/me");
         if (!cancelled) setCustomerId(res.data.id);
       } catch {
         // Not a registered customer
@@ -77,7 +77,7 @@ export default function CustomerInsightsPage() {
     (async () => {
       setLoading(true);
       try {
-        const res = await api.get(`/analytics/customer/${customerId}/insights`);
+        const res = await api.get<CustomerInsights>(`/analytics/customer/${customerId}/insights`);
         if (!cancelled) setData(res.data);
       } catch (e) {
         if (!cancelled) toast.error(getErrorMessage(e));

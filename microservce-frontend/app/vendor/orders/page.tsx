@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { useAuthSession } from "../../../lib/authSession";
-import AdminPageShell from "../../components/ui/AdminPageShell";
+import VendorPageShell from "../../components/ui/VendorPageShell";
 import StatusBadge, { ORDER_STATUS_COLORS } from "../../components/ui/StatusBadge";
 
 /* ── Types ── */
@@ -289,7 +289,7 @@ export default function VendorOrdersPage() {
   /* ── Guards ── */
   if (session.status === "loading" || session.status === "idle") {
     return (
-      <AdminPageShell
+      <VendorPageShell
         title="Vendor Orders"
         breadcrumbs={[
           { label: "Vendor Portal", href: "/vendor" },
@@ -299,13 +299,13 @@ export default function VendorOrdersPage() {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300 }}>
           <p style={{ color: "var(--muted)", fontSize: "0.875rem" }}>Loading session...</p>
         </div>
-      </AdminPageShell>
+      </VendorPageShell>
     );
   }
 
   if (!session.isVendorAdmin && !session.isVendorStaff) {
     return (
-      <AdminPageShell
+      <VendorPageShell
         title="Vendor Orders"
         breadcrumbs={[
           { label: "Vendor Portal", href: "/vendor" },
@@ -336,13 +336,13 @@ export default function VendorOrdersPage() {
             You do not have permission to view vendor orders.
           </p>
         </div>
-      </AdminPageShell>
+      </VendorPageShell>
     );
   }
 
   /* ── Render ── */
   return (
-    <AdminPageShell
+    <VendorPageShell
       title="Vendor Orders"
       breadcrumbs={[
         { label: "Vendor Portal", href: "/vendor" },
@@ -707,6 +707,6 @@ export default function VendorOrdersPage() {
           </>
         )}
       </section>
-    </AdminPageShell>
+    </VendorPageShell>
   );
 }

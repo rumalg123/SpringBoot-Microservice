@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, Syne } from "next/font/google";
 import "./globals.css";
+import Providers from "./providers";
 import AppToaster from "./components/AppToaster";
 import ScrollToTop from "./components/ScrollToTop";
 import BackToTop from "./components/BackToTop";
@@ -31,10 +32,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${bodyFont.variable} ${displayFont.variable} antialiased`}>
-        <ScrollToTop />
-        <AppToaster />
-        <ErrorBoundary>{children}</ErrorBoundary>
-        <BackToTop />
+        <Providers>
+          <ScrollToTop />
+          <AppToaster />
+          <ErrorBoundary>{children}</ErrorBoundary>
+          <BackToTop />
+        </Providers>
       </body>
     </html>
   );

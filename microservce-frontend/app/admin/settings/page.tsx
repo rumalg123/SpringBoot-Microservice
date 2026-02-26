@@ -1,11 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import AppNav from "../../components/AppNav";
-import Footer from "../../components/Footer";
 import { useAuthSession } from "../../../lib/authSession";
+import TableSkeleton from "../../components/ui/TableSkeleton";
 
 type SystemConfig = {
   id: string;
@@ -32,13 +30,8 @@ type FeatureFlag = {
 type Tab = "config" | "flags";
 
 export default function AdminSettingsPage() {
-  const router = useRouter();
   const session = useAuthSession();
-  const {
-    status: sessionStatus, isAuthenticated, canViewAdmin, profile, logout,
-    canManageAdminOrders, canManageAdminProducts, canManageAdminCategories,
-    canManageAdminVendors, canManageAdminPosters, apiClient, emailVerified, isSuperAdmin, isVendorAdmin,
-  } = session;
+  const { status: sessionStatus, apiClient } = session;
 
   const [tab, setTab] = useState<Tab>("config");
 
@@ -88,10 +81,9 @@ export default function AdminSettingsPage() {
 
   useEffect(() => {
     if (sessionStatus !== "ready") return;
-    if (!isAuthenticated || !isSuperAdmin) { router.replace("/"); return; }
     void loadConfigs();
     void loadFlags();
-  }, [sessionStatus, isAuthenticated, isSuperAdmin, router, loadConfigs, loadFlags]);
+  }, [sessionStatus, loadConfigs, loadFlags]);
 
   // --- System Config CRUD ---
   const openEditConfig = (c: SystemConfig) => {
@@ -246,14 +238,6 @@ export default function AdminSettingsPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-      <AppNav
-        email={(profile?.email as string) || ""} isSuperAdmin={isSuperAdmin} isVendorAdmin={isVendorAdmin}
-        canViewAdmin={canViewAdmin} canManageAdminOrders={canManageAdminOrders}
-        canManageAdminProducts={canManageAdminProducts} canManageAdminCategories={canManageAdminCategories}
-        canManageAdminVendors={canManageAdminVendors} canManageAdminPosters={canManageAdminPosters}
-        apiClient={apiClient} emailVerified={emailVerified} onLogout={logout}
-      />
-
       <main className="mx-auto max-w-5xl px-4 py-10">
         <div style={{ marginBottom: "24px" }}>
           <h1 className="text-2xl font-bold" style={{ color: "#fff" }}>Settings</h1>
@@ -367,7 +351,7 @@ export default function AdminSettingsPage() {
 
             {/* Config List */}
             {configLoading ? (
-              <p style={{ color: "var(--muted)", textAlign: "center", padding: "40px 0" }}>Loading configurations...</p>
+              <TableSkeleton rows={4} cols={3} />
             ) : configs.length === 0 ? (
               <div style={{ textAlign: "center", padding: "60px 20px", borderRadius: "14px", background: "var(--card)", border: "1px solid var(--line-bright)" }}>
                 <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>No system configurations found.</p>
@@ -524,7 +508,7 @@ export default function AdminSettingsPage() {
 
             {/* Flags List */}
             {flagLoading ? (
-              <p style={{ color: "var(--muted)", textAlign: "center", padding: "40px 0" }}>Loading feature flags...</p>
+              <TableSkeleton rows={4} cols={3} />
             ) : flags.length === 0 ? (
               <div style={{ textAlign: "center", padding: "60px 20px", borderRadius: "14px", background: "var(--card)", border: "1px solid var(--line-bright)" }}>
                 <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>No feature flags found.</p>
@@ -594,8 +578,6 @@ export default function AdminSettingsPage() {
           </>
         )}
       </main>
-
-      <Footer />
     </div>
   );
 }

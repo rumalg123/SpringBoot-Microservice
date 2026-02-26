@@ -3,10 +3,7 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import AppNav from "../../components/AppNav";
-import Footer from "../../components/Footer";
 import ConfirmModal from "../../components/ConfirmModal";
 import PosterFormField from "../../components/posters/admin/PosterFormField";
 import PosterLinkTargetEditor from "../../components/posters/admin/PosterLinkTargetEditor";
@@ -263,7 +260,6 @@ const variantTableCellStyle: React.CSSProperties = {
 };
 
 export default function AdminPostersPage() {
-  const router = useRouter();
   const session = useAuthSession();
   const [items, setItems] = useState<Poster[]>([]);
   const [deletedItems, setDeletedItems] = useState<Poster[]>([]);
@@ -452,17 +448,9 @@ export default function AdminPostersPage() {
   };
 
   useEffect(() => {
-    if (session.status !== "ready") return;
-    if (!session.isAuthenticated) {
-      router.replace("/");
-      return;
-    }
-    if (!session.canManageAdminPosters) {
-      router.replace("/products");
-      return;
-    }
+    if (session.status !== "ready" || !session.isAuthenticated) return;
     void load();
-  }, [session.status, session.isAuthenticated, session.canManageAdminPosters, router]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [session.status, session.isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!showDeleted || deletedLoaded) return;
@@ -694,19 +682,6 @@ export default function AdminPostersPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-      <AppNav
-        email={(session.profile?.email as string) || ""}
-        isSuperAdmin={session.isSuperAdmin}
-        isVendorAdmin={session.isVendorAdmin}
-        canViewAdmin={session.canViewAdmin}
-        canManageAdminOrders={session.canManageAdminOrders}
-        canManageAdminProducts={session.canManageAdminProducts}
-        canManageAdminVendors={session.canManageAdminVendors}
-        canManageAdminPosters={session.canManageAdminPosters}
-        apiClient={session.apiClient}
-        emailVerified={session.emailVerified}
-        onLogout={() => { void session.logout(); }}
-      />
       <main className="mx-auto max-w-7xl px-4 py-4">
         <nav className="breadcrumb">
           <Link href="/">Home</Link><span className="breadcrumb-sep">&gt;</span>
@@ -1067,7 +1042,6 @@ export default function AdminPostersPage() {
           </div>
         </section>
       </main>
-      <Footer />
       <ConfirmModal
         open={Boolean(deleteTarget)}
         title="Delete Poster"

@@ -3,6 +3,71 @@
 
 @import "tailwindcss";
 
+/* --- Tailwind v4 Theme Tokens --- */
+@theme {
+  /* Background colors */
+  --color-bg: #080812;
+  --color-bg-2: #0d0d1f;
+  --color-surface: #111128;
+  --color-surface-2: #16162e;
+  --color-surface-3: #1c1c38;
+
+  /* Text colors */
+  --color-ink: #f0f0ff;
+  --color-ink-light: #c8c8e8;
+  --color-muted: #6868a0;
+  --color-muted-2: #4a4a70;
+
+  /* Border colors */
+  --color-line: rgba(120, 120, 200, 0.12);
+  --color-line-bright: rgba(0, 212, 255, 0.2);
+
+  /* Brand (neon cyan) */
+  --color-brand: #00d4ff;
+  --color-brand-hover: #00b8e0;
+  --color-brand-soft: rgba(0, 212, 255, 0.08);
+  --color-brand-glow: rgba(0, 212, 255, 0.3);
+
+  /* Accent (violet) */
+  --color-accent: #7c3aed;
+  --color-accent-hover: #6d28d9;
+  --color-accent-soft: rgba(124, 58, 237, 0.12);
+  --color-accent-glow: rgba(124, 58, 237, 0.35);
+  --color-accent-light: #a78bfa;
+
+  /* Semantic colors */
+  --color-success: #10b981;
+  --color-success-glow: rgba(16, 185, 129, 0.25);
+  --color-success-soft: rgba(16, 185, 129, 0.08);
+  --color-warning: #f59e0b;
+  --color-warning-soft: rgba(245, 158, 11, 0.08);
+  --color-warning-border: rgba(245, 158, 11, 0.3);
+  --color-warning-text: #fbbf24;
+  --color-danger: #ef4444;
+  --color-danger-glow: rgba(239, 68, 68, 0.3);
+  --color-danger-soft: rgba(239, 68, 68, 0.08);
+  --color-star: #fbbf24;
+
+  /* Header / Footer */
+  --color-header-bg: rgba(8, 8, 18, 0.85);
+  --color-footer-bg: #060610;
+  --color-footer-text: #8888bb;
+
+  /* Border radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  /* Font sizes (consolidating 10+ variants → 5) */
+  --text-xs: 0.7rem;
+  --text-sm: 0.8rem;
+  --text-base: 0.875rem;
+  --text-lg: 1rem;
+  --text-xl: 1.25rem;
+}
+
 /* --- Design Tokens --- */
 :root {
   /* Dark backgrounds */
