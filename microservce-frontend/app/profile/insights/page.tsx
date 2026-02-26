@@ -55,10 +55,11 @@ export default function CustomerInsightsPage() {
   const [customerId, setCustomerId] = useState<string | null>(null);
   const api = session.apiClient;
   const isAdmin = session.canViewAdmin;
+  const sessionReady = session.status === "ready";
 
   // Get customer ID from /customers/me
   useEffect(() => {
-    if (!api || !session.isAuthenticated || isAdmin) return;
+    if (!sessionReady || !api || !session.isAuthenticated || isAdmin) return;
     let cancelled = false;
     (async () => {
       try {
@@ -69,7 +70,7 @@ export default function CustomerInsightsPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [api, session.isAuthenticated, isAdmin]);
+  }, [sessionReady, api, session.isAuthenticated, isAdmin]);
 
   // Fetch insights
   useEffect(() => {
@@ -126,7 +127,7 @@ export default function CustomerInsightsPage() {
             </div>
           )}
 
-          {!isAdmin && loading && (
+          {!isAdmin && (loading || !sessionReady) && (
             <div className="grid gap-3.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))" }}>
               {Array.from({ length: 4 }).map((_, i) => <div key={i} className="skeleton h-[100px] rounded-lg border border-line bg-[rgba(255,255,255,0.02)] p-5" />)}
             </div>

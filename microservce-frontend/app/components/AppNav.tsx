@@ -86,8 +86,16 @@ export default function AppNav({
 
   useEffect(() => { setMobileOpen(false); }, [pathname]);
 
-  const isActive = (href: string) =>
-    href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
+  const isActive = (href: string) => {
+    if (href === "/") return pathname === "/";
+    if (pathname === href) return true;
+    if (!pathname.startsWith(`${href}/`)) return false;
+    // Don't highlight parent when a more specific child nav item matches
+    return !navItems.some(
+      (n) => n.href !== href && n.href.length > href.length && n.href.startsWith(`${href}/`)
+        && (pathname === n.href || pathname.startsWith(`${n.href}/`))
+    );
+  };
 
   const showAdminOrders = canManageAdminOrders ?? canViewAdmin;
   const showAdminProducts = canManageAdminProducts ?? canViewAdmin;
