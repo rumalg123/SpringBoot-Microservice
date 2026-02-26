@@ -34,9 +34,9 @@ public class CartExpiryScheduler {
             int totalDeleted = 0;
             int deleted;
             do {
-                deleted = transactionTemplate.execute(status ->
+                Integer result = transactionTemplate.execute(status ->
                         cartRepository.deleteExpiredCartsBatch(cutoff, batchSize));
-                if (deleted == null) deleted = 0;
+                deleted = result != null ? result : 0;
                 totalDeleted += deleted;
             } while (deleted >= batchSize);
             if (totalDeleted > 0) {
