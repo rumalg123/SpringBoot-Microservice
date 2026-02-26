@@ -375,7 +375,7 @@ public class CategoryServiceImpl implements CategoryService {
         Set<UUID> ids = categories.stream().map(Category::getId).collect(Collectors.toSet());
         return categoryAttributeRepository.findByCategoryIdInOrderByDisplayOrderAsc(ids)
                 .stream()
-                .collect(Collectors.groupingBy(CategoryAttribute::getCategoryId));
+                .collect(Collectors.groupingBy(a -> a.getCategory().getId()));
     }
 
     private CategoryAttributeResponse toCategoryAttributeResponse(CategoryAttribute attr) {
