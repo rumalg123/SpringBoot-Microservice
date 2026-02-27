@@ -3,7 +3,6 @@ package com.rumal.access_service.exception;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.OptimisticLockingFailureException;
-import org.springframework.data.mapping.PropertyReferenceException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -59,12 +58,6 @@ public class GlobalExceptionHandler {
     public ResponseEntity<?> handleOptimisticLock(OptimisticLockingFailureException ex) {
         log.warn("Optimistic locking conflict: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.CONFLICT).body(error(HttpStatus.CONFLICT, "Resource was modified by another request. Please retry."));
-    }
-
-    @ExceptionHandler(PropertyReferenceException.class)
-    public ResponseEntity<?> handlePropertyReference(PropertyReferenceException ex) {
-        log.warn("Invalid sort/filter property: {}", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error(HttpStatus.BAD_REQUEST, "Invalid sort property: " + ex.getPropertyName()));
     }
 
     @ExceptionHandler(Exception.class)
