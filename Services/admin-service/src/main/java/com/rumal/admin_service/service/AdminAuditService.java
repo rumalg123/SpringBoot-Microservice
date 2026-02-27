@@ -45,7 +45,7 @@ public class AdminAuditService {
         size = Math.min(size, 100);
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
 
-        Specification<AdminAuditLog> spec = Specification.where(null);
+        Specification<AdminAuditLog> spec = Specification.where((Specification<AdminAuditLog>) null);
         if (actorKeycloakId != null && !actorKeycloakId.isBlank()) {
             String trimmedActor = actorKeycloakId.trim();
             spec = spec.and((root, q, cb) -> cb.equal(root.get("actorKeycloakId"), trimmedActor));
