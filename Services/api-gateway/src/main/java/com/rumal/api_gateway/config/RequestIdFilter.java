@@ -24,8 +24,9 @@ public class RequestIdFilter implements GlobalFilter, Ordered {
             requestId = UUID.randomUUID().toString();
         }
 
+        final String resolvedId = requestId;
         ServerHttpRequest request = exchange.getRequest().mutate()
-                .header(REQUEST_ID_HEADER, requestId)
+                .headers(headers -> headers.set(REQUEST_ID_HEADER, resolvedId))
                 .build();
 
         ServerWebExchange mutated = exchange.mutate().request(request).build();

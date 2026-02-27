@@ -16,6 +16,7 @@ public interface PosterService {
     PosterResponse create(UpsertPosterRequest request);
     PosterResponse update(UUID id, UpsertPosterRequest request);
     PosterResponse getByIdOrSlug(String idOrSlug);
+    PosterResponse getCachedPosterByIdOrSlug(String idOrSlug);
     List<PosterResponse> listActiveByPlacement(PosterPlacement placement);
     Page<PosterResponse> listActiveByPlacement(PosterPlacement placement, Pageable pageable);
     List<PosterResponse> listAllActive();
@@ -38,4 +39,5 @@ public interface PosterService {
     void deleteVariant(UUID posterId, UUID variantId);
     List<PosterVariantResponse> listVariants(UUID posterId);
     void recordVariantClick(UUID posterId, UUID variantId);
+    void recordVariantImpression(UUID posterId, UUID variantId);
 }

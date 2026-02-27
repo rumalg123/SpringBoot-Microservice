@@ -20,6 +20,9 @@ public interface StockItemRepository extends JpaRepository<StockItem, UUID> {
 
     List<StockItem> findByProductId(UUID productId);
 
+    @Query("select s from StockItem s join fetch s.warehouse w where s.productId = :productId and w.active = true")
+    List<StockItem> findByProductIdWithActiveWarehouse(@Param("productId") UUID productId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select s from StockItem s join fetch s.warehouse w where s.productId = :productId and w.active = true order by s.quantityAvailable desc")
     List<StockItem> findByProductIdForUpdateOrderByAvailableDesc(@Param("productId") UUID productId);

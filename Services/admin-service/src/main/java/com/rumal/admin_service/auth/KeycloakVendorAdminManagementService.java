@@ -66,7 +66,8 @@ public class KeycloakVendorAdminManagementService {
     ) {
         String normalizedEmail = normalizeEmail(email);
         return runKeycloakCall(() -> {
-            try (Keycloak keycloak = newAdminClient()) {
+            try {
+                Keycloak keycloak = getOrCreateAdminClient();
                 var realmResource = keycloak.realm(realm);
                 UserRepresentation user = null;
                 boolean created = false;
@@ -134,7 +135,8 @@ public class KeycloakVendorAdminManagementService {
         int safeLimit = Math.max(1, Math.min(limit, 20));
 
         return runKeycloakCall(() -> {
-            try (Keycloak keycloak = newAdminClient()) {
+            try {
+                Keycloak keycloak = getOrCreateAdminClient();
                 var realmResource = keycloak.realm(realm);
                 var usersResource = realmResource.users();
 
@@ -179,7 +181,8 @@ public class KeycloakVendorAdminManagementService {
             return;
         }
         runKeycloakVoid(() -> {
-            try (Keycloak keycloak = newAdminClient()) {
+            try {
+                Keycloak keycloak = getOrCreateAdminClient();
                 try {
                     keycloak.realm(realm).users().get(keycloakUserId.trim()).logout();
                 } catch (NotFoundException ignored) {
@@ -207,7 +210,8 @@ public class KeycloakVendorAdminManagementService {
             return;
         }
         runKeycloakVoid(() -> {
-            try (Keycloak keycloak = newAdminClient()) {
+            try {
+                Keycloak keycloak = getOrCreateAdminClient();
                 var users = keycloak.realm(realm).users();
                 for (String id : unique) {
                     try {
@@ -398,14 +402,25 @@ public class KeycloakVendorAdminManagementService {
         return normalizeOptional(user == null ? null : user.getUsername());
     }
 
-    private Keycloak newAdminClient() {
-        return KeycloakBuilder.builder()
-                .serverUrl(serverUrl)
-                .realm(adminRealm)
-                .clientId(clientId)
-                .clientSecret(clientSecret)
-                .grantType(OAuth2Constants.CLIENT_CREDENTIALS)
-                .build();
+    private volatile Keycloak sharedAdminClient;
+
+    private Keycloak getOrCreateAdminClient() {
+        Keycloak client = sharedAdminClient;
+        if (client != null) {
+            return client;
+        }
+        synchronized (this) {
+            if (sharedAdminClient == null) {
+                sharedAdminClient = KeycloakBuilder.builder()
+                        .serverUrl(serverUrl)
+                        .realm(adminRealm)
+                        .clientId(clientId)
+                        .clientSecret(clientSecret)
+                        .grantType(OAuth2Constants.CLIENT_CREDENTIALS)
+                        .build();
+            }
+            return sharedAdminClient;
+        }
     }
 
     private String resolveBaseUrlFromIssuer(String issuerUri) {

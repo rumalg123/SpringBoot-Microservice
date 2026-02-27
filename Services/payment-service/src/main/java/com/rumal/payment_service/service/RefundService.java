@@ -17,10 +17,13 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import org.springframework.data.domain.PageRequest;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -41,6 +44,9 @@ public class RefundService {
     private final PaymentAuditService paymentAuditService;
     private final OrderClient orderClient;
     private final PayHereClient payHereClient;
+    private final TransactionTemplate transactionTemplate;
+    @org.springframework.context.annotation.Lazy
+    private final RefundService self;
 
     @Value("${payment.refund.vendor-response-days:7}")
     private int vendorResponseDays;
@@ -69,8 +75,16 @@ public class RefundService {
         // 3. Get vendor order and validate refund amount
         VendorOrderSummary vendorOrder = orderClient.getVendorOrder(req.orderId(), req.vendorOrderId());
 
-        if (req.refundAmount().compareTo(vendorOrder.orderTotal()) > 0) {
-            throw new ValidationException("Refund amount cannot exceed vendor order total of " + vendorOrder.orderTotal());
+        // C-03: Check cumulative refunded amount (not just this request) to prevent exceeding order total
+        BigDecimal alreadyRefunded = refundRequestRepository
+                .sumRefundedAmountByVendorOrderId(req.vendorOrderId());
+        BigDecimal totalAfterThisRefund = alreadyRefunded.add(req.refundAmount());
+
+        if (totalAfterThisRefund.compareTo(vendorOrder.orderTotal()) > 0) {
+            throw new ValidationException(
+                    "Refund amount would exceed vendor order total. Order total: " + vendorOrder.orderTotal()
+                    + ", already refunded/processing: " + alreadyRefunded
+                    + ", requested: " + req.refundAmount());
         }
 
         // 4. Build RefundRequest entity
@@ -145,47 +159,109 @@ public class RefundService {
     }
 
     // ── Admin Finalize ─────────────────────────────────────────────────
+    // C-01: Split into phases so the external PayHere API call does NOT hold a DB lock.
+    // C-02: Validate PayHere refund response before marking REFUND_COMPLETED.
 
-    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public RefundRequestResponse adminFinalize(String adminKeycloakId, UUID refundId,
                                                 RefundAdminFinalizeRequest req) {
 
-        // 1. Find refund with pessimistic lock
-        RefundRequest refund = refundRequestRepository.findByIdForUpdate(refundId)
-                .orElseThrow(() -> new ResourceNotFoundException("Refund request not found: " + refundId));
+        // ── Phase 1: Validate & set REFUND_PROCESSING (or ADMIN_REJECTED) inside a short transaction ──
+        String oldStatus = transactionTemplate.execute(status -> {
+            RefundRequest refund = refundRequestRepository.findByIdForUpdate(refundId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Refund request not found: " + refundId));
 
-        // 2. Verify status is eligible for admin finalization
-        if (refund.getStatus() != VENDOR_APPROVED
-                && refund.getStatus() != VENDOR_REJECTED
-                && refund.getStatus() != ESCALATED_TO_ADMIN) {
-            throw new ValidationException("Refund must be in VENDOR_APPROVED, VENDOR_REJECTED, or ESCALATED_TO_ADMIN status for admin finalization");
+            if (refund.getStatus() != VENDOR_APPROVED
+                    && refund.getStatus() != VENDOR_REJECTED
+                    && refund.getStatus() != ESCALATED_TO_ADMIN) {
+                throw new ValidationException("Refund must be in VENDOR_APPROVED, VENDOR_REJECTED, or ESCALATED_TO_ADMIN status for admin finalization");
+            }
+
+            String prevStatus = refund.getStatus().name();
+
+            refund.setAdminFinalizedBy(adminKeycloakId);
+            refund.setAdminFinalizedAt(Instant.now());
+            refund.setAdminNote(req.note());
+
+            if (req.approved()) {
+                refund.setStatus(REFUND_PROCESSING);
+            } else {
+                refund.setStatus(ADMIN_REJECTED);
+            }
+
+            refundRequestRepository.save(refund);
+            return prevStatus;
+        });
+
+        // ── If rejected, write audit and return immediately ──
+        if (!req.approved()) {
+            paymentAuditService.writeAudit(null, refundId, null,
+                    "ADMIN_FINALIZE", oldStatus, "ADMIN_REJECTED",
+                    "admin", adminKeycloakId, null, null);
+
+            return toResponse(refundRequestRepository.findById(refundId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Refund request not found: " + refundId)));
         }
 
-        // 3. Store old status
-        String oldStatus = refund.getStatus().name();
+        // ── Phase 2: Call PayHere API *outside* any transaction (no DB lock held) ──
+        Map<String, Object> payHereResult = null;
+        PayHereApiException payHereError = null;
+        try {
+            Payment payment = paymentRepository.findTopByOrderIdOrderByCreatedAtDesc(
+                    refundRequestRepository.findById(refundId)
+                            .orElseThrow(() -> new ResourceNotFoundException("Refund request not found: " + refundId))
+                            .getOrderId()
+            ).orElseThrow(() -> new ResourceNotFoundException("Payment not found for refund: " + refundId));
 
-        // 4/5/6. Set admin fields
-        refund.setAdminFinalizedBy(adminKeycloakId);
-        refund.setAdminFinalizedAt(Instant.now());
-        refund.setAdminNote(req.note());
+            payHereResult = payHereClient.refund(
+                    payment.getPayherePaymentId(),
+                    refundRequestRepository.findById(refundId).orElseThrow().getRefundAmount(),
+                    "Refund for order " + refundRequestRepository.findById(refundId).orElseThrow().getOrderId());
+        } catch (PayHereApiException ex) {
+            log.error("PayHere refund failed for refund request {}: {}", refundId, ex.getMessage());
+            payHereError = ex;
+        }
 
-        // 7. Process approval or rejection
-        if (req.approved()) {
-            refund.setStatus(REFUND_PROCESSING);
+        // ── Phase 3: Re-acquire lock, verify still REFUND_PROCESSING, set final status ──
+        final Map<String, Object> finalResult = payHereResult;
+        final PayHereApiException finalError = payHereError;
+
+        transactionTemplate.executeWithoutResult(status -> {
+            RefundRequest refund = refundRequestRepository.findByIdForUpdate(refundId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Refund request not found: " + refundId));
+
+            if (refund.getStatus() != REFUND_PROCESSING) {
+                log.warn("Refund {} status changed to {} during PayHere call, skipping update",
+                        refundId, refund.getStatus());
+                return;
+            }
+
+            if (finalError != null) {
+                refund.setStatus(REFUND_FAILED);
+                refund.setPayhereRefundRef(finalError.getMessage());
+            } else {
+                // C-02: Validate PayHere response before marking completed
+                boolean success = isPayHereRefundSuccessful(finalResult);
+                if (success) {
+                    refund.setStatus(REFUND_COMPLETED);
+                    refund.setRefundCompletedAt(Instant.now());
+                    refund.setPayhereRefundRef(finalResult != null ? finalResult.toString() : null);
+                } else {
+                    refund.setStatus(REFUND_FAILED);
+                    String errorMsg = finalResult != null ? finalResult.toString() : "No response from PayHere";
+                    refund.setPayhereRefundRef(errorMsg);
+                    log.error("PayHere refund response indicates failure for refund {}: {}", refundId, errorMsg);
+                }
+            }
+
             refundRequestRepository.save(refund);
 
-            try {
-                Payment payment = refund.getPayment();
-                Map<String, Object> result = payHereClient.refund(
-                        payment.getPayherePaymentId(),
-                        refund.getRefundAmount(),
-                        "Refund for order " + refund.getOrderId());
+            paymentAuditService.writeAudit(null, refundId, null,
+                    "ADMIN_FINALIZE", oldStatus, refund.getStatus().name(),
+                    "admin", adminKeycloakId, null, null);
 
-                refund.setPayhereRefundRef(result != null ? result.toString() : null);
-                refund.setStatus(REFUND_COMPLETED);
-                refund.setRefundCompletedAt(Instant.now());
-
-                // Update vendor order status
+            // Sync vendor order status if refund completed
+            if (refund.getStatus() == REFUND_COMPLETED) {
                 try {
                     orderClient.updateVendorOrderStatus(
                             refund.getOrderId(), refund.getVendorOrderId(),
@@ -194,31 +270,23 @@ public class RefundService {
                     log.error("Failed to update vendor order {} status to REFUNDED: {}",
                             refund.getVendorOrderId(), ex.getMessage());
                 }
-
-            } catch (PayHereApiException ex) {
-                log.error("PayHere refund failed for refund request {}: {}",
-                        refundId, ex.getMessage());
-                refund.setStatus(REFUND_FAILED);
             }
+        });
 
-            refund = refundRequestRepository.save(refund);
+        return toResponse(refundRequestRepository.findById(refundId)
+                .orElseThrow(() -> new ResourceNotFoundException("Refund request not found: " + refundId)));
+    }
 
-            paymentAuditService.writeAudit(null, refundId, null,
-                    "ADMIN_FINALIZE", oldStatus, refund.getStatus().name(),
-                    "admin", adminKeycloakId, null, null);
-
-        } else {
-            // 8. Rejected
-            refund.setStatus(ADMIN_REJECTED);
-            refund = refundRequestRepository.save(refund);
-
-            paymentAuditService.writeAudit(null, refundId, null,
-                    "ADMIN_FINALIZE", oldStatus, "ADMIN_REJECTED",
-                    "admin", adminKeycloakId, null, null);
+    private boolean isPayHereRefundSuccessful(Map<String, Object> result) {
+        if (result == null) return false;
+        Object status = result.get("status");
+        if (status == null) {
+            // If PayHere returned data but no explicit status field, treat as success
+            // (some PayHere endpoints return the refund object on success)
+            return !result.containsKey("error");
         }
-
-        // 9. Return mapped response
-        return toResponse(refund);
+        String statusStr = status.toString().toLowerCase();
+        return "1".equals(statusStr) || "success".equals(statusStr) || "true".equals(statusStr);
     }
 
     // ── List & Get Methods ─────────────────────────────────────────────
@@ -272,7 +340,7 @@ public class RefundService {
 
     // ── Escalate Expired Refunds (called by scheduler) ─────────────────
 
-    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    @Transactional(readOnly = true)
     public void escalateExpiredRefunds() {
         int totalEscalated = 0;
         Page<RefundRequest> page;
@@ -282,19 +350,34 @@ public class RefundService {
                     .findByStatusAndVendorResponseDeadlineBefore(REQUESTED, Instant.now(), PageRequest.of(0, 100));
 
             for (RefundRequest refund : page.getContent()) {
-                refund.setStatus(ESCALATED_TO_ADMIN);
-                refundRequestRepository.save(refund);
-
-                paymentAuditService.writeAudit(null, refund.getId(), null,
-                        "REFUND_ESCALATED", "REQUESTED", "ESCALATED_TO_ADMIN",
-                        "system", null, null, null);
+                try {
+                    self.escalateSingleRefund(refund.getId());
+                    totalEscalated++;
+                } catch (Exception ex) {
+                    log.warn("Failed to escalate refund {}: {}", refund.getId(), ex.getMessage());
+                }
             }
-            totalEscalated += page.getNumberOfElements();
         } while (!page.isEmpty());
 
         if (totalEscalated > 0) {
             log.info("Escalated {} expired refund requests to admin", totalEscalated);
         }
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW,
+                   isolation = Isolation.REPEATABLE_READ, timeout = 10)
+    public void escalateSingleRefund(UUID refundId) {
+        RefundRequest refund = refundRequestRepository.findByIdForUpdate(refundId)
+                .orElse(null);
+        if (refund == null || refund.getStatus() != REQUESTED) {
+            return; // Already escalated by another pod or status changed
+        }
+        refund.setStatus(ESCALATED_TO_ADMIN);
+        refundRequestRepository.save(refund);
+
+        paymentAuditService.writeAudit(null, refund.getId(), null,
+                "REFUND_ESCALATED", "REQUESTED", "ESCALATED_TO_ADMIN",
+                "system", null, null, null);
     }
 
     // ── Private Helpers ────────────────────────────────────────────────

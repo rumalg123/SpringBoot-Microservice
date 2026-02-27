@@ -3,6 +3,7 @@ package com.rumal.customer_service.repo;
 
 import com.rumal.customer_service.entity.Customer;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -14,6 +15,10 @@ public interface CustomerRepository extends JpaRepository<Customer, UUID> {
     boolean existsByEmail(String email);
     Optional<Customer> findByEmail(String email);
     Optional<Customer> findByKeycloakId(String keycloakId);
+
+    @Modifying
+    @Query("UPDATE Customer c SET c.loyaltyPoints = c.loyaltyPoints + :points, c.version = c.version + 1 WHERE c.id = :id")
+    int addLoyaltyPointsAtomically(@Param("id") UUID id, @Param("points") int points);
 
     // --- Analytics queries ---
 

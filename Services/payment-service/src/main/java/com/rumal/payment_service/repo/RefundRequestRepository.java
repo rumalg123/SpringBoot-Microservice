@@ -11,6 +11,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -42,4 +43,11 @@ public interface RefundRequestRepository extends JpaRepository<RefundRequest, UU
     Page<RefundRequest> findAllFiltered(UUID vendorId, RefundStatus status, Pageable pageable);
 
     Page<RefundRequest> findByStatusAndVendorResponseDeadlineBefore(RefundStatus status, Instant deadline, Pageable pageable);
+
+    // C-03: Sum of refund amounts for a vendor order that are in active/completed states
+    @Query("SELECT COALESCE(SUM(r.refundAmount), 0) FROM RefundRequest r " +
+            "WHERE r.vendorOrderId = :vendorOrderId " +
+            "AND r.status NOT IN (com.rumal.payment_service.entity.RefundStatus.ADMIN_REJECTED, " +
+            "com.rumal.payment_service.entity.RefundStatus.REFUND_FAILED)")
+    BigDecimal sumRefundedAmountByVendorOrderId(@Param("vendorOrderId") UUID vendorOrderId);
 }

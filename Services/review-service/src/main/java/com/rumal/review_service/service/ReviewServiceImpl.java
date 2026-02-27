@@ -43,8 +43,9 @@ public class ReviewServiceImpl implements ReviewService {
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public ReviewResponse createReview(UUID customerId, String displayName, CreateReviewRequest request) {
-        // Check if already reviewed
-        if (reviewRepository.existsByCustomerIdAndProductIdAndDeletedFalse(customerId, request.productId())) {
+        // Check if already reviewed — pessimistic lock prevents TOCTOU race
+        Optional<Review> existing = reviewRepository.findByCustomerIdAndProductIdForUpdate(customerId, request.productId());
+        if (existing.isPresent()) {
             throw new ValidationException("You have already reviewed this product");
         }
 
@@ -54,12 +55,15 @@ public class ReviewServiceImpl implements ReviewService {
         if (!purchaseCheck.purchased()) {
             throw new ValidationException("You can only review products you have purchased and received");
         }
+        if (purchaseCheck.vendorId() == null) {
+            throw new ValidationException("Unable to determine vendor for this product");
+        }
 
         Review review = Review.builder()
                 .customerId(customerId)
                 .customerDisplayName(displayName)
                 .productId(request.productId())
-                .vendorId(request.vendorId())
+                .vendorId(purchaseCheck.vendorId())
                 .orderId(purchaseCheck.orderId())
                 .rating(request.rating())
                 .title(request.title())
@@ -138,7 +142,7 @@ public class ReviewServiceImpl implements ReviewService {
                 cb.isTrue(root.get("active"))
         );
 
-        return reviewRepository.findAll(spec, sortedPageable).map(this::toResponse);
+        return findWithVendorReply(spec, sortedPageable);
     }
 
     public static String listByProductCacheKey(UUID productId, Pageable pageable, String sortBy) {
@@ -152,7 +156,7 @@ public class ReviewServiceImpl implements ReviewService {
                 cb.equal(root.get("customerId"), customerId),
                 cb.isFalse(root.get("deleted"))
         );
-        return reviewRepository.findAll(spec, pageable).map(this::toResponse);
+        return findWithVendorReply(spec, pageable);
     }
 
     // ─── List by vendor ─────────────────────────────────────
@@ -163,7 +167,7 @@ public class ReviewServiceImpl implements ReviewService {
                 cb.isFalse(root.get("deleted")),
                 cb.isTrue(root.get("active"))
         );
-        return reviewRepository.findAll(spec, pageable).map(this::toResponse);
+        return findWithVendorReply(spec, pageable);
     }
 
     // ─── Admin list ─────────────────────────────────────────
@@ -188,7 +192,7 @@ public class ReviewServiceImpl implements ReviewService {
             spec = spec.and((root, query, cb) -> cb.equal(root.get("active"), active));
         }
 
-        return reviewRepository.findAll(spec, pageable).map(this::toResponse);
+        return findWithVendorReply(spec, pageable);
     }
 
     // ─── Admin actions ──────────────────────────────────────
@@ -421,5 +425,15 @@ public class ReviewServiceImpl implements ReviewService {
             case "rating_low" -> Sort.by(Sort.Direction.ASC, "rating");
             default -> Sort.by(Sort.Direction.DESC, "createdAt");
         };
+    }
+
+    private Page<ReviewResponse> findWithVendorReply(Specification<Review> spec, Pageable pageable) {
+        Specification<Review> withFetch = (root, query, cb) -> {
+            if (query.getResultType() != Long.class && query.getResultType() != long.class) {
+                root.fetch("vendorReply", jakarta.persistence.criteria.JoinType.LEFT);
+            }
+            return spec.toPredicate(root, query, cb);
+        };
+        return reviewRepository.findAll(withFetch, pageable).map(this::toResponse);
     }
 }

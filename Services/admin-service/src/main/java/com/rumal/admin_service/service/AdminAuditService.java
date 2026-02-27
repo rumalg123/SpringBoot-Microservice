@@ -9,6 +9,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,19 +45,29 @@ public class AdminAuditService {
         size = Math.min(size, 100);
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
 
-        Page<AdminAuditLog> result;
+        Specification<AdminAuditLog> spec = Specification.where(null);
         if (actorKeycloakId != null && !actorKeycloakId.isBlank()) {
-            result = auditLogRepository.findByActorKeycloakId(actorKeycloakId.trim(), pageable);
-        } else if (resourceType != null && resourceId != null) {
-            result = auditLogRepository.findByResourceTypeAndResourceId(resourceType, resourceId, pageable);
-        } else if (action != null && !action.isBlank()) {
-            result = auditLogRepository.findByAction(action.trim(), pageable);
-        } else if (from != null && to != null) {
-            result = auditLogRepository.findByCreatedAtBetween(from, to, pageable);
-        } else {
-            result = auditLogRepository.findAll(pageable);
+            String trimmedActor = actorKeycloakId.trim();
+            spec = spec.and((root, q, cb) -> cb.equal(root.get("actorKeycloakId"), trimmedActor));
+        }
+        if (resourceType != null && resourceId != null) {
+            spec = spec.and((root, q, cb) -> cb.and(
+                    cb.equal(root.get("resourceType"), resourceType),
+                    cb.equal(root.get("resourceId"), resourceId)
+            ));
+        }
+        if (action != null && !action.isBlank()) {
+            String trimmedAction = action.trim();
+            spec = spec.and((root, q, cb) -> cb.equal(root.get("action"), trimmedAction));
+        }
+        if (from != null) {
+            spec = spec.and((root, q, cb) -> cb.greaterThanOrEqualTo(root.get("createdAt"), from));
+        }
+        if (to != null) {
+            spec = spec.and((root, q, cb) -> cb.lessThanOrEqualTo(root.get("createdAt"), to));
         }
 
+        Page<AdminAuditLog> result = auditLogRepository.findAll(spec, pageable);
         return toPageResponse(result);
     }
 

@@ -52,7 +52,7 @@ public class DashboardService {
 
         return new DashboardSummaryResponse(
                 totalOrders, pendingOrders, processingOrders, completedOrders, cancelledOrders,
-                0, 0, 0, 0,
+                -1, -1, -1, -1,
                 ordersByStatus, Instant.now()
         );
     }

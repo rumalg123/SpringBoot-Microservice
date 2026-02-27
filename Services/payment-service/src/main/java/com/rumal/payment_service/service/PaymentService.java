@@ -22,8 +22,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -247,6 +251,14 @@ public class PaymentService {
             return;
         }
 
+        // C-04: Webhook deduplication — hash of webhook params to detect retries
+        String webhookHash = computeWebhookHash(merchantId, orderId, payhereAmount, currency, statusCode);
+        if (webhookHash.equals(payment.getWebhookIdempotencyHash())) {
+            log.info("Duplicate webhook detected for payment {} (hash={}). Skipping.", paymentUuid, webhookHash);
+            return;
+        }
+        payment.setWebhookIdempotencyHash(webhookHash);
+
         // 6. Set webhook fields
         payment.setPayherePaymentId(paymentId);
         payment.setPayhereStatusCode(statusCode);
@@ -375,7 +387,9 @@ public class PaymentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Payment not found: " + paymentId));
 
         Map<String, Object> response = payHereClient.retrievePayment("ORD-" + paymentId);
-        log.info("PayHere verify response for payment {}: {}", paymentId, response);
+        // H-02: Don't log full PayHere response (may contain card data — PCI violation)
+        log.info("PayHere verify for payment {} completed, status={}", paymentId,
+                response != null ? response.get("status") : "null");
 
         paymentAuditService.writeAudit(paymentId, null, null,
                 "ADMIN_VERIFY", null, null,
@@ -432,6 +446,19 @@ public class PaymentService {
                 p.getCreatedAt(),
                 p.getUpdatedAt()
         );
+    }
+
+    // C-04: Compute a SHA-256 hash of webhook parameters for deduplication
+    private String computeWebhookHash(String merchantId, String orderId,
+                                       String amount, String currency, int statusCode) {
+        try {
+            String data = merchantId + "|" + orderId + "|" + amount + "|" + currency + "|" + statusCode;
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(data.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 not available", e);
+        }
     }
 
     private PaymentAuditResponse toAuditResponse(PaymentAudit a) {

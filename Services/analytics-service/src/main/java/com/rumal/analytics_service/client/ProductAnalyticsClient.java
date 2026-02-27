@@ -1,6 +1,7 @@
 package com.rumal.analytics_service.client;
 
 import com.rumal.analytics_service.client.dto.*;
+import com.rumal.analytics_service.exception.DownstreamHttpException;
 import com.rumal.analytics_service.exception.ServiceUnavailableException;
 import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.retry.RetryRegistry;
@@ -11,6 +12,7 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 
 import java.util.List;
 import java.util.UUID;
@@ -61,6 +63,8 @@ public class ProductAnalyticsClient {
                     .header("X-Internal-Auth", internalAuth)
                     .retrieve()
                     .body(type);
+        } catch (RestClientResponseException ex) {
+            throw new DownstreamHttpException(ex.getStatusCode(), "Product analytics HTTP error: " + ex.getStatusCode().value(), ex);
         } catch (RestClientException ex) {
             throw new ServiceUnavailableException("Product analytics service unavailable", ex);
         }
@@ -74,6 +78,8 @@ public class ProductAnalyticsClient {
                     .retrieve()
                     .body(type);
             return result == null ? List.of() : result;
+        } catch (RestClientResponseException ex) {
+            throw new DownstreamHttpException(ex.getStatusCode(), "Product analytics HTTP error: " + ex.getStatusCode().value(), ex);
         } catch (RestClientException ex) {
             throw new ServiceUnavailableException("Product analytics service unavailable", ex);
         }

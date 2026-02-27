@@ -1,5 +1,6 @@
 package com.rumal.api_gateway.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
@@ -19,17 +20,22 @@ import reactor.core.publisher.Mono;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 @Component
 public class RequestBodySizeLimitFilter implements GlobalFilter, Ordered {
 
     private final long maxBodyBytes;
+    private final ObjectMapper objectMapper;
 
     public RequestBodySizeLimitFilter(
-            @Value("${gateway.max-request-body-size:2MB}") DataSize maxBodySize
+            @Value("${gateway.max-request-body-size:2MB}") DataSize maxBodySize,
+            ObjectMapper objectMapper
     ) {
         this.maxBodyBytes = maxBodySize.toBytes();
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -77,23 +83,25 @@ public class RequestBodySizeLimitFilter implements GlobalFilter, Ordered {
 
     private Mono<Void> writePayloadTooLarge(ServerWebExchange exchange) {
         String requestId = exchange.getRequest().getHeaders().getFirst(RequestIdFilter.REQUEST_ID_HEADER);
-        String body = "{\"timestamp\":\"" + Instant.now() + "\"," +
-                "\"path\":\"" + escapeJson(exchange.getRequest().getPath().value()) + "\"," +
-                "\"status\":413," +
-                "\"error\":\"Payload Too Large\"," +
-                "\"message\":\"Request body exceeds the maximum allowed size\"," +
-                "\"requestId\":\"" + escapeJson(requestId) + "\"}";
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("timestamp", Instant.now().toString());
+        body.put("path", exchange.getRequest().getPath().value());
+        body.put("status", 413);
+        body.put("error", "Payload Too Large");
+        body.put("message", "Request body exceeds the maximum allowed size");
+        body.put("requestId", requestId != null ? requestId : "");
+
+        byte[] bytes;
+        try {
+            bytes = objectMapper.writeValueAsBytes(body);
+        } catch (Exception e) {
+            bytes = "{\"status\":413,\"error\":\"Payload Too Large\"}".getBytes(StandardCharsets.UTF_8);
+        }
+
         exchange.getResponse().setStatusCode(HttpStatus.CONTENT_TOO_LARGE);
         exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
-        DataBuffer dataBuffer = exchange.getResponse().bufferFactory()
-                .wrap(body.getBytes(StandardCharsets.UTF_8));
+        DataBuffer dataBuffer = exchange.getResponse().bufferFactory().wrap(bytes);
         return exchange.getResponse().writeWith(Mono.just(dataBuffer));
-    }
-
-    private static String escapeJson(String value) {
-        if (value == null) return "";
-        return value.replace("\\", "\\\\").replace("\"", "\\\"")
-                .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
     }
 
     @Override

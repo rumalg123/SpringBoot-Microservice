@@ -42,7 +42,7 @@ public class CouponReservationService {
     @Value("${coupon.reservation.max-ttl-seconds:1800}")
     private int maxReservationTtlSeconds;
 
-    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 20)
+    @Transactional(readOnly = false, isolation = Isolation.SERIALIZABLE, timeout = 20)
     public CouponReservationResponse reserve(CreateCouponReservationRequest request) {
         validateReservationRequest(request);
 
@@ -59,13 +59,17 @@ public class CouponReservationService {
         }
 
         Instant now = Instant.now();
-        PromotionQuoteResponse quote = promotionQuoteService.quote(request.quoteRequest());
+
+        // Acquire pessimistic lock on coupon row before quote and validation
+        // to serialize concurrent reservation attempts for the same coupon code
         CouponValidationService.CouponEligibility eligibility = couponValidationService
                 .findEligibleCouponForReservation(request.couponCode(), request.customerId(), now)
                 .orElseThrow(() -> new ValidationException("Coupon code not found"));
         if (!eligibility.eligible()) {
             throw new ValidationException(eligibility.reason());
         }
+
+        PromotionQuoteResponse quote = promotionQuoteService.quote(request.quoteRequest());
 
         CouponCode couponCode = eligibility.couponCode();
         UUID couponPromotionId = eligibility.promotionId();
@@ -122,6 +126,7 @@ public class CouponReservationService {
         }
 
         incrementPromotionBurnedBudgetIfApplicable(reservation.getPromotionId(), reservation.getReservedDiscountAmount());
+        incrementFlashSaleRedemptionIfApplicable(reservation.getPromotionId());
         reservation.setStatus(CouponReservationStatus.COMMITTED);
         reservation.setOrderId(request.orderId());
         reservation.setCommittedAt(Instant.now());
@@ -245,6 +250,21 @@ public class CouponReservationService {
         }
         promotion.setBurnedBudgetAmount(newBurned);
         promotionCampaignRepository.save(promotion);
+    }
+
+    private void incrementFlashSaleRedemptionIfApplicable(UUID promotionId) {
+        if (promotionId == null) {
+            return;
+        }
+        var promotion = promotionCampaignRepository.findByIdForUpdate(promotionId)
+                .orElse(null);
+        if (promotion == null || !promotion.isFlashSale() || promotion.getFlashSaleMaxRedemptions() == null) {
+            return;
+        }
+        int updated = promotionCampaignRepository.incrementFlashSaleRedemptionCount(promotionId);
+        if (updated == 0) {
+            throw new ValidationException("Flash sale redemption limit reached");
+        }
     }
 
     private void decrementPromotionBurnedBudgetIfApplicable(UUID promotionId, BigDecimal amount) {

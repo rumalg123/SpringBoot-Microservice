@@ -22,6 +22,9 @@ public class OutboxEvent {
     @GeneratedValue
     private UUID id;
 
+    @Version
+    private Long version;
+
     @Column(name = "aggregate_type", nullable = false, length = 60)
     private String aggregateType;
 

@@ -76,14 +76,14 @@ public class PosterController {
     @PostMapping("/{id}/click")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void recordClick(@PathVariable UUID id, HttpServletRequest request) {
-        if (!rateLimiter.isAllowed(request.getRemoteAddr(), id)) return;
+        if (!rateLimiter.isAllowed(request, id)) return;
         posterService.recordClick(id);
     }
 
     @PostMapping("/{id}/impression")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void recordImpression(@PathVariable UUID id, HttpServletRequest request) {
-        if (!rateLimiter.isAllowed(request.getRemoteAddr(), id)) return;
+        if (!rateLimiter.isAllowed(request, id)) return;
         posterService.recordImpression(id);
     }
 
@@ -94,7 +94,18 @@ public class PosterController {
             @PathVariable UUID variantId,
             HttpServletRequest request
     ) {
-        if (!rateLimiter.isAllowed(request.getRemoteAddr(), posterId)) return;
+        if (!rateLimiter.isAllowed(request, posterId)) return;
         posterService.recordVariantClick(posterId, variantId);
+    }
+
+    @PostMapping("/{posterId}/variants/{variantId}/impression")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void recordVariantImpression(
+            @PathVariable UUID posterId,
+            @PathVariable UUID variantId,
+            HttpServletRequest request
+    ) {
+        if (!rateLimiter.isAllowed(request, posterId)) return;
+        posterService.recordVariantImpression(posterId, variantId);
     }
 }

@@ -42,4 +42,17 @@ public interface StockReservationRepository extends JpaRepository<StockReservati
             @Param("orderId") UUID orderId,
             Pageable pageable
     );
+
+    @Query("""
+            select r from StockReservation r join fetch r.stockItem si
+            where si.vendorId = :vendorId
+              and (:status is null or r.status = :status)
+              and (:orderId is null or r.orderId = :orderId)
+            """)
+    Page<StockReservation> findFilteredByVendor(
+            @Param("vendorId") UUID vendorId,
+            @Param("status") ReservationStatus status,
+            @Param("orderId") UUID orderId,
+            Pageable pageable
+    );
 }

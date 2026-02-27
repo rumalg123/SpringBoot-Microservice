@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -116,9 +117,19 @@ public class AdminBankAccountController {
         requireUserSub(userSub);
         VendorBankAccount account = bankAccountRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Bank account not found: " + id));
-        bankAccountRepository.unsetPrimaryForVendor(account.getVendorId());
-        account.setPrimary(true);
-        return toResponse(bankAccountRepository.save(account));
+
+        // Lock ALL active accounts for this vendor to prevent concurrent setPrimary
+        List<VendorBankAccount> allAccounts = bankAccountRepository
+                .findByVendorIdAndActiveTrueForUpdate(account.getVendorId());
+        for (VendorBankAccount a : allAccounts) {
+            a.setPrimary(a.getId().equals(id));
+        }
+        bankAccountRepository.saveAll(allAccounts);
+
+        // Re-read to return fresh state
+        account = bankAccountRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Bank account not found: " + id));
+        return toResponse(account);
     }
 
     private String requireUserSub(String userSub) {

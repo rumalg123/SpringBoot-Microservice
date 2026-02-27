@@ -496,7 +496,7 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 30)
-    public BulkOperationResult bulkDelete(BulkDeleteRequest request) {
+    public BulkOperationResult bulkDelete(BulkDeleteRequest request, Set<UUID> allowedVendorIds) {
         List<UUID> ids = request.productIds();
         int success = 0;
         List<String> errors = new ArrayList<>();
@@ -507,6 +507,10 @@ public class ProductServiceImpl implements ProductService {
                         .orElse(null);
                 if (product == null) {
                     errors.add("Product not found or already deleted: " + id);
+                    continue;
+                }
+                if (allowedVendorIds != null && !allowedVendorIds.contains(product.getVendorId())) {
+                    errors.add("Access denied for product: " + id);
                     continue;
                 }
                 product.setDeleted(true);
@@ -530,7 +534,7 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 30)
-    public BulkOperationResult bulkPriceUpdate(BulkPriceUpdateRequest request) {
+    public BulkOperationResult bulkPriceUpdate(BulkPriceUpdateRequest request, Set<UUID> allowedVendorIds) {
         List<BulkPriceUpdateRequest.PriceUpdateItem> items = request.items();
         int success = 0;
         List<String> errors = new ArrayList<>();
@@ -541,6 +545,10 @@ public class ProductServiceImpl implements ProductService {
                         .orElse(null);
                 if (product == null) {
                     errors.add("Product not found: " + item.productId());
+                    continue;
+                }
+                if (allowedVendorIds != null && !allowedVendorIds.contains(product.getVendorId())) {
+                    errors.add("Access denied for product: " + item.productId());
                     continue;
                 }
                 if (item.discountedPrice() != null && item.discountedPrice().compareTo(BigDecimal.ZERO) <= 0) {
@@ -568,7 +576,7 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 30)
-    public BulkOperationResult bulkCategoryReassign(BulkCategoryReassignRequest request) {
+    public BulkOperationResult bulkCategoryReassign(BulkCategoryReassignRequest request, Set<UUID> allowedVendorIds) {
         List<UUID> ids = request.productIds();
         UUID targetCategoryId = request.targetCategoryId();
         Category targetCategory = categoryRepository.findById(targetCategoryId)
@@ -587,6 +595,10 @@ public class ProductServiceImpl implements ProductService {
                         .orElse(null);
                 if (product == null) {
                     errors.add("Product not found: " + id);
+                    continue;
+                }
+                if (allowedVendorIds != null && !allowedVendorIds.contains(product.getVendorId())) {
+                    errors.add("Access denied for product: " + id);
                     continue;
                 }
                 Set<Category> updatedCategories = new java.util.LinkedHashSet<>(product.getCategories());

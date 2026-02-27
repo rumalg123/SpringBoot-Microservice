@@ -118,6 +118,7 @@ resilience4j:
           - java.io.IOException
           - org.springframework.web.client.ResourceAccessException
           - org.springframework.web.client.HttpServerErrorException
+          - com.rumal.order_service.exception.ServiceUnavailableException
       productService:
         maxAttempts: 3
         waitDuration: 300ms
@@ -127,6 +128,7 @@ resilience4j:
           - java.io.IOException
           - org.springframework.web.client.ResourceAccessException
           - org.springframework.web.client.HttpServerErrorException
+          - com.rumal.order_service.exception.ServiceUnavailableException
       vendorService:
         maxAttempts: 3
         waitDuration: 300ms
@@ -136,6 +138,7 @@ resilience4j:
           - java.io.IOException
           - org.springframework.web.client.ResourceAccessException
           - org.springframework.web.client.HttpServerErrorException
+          - com.rumal.order_service.exception.ServiceUnavailableException
       promotionService:
         maxAttempts: 3
         waitDuration: 300ms

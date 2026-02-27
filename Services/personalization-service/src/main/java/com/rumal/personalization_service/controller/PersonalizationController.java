@@ -54,7 +54,7 @@ public class PersonalizationController {
     }
 
     @GetMapping("/trending")
-    public List<ProductSummary> getTrending(@RequestParam(defaultValue = "20") int limit) {
+    public List<ProductSummary> getTrending(@RequestParam(defaultValue = "20") @Max(100) int limit) {
         return trendingService.getTrending(limit);
     }
 

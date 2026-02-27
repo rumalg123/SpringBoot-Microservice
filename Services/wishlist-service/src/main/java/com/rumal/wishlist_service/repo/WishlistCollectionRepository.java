@@ -13,7 +13,7 @@ public interface WishlistCollectionRepository extends JpaRepository<WishlistColl
 
     Optional<WishlistCollection> findByIdAndKeycloakId(UUID id, String keycloakId);
 
-    Optional<WishlistCollection> findByKeycloakIdAndIsDefaultTrue(String keycloakId);
+    List<WishlistCollection> findByKeycloakIdAndIsDefaultTrueOrderByCreatedAtAsc(String keycloakId);
 
     Optional<WishlistCollection> findByShareToken(String shareToken);
 

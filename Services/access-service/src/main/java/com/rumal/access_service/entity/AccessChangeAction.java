@@ -4,6 +4,7 @@ public enum AccessChangeAction {
     CREATED,
     UPDATED,
     SOFT_DELETED,
-    RESTORED
+    RESTORED,
+    EXPIRED
 }
 

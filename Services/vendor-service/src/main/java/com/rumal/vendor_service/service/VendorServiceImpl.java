@@ -24,9 +24,11 @@ import com.rumal.vendor_service.entity.VendorLifecycleAudit;
 import com.rumal.vendor_service.entity.VendorPayoutConfig;
 import com.rumal.vendor_service.entity.VendorStatus;
 import com.rumal.vendor_service.entity.VendorUser;
+import com.rumal.vendor_service.entity.VendorUserRole;
 import com.rumal.vendor_service.entity.VerificationStatus;
 import com.rumal.vendor_service.exception.ResourceNotFoundException;
 import com.rumal.vendor_service.exception.ServiceUnavailableException;
+import com.rumal.vendor_service.exception.UnauthorizedException;
 import com.rumal.vendor_service.exception.ValidationException;
 import com.rumal.vendor_service.repo.VendorLifecycleAuditRepository;
 import com.rumal.vendor_service.repo.VendorPayoutConfigRepository;
@@ -799,6 +801,33 @@ public class VendorServiceImpl implements VendorService {
                 .getVendor();
     }
 
+    private Vendor resolveVendorOwner(String keycloakUserId, UUID vendorIdHint) {
+        String normalized = normalizeRequired(keycloakUserId, "keycloakUserId", 120);
+        List<VendorUser> memberships = vendorUserRepository
+                .findAccessibleMembershipsByKeycloakUser(normalized);
+        if (memberships.isEmpty()) {
+            throw new ResourceNotFoundException("No active vendor membership found for user");
+        }
+
+        VendorUser membership;
+        if (memberships.size() == 1) {
+            membership = memberships.get(0);
+        } else {
+            if (vendorIdHint == null) {
+                throw new ValidationException("Multiple vendor memberships found. Specify vendorId query parameter.");
+            }
+            membership = memberships.stream()
+                    .filter(m -> vendorIdHint.equals(m.getVendor().getId()))
+                    .findFirst()
+                    .orElseThrow(() -> new ResourceNotFoundException("No active vendor membership found for vendorId: " + vendorIdHint));
+        }
+
+        if (membership.getRole() != VendorUserRole.OWNER) {
+            throw new UnauthorizedException("Only vendor owners can perform this operation");
+        }
+        return membership.getVendor();
+    }
+
     @Override
     public VendorResponse getVendorForKeycloakUser(String keycloakUserId, UUID vendorIdHint) {
         return toVendorResponse(resolveVendorForKeycloakUser(keycloakUserId, vendorIdHint));
@@ -854,7 +883,7 @@ public class VendorServiceImpl implements VendorService {
 
     @Override
     public VendorPayoutConfigResponse getPayoutConfig(String keycloakUserId, UUID vendorIdHint) {
-        Vendor vendor = resolveVendorForKeycloakUser(keycloakUserId, vendorIdHint);
+        Vendor vendor = resolveVendorOwner(keycloakUserId, vendorIdHint);
         VendorPayoutConfig config = vendorPayoutConfigRepository.findByVendorId(vendor.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Payout config not found for vendor: " + vendor.getId()));
         return toPayoutConfigResponse(config);
@@ -863,7 +892,7 @@ public class VendorServiceImpl implements VendorService {
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public VendorPayoutConfigResponse upsertPayoutConfig(String keycloakUserId, UUID vendorIdHint, UpsertVendorPayoutConfigRequest request) {
-        Vendor vendor = resolveVendorForKeycloakUser(keycloakUserId, vendorIdHint);
+        Vendor vendor = resolveVendorOwner(keycloakUserId, vendorIdHint);
         VendorPayoutConfig config = vendorPayoutConfigRepository.findByVendorId(vendor.getId())
                 .orElseGet(() -> {
                     VendorPayoutConfig c = new VendorPayoutConfig();
@@ -967,6 +996,7 @@ public class VendorServiceImpl implements VendorService {
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    @CacheEvict(cacheNames = "vendorOperationalState", key = "#vendorId")
     public VendorResponse approveVerification(UUID vendorId, AdminVerificationActionRequest request, String actorSub, String actorRoles) {
         Vendor vendor = getNonDeletedVendor(vendorId);
         if (vendor.getVerificationStatus() != VerificationStatus.PENDING_VERIFICATION) {
@@ -986,6 +1016,7 @@ public class VendorServiceImpl implements VendorService {
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    @CacheEvict(cacheNames = "vendorOperationalState", key = "#vendorId")
     public VendorResponse rejectVerification(UUID vendorId, AdminVerificationActionRequest request, String actorSub, String actorRoles) {
         Vendor vendor = getNonDeletedVendor(vendorId);
         if (vendor.getVerificationStatus() != VerificationStatus.PENDING_VERIFICATION) {

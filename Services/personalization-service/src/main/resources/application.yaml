@@ -44,6 +44,8 @@ personalization:
     affinity-cron: ${PERSONALIZATION_AFFINITY_CRON:0 0 * * * *}
     trending-cron: ${PERSONALIZATION_TRENDING_CRON:0 */30 * * * *}
     cleanup-cron: ${PERSONALIZATION_CLEANUP_CRON:0 0 3 * * *}
+    co-purchase-max-events: ${PERSONALIZATION_CO_PURCHASE_MAX_EVENTS:500000}
+    affinity-max-aggregates: ${PERSONALIZATION_AFFINITY_MAX_AGGREGATES:500000}
 
 cache:
   clear-on-startup: ${CACHE_CLEAR_ON_STARTUP:true}

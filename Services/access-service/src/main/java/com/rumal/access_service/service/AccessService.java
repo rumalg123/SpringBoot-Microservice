@@ -51,15 +51,19 @@ public interface AccessService {
     Page<VendorStaffAccessResponse> listVendorStaff(UUID vendorId, Pageable pageable);
     Page<VendorStaffAccessResponse> listAllVendorStaff(Pageable pageable);
     Page<VendorStaffAccessResponse> listDeletedVendorStaff(Pageable pageable);
+    Page<VendorStaffAccessResponse> listDeletedVendorStaff(UUID vendorId, Pageable pageable);
     VendorStaffAccessResponse getVendorStaffById(UUID id);
+    VendorStaffAccessResponse getVendorStaffById(UUID id, UUID callerVendorId);
     VendorStaffAccessResponse createVendorStaff(UpsertVendorStaffAccessRequest request);
     VendorStaffAccessResponse createVendorStaff(UpsertVendorStaffAccessRequest request, String actorSub, String actorRoles, String reason);
     VendorStaffAccessResponse updateVendorStaff(UUID id, UpsertVendorStaffAccessRequest request);
     VendorStaffAccessResponse updateVendorStaff(UUID id, UpsertVendorStaffAccessRequest request, String actorSub, String actorRoles, String reason);
     void softDeleteVendorStaff(UUID id);
     void softDeleteVendorStaff(UUID id, String actorSub, String actorRoles, String reason);
+    void softDeleteVendorStaff(UUID id, String actorSub, String actorRoles, String reason, UUID callerVendorId);
     VendorStaffAccessResponse restoreVendorStaff(UUID id);
     VendorStaffAccessResponse restoreVendorStaff(UUID id, String actorSub, String actorRoles, String reason);
+    VendorStaffAccessResponse restoreVendorStaff(UUID id, String actorSub, String actorRoles, String reason, UUID callerVendorId);
     List<VendorStaffAccessLookupResponse> listVendorStaffAccessByKeycloakUser(String keycloakUserId);
 
     // Permission groups
@@ -80,6 +84,4 @@ public interface AccessService {
     Page<ApiKeyResponse> listApiKeys(String keycloakId, Pageable pageable);
     void deleteApiKey(UUID id);
 
-    // Expiry processing
-    int deactivateExpiredAccess();
 }

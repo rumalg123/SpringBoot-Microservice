@@ -5,6 +5,7 @@ import com.rumal.admin_service.client.AccessClient;
 import com.rumal.admin_service.client.VendorClient;
 import com.rumal.admin_service.dto.VendorAdminOnboardRequest;
 import com.rumal.admin_service.dto.VendorAdminOnboardResponse;
+import com.rumal.admin_service.exception.DownstreamHttpException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -220,7 +221,22 @@ public class AdminVendorService {
                 .orElse(null);
 
         if (existing == null) {
-            return vendorClient.addVendorUser(vendorId, membershipRequest, internalAuth);
+            try {
+                return vendorClient.addVendorUser(vendorId, membershipRequest, internalAuth);
+            } catch (DownstreamHttpException ex) {
+                if (ex.getStatusCode().value() == 409) {
+                    memberships = vendorClient.listVendorUsers(vendorId, internalAuth);
+                    existing = memberships.stream()
+                            .filter(m -> keycloakUserId.equalsIgnoreCase(stringValue(m.get("keycloakUserId"))))
+                            .findFirst()
+                            .orElse(null);
+                    if (existing != null) {
+                        UUID membershipId = parseUuid(existing.get("id"), "vendor membership id");
+                        return vendorClient.updateVendorUser(vendorId, membershipId, membershipRequest, internalAuth);
+                    }
+                }
+                throw ex;
+            }
         }
 
         UUID membershipId = parseUuid(existing.get("id"), "vendor membership id");

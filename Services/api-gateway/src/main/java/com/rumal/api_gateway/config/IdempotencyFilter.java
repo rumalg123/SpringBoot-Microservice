@@ -27,6 +27,9 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -40,6 +43,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 
@@ -47,7 +51,9 @@ import java.util.regex.Pattern;
 @NullMarked
 public class IdempotencyFilter implements GlobalFilter, Ordered {
 
+    private static final Logger log = LoggerFactory.getLogger(IdempotencyFilter.class);
     private static final Pattern IDEM_KEY_PATTERN = Pattern.compile("^[a-zA-Z0-9\\-_]{1,128}$");
+    private static final long MAX_CACHEABLE_RESPONSE_SIZE = 512 * 1024;
 
     private static final Set<String> EXCLUDED_RESPONSE_HEADERS = Set.of(
             HttpHeaders.CONTENT_LENGTH.toLowerCase(),
@@ -93,6 +99,14 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         if (!enabled || !isMutatingRequest(exchange) || shouldSkipBodyBuffering(exchange)) {
+            if (shouldSkipBodyBuffering(exchange) && isMutatingRequest(exchange)) {
+                String idempotencyKey = exchange.getRequest().getHeaders().getFirst(keyHeaderName);
+                if (StringUtils.hasText(idempotencyKey)) {
+                    log.debug("Idempotency skipped for binary/multipart request path={} key={}",
+                            exchange.getRequest().getPath().value(), idempotencyKey);
+                    exchange.getResponse().getHeaders().set("X-Idempotency-Status", "SKIPPED");
+                }
+            }
             return chain.filter(exchange);
         }
 
@@ -205,6 +219,7 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
         ByteArrayOutputStream responseBodyCapture = new ByteArrayOutputStream();
         AtomicReference<@Nullable HttpStatusCode> responseStatusRef = new AtomicReference<>();
         AtomicReference<HttpHeaders> responseHeadersRef = new AtomicReference<>(new HttpHeaders());
+        AtomicBoolean responseTooLarge = new AtomicBoolean(false);
 
         ServerHttpResponseDecorator decoratedResponse = new ServerHttpResponseDecorator(exchange.getResponse()) {
 
@@ -226,7 +241,11 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
                             byte[] bytes = new byte[dataBuffer.readableByteCount()];
                             dataBuffer.read(bytes);
                             DataBufferUtils.release(dataBuffer);
-                            responseBodyCapture.writeBytes(bytes);
+                            if (responseBodyCapture.size() + bytes.length <= MAX_CACHEABLE_RESPONSE_SIZE) {
+                                responseBodyCapture.writeBytes(bytes);
+                            } else {
+                                responseTooLarge.set(true);
+                            }
                             return bufferFactory().wrap(bytes);
                         });
                 return super.writeWith(bodyFlux);
@@ -252,13 +271,18 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
 
         return chain.filter(decoratedExchange)
                 .onErrorResume(error -> redisTemplate.delete(redisKey).then(Mono.error(error)))
-                .then(Mono.defer(() -> persistCompletedEntry(
-                        redisKey,
-                        requestHash,
-                        responseStatusRef.get(),
-                        responseHeadersRef.get(),
-                        responseBodyCapture.toByteArray()
-                )).onErrorResume(error -> redisTemplate.delete(redisKey).then()));
+                .then(Mono.defer(() -> {
+                    if (responseTooLarge.get()) {
+                        return redisTemplate.delete(redisKey).then();
+                    }
+                    return persistCompletedEntry(
+                            redisKey,
+                            requestHash,
+                            responseStatusRef.get(),
+                            responseHeadersRef.get(),
+                            responseBodyCapture.toByteArray()
+                    );
+                }).onErrorResume(error -> redisTemplate.delete(redisKey).then()));
     }
 
     private Mono<Void> persistCompletedEntry(
@@ -321,17 +345,25 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
 
     private Mono<Void> writeJsonError(ServerWebExchange exchange, HttpStatus status, String message, String idempotencyStatus) {
         String requestId = exchange.getRequest().getHeaders().getFirst(RequestIdFilter.REQUEST_ID_HEADER);
-        String body = "{\"timestamp\":\"" + Instant.now() + "\"," +
-                "\"path\":\"" + escapeJson(exchange.getRequest().getPath().value()) + "\"," +
-                "\"status\":" + status.value() + "," +
-                "\"error\":\"" + status.getReasonPhrase() + "\"," +
-                "\"message\":\"" + escapeJson(message) + "\"," +
-                "\"requestId\":\"" + escapeJson(requestId == null ? "" : requestId) + "\"}";
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("timestamp", Instant.now().toString());
+        body.put("path", exchange.getRequest().getPath().value());
+        body.put("status", status.value());
+        body.put("error", status.getReasonPhrase());
+        body.put("message", message);
+        body.put("requestId", requestId != null ? requestId : "");
+
+        byte[] bytes;
+        try {
+            bytes = objectMapper.writeValueAsBytes(body);
+        } catch (Exception e) {
+            bytes = ("{\"status\":" + status.value() + ",\"error\":\"" + status.getReasonPhrase() + "\"}").getBytes(StandardCharsets.UTF_8);
+        }
+
         exchange.getResponse().setStatusCode(status);
         exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
         exchange.getResponse().getHeaders().set("X-Idempotency-Status", idempotencyStatus);
-        DataBuffer dataBuffer = exchange.getResponse().bufferFactory()
-                .wrap(body.getBytes(StandardCharsets.UTF_8));
+        DataBuffer dataBuffer = exchange.getResponse().bufferFactory().wrap(bytes);
         return exchange.getResponse().writeWith(Mono.just(dataBuffer));
     }
 
@@ -489,17 +521,6 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
         } catch (IllegalArgumentException e) {
             return new byte[0];
         }
-    }
-
-    private String escapeJson(@Nullable String value) {
-        if (value == null) {
-            return "";
-        }
-        return value
-                .replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r");
     }
 
     @Override

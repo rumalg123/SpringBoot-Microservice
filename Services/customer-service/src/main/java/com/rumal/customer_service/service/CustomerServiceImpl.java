@@ -26,6 +26,7 @@ import com.rumal.customer_service.repo.CustomerActivityLogRepository;
 import com.rumal.customer_service.repo.CustomerAddressRepository;
 import com.rumal.customer_service.repo.CustomerRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
@@ -114,14 +115,18 @@ public class CustomerServiceImpl implements CustomerService {
         final String resolvedKeycloakId = keycloakId;
 
         return transactionTemplate.execute(status -> {
-            Customer saved = customerRepository.save(
-                    Customer.builder()
-                            .name(request.name().trim())
-                            .email(email)
-                            .keycloakId(resolvedKeycloakId)
-                            .build()
-            );
-            return toResponse(saved);
+            try {
+                Customer saved = customerRepository.save(
+                        Customer.builder()
+                                .name(request.name().trim())
+                                .email(email)
+                                .keycloakId(resolvedKeycloakId)
+                                .build()
+                );
+                return toResponse(saved);
+            } catch (DataIntegrityViolationException ex) {
+                throw new DuplicateResourceException("Customer already exists with email: " + email);
+            }
         });
     }
 
@@ -162,15 +167,22 @@ public class CustomerServiceImpl implements CustomerService {
                 ? resolvedName.trim()
                 : normalizedEmail;
 
-        Customer saved = customerRepository.save(
-                Customer.builder()
-                        .name(name)
-                        .email(normalizedEmail)
-                        .keycloakId(normalizedKeycloakId)
-                        .build()
-        );
-
-        return toResponse(saved);
+        try {
+            Customer saved = customerRepository.save(
+                    Customer.builder()
+                            .name(name)
+                            .email(normalizedEmail)
+                            .keycloakId(normalizedKeycloakId)
+                            .build()
+            );
+            return toResponse(saved);
+        } catch (DataIntegrityViolationException ex) {
+            Customer existingRetry = customerRepository.findByKeycloakId(normalizedKeycloakId).orElse(null);
+            if (existingRetry != null) {
+                return toResponse(existingRetry);
+            }
+            throw new DuplicateResourceException("Customer already exists with email: " + normalizedEmail);
+        }
     }
 
     @Override
@@ -186,11 +198,7 @@ public class CustomerServiceImpl implements CustomerService {
         String fullName = (firstName + " " + lastName).trim();
         String customerDbKeycloakId = customer.getKeycloakId();
 
-        if (StringUtils.hasText(customerDbKeycloakId)) {
-            keycloakManagementService.updateUserNames(customerDbKeycloakId, firstName, lastName);
-        }
-
-        return transactionTemplate.execute(status -> {
+        CustomerResponse result = transactionTemplate.execute(status -> {
             Customer managed = customerRepository.findByKeycloakId(normalizedKeycloakId)
                     .orElseThrow(() -> new ResourceNotFoundException("Customer not found for keycloak id"));
             managed.setName(fullName);
@@ -202,6 +210,12 @@ public class CustomerServiceImpl implements CustomerService {
             logActivity(saved.getId(), "PROFILE_UPDATE", "Profile updated", ipAddress);
             return toResponse(saved);
         });
+
+        if (StringUtils.hasText(customerDbKeycloakId)) {
+            keycloakManagementService.updateUserNames(customerDbKeycloakId, firstName, lastName);
+        }
+
+        return result;
     }
 
     @Override
@@ -217,9 +231,7 @@ public class CustomerServiceImpl implements CustomerService {
             return toResponse(customer);
         }
 
-        keycloakManagementService.setUserEnabled(normalizedKeycloakId, false);
-
-        return transactionTemplate.execute(status -> {
+        CustomerResponse result = transactionTemplate.execute(status -> {
             Customer managed = customerRepository.findByKeycloakId(normalizedKeycloakId)
                     .orElseThrow(() -> new ResourceNotFoundException("Customer not found for keycloak id"));
             managed.setActive(false);
@@ -227,6 +239,10 @@ public class CustomerServiceImpl implements CustomerService {
             Customer saved = customerRepository.save(managed);
             return toResponse(saved);
         });
+
+        keycloakManagementService.setUserEnabled(normalizedKeycloakId, false);
+
+        return result;
     }
 
     @Override
@@ -491,15 +507,23 @@ public class CustomerServiceImpl implements CustomerService {
 
     @Override
     @CachePut(cacheNames = "customerByKeycloak", key = "#result.keycloakId()")
-    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 20)
     public CustomerResponse addLoyaltyPoints(UUID customerId, int points) {
+        int updated = customerRepository.addLoyaltyPointsAtomically(customerId, points);
+        if (updated == 0) {
+            throw new ResourceNotFoundException("Customer not found: " + customerId);
+        }
+
         Customer customer = customerRepository.findById(customerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found: " + customerId));
 
-        customer.setLoyaltyPoints(customer.getLoyaltyPoints() + points);
-        customer.setLoyaltyTier(calculateTier(customer.getLoyaltyPoints()));
-        Customer saved = customerRepository.save(customer);
-        return toResponse(saved);
+        CustomerLoyaltyTier newTier = calculateTier(customer.getLoyaltyPoints());
+        if (customer.getLoyaltyTier() != newTier) {
+            customer.setLoyaltyTier(newTier);
+            customer = customerRepository.save(customer);
+        }
+
+        return toResponse(customer);
     }
 
     private CustomerLoyaltyTier calculateTier(long totalPoints) {
@@ -557,10 +581,15 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     private CommunicationPreferences getDefaultCommunicationPreferences(Customer customer) {
-        CommunicationPreferences prefs = CommunicationPreferences.builder()
-                .customer(customer)
-                .build();
-        return communicationPreferencesRepository.save(prefs);
+        try {
+            CommunicationPreferences prefs = CommunicationPreferences.builder()
+                    .customer(customer)
+                    .build();
+            return communicationPreferencesRepository.save(prefs);
+        } catch (DataIntegrityViolationException ex) {
+            return communicationPreferencesRepository.findByCustomerId(customer.getId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Communication preferences not found"));
+        }
     }
 
     private CommunicationPreferencesResponse toCommPrefsResponse(CommunicationPreferences prefs) {

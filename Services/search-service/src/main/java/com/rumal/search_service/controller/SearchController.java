@@ -37,6 +37,8 @@ public class SearchController {
         if (size > 50) size = 50;
         if (size < 1) size = 1;
         if (page < 0) page = 0;
+        int maxPage = (10_000 / size) - 1;
+        if (page > maxPage) page = maxPage;
 
         var request = new SearchRequest(q, category, mainCategory, subCategory,
                 brand, minPrice, maxPrice, vendorId, sortBy, page, size);

@@ -1,6 +1,7 @@
 package com.rumal.analytics_service.client;
 
 import com.rumal.analytics_service.client.dto.*;
+import com.rumal.analytics_service.exception.DownstreamHttpException;
 import com.rumal.analytics_service.exception.ServiceUnavailableException;
 import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.retry.RetryRegistry;
@@ -11,6 +12,7 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 
 import java.util.Map;
 import java.util.UUID;
@@ -57,6 +59,8 @@ public class ReviewAnalyticsClient {
                     .header("X-Internal-Auth", internalAuth)
                     .retrieve()
                     .body(type);
+        } catch (RestClientResponseException ex) {
+            throw new DownstreamHttpException(ex.getStatusCode(), "Review analytics HTTP error: " + ex.getStatusCode().value(), ex);
         } catch (RestClientException ex) {
             throw new ServiceUnavailableException("Review analytics service unavailable", ex);
         }
@@ -69,6 +73,8 @@ public class ReviewAnalyticsClient {
                     .header("X-Internal-Auth", internalAuth)
                     .retrieve()
                     .body(type);
+        } catch (RestClientResponseException ex) {
+            throw new DownstreamHttpException(ex.getStatusCode(), "Review analytics HTTP error: " + ex.getStatusCode().value(), ex);
         } catch (RestClientException ex) {
             throw new ServiceUnavailableException("Review analytics service unavailable", ex);
         }

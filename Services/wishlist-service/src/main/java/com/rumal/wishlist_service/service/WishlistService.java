@@ -5,6 +5,7 @@ import com.rumal.wishlist_service.client.ProductClient;
 import com.rumal.wishlist_service.dto.AddWishlistItemRequest;
 import com.rumal.wishlist_service.dto.CreateWishlistCollectionRequest;
 import com.rumal.wishlist_service.dto.ProductDetails;
+import com.rumal.wishlist_service.dto.SharedWishlistItemResponse;
 import com.rumal.wishlist_service.dto.SharedWishlistResponse;
 import com.rumal.wishlist_service.dto.UpdateItemNoteRequest;
 import com.rumal.wishlist_service.dto.UpdateWishlistCollectionRequest;
@@ -285,8 +286,8 @@ public class WishlistService {
         }
 
         List<WishlistItem> items = wishlistItemRepository.findByCollectionOrderByCreatedAtDesc(collection);
-        List<WishlistItemResponse> itemResponses = items.stream()
-                .map(this::toItemResponse)
+        List<SharedWishlistItemResponse> itemResponses = items.stream()
+                .map(this::toSharedItemResponse)
                 .toList();
 
         return new SharedWishlistResponse(
@@ -351,22 +352,27 @@ public class WishlistService {
     }
 
     private WishlistCollection getOrCreateDefaultCollection(String keycloakId) {
-        return wishlistCollectionRepository.findByKeycloakIdAndIsDefaultTrue(keycloakId)
-                .orElseGet(() -> {
-                    try {
-                        WishlistCollection defaultCollection = WishlistCollection.builder()
-                                .keycloakId(keycloakId)
-                                .name("My Wishlist")
-                                .isDefault(true)
-                                .build();
-                        return wishlistCollectionRepository.save(defaultCollection);
-                    } catch (org.springframework.dao.DataIntegrityViolationException e) {
-                        // Concurrent creation race — re-fetch the one that won
-                        return wishlistCollectionRepository.findByKeycloakIdAndIsDefaultTrue(keycloakId)
-                                .orElseThrow(() -> new IllegalStateException(
-                                        "Default collection not found after concurrent creation", e));
-                    }
-                });
+        List<WishlistCollection> defaults = wishlistCollectionRepository
+                .findByKeycloakIdAndIsDefaultTrueOrderByCreatedAtAsc(keycloakId);
+        if (!defaults.isEmpty()) {
+            return defaults.getFirst();
+        }
+        try {
+            WishlistCollection defaultCollection = WishlistCollection.builder()
+                    .keycloakId(keycloakId)
+                    .name("My Wishlist")
+                    .isDefault(true)
+                    .build();
+            return wishlistCollectionRepository.save(defaultCollection);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            // Concurrent creation race — re-fetch the one that won
+            List<WishlistCollection> retryDefaults = wishlistCollectionRepository
+                    .findByKeycloakIdAndIsDefaultTrueOrderByCreatedAtAsc(keycloakId);
+            if (!retryDefaults.isEmpty()) {
+                return retryDefaults.getFirst();
+            }
+            throw new IllegalStateException("Default collection not found after concurrent creation", e);
+        }
     }
 
     private ProductDetails resolveWishlistProduct(UUID productId) {
@@ -432,6 +438,18 @@ public class WishlistService {
                 item.getNote(),
                 item.getCreatedAt(),
                 item.getUpdatedAt()
+        );
+    }
+
+    private SharedWishlistItemResponse toSharedItemResponse(WishlistItem item) {
+        return new SharedWishlistItemResponse(
+                item.getProductId(),
+                item.getProductSlug(),
+                item.getProductName(),
+                item.getProductType(),
+                item.getMainImage(),
+                normalizeMoney(item.getSellingPriceSnapshot()),
+                item.getCreatedAt()
         );
     }
 

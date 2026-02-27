@@ -2,6 +2,8 @@ package com.rumal.analytics_service.security;
 
 import com.rumal.analytics_service.exception.UnauthorizedException;
 import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -16,13 +18,18 @@ import java.util.HexFormat;
 @Component
 public class InternalRequestVerifier {
 
+    private static final Logger log = LoggerFactory.getLogger(InternalRequestVerifier.class);
     private static final String HMAC_ALGO = "HmacSHA256";
     private static final long MAX_TIMESTAMP_DRIFT_MS = 60_000;
 
     private final String sharedSecret;
+    private final boolean hmacRequired;
 
-    public InternalRequestVerifier(@Value("${internal.auth.shared-secret:}") String sharedSecret) {
+    public InternalRequestVerifier(
+            @Value("${internal.auth.shared-secret:}") String sharedSecret,
+            @Value("${internal.auth.hmac-required:false}") boolean hmacRequired) {
         this.sharedSecret = sharedSecret;
+        this.hmacRequired = hmacRequired;
     }
 
     public void verify(String headerValue) {
@@ -44,7 +51,12 @@ public class InternalRequestVerifier {
         String signature = request.getHeader("X-Internal-Signature");
         String timestampStr = request.getHeader("X-Internal-Timestamp");
         if (signature == null || timestampStr == null) {
-            return; // HMAC not yet deployed by caller — graceful
+            if (hmacRequired) {
+                throw new UnauthorizedException("HMAC signature headers are required but missing");
+            }
+            log.warn("HMAC headers missing for {} {} — falling back to shared-secret-only auth",
+                    request.getMethod(), request.getRequestURI());
+            return;
         }
         long timestamp;
         try {

@@ -17,6 +17,10 @@ public interface ReviewRepository extends JpaRepository<Review, UUID>, JpaSpecif
 
     boolean existsByCustomerIdAndProductIdAndDeletedFalse(UUID customerId, UUID productId);
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT r FROM Review r WHERE r.customerId = :customerId AND r.productId = :productId AND r.deleted = false")
+    Optional<Review> findByCustomerIdAndProductIdForUpdate(@Param("customerId") UUID customerId, @Param("productId") UUID productId);
+
     @Query("SELECT r.rating AS rating, COUNT(r) AS cnt FROM Review r WHERE r.productId = :productId AND r.deleted = false AND r.active = true GROUP BY r.rating")
     List<Object[]> countByProductIdGroupByRating(@Param("productId") UUID productId);
 

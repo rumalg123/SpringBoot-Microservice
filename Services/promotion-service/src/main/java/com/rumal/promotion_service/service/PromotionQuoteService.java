@@ -51,7 +51,7 @@ public class PromotionQuoteService {
             throw new ValidationException("At least one line is required");
         }
 
-        Instant pricedAt = request.pricingAt() == null ? Instant.now() : request.pricingAt();
+        Instant pricedAt = Instant.now();
         BigDecimal shippingAmount = normalizeMoney(request.shippingAmount() == null ? BigDecimal.ZERO : request.shippingAmount());
 
         List<LineState> lineStates = new ArrayList<>(request.lines().size());
@@ -290,20 +290,47 @@ public class PromotionQuoteService {
             return PromotionApplicationResult.rejected("BUNDLE_DISCOUNT promotions must use CART application level");
         }
 
+        List<BigDecimal> beforeDiscounts = eligibleLines.stream()
+                .map(l -> normalizeMoney(l.lineDiscount()))
+                .toList();
+
         BigDecimal totalDiscount = BigDecimal.ZERO;
+        List<BigDecimal> appliedPerLine = new ArrayList<>(eligibleLines.size());
         for (LineState line : eligibleLines) {
             BigDecimal remaining = line.lineTotal();
             if (remaining.compareTo(BigDecimal.ZERO) <= 0) {
+                appliedPerLine.add(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
                 continue;
             }
             BigDecimal discount = calculateDiscountForAmount(promotion, remaining);
             if (discount.compareTo(BigDecimal.ZERO) <= 0) {
+                appliedPerLine.add(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
                 continue;
             }
-            line.applyLineDiscount(discount);
-            totalDiscount = totalDiscount.add(discount);
+            BigDecimal applied = line.applyLineDiscount(discount);
+            appliedPerLine.add(applied);
+            totalDiscount = totalDiscount.add(applied);
         }
-        totalDiscount = applyPromotionCap(promotion, normalizeMoney(totalDiscount));
+
+        BigDecimal uncapped = normalizeMoney(totalDiscount);
+        totalDiscount = applyPromotionCap(promotion, uncapped);
+
+        if (totalDiscount.compareTo(uncapped) < 0 && uncapped.compareTo(BigDecimal.ZERO) > 0) {
+            // Restore line states to pre-application snapshot
+            for (int i = 0; i < eligibleLines.size(); i++) {
+                eligibleLines.get(i).lineDiscount = beforeDiscounts.get(i);
+            }
+            // Re-apply with proportionally scaled-down discounts
+            BigDecimal scaleFactor = totalDiscount.divide(uncapped, 10, RoundingMode.HALF_UP);
+            BigDecimal reappliedTotal = BigDecimal.ZERO;
+            for (int i = 0; i < eligibleLines.size(); i++) {
+                BigDecimal scaled = normalizeMoney(appliedPerLine.get(i).multiply(scaleFactor));
+                BigDecimal reapplied = eligibleLines.get(i).applyLineDiscount(scaled);
+                reappliedTotal = reappliedTotal.add(reapplied);
+            }
+            totalDiscount = normalizeMoney(reappliedTotal);
+        }
+
         if (totalDiscount.compareTo(BigDecimal.ZERO) <= 0) {
             return PromotionApplicationResult.rejected("Promotion produced no discount");
         }
@@ -339,30 +366,56 @@ public class PromotionQuoteService {
                         .thenComparing(line -> line.request().vendorId(), Comparator.nullsLast(Comparator.naturalOrder())))
                 .toList();
 
+        List<BigDecimal> beforeDiscounts = cheapestFirst.stream()
+                .map(l -> normalizeMoney(l.lineDiscount()))
+                .toList();
+
         BigDecimal totalDiscount = BigDecimal.ZERO;
+        List<BigDecimal> appliedPerLine = new ArrayList<>(cheapestFirst.size());
         for (LineState line : cheapestFirst) {
             if (freeUnitsRemaining <= 0) {
-                break;
+                appliedPerLine.add(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+                continue;
             }
             if (line.request().quantity() <= 0 || line.lineTotal().compareTo(BigDecimal.ZERO) <= 0) {
+                appliedPerLine.add(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
                 continue;
             }
             int freeUnitsForLine = Math.min(freeUnitsRemaining, line.request().quantity());
             if (freeUnitsForLine <= 0) {
+                appliedPerLine.add(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
                 continue;
             }
             BigDecimal discount = bogoDiscountForUnits(line, freeUnitsForLine);
             if (discount.compareTo(BigDecimal.ZERO) <= 0) {
+                appliedPerLine.add(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
                 continue;
             }
             BigDecimal applied = line.applyLineDiscount(discount);
+            appliedPerLine.add(applied);
             if (applied.compareTo(BigDecimal.ZERO) > 0) {
                 totalDiscount = totalDiscount.add(applied);
                 freeUnitsRemaining -= freeUnitsForLine;
             }
         }
 
-        totalDiscount = applyPromotionCap(promotion, normalizeMoney(totalDiscount));
+        BigDecimal uncapped = normalizeMoney(totalDiscount);
+        totalDiscount = applyPromotionCap(promotion, uncapped);
+
+        if (totalDiscount.compareTo(uncapped) < 0 && uncapped.compareTo(BigDecimal.ZERO) > 0) {
+            for (int i = 0; i < cheapestFirst.size(); i++) {
+                cheapestFirst.get(i).lineDiscount = beforeDiscounts.get(i);
+            }
+            BigDecimal scaleFactor = totalDiscount.divide(uncapped, 10, RoundingMode.HALF_UP);
+            BigDecimal reappliedTotal = BigDecimal.ZERO;
+            for (int i = 0; i < cheapestFirst.size(); i++) {
+                BigDecimal scaled = normalizeMoney(appliedPerLine.get(i).multiply(scaleFactor));
+                BigDecimal reapplied = cheapestFirst.get(i).applyLineDiscount(scaled);
+                reappliedTotal = reappliedTotal.add(reapplied);
+            }
+            totalDiscount = normalizeMoney(reappliedTotal);
+        }
+
         if (totalDiscount.compareTo(BigDecimal.ZERO) <= 0) {
             return PromotionApplicationResult.rejected("BUY_X_GET_Y produced no discount");
         }
@@ -536,6 +589,12 @@ public class PromotionQuoteService {
         BigDecimal discount = switch (promotion.getBenefitType()) {
             case PERCENTAGE_OFF -> {
                 BigDecimal percent = promotion.getBenefitValue() == null ? BigDecimal.ZERO : promotion.getBenefitValue();
+                if (percent.compareTo(BigDecimal.ZERO) <= 0) {
+                    yield BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+                }
+                if (percent.compareTo(BigDecimal.valueOf(100)) > 0) {
+                    percent = BigDecimal.valueOf(100);
+                }
                 yield baseAmount.multiply(percent).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
             }
             case FIXED_AMOUNT_OFF -> promotion.getBenefitValue() == null ? BigDecimal.ZERO : promotion.getBenefitValue();

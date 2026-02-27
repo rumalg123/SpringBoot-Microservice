@@ -26,6 +26,7 @@ public class AdminAccessAuditController {
     @GetMapping
     public AccessChangeAuditPageResponse list(
             @RequestHeader(INTERNAL_HEADER) String internalAuth,
+            @RequestHeader(value = "X-Caller-Vendor-Id", required = false) UUID callerVendorId,
             @RequestParam(required = false) String targetType,
             @RequestParam(required = false) UUID targetId,
             @RequestParam(required = false) UUID vendorId,
@@ -38,6 +39,7 @@ public class AdminAccessAuditController {
             @RequestParam(required = false) Integer limit
     ) {
         internalRequestVerifier.verify(internalAuth);
-        return accessService.listAccessAudit(targetType, targetId, vendorId, action, actorQuery, from, to, page, size, limit);
+        UUID effectiveVendorId = callerVendorId != null ? callerVendorId : vendorId;
+        return accessService.listAccessAudit(targetType, targetId, effectiveVendorId, action, actorQuery, from, to, page, size, limit);
     }
 }

@@ -18,6 +18,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 public interface ProductService {
@@ -41,9 +42,9 @@ public interface ProductService {
     ProductResponse submitForReview(UUID productId);
     ProductResponse approveProduct(UUID productId);
     ProductResponse rejectProduct(UUID productId, String reason);
-    BulkOperationResult bulkDelete(BulkDeleteRequest request);
-    BulkOperationResult bulkPriceUpdate(BulkPriceUpdateRequest request);
-    BulkOperationResult bulkCategoryReassign(BulkCategoryReassignRequest request);
+    BulkOperationResult bulkDelete(BulkDeleteRequest request, Set<UUID> allowedVendorIds);
+    BulkOperationResult bulkPriceUpdate(BulkPriceUpdateRequest request, Set<UUID> allowedVendorIds);
+    BulkOperationResult bulkCategoryReassign(BulkCategoryReassignRequest request, Set<UUID> allowedVendorIds);
     List<ProductSummaryResponse> getByIds(List<UUID> ids);
     Page<ProductSummaryResponse> listUpdatedSince(Instant since, Pageable pageable);
     byte[] exportProductsCsv();

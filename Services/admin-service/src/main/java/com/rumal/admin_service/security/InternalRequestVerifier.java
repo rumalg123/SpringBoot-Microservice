@@ -20,9 +20,13 @@ public class InternalRequestVerifier {
     private static final long MAX_TIMESTAMP_DRIFT_MS = 60_000;
 
     private final String sharedSecret;
+    private final boolean hmacRequired;
 
-    public InternalRequestVerifier(@Value("${internal.auth.shared-secret:}") String sharedSecret) {
+    public InternalRequestVerifier(
+            @Value("${internal.auth.shared-secret:}") String sharedSecret,
+            @Value("${internal.auth.hmac-required:false}") boolean hmacRequired) {
         this.sharedSecret = sharedSecret;
+        this.hmacRequired = hmacRequired;
     }
 
     public void verify(String headerValue) {
@@ -44,7 +48,10 @@ public class InternalRequestVerifier {
         String signature = request.getHeader("X-Internal-Signature");
         String timestampStr = request.getHeader("X-Internal-Timestamp");
         if (signature == null || timestampStr == null) {
-            return; // HMAC not yet deployed by caller — graceful
+            if (hmacRequired) {
+                throw new UnauthorizedException("HMAC signature headers are required but missing");
+            }
+            return;
         }
         long timestamp;
         try {

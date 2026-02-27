@@ -62,7 +62,7 @@ public interface UserEventRepository extends JpaRepository<UserEvent, UUID> {
             WHERE e.eventType = 'PURCHASE' AND e.createdAt > :since
             ORDER BY e.userId, e.createdAt
             """)
-    List<Object[]> findPurchaseEventsForCoPurchase(Instant since);
+    List<Object[]> findPurchaseEventsForCoPurchase(Instant since, Pageable pageable);
 
     @Query("""
             SELECT e.productId, e.categorySlugs, e.vendorId, e.brandName, COUNT(e) AS cnt
@@ -82,7 +82,7 @@ public interface UserEventRepository extends JpaRepository<UserEvent, UUID> {
             WHERE e.userId IS NOT NULL AND e.createdAt > :since
             GROUP BY e.userId, e.eventType, COALESCE(e.categorySlugs, ''), COALESCE(e.brandName, '')
             """)
-    List<Object[]> findUserEventAggregates(Instant since);
+    List<Object[]> findUserEventAggregates(Instant since, Pageable pageable);
 
     @Modifying
     @Transactional

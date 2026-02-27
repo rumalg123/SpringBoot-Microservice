@@ -36,29 +36,33 @@ public class AdminVendorStaffController {
     @GetMapping
     public Page<VendorStaffAccessResponse> listAll(
             @RequestHeader(INTERNAL_HEADER) String internalAuth,
+            @RequestHeader(value = "X-Caller-Vendor-Id", required = false) UUID callerVendorId,
             @RequestParam(required = false) UUID vendorId,
             @PageableDefault(size = 20, sort = "email") Pageable pageable
     ) {
         internalRequestVerifier.verify(internalAuth);
-        return accessService.listVendorStaff(vendorId, pageable);
+        UUID effectiveVendorId = callerVendorId != null ? callerVendorId : vendorId;
+        return accessService.listVendorStaff(effectiveVendorId, pageable);
     }
 
     @GetMapping("/deleted")
     public Page<VendorStaffAccessResponse> listDeleted(
             @RequestHeader(INTERNAL_HEADER) String internalAuth,
+            @RequestHeader(value = "X-Caller-Vendor-Id", required = false) UUID callerVendorId,
             @PageableDefault(size = 20, sort = "email") Pageable pageable
     ) {
         internalRequestVerifier.verify(internalAuth);
-        return accessService.listDeletedVendorStaff(pageable);
+        return accessService.listDeletedVendorStaff(callerVendorId, pageable);
     }
 
     @GetMapping("/{id}")
     public VendorStaffAccessResponse getById(
             @RequestHeader(INTERNAL_HEADER) String internalAuth,
+            @RequestHeader(value = "X-Caller-Vendor-Id", required = false) UUID callerVendorId,
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
-        return accessService.getVendorStaffById(id);
+        return accessService.getVendorStaffById(id, callerVendorId);
     }
 
     @PostMapping
@@ -91,24 +95,26 @@ public class AdminVendorStaffController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(
             @RequestHeader(INTERNAL_HEADER) String internalAuth,
+            @RequestHeader(value = "X-Caller-Vendor-Id", required = false) UUID callerVendorId,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @RequestHeader(value = "X-Action-Reason", required = false) String actionReason,
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
-        accessService.softDeleteVendorStaff(id, userSub, userRoles, actionReason);
+        accessService.softDeleteVendorStaff(id, userSub, userRoles, actionReason, callerVendorId);
     }
 
     @PostMapping("/{id}/restore")
     public VendorStaffAccessResponse restore(
             @RequestHeader(INTERNAL_HEADER) String internalAuth,
+            @RequestHeader(value = "X-Caller-Vendor-Id", required = false) UUID callerVendorId,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @RequestHeader(value = "X-Action-Reason", required = false) String actionReason,
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
-        return accessService.restoreVendorStaff(id, userSub, userRoles, actionReason);
+        return accessService.restoreVendorStaff(id, userSub, userRoles, actionReason, callerVendorId);
     }
 }

@@ -1,5 +1,7 @@
 package com.rumal.api_gateway.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -12,12 +14,14 @@ import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 @Service
 public class KeycloakManagementService {
 
+    private static final Logger log = LoggerFactory.getLogger(KeycloakManagementService.class);
     private static final Duration TOKEN_REFRESH_MARGIN = Duration.ofSeconds(30);
 
     private final WebClient webClient;
@@ -25,7 +29,7 @@ public class KeycloakManagementService {
     private final String adminRealm;
     private final String adminClientId;
     private final String adminClientSecret;
-    private final AtomicReference<Mono<String>> cachedTokenMono = new AtomicReference<>();
+    private final AtomicReference<CachedToken> cachedToken = new AtomicReference<>();
 
     public KeycloakManagementService(
             WebClient.Builder webClientBuilder,
@@ -62,29 +66,20 @@ public class KeycloakManagementService {
                         .onStatus(HttpStatusCode::isError, response ->
                                 response.bodyToMono(String.class)
                                         .defaultIfEmpty("")
+                                        .doOnNext(body -> log.warn("Keycloak verification email failed: {}", body))
                                         .flatMap(body -> Mono.error(new ResponseStatusException(
                                                 HttpStatus.BAD_GATEWAY,
-                                                "Keycloak verification email request failed: " + body))))
+                                                "Unable to send verification email. Please try again later."))))
                         .toBodilessEntity()
                         .then());
     }
 
     private Mono<String> getAccessToken() {
-        Mono<String> cached = cachedTokenMono.get();
-        if (cached != null) {
-            return cached;
+        CachedToken cached = cachedToken.get();
+        if (cached != null && Instant.now().isBefore(cached.expiresAt())) {
+            return Mono.just(cached.token());
         }
-        return refreshToken();
-    }
-
-    private Mono<String> refreshToken() {
-        Mono<String> tokenMono = fetchAccessToken()
-                .cache(token -> TOKEN_REFRESH_MARGIN.multipliedBy(2),
-                        error -> Duration.ZERO,
-                        () -> Duration.ZERO)
-                .doOnError(e -> cachedTokenMono.set(null));
-        cachedTokenMono.set(tokenMono);
-        return tokenMono;
+        return fetchAccessToken();
     }
 
     private Mono<String> fetchAccessToken() {
@@ -98,9 +93,10 @@ public class KeycloakManagementService {
                 .onStatus(HttpStatusCode::isError, response ->
                         response.bodyToMono(String.class)
                                 .defaultIfEmpty("")
+                                .doOnNext(body -> log.error("Keycloak token request failed: {}", body))
                                 .flatMap(body -> Mono.error(new ResponseStatusException(
                                         HttpStatus.BAD_GATEWAY,
-                                        "Keycloak token request failed: " + body))))
+                                        "Identity provider unavailable"))))
                 .bodyToMono(KeycloakAccessTokenResponse.class)
                 .flatMap(resp -> {
                     String token = resp.accessToken();
@@ -108,13 +104,23 @@ public class KeycloakManagementService {
                         return Mono.error(new ResponseStatusException(
                                 HttpStatus.BAD_GATEWAY, "Keycloak access token is empty"));
                     }
-                    long ttlSeconds = resp.expiresIn() > 0 ? resp.expiresIn() : 300;
-                    Duration cacheDuration = Duration.ofSeconds(Math.max(1, ttlSeconds - TOKEN_REFRESH_MARGIN.getSeconds()));
-                    Mono<String> cachedMono = Mono.just(token)
-                            .cache(cacheDuration);
-                    cachedTokenMono.set(cachedMono);
+                    long ttl = resp.expiresIn() > 0 ? resp.expiresIn() : 300;
+                    Instant expiresAt = Instant.now().plusSeconds(
+                            Math.max(1, ttl - TOKEN_REFRESH_MARGIN.getSeconds()));
+                    cachedToken.set(new CachedToken(token, expiresAt));
                     return Mono.just(token);
                 });
+    }
+
+    public Mono<Void> revokeSession(String sessionId) {
+        return getAccessToken()
+                .flatMap(token -> webClient.delete()
+                        .uri("/admin/realms/{realm}/sessions/{sessionId}", realm, sessionId)
+                        .header("Authorization", "Bearer " + token)
+                        .retrieve()
+                        .onStatus(HttpStatusCode::isError, response -> Mono.empty())
+                        .toBodilessEntity()
+                        .then());
     }
 
     private String resolveBaseUrlFromIssuer(String issuerUri) {
@@ -131,6 +137,8 @@ public class KeycloakManagementService {
         }
         return normalized.substring(0, realmsSegmentIndex);
     }
+
+    private record CachedToken(String token, Instant expiresAt) {}
 
     private record KeycloakAccessTokenResponse(String access_token, long expires_in) {
         private String accessToken() {

@@ -148,6 +148,7 @@ public class CartService {
             item.setQuantity(quantity);
             refreshCartItemSnapshot(item, product);
             item.setLineTotal(calculateLineTotal(item.getUnitPrice(), item.getQuantity()));
+            cart.setLastActivityAt(Instant.now());
 
             Cart saved = cartRepository.save(cart);
             return toResponse(saved);
@@ -168,6 +169,7 @@ public class CartService {
         if (!removed) {
             throw new ResourceNotFoundException("Cart item not found: " + itemId);
         }
+        cart.setLastActivityAt(Instant.now());
         cartRepository.save(cart);
     }
 
@@ -193,7 +195,8 @@ public class CartService {
         Cart previewCart = cartRepository.findWithItemsByKeycloakId(normalizedKeycloakId)
                 .orElseThrow(() -> new ValidationException("Cart is empty"));
 
-        if (previewCart.getItems().isEmpty()) {
+        List<CartItem> activeItems = activeCartItems(previewCart);
+        if (activeItems.isEmpty()) {
             throw new ValidationException("Cart is empty");
         }
 
@@ -211,7 +214,7 @@ public class CartService {
             Cart cart = cartRepository.findWithItemsByKeycloakIdForUpdate(normalizedKeycloakId)
                     .orElseThrow(() -> new ValidationException("Cart is empty"));
 
-            if (cart.getItems().isEmpty()) {
+            if (activeCartItems(cart).isEmpty()) {
                 throw new ValidationException("Cart is empty");
             }
             if (!checkoutSnapshot(cart).equals(expectedSnapshot)) {
@@ -222,7 +225,7 @@ public class CartService {
             int totalQuantity = 0;
             BigDecimal subtotal = BigDecimal.ZERO;
 
-            for (CartItem cartItem : cart.getItems()) {
+            for (CartItem cartItem : activeCartItems(cart)) {
                 ProductDetails latest = latestProductsById.get(cartItem.getProductId());
                 if (latest == null) {
                     throw new ValidationException("Product is not available: " + cartItem.getProductId());
@@ -315,7 +318,7 @@ public class CartService {
                 cartRepository.findWithItemsByKeycloakIdForUpdate(normalizedKeycloakId)
                         .map(cart -> {
                             if (checkoutSnapshot(cart).equals(expectedSnapshot)) {
-                                cart.getItems().clear();
+                                cart.getItems().removeIf(item -> !item.isSavedForLater());
                                 cartRepository.save(cart);
                                 return true;
                             }
@@ -345,7 +348,8 @@ public class CartService {
         String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
         Cart cart = cartRepository.findWithItemsByKeycloakId(normalizedKeycloakId)
                 .orElseThrow(() -> new ValidationException("Cart is empty"));
-        if (cart.getItems().isEmpty()) {
+        List<CartItem> activeItems = activeCartItems(cart);
+        if (activeItems.isEmpty()) {
             throw new ValidationException("Cart is empty");
         }
 
@@ -365,7 +369,7 @@ public class CartService {
         }
 
         int totalQuantity = 0;
-        for (CartItem item : cart.getItems()) {
+        for (CartItem item : activeItems) {
             ProductDetails latest = latestProductsById.get(item.getProductId());
             if (latest == null) {
                 throw new ValidationException("Product is not available: " + item.getProductId());
@@ -391,7 +395,7 @@ public class CartService {
         }
 
         return new CheckoutPreviewResponse(
-                cart.getItems().size(),
+                activeItems.size(),
                 totalQuantity,
                 quoteRequest.couponCode(),
                 normalizeMoney(quote.subtotal()),
@@ -530,12 +534,18 @@ public class CartService {
     }
 
     private List<CartCheckoutLine> checkoutSnapshot(Cart cart) {
+        return activeCartItems(cart).stream()
+                .map(item -> new CartCheckoutLine(item.getProductId(), item.getQuantity()))
+                .sorted(Comparator.comparing(line -> line.productId() == null ? "" : line.productId().toString()))
+                .toList();
+    }
+
+    private List<CartItem> activeCartItems(Cart cart) {
         if (cart == null || cart.getItems() == null) {
             return List.of();
         }
         return cart.getItems().stream()
-                .map(item -> new CartCheckoutLine(item.getProductId(), item.getQuantity()))
-                .sorted(Comparator.comparing(line -> line.productId() == null ? "" : line.productId().toString()))
+                .filter(item -> !item.isSavedForLater())
                 .toList();
     }
 
@@ -627,11 +637,12 @@ public class CartService {
             String couponCode,
             String countryCode
     ) {
-        if (cart == null || cart.getItems() == null || cart.getItems().isEmpty()) {
+        if (cart == null || cart.getItems() == null || activeCartItems(cart).isEmpty()) {
             throw new ValidationException("Cart is empty");
         }
-        List<PromotionQuoteLineRequest> quoteLines = new java.util.ArrayList<>(cart.getItems().size());
-        for (CartItem item : cart.getItems()) {
+        List<CartItem> activeItems = activeCartItems(cart);
+        List<PromotionQuoteLineRequest> quoteLines = new java.util.ArrayList<>(activeItems.size());
+        for (CartItem item : activeItems) {
             ProductDetails latest = latestProductsById.get(item.getProductId());
             if (latest == null) {
                 throw new ValidationException("Product is not available: " + item.getProductId());
@@ -662,11 +673,12 @@ public class CartService {
             Map<UUID, ProductDetails> latestProductsById,
             String destinationCountryCode
     ) {
-        if (cart == null || cart.getItems() == null || cart.getItems().isEmpty()) {
+        if (cart == null || cart.getItems() == null || activeCartItems(cart).isEmpty()) {
             return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         }
-        List<ShippingFeeCalculator.ShippingLine> shippingLines = new java.util.ArrayList<>(cart.getItems().size());
-        for (CartItem item : cart.getItems()) {
+        List<CartItem> activeItems = activeCartItems(cart);
+        List<ShippingFeeCalculator.ShippingLine> shippingLines = new java.util.ArrayList<>(activeItems.size());
+        for (CartItem item : activeItems) {
             ProductDetails latest = latestProductsById.get(item.getProductId());
             if (latest == null || latest.vendorId() == null) {
                 throw new ValidationException("Product vendorId is missing: " + item.getProductId());

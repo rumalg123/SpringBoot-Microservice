@@ -43,6 +43,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.util.Set;
 import java.util.UUID;
 
 @RestController
@@ -222,7 +223,7 @@ public class AdminProductController {
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
-        adminProductAccessScopeService.assertCanManageProductOperations(userSub, userRoles, internalAuth);
+        adminProductAccessScopeService.assertPlatformLevelProductManagement(userSub, userRoles, internalAuth);
         return productService.approveProduct(id);
     }
 
@@ -235,7 +236,7 @@ public class AdminProductController {
             @Valid @RequestBody RejectProductRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
-        adminProductAccessScopeService.assertCanManageProductOperations(userSub, userRoles, internalAuth);
+        adminProductAccessScopeService.assertPlatformLevelProductManagement(userSub, userRoles, internalAuth);
         return productService.rejectProduct(id, request.reason());
     }
 
@@ -247,8 +248,8 @@ public class AdminProductController {
             @Valid @RequestBody BulkDeleteRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
-        adminProductAccessScopeService.assertCanManageProductOperations(userSub, userRoles, internalAuth);
-        return productService.bulkDelete(request);
+        Set<UUID> allowedVendorIds = adminProductAccessScopeService.resolveAllowedVendorIds(userSub, userRoles, internalAuth);
+        return productService.bulkDelete(request, allowedVendorIds);
     }
 
     @PostMapping("/bulk-price-update")
@@ -259,8 +260,8 @@ public class AdminProductController {
             @Valid @RequestBody BulkPriceUpdateRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
-        adminProductAccessScopeService.assertCanManageProductOperations(userSub, userRoles, internalAuth);
-        return productService.bulkPriceUpdate(request);
+        Set<UUID> allowedVendorIds = adminProductAccessScopeService.resolveAllowedVendorIds(userSub, userRoles, internalAuth);
+        return productService.bulkPriceUpdate(request, allowedVendorIds);
     }
 
     @PostMapping("/bulk-category-reassign")
@@ -271,8 +272,8 @@ public class AdminProductController {
             @Valid @RequestBody BulkCategoryReassignRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
-        adminProductAccessScopeService.assertCanManageProductOperations(userSub, userRoles, internalAuth);
-        return productService.bulkCategoryReassign(request);
+        Set<UUID> allowedVendorIds = adminProductAccessScopeService.resolveAllowedVendorIds(userSub, userRoles, internalAuth);
+        return productService.bulkCategoryReassign(request, allowedVendorIds);
     }
 
     @GetMapping("/export")
@@ -283,7 +284,7 @@ public class AdminProductController {
             @RequestParam(defaultValue = "csv") String format
     ) {
         internalRequestVerifier.verify(internalAuth);
-        adminProductAccessScopeService.assertCanManageProductOperations(userSub, userRoles, internalAuth);
+        adminProductAccessScopeService.assertPlatformLevelProductManagement(userSub, userRoles, internalAuth);
         byte[] csvBytes = productService.exportProductsCsv();
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=products.csv")
@@ -299,7 +300,7 @@ public class AdminProductController {
             @RequestParam("file") MultipartFile file
     ) throws IOException {
         internalRequestVerifier.verify(internalAuth);
-        adminProductAccessScopeService.assertCanManageProductOperations(userSub, userRoles, internalAuth);
+        adminProductAccessScopeService.assertPlatformLevelProductManagement(userSub, userRoles, internalAuth);
         return productService.importProductsCsv(file.getInputStream());
     }
 }

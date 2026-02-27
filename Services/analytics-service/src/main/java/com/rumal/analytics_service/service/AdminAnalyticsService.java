@@ -154,13 +154,21 @@ public class AdminAnalyticsService {
         log.info("All analytics caches evicted");
     }
 
+    @Cacheable(cacheNames = "dashboardSummary", key = "'legacy'")
     public DashboardSummaryResponse getLegacyDashboardSummary() {
-        var orderSummary = safeCall(() -> orderClient.getPlatformSummary(30), null);
-        var vendorSummary = safeCall(() -> vendorClient.getPlatformSummary(), null);
-        var productSummary = safeCall(() -> productClient.getPlatformSummary(), null);
-        var promotionSummary = safeCall(() -> promotionClient.getPlatformSummary(), null);
+        var ordersFuture = CompletableFuture.supplyAsync(() ->
+                safeCall(() -> orderClient.getPlatformSummary(30), null), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
+        var vendorsFuture = CompletableFuture.supplyAsync(() ->
+                safeCall(() -> vendorClient.getPlatformSummary(), null), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
+        var productsFuture = CompletableFuture.supplyAsync(() ->
+                safeCall(() -> productClient.getPlatformSummary(), null), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
+        var promotionsFuture = CompletableFuture.supplyAsync(() ->
+                safeCall(() -> promotionClient.getPlatformSummary(), null), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
 
-        return buildLegacyDashboard(orderSummary, vendorSummary, productSummary, promotionSummary);
+        CompletableFuture.allOf(ordersFuture, vendorsFuture, productsFuture, promotionsFuture).join();
+
+        return buildLegacyDashboard(ordersFuture.join(), vendorsFuture.join(),
+                productsFuture.join(), promotionsFuture.join());
     }
 
     private DashboardSummaryResponse buildLegacyDashboard(

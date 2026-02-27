@@ -19,8 +19,14 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout() {
-        return ResponseEntity.noContent().build();
+    public Mono<ResponseEntity<Void>> logout(JwtAuthenticationToken authentication) {
+        String sessionId = authentication.getToken().getClaimAsString("sid");
+        if (sessionId == null || sessionId.isBlank()) {
+            return Mono.just(ResponseEntity.noContent().build());
+        }
+        return keycloakManagementService.revokeSession(sessionId)
+                .thenReturn(ResponseEntity.noContent().<Void>build())
+                .onErrorResume(e -> Mono.just(ResponseEntity.noContent().build()));
     }
 
     @PostMapping("/resend-verification")

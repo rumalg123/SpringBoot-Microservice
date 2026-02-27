@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
@@ -28,14 +29,22 @@ public class VendorAnalyticsService {
 
     @Cacheable(cacheNames = "vendorAnalytics", key = "#vendorId")
     public VendorDashboardAnalytics getVendorDashboard(UUID vendorId) {
-        var ordersFuture = CompletableFuture.supplyAsync(() -> safeCall(() -> orderClient.getVendorSummary(vendorId, 30), null), analyticsExecutor);
-        var revenueTrendFuture = CompletableFuture.supplyAsync(() -> safeCall(() -> orderClient.getVendorRevenueTrend(vendorId, 30), List.<DailyRevenueBucket>of()), analyticsExecutor);
-        var topProductsFuture = CompletableFuture.supplyAsync(() -> safeCall(() -> orderClient.getVendorTopProducts(vendorId, 10), List.<TopProductEntry>of()), analyticsExecutor);
-        var productsFuture = CompletableFuture.supplyAsync(() -> safeCall(() -> productClient.getVendorSummary(vendorId), null), analyticsExecutor);
-        var inventoryFuture = CompletableFuture.supplyAsync(() -> safeCall(() -> inventoryClient.getVendorHealth(vendorId), null), analyticsExecutor);
-        var promotionsFuture = CompletableFuture.supplyAsync(() -> safeCall(() -> promotionClient.getVendorSummary(vendorId), null), analyticsExecutor);
-        var reviewsFuture = CompletableFuture.supplyAsync(() -> safeCall(() -> reviewClient.getVendorSummary(vendorId), null), analyticsExecutor);
-        var performanceFuture = CompletableFuture.supplyAsync(() -> safeCall(() -> vendorClient.getVendorPerformance(vendorId), null), analyticsExecutor);
+        var ordersFuture = CompletableFuture.supplyAsync(() -> safeCall(() -> orderClient.getVendorSummary(vendorId, 30), null), analyticsExecutor)
+                .orTimeout(10, TimeUnit.SECONDS);
+        var revenueTrendFuture = CompletableFuture.supplyAsync(() -> safeCall(() -> orderClient.getVendorRevenueTrend(vendorId, 30), List.<DailyRevenueBucket>of()), analyticsExecutor)
+                .orTimeout(10, TimeUnit.SECONDS);
+        var topProductsFuture = CompletableFuture.supplyAsync(() -> safeCall(() -> orderClient.getVendorTopProducts(vendorId, 10), List.<TopProductEntry>of()), analyticsExecutor)
+                .orTimeout(10, TimeUnit.SECONDS);
+        var productsFuture = CompletableFuture.supplyAsync(() -> safeCall(() -> productClient.getVendorSummary(vendorId), null), analyticsExecutor)
+                .orTimeout(10, TimeUnit.SECONDS);
+        var inventoryFuture = CompletableFuture.supplyAsync(() -> safeCall(() -> inventoryClient.getVendorHealth(vendorId), null), analyticsExecutor)
+                .orTimeout(10, TimeUnit.SECONDS);
+        var promotionsFuture = CompletableFuture.supplyAsync(() -> safeCall(() -> promotionClient.getVendorSummary(vendorId), null), analyticsExecutor)
+                .orTimeout(10, TimeUnit.SECONDS);
+        var reviewsFuture = CompletableFuture.supplyAsync(() -> safeCall(() -> reviewClient.getVendorSummary(vendorId), null), analyticsExecutor)
+                .orTimeout(10, TimeUnit.SECONDS);
+        var performanceFuture = CompletableFuture.supplyAsync(() -> safeCall(() -> vendorClient.getVendorPerformance(vendorId), null), analyticsExecutor)
+                .orTimeout(10, TimeUnit.SECONDS);
 
         CompletableFuture.allOf(ordersFuture, revenueTrendFuture, topProductsFuture,
             productsFuture, inventoryFuture, promotionsFuture, reviewsFuture, performanceFuture).join();

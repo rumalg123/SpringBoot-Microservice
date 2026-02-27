@@ -20,6 +20,9 @@ import java.util.Set;
 public class AdminAnalyticsController {
 
     private static final Set<String> ADMIN_ROLES = Set.of("super_admin", "platform_staff");
+    private static final Set<String> ALLOWED_SORT_BY = Set.of(
+        "ORDERS_COMPLETED", "AVERAGE_RATING", "FULFILLMENT_RATE", "DISPUTE_RATE", "REVENUE"
+    );
 
     private final InternalRequestVerifier internalRequestVerifier;
     private final AdminAnalyticsService adminAnalyticsService;
@@ -64,7 +67,11 @@ public class AdminAnalyticsController {
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @RequestParam(defaultValue = "ORDERS_COMPLETED") String sortBy) {
         verifyAdminAccess(internalAuth, userRoles);
-        return adminAnalyticsService.getVendorLeaderboard(sortBy);
+        String normalizedSortBy = sortBy.trim().toUpperCase();
+        if (!ALLOWED_SORT_BY.contains(normalizedSortBy)) {
+            normalizedSortBy = "ORDERS_COMPLETED";
+        }
+        return adminAnalyticsService.getVendorLeaderboard(normalizedSortBy);
     }
 
     @GetMapping("/inventory-health")

@@ -69,6 +69,7 @@ public class AdminWarehouseController {
     ) {
         AdminActorScope scope = resolveScope(internalAuth, userSub, userRoles);
         adminAccessScopeService.assertCanManageInventory(scope);
+        adminAccessScopeService.assertCanManageWarehouse(scope, request.vendorId());
         return warehouseService.create(request);
     }
 

@@ -69,6 +69,7 @@ public class AdminStockController {
     ) {
         AdminActorScope scope = resolveScope(internalAuth, userSub, userRoles);
         adminAccessScopeService.assertCanManageInventory(scope);
+        adminAccessScopeService.assertCanManageStockItem(scope, request.vendorId());
         return stockService.createStockItem(request);
     }
 
@@ -111,6 +112,9 @@ public class AdminStockController {
     ) {
         AdminActorScope scope = resolveScope(internalAuth, userSub, userRoles);
         adminAccessScopeService.assertCanManageInventory(scope);
+        for (StockItemCreateRequest item : request.items()) {
+            adminAccessScopeService.assertCanManageStockItem(scope, item.vendorId());
+        }
         return stockService.bulkImport(request.items(), "admin", userSub != null ? userSub : "unknown");
     }
 
@@ -123,7 +127,11 @@ public class AdminStockController {
     ) {
         AdminActorScope scope = resolveScope(internalAuth, userSub, userRoles);
         adminAccessScopeService.assertCanManageInventory(scope);
-        return stockService.listLowStock(pageable);
+        if (scope.isPlatformPrivileged()) {
+            return stockService.listLowStock(pageable);
+        }
+        UUID vendorId = adminAccessScopeService.resolveScopedVendorFilter(scope, null);
+        return stockService.listLowStockByVendor(vendorId, pageable);
     }
 
     @GetMapping("/movements")
@@ -138,7 +146,8 @@ public class AdminStockController {
     ) {
         AdminActorScope scope = resolveScope(internalAuth, userSub, userRoles);
         adminAccessScopeService.assertCanManageInventory(scope);
-        return stockService.listMovements(pageable, productId, warehouseId, movementType);
+        UUID scopedVendorId = scope.isPlatformPrivileged() ? null : adminAccessScopeService.resolveScopedVendorFilter(scope, null);
+        return stockService.listMovements(pageable, scopedVendorId, productId, warehouseId, movementType);
     }
 
     @GetMapping("/reservations")
@@ -152,7 +161,8 @@ public class AdminStockController {
     ) {
         AdminActorScope scope = resolveScope(internalAuth, userSub, userRoles);
         adminAccessScopeService.assertCanManageInventory(scope);
-        return stockService.listReservations(pageable, status, orderId);
+        UUID scopedVendorId = scope.isPlatformPrivileged() ? null : adminAccessScopeService.resolveScopedVendorFilter(scope, null);
+        return stockService.listReservations(pageable, scopedVendorId, status, orderId);
     }
 
     private AdminActorScope resolveScope(String internalAuth, String userSub, String userRoles) {

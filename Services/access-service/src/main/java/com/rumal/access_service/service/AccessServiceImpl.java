@@ -125,15 +125,15 @@ public class AccessServiceImpl implements AccessService {
             spec = spec.and((root, query, cb) -> cb.equal(root.get("action"), normalizedAction));
         }
         if (normalizedActorQuery != null) {
-            String like = "%" + normalizedActorQuery.toLowerCase(Locale.ROOT) + "%";
+            String like = "%" + escapeLikePattern(normalizedActorQuery.toLowerCase(Locale.ROOT)) + "%";
             spec = spec.and((root, query, cb) -> cb.or(
-                    cb.like(cb.lower(cb.coalesce(root.get("actorSub"), "")), like),
-                    cb.like(cb.lower(cb.coalesce(root.get("actorRoles"), "")), like),
-                    cb.like(cb.lower(cb.coalesce(root.get("actorType"), "")), like),
-                    cb.like(cb.lower(cb.coalesce(root.get("changeSource"), "")), like),
-                    cb.like(cb.lower(cb.coalesce(root.get("reason"), "")), like),
-                    cb.like(cb.lower(cb.coalesce(root.get("email"), "")), like),
-                    cb.like(cb.lower(cb.coalesce(root.get("keycloakUserId"), "")), like)
+                    cb.like(cb.lower(cb.coalesce(root.get("actorSub"), "")), like, '\\'),
+                    cb.like(cb.lower(cb.coalesce(root.get("actorRoles"), "")), like, '\\'),
+                    cb.like(cb.lower(cb.coalesce(root.get("actorType"), "")), like, '\\'),
+                    cb.like(cb.lower(cb.coalesce(root.get("changeSource"), "")), like, '\\'),
+                    cb.like(cb.lower(cb.coalesce(root.get("reason"), "")), like, '\\'),
+                    cb.like(cb.lower(cb.coalesce(root.get("email"), "")), like, '\\'),
+                    cb.like(cb.lower(cb.coalesce(root.get("keycloakUserId"), "")), like, '\\')
             ));
         }
         if (fromInstant != null) {
@@ -266,7 +266,8 @@ public class AccessServiceImpl implements AccessService {
         }
         entity.setDeleted(false);
         entity.setDeletedAt(null);
-        entity.setActive(true);
+        boolean shouldBeActive = !isExpired(entity.getAccessExpiresAt());
+        entity.setActive(shouldBeActive);
         PlatformStaffAccess saved = platformStaffAccessRepository.save(entity);
         recordPlatformAudit(saved, AccessChangeAction.RESTORED, actorSub, actorRoles, reason);
         String keycloakUserId = saved.getKeycloakUserId();
@@ -317,10 +318,26 @@ public class AccessServiceImpl implements AccessService {
     }
 
     @Override
+    public Page<VendorStaffAccessResponse> listDeletedVendorStaff(UUID vendorId, Pageable pageable) {
+        if (vendorId == null) {
+            return listDeletedVendorStaff(pageable);
+        }
+        return vendorStaffAccessRepository.findByVendorIdAndDeletedTrue(vendorId, pageable).map(this::toVendorStaffResponse);
+    }
+
+    @Override
     public VendorStaffAccessResponse getVendorStaffById(UUID id) {
         return vendorStaffAccessRepository.findById(id)
                 .map(this::toVendorStaffResponse)
                 .orElseThrow(() -> new ResourceNotFoundException("Vendor staff not found: " + id));
+    }
+
+    @Override
+    public VendorStaffAccessResponse getVendorStaffById(UUID id, UUID callerVendorId) {
+        VendorStaffAccess entity = vendorStaffAccessRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Vendor staff not found: " + id));
+        verifyVendorTenancy(entity, callerVendorId);
+        return toVendorStaffResponse(entity);
     }
 
     @Override
@@ -362,6 +379,9 @@ public class AccessServiceImpl implements AccessService {
     public VendorStaffAccessResponse updateVendorStaff(UUID id, UpsertVendorStaffAccessRequest request, String actorSub, String actorRoles, String reason) {
         VendorStaffAccess entity = vendorStaffAccessRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Vendor staff not found: " + id));
+        if (!entity.getVendorId().equals(request.vendorId())) {
+            throw new ValidationException("Vendor staff does not belong to the specified vendor");
+        }
         String previousKeycloakUserId = entity.getKeycloakUserId();
         applyVendorStaff(entity, request);
         VendorStaffAccess saved = vendorStaffAccessRepository.save(entity);
@@ -386,8 +406,15 @@ public class AccessServiceImpl implements AccessService {
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public void softDeleteVendorStaff(UUID id, String actorSub, String actorRoles, String reason) {
+        softDeleteVendorStaff(id, actorSub, actorRoles, reason, null);
+    }
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    public void softDeleteVendorStaff(UUID id, String actorSub, String actorRoles, String reason, UUID callerVendorId) {
         VendorStaffAccess entity = vendorStaffAccessRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Vendor staff not found: " + id));
+        verifyVendorTenancy(entity, callerVendorId);
         entity.setDeleted(true);
         entity.setDeletedAt(Instant.now());
         entity.setActive(false);
@@ -411,14 +438,22 @@ public class AccessServiceImpl implements AccessService {
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public VendorStaffAccessResponse restoreVendorStaff(UUID id, String actorSub, String actorRoles, String reason) {
+        return restoreVendorStaff(id, actorSub, actorRoles, reason, null);
+    }
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    public VendorStaffAccessResponse restoreVendorStaff(UUID id, String actorSub, String actorRoles, String reason, UUID callerVendorId) {
         VendorStaffAccess entity = vendorStaffAccessRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Vendor staff not found: " + id));
+        verifyVendorTenancy(entity, callerVendorId);
         if (!entity.isDeleted()) {
             throw new ValidationException("Vendor staff is not soft deleted: " + id);
         }
         entity.setDeleted(false);
         entity.setDeletedAt(null);
-        entity.setActive(true);
+        boolean shouldBeActive = !isExpired(entity.getAccessExpiresAt());
+        entity.setActive(shouldBeActive);
         VendorStaffAccess saved = vendorStaffAccessRepository.save(entity);
         recordVendorAudit(saved, AccessChangeAction.RESTORED, actorSub, actorRoles, reason);
         String keycloakUserId = saved.getKeycloakUserId();
@@ -468,6 +503,7 @@ public class AccessServiceImpl implements AccessService {
         entity.setActive(request.active() == null || request.active());
         entity.setDeleted(false);
         entity.setDeletedAt(null);
+        validatePermissionGroupScope(request.permissionGroupId(), PermissionGroupScope.PLATFORM);
         entity.setPermissionGroupId(request.permissionGroupId());
         entity.setAccessExpiresAt(request.accessExpiresAt());
         entity.setMfaRequired(request.mfaRequired() != null && request.mfaRequired());
@@ -496,9 +532,24 @@ public class AccessServiceImpl implements AccessService {
         entity.setDeleted(false);
         entity.setDeletedAt(null);
         entity.setMfaRequired(request.mfaRequired() != null && request.mfaRequired());
+        validatePermissionGroupScope(request.permissionGroupId(), PermissionGroupScope.VENDOR);
         entity.setPermissionGroupId(request.permissionGroupId());
         entity.setAccessExpiresAt(request.accessExpiresAt());
         entity.setAllowedIps(trimToNull(request.allowedIps()));
+    }
+
+    private void validatePermissionGroupScope(UUID permissionGroupId, PermissionGroupScope expectedScope) {
+        if (permissionGroupId == null) {
+            return;
+        }
+        PermissionGroup group = permissionGroupRepository.findById(permissionGroupId)
+                .orElseThrow(() -> new ValidationException("Permission group not found: " + permissionGroupId));
+        if (group.getScope() != expectedScope) {
+            throw new ValidationException(
+                    "Permission group '" + group.getName() + "' has scope " + group.getScope()
+                            + " but expected " + expectedScope
+            );
+        }
     }
 
     private Set<PlatformPermission> normalizePlatformPermissions(Set<PlatformPermission> permissions) {
@@ -738,6 +789,18 @@ public class AccessServiceImpl implements AccessService {
         return accessExpiresAt != null && Instant.now().isAfter(accessExpiresAt);
     }
 
+    private void verifyVendorTenancy(VendorStaffAccess entity, UUID callerVendorId) {
+        if (callerVendorId != null && !callerVendorId.equals(entity.getVendorId())) {
+            throw new ValidationException("Vendor staff does not belong to the specified vendor");
+        }
+    }
+
+    private String escapeLikePattern(String input) {
+        return input.replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
+    }
+
     // ── Permission Groups ──────────────────────────────────────────────
 
     @Override
@@ -780,6 +843,15 @@ public class AccessServiceImpl implements AccessService {
         if (permissionGroupRepository.existsByNameIgnoreCaseAndScopeAndIdNot(name, request.scope(), id)) {
             throw new ValidationException("Another permission group with this name and scope already exists");
         }
+        if (entity.getScope() != request.scope()) {
+            boolean hasPlatformAssignments = platformStaffAccessRepository.existsByPermissionGroupIdAndDeletedFalse(id);
+            boolean hasVendorAssignments = vendorStaffAccessRepository.existsByPermissionGroupIdAndDeletedFalse(id);
+            if (hasPlatformAssignments || hasVendorAssignments) {
+                throw new ValidationException(
+                        "Cannot change scope of permission group that has active staff assignments. "
+                                + "Remove all assignments first or create a new group.");
+            }
+        }
         entity.setName(name);
         entity.setDescription(trimToNull(request.description()));
         entity.setPermissions(joinStringSet(request.permissions()));
@@ -792,6 +864,13 @@ public class AccessServiceImpl implements AccessService {
     public void deletePermissionGroup(UUID id) {
         if (!permissionGroupRepository.existsById(id)) {
             throw new ResourceNotFoundException("Permission group not found: " + id);
+        }
+        boolean hasPlatformAssignments = platformStaffAccessRepository.existsByPermissionGroupIdAndDeletedFalse(id);
+        boolean hasVendorAssignments = vendorStaffAccessRepository.existsByPermissionGroupIdAndDeletedFalse(id);
+        if (hasPlatformAssignments || hasVendorAssignments) {
+            throw new ValidationException(
+                    "Cannot delete permission group with active staff assignments. "
+                            + "Reassign or remove staff from this group first.");
         }
         permissionGroupRepository.deleteById(id);
     }
@@ -949,59 +1028,4 @@ public class AccessServiceImpl implements AccessService {
         }
     }
 
-    // ── Expiry Processing ──────────────────────────────────────────────
-
-    @Override
-    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 60)
-    public int deactivateExpiredAccess() {
-        Instant now = Instant.now();
-        int count = 0;
-        Pageable batch = PageRequest.of(0, 100);
-
-        List<String> platformUserIds = new ArrayList<>();
-        Page<PlatformStaffAccess> platformPage;
-        do {
-            platformPage = platformStaffAccessRepository
-                    .findByActiveTrueAndDeletedFalseAndAccessExpiresAtBefore(now, batch);
-            platformPage.forEach(staff -> {
-                staff.setActive(false);
-                platformUserIds.add(staff.getKeycloakUserId());
-            });
-            platformStaffAccessRepository.saveAll(platformPage.getContent());
-            count += platformPage.getNumberOfElements();
-        } while (platformPage.hasNext());
-
-        List<String> vendorUserIds = new ArrayList<>();
-        Page<VendorStaffAccess> vendorPage;
-        do {
-            vendorPage = vendorStaffAccessRepository
-                    .findByActiveTrueAndDeletedFalseAndAccessExpiresAtBefore(now, batch);
-            vendorPage.forEach(staff -> {
-                staff.setActive(false);
-                vendorUserIds.add(staff.getKeycloakUserId());
-            });
-            vendorStaffAccessRepository.saveAll(vendorPage.getContent());
-            count += vendorPage.getNumberOfElements();
-        } while (vendorPage.hasNext());
-
-        Page<ApiKey> keyPage;
-        do {
-            keyPage = apiKeyRepository.findByActiveTrueAndExpiresAtBefore(now, batch);
-            keyPage.forEach(key -> key.setActive(false));
-            apiKeyRepository.saveAll(keyPage.getContent());
-            count += keyPage.getNumberOfElements();
-        } while (keyPage.hasNext());
-
-        if (count > 0) {
-            log.info("Deactivated {} expired access records", count);
-        }
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                platformUserIds.forEach(uid -> evictPlatformAccessLookup(uid));
-                vendorUserIds.forEach(uid -> evictVendorAccessLookup(uid));
-            }
-        });
-        return count;
-    }
 }

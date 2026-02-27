@@ -7,6 +7,7 @@ import com.rumal.admin_service.dto.UpdateOrderNoteRequest;
 import com.rumal.admin_service.dto.UpdateOrderStatusRequest;
 import com.rumal.admin_service.dto.VendorOrderResponse;
 import com.rumal.admin_service.dto.VendorOrderStatusAuditResponse;
+import com.rumal.admin_service.exception.DownstreamHttpException;
 import com.rumal.admin_service.exception.ServiceUnavailableException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -15,8 +16,10 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.cloud.client.circuitbreaker.CircuitBreakerFactory;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.util.UriBuilder;
 
 import java.net.URI;
@@ -110,6 +113,8 @@ public class OrderClient {
                         .body(new UpdateOrderStatusRequest(status))
                         .retrieve()
                         .body(OrderResponse.class);
+            } catch (RestClientResponseException ex) {
+                throw toDownstreamHttpException(ex);
             } catch (RestClientException ex) {
                 throw new ServiceUnavailableException("Order service unavailable. Try again later.", ex);
             }
@@ -127,6 +132,8 @@ public class OrderClient {
                         .body(body)
                         .retrieve()
                         .body(OrderResponse.class);
+            } catch (RestClientResponseException ex) {
+                throw toDownstreamHttpException(ex);
             } catch (RestClientException ex) {
                 throw new ServiceUnavailableException("Order service unavailable. Try again later.", ex);
             }
@@ -208,6 +215,8 @@ public class OrderClient {
                         .body(new UpdateOrderStatusRequest(status))
                         .retrieve()
                         .body(VendorOrderResponse.class);
+            } catch (RestClientResponseException ex) {
+                throw toDownstreamHttpException(ex);
             } catch (RestClientException ex) {
                 throw new ServiceUnavailableException("Order service unavailable. Try again later.", ex);
             }
@@ -376,6 +385,21 @@ public class OrderClient {
         }
 
         return builder.build();
+    }
+
+    private DownstreamHttpException toDownstreamHttpException(RestClientResponseException ex) {
+        String body = ex.getResponseBodyAsString();
+        String message;
+        if (StringUtils.hasText(body)) {
+            String compactBody = body.replaceAll("\\s+", " ").trim();
+            if (compactBody.length() > 300) {
+                compactBody = compactBody.substring(0, 300) + "...";
+            }
+            message = "Order service responded with " + ex.getStatusCode().value() + ": " + compactBody;
+        } else {
+            message = "Order service responded with " + ex.getStatusCode().value();
+        }
+        return new DownstreamHttpException(ex.getStatusCode(), message, ex);
     }
 
     private <T> T runOrderCall(Supplier<T> action) {

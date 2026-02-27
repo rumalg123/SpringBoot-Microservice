@@ -1,9 +1,11 @@
 package com.rumal.payment_service.repo;
 
 import com.rumal.payment_service.entity.VendorBankAccount;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -23,4 +25,8 @@ public interface VendorBankAccountRepository extends JpaRepository<VendorBankAcc
     @Modifying
     @Query("UPDATE VendorBankAccount b SET b.primary = false WHERE b.vendorId = :vendorId AND b.primary = true")
     int unsetPrimaryForVendor(@Param("vendorId") UUID vendorId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT b FROM VendorBankAccount b WHERE b.vendorId = :vendorId AND b.active = true")
+    List<VendorBankAccount> findByVendorIdAndActiveTrueForUpdate(@Param("vendorId") UUID vendorId);
 }

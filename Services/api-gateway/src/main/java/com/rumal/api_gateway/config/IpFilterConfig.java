@@ -1,5 +1,6 @@
 package com.rumal.api_gateway.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -16,6 +17,8 @@ import reactor.core.publisher.Mono;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Arrays;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -29,17 +32,20 @@ public class IpFilterConfig implements GlobalFilter, Ordered {
     private final Set<String> allowedIps;
     private final boolean allowlistEnabled;
     private final TrustedProxyResolver trustedProxyResolver;
+    private final ObjectMapper objectMapper;
 
     public IpFilterConfig(
             @Value("${gateway.ip-filter.blocked:}") String blockedIps,
             @Value("${gateway.ip-filter.allowed:}") String allowedIps,
             @Value("${gateway.ip-filter.allowlist-enabled:false}") boolean allowlistEnabled,
-            TrustedProxyResolver trustedProxyResolver
+            TrustedProxyResolver trustedProxyResolver,
+            ObjectMapper objectMapper
     ) {
         this.blockedIps = parseIpSet(blockedIps);
         this.allowedIps = parseIpSet(allowedIps);
         this.allowlistEnabled = allowlistEnabled;
         this.trustedProxyResolver = trustedProxyResolver;
+        this.objectMapper = objectMapper;
         if (allowlistEnabled && this.allowedIps.isEmpty()) {
             log.warn("IP allowlist enabled but no IPs configured — blocking all traffic");
         }
@@ -68,22 +74,24 @@ public class IpFilterConfig implements GlobalFilter, Ordered {
     }
 
     private Mono<Void> writeForbidden(ServerWebExchange exchange) {
-        String body = "{\"timestamp\":\"" + Instant.now() + "\"," +
-                "\"path\":\"" + escapeJson(exchange.getRequest().getPath().value()) + "\"," +
-                "\"status\":403," +
-                "\"error\":\"Forbidden\"," +
-                "\"message\":\"Access denied\"}";
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("timestamp", Instant.now().toString());
+        body.put("path", exchange.getRequest().getPath().value());
+        body.put("status", 403);
+        body.put("error", "Forbidden");
+        body.put("message", "Access denied");
+
+        byte[] bytes;
+        try {
+            bytes = objectMapper.writeValueAsBytes(body);
+        } catch (Exception e) {
+            bytes = "{\"status\":403,\"error\":\"Forbidden\"}".getBytes(StandardCharsets.UTF_8);
+        }
+
         exchange.getResponse().setStatusCode(HttpStatus.FORBIDDEN);
         exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
-        DataBuffer dataBuffer = exchange.getResponse().bufferFactory()
-                .wrap(body.getBytes(StandardCharsets.UTF_8));
+        DataBuffer dataBuffer = exchange.getResponse().bufferFactory().wrap(bytes);
         return exchange.getResponse().writeWith(Mono.just(dataBuffer));
-    }
-
-    private static String escapeJson(String value) {
-        if (value == null) return "";
-        return value.replace("\\", "\\\\").replace("\"", "\\\"")
-                .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
     }
 
     private String resolveClientIp(ServerWebExchange exchange) {

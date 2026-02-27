@@ -45,6 +45,7 @@ import com.rumal.order_service.entity.VendorOrder;
 import com.rumal.order_service.entity.VendorOrderStatusAudit;
 import com.rumal.order_service.exception.ResourceNotFoundException;
 import com.rumal.order_service.exception.ServiceUnavailableException;
+import com.rumal.order_service.exception.UnauthorizedException;
 import com.rumal.order_service.exception.ValidationException;
 import com.rumal.order_service.repo.OrderRepository;
 import com.rumal.order_service.repo.OrderSpecifications;
@@ -153,25 +154,32 @@ public class OrderService {
             order.getVendorOrders().forEach(vendorOrder ->
                     recordVendorOrderStatusAudit(vendorOrder, null, OrderStatus.PENDING, keycloakId, "customer", "customer", "order_create", "Vendor order created")
             );
+
+            // Enqueue coupon commit as an outbox event inside the transaction
+            if (pricingSnapshot != null && pricingSnapshot.couponReservationId() != null) {
+                outboxService.enqueue("Order", order.getId(), "COUPON_COMMIT",
+                        Map.of("reservationId", pricingSnapshot.couponReservationId().toString(),
+                                "customerId", customer.id().toString()));
+            }
+
+            // Enqueue inventory reserve as an outbox event inside the transaction
+            if (lines != null && !lines.isEmpty()) {
+                Instant expiresAt = order.getExpiresAt() != null
+                        ? order.getExpiresAt()
+                        : Instant.now().plus(orderExpiryTtl);
+                List<Map<String, Object>> stockItems = lines.stream()
+                        .map(line -> Map.<String, Object>of(
+                                "productId", line.product().id().toString(),
+                                "quantity", line.quantity()))
+                        .toList();
+                outboxService.enqueue("Order", order.getId(), "INVENTORY_RESERVE",
+                        Map.of("stockItems", stockItems,
+                                "expiresAt", expiresAt.toString()));
+            }
+
             evictOrdersListCaches();
             return order;
         });
-        try {
-            maybeCommitCouponReservation(saved, customer.id(), pricingSnapshot);
-        } catch (RuntimeException ex) {
-            log.warn("Coupon reservation commit failed after order {} was persisted. " +
-                    "Order is valid but coupon state may need reconciliation. reservationId={}",
-                    saved.getId(),
-                    pricingSnapshot == null ? null : pricingSnapshot.couponReservationId(),
-                    ex);
-        }
-        try {
-            maybeReserveInventory(saved, lines);
-        } catch (RuntimeException ex) {
-            log.warn("Inventory reservation failed after order {} was persisted. " +
-                    "Order exists in PENDING, expiry scheduler will clean up.",
-                    saved.getId(), ex);
-        }
         return toResponse(saved);
     }
 
@@ -1345,9 +1353,12 @@ public class OrderService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, timeout = 20)
-    public VendorOrderResponse setTrackingInfo(UUID vendorOrderId, SetTrackingInfoRequest req) {
+    public VendorOrderResponse setTrackingInfo(UUID vendorOrderId, SetTrackingInfoRequest req, UUID vendorId) {
         VendorOrder vendorOrder = vendorOrderRepository.findById(vendorOrderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Vendor order not found: " + vendorOrderId));
+        if (vendorId != null && !vendorOrder.getVendorId().equals(vendorId)) {
+            throw new UnauthorizedException("You do not own this vendor order");
+        }
         vendorOrder.setTrackingNumber(req.trackingNumber());
         vendorOrder.setTrackingUrl(req.trackingUrl());
         vendorOrder.setCarrierCode(req.carrierCode());
@@ -1384,11 +1395,14 @@ public class OrderService {
 
     @Transactional(readOnly = true)
     public CustomerProductPurchaseCheckResponse checkCustomerPurchasedProduct(UUID customerId, UUID productId) {
-        List<UUID> orderIds = orderRepository.findDeliveredOrderIdsByCustomerAndProduct(customerId, productId);
-        if (orderIds.isEmpty()) {
-            return new CustomerProductPurchaseCheckResponse(false, null);
+        List<Object[]> rows = orderRepository.findDeliveredOrderIdsByCustomerAndProduct(customerId, productId);
+        if (rows.isEmpty()) {
+            return new CustomerProductPurchaseCheckResponse(false, null, null);
         }
-        return new CustomerProductPurchaseCheckResponse(true, orderIds.getFirst());
+        Object[] first = rows.getFirst();
+        UUID orderId = (UUID) first[0];
+        UUID vendorId = (UUID) first[1];
+        return new CustomerProductPurchaseCheckResponse(true, orderId, vendorId);
     }
 
     // ── Vendor self-service ─────────────────────────────────────
@@ -1509,21 +1523,35 @@ public class OrderService {
 
     // ── CSV export ──────────────────────────────────────────────
 
+    private static final int CSV_EXPORT_MAX_ROWS = 100_000;
+    private static final long CSV_EXPORT_MAX_RANGE_DAYS = 90;
+
     public void exportOrdersCsv(OrderStatus status, Instant createdAfter, Instant createdBefore, java.io.Writer writer) {
+        // Default createdAfter to 90 days ago if not provided
+        if (createdAfter == null) {
+            createdAfter = Instant.now().minus(java.time.Duration.ofDays(CSV_EXPORT_MAX_RANGE_DAYS));
+        }
+
+        // Validate date range does not exceed 90 days
+        Instant effectiveBefore = createdBefore != null ? createdBefore : Instant.now();
+        long rangeDays = java.time.Duration.between(createdAfter, effectiveBefore).toDays();
+        if (rangeDays > CSV_EXPORT_MAX_RANGE_DAYS) {
+            throw new ValidationException("CSV export date range must not exceed " + CSV_EXPORT_MAX_RANGE_DAYS + " days");
+        }
+
         try {
             writer.write("orderId,customerKeycloakId,customerEmail,status,grandTotal,currency,createdAt,updatedAt,itemCount\n");
 
             int page = 0;
             int pageSize = 500;
+            int totalRowsWritten = 0;
             Page<Order> orderPage;
+            java.util.Map<UUID, CustomerSummary> customerCache = new java.util.HashMap<>();
             do {
                 orderPage = orderRepository.findAll(
                         OrderSpecifications.withFilters(null, null, status, createdAfter, createdBefore),
                         PageRequest.of(page, pageSize)
                 );
-
-                // Batch customer lookup: collect unique IDs per page
-                java.util.Map<UUID, CustomerSummary> customerCache = new java.util.HashMap<>();
                 for (Order order : orderPage.getContent()) {
                     UUID custId = order.getCustomerId();
                     if (custId != null && !customerCache.containsKey(custId)) {
@@ -1538,6 +1566,9 @@ public class OrderService {
 
                 StringBuilder batch = new StringBuilder();
                 for (Order order : orderPage.getContent()) {
+                    if (totalRowsWritten >= CSV_EXPORT_MAX_ROWS) {
+                        break;
+                    }
                     CustomerSummary customer = order.getCustomerId() != null ? customerCache.get(order.getCustomerId()) : null;
 
                     batch.append(escapeCsvField(order.getId().toString())).append(',');
@@ -1550,9 +1581,13 @@ public class OrderService {
                     batch.append(escapeCsvField(order.getUpdatedAt() != null ? order.getUpdatedAt().toString() : "")).append(',');
                     batch.append(order.getItemCount());
                     batch.append('\n');
+                    totalRowsWritten++;
                 }
                 writer.write(batch.toString());
                 writer.flush();
+                if (totalRowsWritten >= CSV_EXPORT_MAX_ROWS) {
+                    break;
+                }
                 page++;
             } while (orderPage.hasNext());
         } catch (java.io.IOException e) {
@@ -1606,7 +1641,7 @@ public class OrderService {
         return toResponse(saved);
     }
 
-    private UUID resolveVendorIdForUser(String userSub, UUID vendorIdHint) {
+    public UUID resolveVendorIdForUser(String userSub, UUID vendorIdHint) {
         VendorSummaryForOrder vendor = vendorClient.getVendorForUser(userSub, vendorIdHint);
         return vendor.id();
     }

@@ -123,8 +123,17 @@ public class AdminOrderService {
     ) {
         int succeeded = 0;
         List<BulkOperationResult.BulkItemError> errors = new ArrayList<>();
+        long deadline = System.currentTimeMillis() + 25_000;
 
         for (UUID orderId : orderIds) {
+            if (System.currentTimeMillis() > deadline) {
+                log.warn("Bulk status update aborted after deadline — processed {}/{}", succeeded + errors.size(), orderIds.size());
+                int currentIndex = succeeded + errors.size();
+                for (int i = currentIndex; i < orderIds.size(); i++) {
+                    errors.add(new BulkOperationResult.BulkItemError(orderIds.get(i), "Aborted: processing deadline exceeded"));
+                }
+                break;
+            }
             try {
                 orderClient.updateOrderStatus(orderId, status, internalAuth, userSub, userRoles);
                 succeeded++;

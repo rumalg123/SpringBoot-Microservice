@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.locks.ReentrantLock;
 
 @Slf4j
 @Service
@@ -29,6 +30,8 @@ public class ProductIndexService {
     private final ProductClient productClient;
     private final ProductSearchRepository productSearchRepository;
     private final StringRedisTemplate stringRedisTemplate;
+
+    private final ReentrantLock indexLock = new ReentrantLock();
 
     @Value("${search.sync.batch-size:100}")
     private int batchSize;
@@ -47,92 +50,114 @@ public class ProductIndexService {
     }
 
     public ReindexResponse fullReindex() {
-        log.info("Starting full product reindex");
-        Instant reindexStart = Instant.now();
-        long start = System.currentTimeMillis();
-        long totalIndexed = 0;
-        int page = 0;
-        boolean hasMore = true;
-        boolean hadErrors = false;
-
-        while (hasMore) {
-            try {
-                ProductIndexPage batch = productClient.fetchCatalogPage(page, batchSize);
-                if (batch == null || batch.content() == null || batch.content().isEmpty()) break;
-
-                List<ProductDocument> documents = batch.content().stream()
-                        .map(this::toDocument)
-                        .toList();
-
-                productSearchRepository.saveAll(documents);
-                totalIndexed += documents.size();
-                hasMore = !batch.last();
-                page++;
-
-                if (page % 10 == 0) {
-                    log.info("Reindex progress: {} products indexed across {} pages", totalIndexed, page);
-                }
-            } catch (Exception e) {
-                log.error("Error during full reindex at page {}: {}", page, e.getMessage(), e);
-                hadErrors = true;
-                break;
-            }
+        if (!indexLock.tryLock()) {
+            log.warn("Reindex already in progress, skipping");
+            return new ReindexResponse(0, 0, "SKIPPED");
         }
+        try {
+            log.info("Starting full product reindex");
+            Instant reindexStart = Instant.now();
+            long start = System.currentTimeMillis();
+            long totalIndexed = 0;
+            int page = 0;
+            boolean hasMore = true;
+            boolean hadErrors = false;
 
-        if (!hadErrors && totalIndexed > 0) {
-            try {
-                long deleted = productSearchRepository.deleteByUpdatedAtBefore(reindexStart);
-                if (deleted > 0) {
-                    log.info("Removed {} stale products from search index", deleted);
+            while (hasMore) {
+                try {
+                    ProductIndexPage batch = productClient.fetchCatalogPage(page, batchSize);
+                    if (batch == null || batch.content() == null || batch.content().isEmpty()) break;
+
+                    List<ProductDocument> documents = batch.content().stream()
+                            .map(this::toDocument)
+                            .toList();
+
+                    productSearchRepository.saveAll(documents);
+                    totalIndexed += documents.size();
+                    hasMore = !batch.last();
+                    page++;
+
+                    if (page % 10 == 0) {
+                        log.info("Reindex progress: {} products indexed across {} pages", totalIndexed, page);
+                    }
+                } catch (Exception e) {
+                    log.error("Error during full reindex at page {}: {}", page, e.getMessage(), e);
+                    hadErrors = true;
+                    break;
                 }
-            } catch (Exception e) {
-                log.warn("Failed to remove stale products: {}", e.getMessage());
             }
-        }
 
-        long duration = System.currentTimeMillis() - start;
-        updateLastSyncTime();
-        String status = hadErrors ? "PARTIAL_FAILURE" : "COMPLETED";
-        log.info("Full reindex {}: {} products in {}ms", status, totalIndexed, duration);
-        return new ReindexResponse(totalIndexed, duration, status);
+            if (!hadErrors && totalIndexed > 0) {
+                try {
+                    long deleted = productSearchRepository.deleteByIndexedAtBefore(reindexStart);
+                    if (deleted > 0) {
+                        log.info("Removed {} stale products from search index", deleted);
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to remove stale products: {}", e.getMessage());
+                }
+            }
+
+            long duration = System.currentTimeMillis() - start;
+            if (!hadErrors) {
+                updateLastSyncTime();
+            }
+            String status = hadErrors ? "PARTIAL_FAILURE" : "COMPLETED";
+            log.info("Full reindex {}: {} products in {}ms", status, totalIndexed, duration);
+            return new ReindexResponse(totalIndexed, duration, status);
+        } finally {
+            indexLock.unlock();
+        }
     }
 
     @Scheduled(cron = "${search.sync.incremental-sync-cron:0 */5 * * * *}")
     public void incrementalSync() {
-        Instant since = getLastSyncTime();
-        if (since == null) {
-            log.info("No last sync time found, skipping incremental sync (awaiting full reindex)");
+        if (!indexLock.tryLock()) {
+            log.debug("Index operation already in progress, skipping incremental sync");
             return;
         }
-
-        log.debug("Starting incremental sync for products updated since {}", since);
-        int page = 0;
-        long totalSynced = 0;
-        boolean hasMore = true;
-
-        while (hasMore) {
-            try {
-                ProductIndexPage batch = productClient.fetchUpdatedSince(since, page, batchSize);
-                if (batch == null || batch.content() == null || batch.content().isEmpty()) break;
-
-                List<ProductDocument> documents = batch.content().stream()
-                        .map(this::toDocument)
-                        .toList();
-
-                productSearchRepository.saveAll(documents);
-                totalSynced += documents.size();
-                hasMore = !batch.last();
-                page++;
-            } catch (Exception e) {
-                log.warn("Error during incremental sync at page {}: {}", page, e.getMessage());
-                break;
+        try {
+            Instant since = getLastSyncTime();
+            if (since == null) {
+                log.info("No last sync time found, skipping incremental sync (awaiting full reindex)");
+                return;
             }
-        }
 
-        if (totalSynced > 0) {
-            log.info("Incremental sync completed: {} products updated", totalSynced);
+            log.debug("Starting incremental sync for products updated since {}", since);
+            int page = 0;
+            long totalSynced = 0;
+            boolean hasMore = true;
+            boolean hadErrors = false;
+
+            while (hasMore) {
+                try {
+                    ProductIndexPage batch = productClient.fetchUpdatedSince(since, page, batchSize);
+                    if (batch == null || batch.content() == null || batch.content().isEmpty()) break;
+
+                    List<ProductDocument> documents = batch.content().stream()
+                            .map(this::toDocument)
+                            .toList();
+
+                    productSearchRepository.saveAll(documents);
+                    totalSynced += documents.size();
+                    hasMore = !batch.last();
+                    page++;
+                } catch (Exception e) {
+                    log.warn("Error during incremental sync at page {}: {}", page, e.getMessage());
+                    hadErrors = true;
+                    break;
+                }
+            }
+
+            if (totalSynced > 0) {
+                log.info("Incremental sync completed: {} products updated", totalSynced);
+            }
+            if (!hadErrors) {
+                updateLastSyncTime();
+            }
+        } finally {
+            indexLock.unlock();
         }
-        updateLastSyncTime();
     }
 
     public ReindexResponse triggerFullReindex() {
@@ -173,6 +198,7 @@ public class ProductIndexService {
                 .specifications(List.of())
                 .createdAt(data.createdAt())
                 .updatedAt(data.updatedAt())
+                .indexedAt(Instant.now())
                 .build();
     }
 

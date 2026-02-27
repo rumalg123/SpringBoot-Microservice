@@ -216,7 +216,7 @@ public class OrderController {
             @Valid @RequestBody SetTrackingInfoRequest req
     ) {
         internalRequestVerifier.verify(internalAuth);
-        return orderService.setTrackingInfo(vendorOrderId, req);
+        return orderService.setTrackingInfo(vendorOrderId, req, null);
     }
 
     @PatchMapping("/{id}/note")
@@ -267,12 +267,14 @@ public class OrderController {
     @GetMapping("/export")
     public void exportOrders(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @RequestParam(required = false) OrderStatus status,
             @RequestParam(required = false) Instant createdAfter,
             @RequestParam(required = false) Instant createdBefore,
             HttpServletResponse response
     ) {
         internalRequestVerifier.verify(internalAuth);
+        requireAdminRole(userRoles);
         response.setContentType("text/csv");
         response.setHeader("Content-Disposition", "attachment; filename=orders-export.csv");
         try {
@@ -302,6 +304,18 @@ public class OrderController {
     private void verifyEmailVerified(String emailVerified) {
         if (emailVerified == null || !"true".equalsIgnoreCase(emailVerified.trim())) {
             throw new UnauthorizedException("Email is not verified");
+        }
+    }
+
+    private void requireAdminRole(String userRoles) {
+        if (userRoles == null || userRoles.isBlank()) {
+            throw new UnauthorizedException("Missing required admin role for CSV export");
+        }
+        boolean hasAdminRole = java.util.Arrays.stream(userRoles.split(","))
+                .map(String::trim)
+                .anyMatch(role -> "super_admin".equals(role) || "platform_staff".equals(role));
+        if (!hasAdminRole) {
+            throw new UnauthorizedException("Missing required admin role for CSV export");
         }
     }
 

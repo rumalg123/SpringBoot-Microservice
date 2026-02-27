@@ -6,5 +6,5 @@ import org.springframework.data.elasticsearch.repository.ElasticsearchRepository
 import java.time.Instant;
 
 public interface ProductSearchRepository extends ElasticsearchRepository<ProductDocument, String> {
-    long deleteByUpdatedAtBefore(Instant cutoff);
+    long deleteByIndexedAtBefore(Instant cutoff);
 }

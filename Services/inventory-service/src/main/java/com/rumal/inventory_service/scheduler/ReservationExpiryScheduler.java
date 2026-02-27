@@ -17,13 +17,18 @@ public class ReservationExpiryScheduler {
 
     @Scheduled(fixedDelayString = "${inventory.reservation.cleanup-interval:PT1M}", initialDelayString = "PT30S")
     public void cleanupExpiredReservations() {
+        int totalExpired = 0;
         try {
-            int expired = stockService.expireStaleReservations();
-            if (expired > 0) {
-                log.info("Reservation expiry scheduler released {} expired reservations", expired);
-            }
+            int batch;
+            do {
+                batch = stockService.expireStaleReservationsBatch(100);
+                totalExpired += batch;
+            } while (batch > 0);
         } catch (Exception e) {
-            log.error("Error during reservation expiry cleanup", e);
+            log.error("Error during reservation expiry cleanup (expired {} so far)", totalExpired, e);
+        }
+        if (totalExpired > 0) {
+            log.info("Reservation expiry scheduler released {} expired reservations total", totalExpired);
         }
     }
 }

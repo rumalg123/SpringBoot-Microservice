@@ -71,6 +71,7 @@ resilience4j:
           - java.io.IOException
           - org.springframework.web.client.ResourceAccessException
           - org.springframework.web.client.HttpServerErrorException
+          - com.rumal.wishlist_service.exception.ServiceUnavailableException
       cartService:
         maxAttempts: 3
         waitDuration: 300ms
@@ -80,6 +81,7 @@ resilience4j:
           - java.io.IOException
           - org.springframework.web.client.ResourceAccessException
           - org.springframework.web.client.HttpServerErrorException
+          - com.rumal.wishlist_service.exception.ServiceUnavailableException
 
 internal:
   auth:

@@ -98,9 +98,21 @@ public class Payment {
     @Column(name = "expires_at")
     private Instant expiresAt;
 
+    // C-04: Hash of webhook params for deduplication (merchant_id+order_id+status_code+amount)
+    @Column(name = "webhook_idempotency_hash", length = 64)
+    private String webhookIdempotencyHash;
+
     @Builder.Default
     @Column(name = "order_sync_pending", nullable = false)
     private boolean orderSyncPending = false;
+
+    @Builder.Default
+    @Column(name = "order_sync_retry_count", nullable = false)
+    private int orderSyncRetryCount = 0;
+
+    @Builder.Default
+    @Column(name = "order_sync_max_retries", nullable = false)
+    private int orderSyncMaxRetries = 10;
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)

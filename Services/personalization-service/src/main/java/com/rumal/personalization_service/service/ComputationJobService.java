@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -36,6 +37,12 @@ public class ComputationJobService {
     @Value("${personalization.anonymous-session-expiry-days:30}")
     private int anonymousSessionExpiryDays;
 
+    @Value("${personalization.computation.co-purchase-max-events:500000}")
+    private int coPurchaseMaxEvents;
+
+    @Value("${personalization.computation.affinity-max-aggregates:500000}")
+    private int affinityMaxAggregates;
+
     private static record ProductFeatures(UUID productId, Set<String> categories, UUID vendorId, String brandName) {}
 
     // ---- Co-purchase computation (every 6h) ----
@@ -45,7 +52,8 @@ public class ComputationJobService {
     public void computeCoPurchases() {
         log.info("Starting co-purchase computation");
         Instant since = Instant.now().minus(90, ChronoUnit.DAYS);
-        List<Object[]> purchaseEvents = userEventRepository.findPurchaseEventsForCoPurchase(since);
+        List<Object[]> purchaseEvents = userEventRepository.findPurchaseEventsForCoPurchase(
+                since, PageRequest.of(0, coPurchaseMaxEvents));
 
         // Group by userId and 5-minute purchase windows
         Map<String, Set<UUID>> purchaseGroups = new LinkedHashMap<>();
@@ -243,7 +251,8 @@ public class ComputationJobService {
     public void computeUserAffinities() {
         log.info("Starting user affinity computation");
         Instant since = Instant.now().minus(30, ChronoUnit.DAYS);
-        List<Object[]> aggregates = userEventRepository.findUserEventAggregates(since);
+        List<Object[]> aggregates = userEventRepository.findUserEventAggregates(
+                since, PageRequest.of(0, affinityMaxAggregates));
 
         // Group by userId → affinityType → affinityKey → weighted score
         Map<UUID, Map<String, Map<String, double[]>>> userScores = new HashMap<>();

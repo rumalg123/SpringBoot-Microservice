@@ -38,4 +38,20 @@ public interface StockMovementRepository extends JpaRepository<StockMovement, UU
             order by m.createdAt desc
             """)
     Page<StockMovement> findByVendorId(@Param("vendorId") UUID vendorId, Pageable pageable);
+
+    @Query("""
+            select m from StockMovement m
+            where m.stockItem.vendorId = :vendorId
+              and (:productId is null or m.productId = :productId)
+              and (:warehouseId is null or m.warehouseId = :warehouseId)
+              and (:movementType is null or m.movementType = :movementType)
+            order by m.createdAt desc
+            """)
+    Page<StockMovement> findFilteredByVendor(
+            @Param("vendorId") UUID vendorId,
+            @Param("productId") UUID productId,
+            @Param("warehouseId") UUID warehouseId,
+            @Param("movementType") MovementType movementType,
+            Pageable pageable
+    );
 }

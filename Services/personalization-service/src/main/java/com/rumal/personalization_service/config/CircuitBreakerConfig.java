@@ -62,7 +62,10 @@ public class CircuitBreakerConfig {
         var retryConfig = RetryConfig.custom()
                 .maxAttempts(Math.max(1, maxAttempts))
                 .waitDuration(Duration.ofMillis(Math.max(100, waitDurationMs)))
-                .ignoreExceptions(DownstreamHttpException.class, IllegalArgumentException.class)
+                .ignoreExceptions(
+                        DownstreamHttpException.class,
+                        IllegalArgumentException.class,
+                        io.github.resilience4j.circuitbreaker.CallNotPermittedException.class)
                 .build();
 
         return RetryRegistry.of(retryConfig);

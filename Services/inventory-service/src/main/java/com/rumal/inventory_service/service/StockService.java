@@ -33,6 +33,7 @@ public class StockService {
     private final StockReservationRepository stockReservationRepository;
     private final StockMovementRepository stockMovementRepository;
     private final WarehouseService warehouseService;
+    private final org.springframework.transaction.PlatformTransactionManager txManager;
 
     // ─── Internal: Check Availability ───
 
@@ -40,9 +41,8 @@ public class StockService {
     public List<StockCheckResult> checkAvailability(List<StockCheckRequest> requests) {
         List<StockCheckResult> results = new ArrayList<>();
         for (StockCheckRequest req : requests) {
-            List<StockItem> items = stockItemRepository.findByProductId(req.productId());
+            List<StockItem> items = stockItemRepository.findByProductIdWithActiveWarehouse(req.productId());
             int totalAvailable = items.stream()
-                    .filter(s -> s.getWarehouse().isActive())
                     .mapToInt(StockItem::getQuantityAvailable)
                     .sum();
             boolean backorderable = items.stream().anyMatch(StockItem::isBackorderable);
@@ -57,6 +57,17 @@ public class StockService {
 
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public StockReservationResponse reserveForOrder(UUID orderId, List<StockCheckRequest> items, Instant expiresAt) {
+        List<StockReservation> existing = stockReservationRepository
+                .findByOrderIdAndStatusWithStockItem(orderId, ReservationStatus.RESERVED);
+        if (!existing.isEmpty()) {
+            log.info("Reservation already exists for order {} — returning existing reservation (idempotent)", orderId);
+            List<ReservationItemResponse> existingItems = existing.stream()
+                    .map(r -> new ReservationItemResponse(r.getId(), r.getProductId(),
+                            r.getStockItem().getWarehouse().getId(), r.getQuantityReserved()))
+                    .toList();
+            return new StockReservationResponse(orderId, "RESERVED", existingItems, existing.getFirst().getExpiresAt());
+        }
+
         List<ReservationItemResponse> reservationItems = new ArrayList<>();
         Instant now = Instant.now();
 
@@ -80,7 +91,11 @@ public class StockService {
             for (StockItem stockItem : stockItems) {
                 if (remaining <= 0) break;
 
-                int allocate = Math.min(remaining, Math.max(0, stockItem.getQuantityAvailable()));
+                // C-05: Re-read the locked row to get the true current available quantity.
+                // findByProductIdForUpdateOrderByAvailableDesc already holds the PESSIMISTIC_WRITE lock
+                // on these rows, so the values are guaranteed consistent within this transaction.
+                int currentAvailable = stockItem.getQuantityAvailable();
+                int allocate = Math.min(remaining, Math.max(0, currentAvailable));
                 if (allocate == 0 && !stockItem.isBackorderable()) continue;
                 if (allocate == 0 && stockItem.isBackorderable()) {
                     allocate = remaining;
@@ -89,6 +104,14 @@ public class StockService {
                 int quantityBefore = stockItem.getQuantityAvailable();
                 stockItem.setQuantityReserved(stockItem.getQuantityReserved() + allocate);
                 stockItem.recalculateAvailable();
+
+                // C-05: Prevent negative available stock (guard against overselling)
+                if (stockItem.getQuantityAvailable() < 0 && !stockItem.isBackorderable()) {
+                    throw new InsufficientStockException(
+                            "Reservation would result in negative available stock for product "
+                            + req.productId() + " in warehouse " + stockItem.getWarehouse().getId());
+                }
+
                 stockItem.recalculateStatus();
                 stockItemRepository.save(stockItem);
 
@@ -134,9 +157,11 @@ public class StockService {
         List<StockReservation> reservations = stockReservationRepository
                 .findByOrderIdAndStatusWithStockItem(orderId, ReservationStatus.RESERVED);
 
+        // H-09: Fail loudly if no reservations found — don't silently proceed with an unconfirmed order
         if (reservations.isEmpty()) {
-            log.warn("No RESERVED reservations found for order {}", orderId);
-            return;
+            throw new ResourceNotFoundException(
+                    "No RESERVED reservations found for order " + orderId
+                    + ". The reservation may have expired. A new order may be needed.");
         }
 
         Instant now = Instant.now();
@@ -241,6 +266,11 @@ public class StockService {
     public StockItemResponse createStockItem(StockItemCreateRequest request) {
         Warehouse warehouse = warehouseService.findById(request.warehouseId());
 
+        if (warehouse.getVendorId() != null && !warehouse.getVendorId().equals(request.vendorId())) {
+            throw new ValidationException("Warehouse " + request.warehouseId()
+                    + " does not belong to vendor " + request.vendorId());
+        }
+
         stockItemRepository.findByProductIdAndWarehouseId(request.productId(), request.warehouseId())
                 .ifPresent(existing -> {
                     throw new ValidationException("Stock item already exists for product " + request.productId()
@@ -307,59 +337,67 @@ public class StockService {
         return toStockItemResponse(stockItem);
     }
 
-    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public BulkStockImportResponse bulkImport(List<StockItemCreateRequest> items, String actorType, String actorId) {
         int created = 0;
         int updated = 0;
         List<String> errors = new ArrayList<>();
 
+        var txTemplate = new org.springframework.transaction.support.TransactionTemplate(txManager);
+        txTemplate.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_REPEATABLE_READ);
+        txTemplate.setTimeout(10);
+
         for (int i = 0; i < items.size(); i++) {
             StockItemCreateRequest req = items.get(i);
+            final int index = i;
             try {
-                Optional<StockItem> existing = stockItemRepository.findByProductIdAndWarehouseId(req.productId(), req.warehouseId());
-                if (existing.isPresent()) {
-                    StockItem stockItem = existing.get();
-                    int quantityBefore = stockItem.getQuantityAvailable();
-                    int diff = req.quantityOnHand() - stockItem.getQuantityOnHand();
-                    stockItem.setQuantityOnHand(req.quantityOnHand());
-                    stockItem.setSku(req.sku());
-                    stockItem.setLowStockThreshold(req.lowStockThreshold());
-                    stockItem.setBackorderable(req.backorderable());
-                    stockItem.recalculateAvailable();
-                    stockItem.recalculateStatus();
-                    stockItemRepository.save(stockItem);
+                String result = txTemplate.execute(status -> {
+                    Optional<StockItem> existing = stockItemRepository.findByProductIdAndWarehouseId(req.productId(), req.warehouseId());
+                    if (existing.isPresent()) {
+                        StockItem stockItem = existing.get();
+                        int quantityBefore = stockItem.getQuantityAvailable();
+                        int diff = req.quantityOnHand() - stockItem.getQuantityOnHand();
+                        stockItem.setQuantityOnHand(req.quantityOnHand());
+                        stockItem.setSku(req.sku());
+                        stockItem.setLowStockThreshold(req.lowStockThreshold());
+                        stockItem.setBackorderable(req.backorderable());
+                        stockItem.recalculateAvailable();
+                        stockItem.recalculateStatus();
+                        stockItemRepository.save(stockItem);
 
-                    if (diff != 0) {
-                        recordMovement(stockItem, MovementType.BULK_IMPORT, diff,
-                                quantityBefore, stockItem.getQuantityAvailable(),
-                                "bulk_import", null, actorType, actorId, "Bulk import update");
-                    }
-                    updated++;
-                } else {
-                    Warehouse warehouse = warehouseService.findById(req.warehouseId());
-                    StockItem stockItem = StockItem.builder()
-                            .productId(req.productId())
-                            .vendorId(req.vendorId())
-                            .warehouse(warehouse)
-                            .sku(req.sku())
-                            .quantityOnHand(req.quantityOnHand())
-                            .quantityReserved(0)
-                            .quantityAvailable(req.quantityOnHand())
-                            .lowStockThreshold(req.lowStockThreshold())
-                            .backorderable(req.backorderable())
-                            .build();
-                    stockItem.recalculateStatus();
-                    stockItem = stockItemRepository.save(stockItem);
+                        if (diff != 0) {
+                            recordMovement(stockItem, MovementType.BULK_IMPORT, diff,
+                                    quantityBefore, stockItem.getQuantityAvailable(),
+                                    "bulk_import", null, actorType, actorId, "Bulk import update");
+                        }
+                        return "updated";
+                    } else {
+                        Warehouse warehouse = warehouseService.findById(req.warehouseId());
+                        StockItem stockItem = StockItem.builder()
+                                .productId(req.productId())
+                                .vendorId(req.vendorId())
+                                .warehouse(warehouse)
+                                .sku(req.sku())
+                                .quantityOnHand(req.quantityOnHand())
+                                .quantityReserved(0)
+                                .quantityAvailable(req.quantityOnHand())
+                                .lowStockThreshold(req.lowStockThreshold())
+                                .backorderable(req.backorderable())
+                                .build();
+                        stockItem.recalculateStatus();
+                        stockItem = stockItemRepository.save(stockItem);
 
-                    if (req.quantityOnHand() > 0) {
-                        recordMovement(stockItem, MovementType.BULK_IMPORT, req.quantityOnHand(),
-                                0, req.quantityOnHand(),
-                                "bulk_import", null, actorType, actorId, "Bulk import create");
+                        if (req.quantityOnHand() > 0) {
+                            recordMovement(stockItem, MovementType.BULK_IMPORT, req.quantityOnHand(),
+                                    0, req.quantityOnHand(),
+                                    "bulk_import", null, actorType, actorId, "Bulk import create");
+                        }
+                        return "created";
                     }
-                    created++;
-                }
+                });
+                if ("created".equals(result)) created++;
+                else updated++;
             } catch (Exception e) {
-                errors.add("Item[" + i + "] productId=" + req.productId() + ": " + e.getMessage());
+                errors.add("Item[" + index + "] productId=" + req.productId() + ": " + e.getMessage());
             }
         }
 
@@ -379,7 +417,11 @@ public class StockService {
     // ─── Movements ───
 
     @Transactional(readOnly = true)
-    public Page<StockMovementResponse> listMovements(Pageable pageable, UUID productId, UUID warehouseId, MovementType movementType) {
+    public Page<StockMovementResponse> listMovements(Pageable pageable, UUID vendorId, UUID productId, UUID warehouseId, MovementType movementType) {
+        if (vendorId != null) {
+            return stockMovementRepository.findFilteredByVendor(vendorId, productId, warehouseId, movementType, pageable)
+                    .map(this::toMovementResponse);
+        }
         return stockMovementRepository.findFiltered(productId, warehouseId, movementType, pageable)
                 .map(this::toMovementResponse);
     }
@@ -393,7 +435,11 @@ public class StockService {
     // ─── Reservations ───
 
     @Transactional(readOnly = true)
-    public Page<StockReservationDetailResponse> listReservations(Pageable pageable, ReservationStatus status, UUID orderId) {
+    public Page<StockReservationDetailResponse> listReservations(Pageable pageable, UUID vendorId, ReservationStatus status, UUID orderId) {
+        if (vendorId != null) {
+            return stockReservationRepository.findFilteredByVendor(vendorId, status, orderId, pageable)
+                    .map(this::toReservationDetailResponse);
+        }
         return stockReservationRepository.findFiltered(status, orderId, pageable)
                 .map(this::toReservationDetailResponse);
     }
@@ -401,46 +447,41 @@ public class StockService {
     // ─── Expiry (called by scheduler) ───
 
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
-    public int expireStaleReservations() {
+    public int expireStaleReservationsBatch(int batchSize) {
         Instant now = Instant.now();
-        int totalExpired = 0;
-        Page<StockReservation> page;
+        Page<StockReservation> page = stockReservationRepository
+                .findExpiredReservations(ReservationStatus.RESERVED, now, PageRequest.of(0, batchSize));
 
-        do {
-            page = stockReservationRepository
-                    .findExpiredReservations(ReservationStatus.RESERVED, now, PageRequest.of(0, 100));
-
-            for (StockReservation reservation : page.getContent()) {
-                StockItem stockItem = stockItemRepository.findByIdForUpdate(reservation.getStockItem().getId())
-                        .orElse(null);
-                if (stockItem == null) {
-                    log.warn("StockItem {} not found during expiry of reservation {}", reservation.getStockItem().getId(), reservation.getId());
-                    continue;
-                }
-
-                int quantityBefore = stockItem.getQuantityAvailable();
-                stockItem.setQuantityReserved(stockItem.getQuantityReserved() - reservation.getQuantityReserved());
-                stockItem.recalculateAvailable();
-                stockItem.recalculateStatus();
-                stockItemRepository.save(stockItem);
-
-                reservation.setStatus(ReservationStatus.EXPIRED);
-                reservation.setReleasedAt(now);
-                reservation.setReleaseReason("Reservation expired");
-                stockReservationRepository.save(reservation);
-
-                recordMovement(stockItem, MovementType.RESERVATION_RELEASE, reservation.getQuantityReserved(),
-                        quantityBefore, stockItem.getQuantityAvailable(),
-                        "order", reservation.getOrderId(), "system", "scheduler",
-                        "Reservation expired for order " + reservation.getOrderId());
+        for (StockReservation reservation : page.getContent()) {
+            StockItem stockItem = stockItemRepository.findByIdForUpdate(reservation.getStockItem().getId())
+                    .orElse(null);
+            if (stockItem == null) {
+                log.warn("StockItem {} not found during expiry of reservation {}", reservation.getStockItem().getId(), reservation.getId());
+                continue;
             }
-            totalExpired += page.getNumberOfElements();
-        } while (!page.isEmpty());
 
-        if (totalExpired > 0) {
-            log.info("Expired {} stale reservations", totalExpired);
+            int quantityBefore = stockItem.getQuantityAvailable();
+            stockItem.setQuantityReserved(stockItem.getQuantityReserved() - reservation.getQuantityReserved());
+            stockItem.recalculateAvailable();
+            stockItem.recalculateStatus();
+            stockItemRepository.save(stockItem);
+
+            reservation.setStatus(ReservationStatus.EXPIRED);
+            reservation.setReleasedAt(now);
+            reservation.setReleaseReason("Reservation expired");
+            stockReservationRepository.save(reservation);
+
+            recordMovement(stockItem, MovementType.RESERVATION_RELEASE, reservation.getQuantityReserved(),
+                    quantityBefore, stockItem.getQuantityAvailable(),
+                    "order", reservation.getOrderId(), "system", "scheduler",
+                    "Reservation expired for order " + reservation.getOrderId());
         }
-        return totalExpired;
+
+        int expired = page.getNumberOfElements();
+        if (expired > 0) {
+            log.info("Expired {} stale reservations (batch)", expired);
+        }
+        return expired;
     }
 
     // ─── Helpers ───

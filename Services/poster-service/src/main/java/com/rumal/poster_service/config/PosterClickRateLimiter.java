@@ -1,5 +1,6 @@
 package com.rumal.poster_service.config;
 
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
@@ -21,7 +22,8 @@ public class PosterClickRateLimiter {
         this.maxClicksPerMinute = maxClicksPerMinute;
     }
 
-    public boolean isAllowed(String ip, UUID posterId) {
+    public boolean isAllowed(HttpServletRequest request, UUID posterId) {
+        String ip = resolveClientIp(request);
         String key = "poster:ratelimit:" + posterId + ":" + ip;
         try {
             Long count = redisTemplate.opsForValue().increment(key);
@@ -32,5 +34,16 @@ public class PosterClickRateLimiter {
         } catch (Exception e) {
             return true;
         }
+    }
+
+    private String resolveClientIp(HttpServletRequest request) {
+        String xff = request.getHeader("X-Forwarded-For");
+        if (xff != null && !xff.isBlank()) {
+            String first = xff.split(",")[0].trim();
+            if (!first.isEmpty()) {
+                return first;
+            }
+        }
+        return request.getRemoteAddr();
     }
 }

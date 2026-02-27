@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
@@ -25,9 +26,12 @@ public class CustomerAnalyticsService {
 
     @Cacheable(cacheNames = "customerInsights", key = "#customerId")
     public CustomerInsightsResponse getCustomerInsights(UUID customerId) {
-        var orderSummaryFuture = CompletableFuture.supplyAsync(() -> safeCall(() -> orderClient.getCustomerSummary(customerId), null), analyticsExecutor);
-        var spendingTrendFuture = CompletableFuture.supplyAsync(() -> safeCall(() -> orderClient.getCustomerSpendingTrend(customerId, 12), List.<MonthlySpendBucket>of()), analyticsExecutor);
-        var profileFuture = CompletableFuture.supplyAsync(() -> safeCall(() -> customerClient.getProfileSummary(customerId), null), analyticsExecutor);
+        var orderSummaryFuture = CompletableFuture.supplyAsync(() -> safeCall(() -> orderClient.getCustomerSummary(customerId), null), analyticsExecutor)
+                .orTimeout(10, TimeUnit.SECONDS);
+        var spendingTrendFuture = CompletableFuture.supplyAsync(() -> safeCall(() -> orderClient.getCustomerSpendingTrend(customerId, 12), List.<MonthlySpendBucket>of()), analyticsExecutor)
+                .orTimeout(10, TimeUnit.SECONDS);
+        var profileFuture = CompletableFuture.supplyAsync(() -> safeCall(() -> customerClient.getProfileSummary(customerId), null), analyticsExecutor)
+                .orTimeout(10, TimeUnit.SECONDS);
 
         CompletableFuture.allOf(orderSummaryFuture, spendingTrendFuture, profileFuture).join();
 

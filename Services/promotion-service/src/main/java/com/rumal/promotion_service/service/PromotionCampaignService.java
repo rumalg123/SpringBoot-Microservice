@@ -350,16 +350,21 @@ public class PromotionCampaignService {
             if (request.benefitValue() == null || request.benefitValue().compareTo(BigDecimal.ZERO) <= 0) {
                 throw new ValidationException("BUNDLE_DISCOUNT promotions require benefitValue > 0");
             }
+        } else if (request.benefitType() == PromotionBenefitType.PERCENTAGE_OFF) {
+            if (request.benefitValue() == null || request.benefitValue().compareTo(BigDecimal.ZERO) <= 0) {
+                throw new ValidationException("PERCENTAGE_OFF benefitValue must be greater than 0");
+            }
+            if (request.benefitValue().compareTo(BigDecimal.valueOf(100)) > 0) {
+                throw new ValidationException("PERCENTAGE_OFF benefitValue must not exceed 100");
+            }
+        } else if (request.benefitType() == PromotionBenefitType.FIXED_AMOUNT_OFF) {
+            if (request.benefitValue() == null || request.benefitValue().compareTo(BigDecimal.ZERO) <= 0) {
+                throw new ValidationException("FIXED_AMOUNT_OFF benefitValue must be greater than 0");
+            }
         } else {
             if (request.benefitValue() == null || request.benefitValue().compareTo(BigDecimal.ZERO) <= 0) {
                 throw new ValidationException("benefitValue must be greater than 0 for non-shipping benefits");
             }
-        }
-
-        if (request.benefitType() == PromotionBenefitType.PERCENTAGE_OFF
-                && request.benefitValue() != null
-                && request.benefitValue().compareTo(BigDecimal.valueOf(100)) > 0) {
-            throw new ValidationException("Percentage discount cannot exceed 100");
         }
         if (request.budgetAmount() != null && request.budgetAmount().compareTo(BigDecimal.ZERO) < 0) {
             throw new ValidationException("budgetAmount cannot be negative");

@@ -46,9 +46,17 @@ public class AdminProductAccessScopeService {
         if (scope.superAdmin() || scope.platformProductsManage()) {
             return request;
         }
-        UUID resolvedVendorId = request.productType() == com.rumal.product_service.entity.ProductType.VARIATION
-                ? request.vendorId()
-                : resolveVendorIdForVendorScopedActor(scope.vendorProductVendorIds(), request.vendorId());
+        UUID resolvedVendorId;
+        if (request.productType() == com.rumal.product_service.entity.ProductType.VARIATION) {
+            // Variations inherit vendorId from the parent, but still validate against the actor's scope
+            // when a vendorId is explicitly provided in the request
+            if (request.vendorId() != null && !scope.vendorProductVendorIds().contains(request.vendorId())) {
+                throw new UnauthorizedException("Vendor-scoped user cannot create a variation for another vendor");
+            }
+            resolvedVendorId = request.vendorId();
+        } else {
+            resolvedVendorId = resolveVendorIdForVendorScopedActor(scope.vendorProductVendorIds(), request.vendorId());
+        }
         return copyRequestWithVendorId(request, resolvedVendorId);
     }
 
@@ -95,6 +103,25 @@ public class AdminProductAccessScopeService {
         if (scope.vendorProductVendorIds().isEmpty()) {
             throw new UnauthorizedException("Caller does not have product management access");
         }
+    }
+
+    public Set<UUID> resolveAllowedVendorIds(String userSub, String userRolesHeader, String internalAuth) {
+        ActorScope scope = resolveScope(userSub, userRolesHeader, internalAuth);
+        if (scope.superAdmin() || scope.platformProductsManage()) {
+            return null; // null = all vendors allowed
+        }
+        if (scope.vendorProductVendorIds().isEmpty()) {
+            throw new UnauthorizedException("Caller does not have product management access");
+        }
+        return scope.vendorProductVendorIds();
+    }
+
+    public void assertPlatformLevelProductManagement(String userSub, String userRolesHeader, String internalAuth) {
+        ActorScope scope = resolveScope(userSub, userRolesHeader, internalAuth);
+        if (scope.superAdmin() || scope.platformProductsManage()) {
+            return;
+        }
+        throw new UnauthorizedException("Only platform-level admins can perform this operation");
     }
 
     public void assertCanManageCategories(String userSub, String userRolesHeader, String internalAuth) {

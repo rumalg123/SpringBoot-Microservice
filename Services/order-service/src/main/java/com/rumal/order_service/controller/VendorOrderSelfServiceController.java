@@ -1,18 +1,22 @@
 package com.rumal.order_service.controller;
 
+import com.rumal.order_service.dto.SetTrackingInfoRequest;
 import com.rumal.order_service.dto.VendorOrderDetailResponse;
 import com.rumal.order_service.dto.VendorOrderResponse;
 import com.rumal.order_service.entity.OrderStatus;
 import com.rumal.order_service.exception.UnauthorizedException;
 import com.rumal.order_service.security.InternalRequestVerifier;
 import com.rumal.order_service.service.OrderService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -51,6 +55,20 @@ public class VendorOrderSelfServiceController {
     ) {
         verifyAuth(internalAuth, emailVerified, userSub);
         return orderService.getVendorOrderForVendorUser(userSub, vendorId, vendorOrderId);
+    }
+
+    @PatchMapping("/{vendorOrderId}/tracking")
+    public VendorOrderResponse setTrackingInfo(
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Email-Verified", required = false) String emailVerified,
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestParam(required = false) UUID vendorId,
+            @PathVariable UUID vendorOrderId,
+            @Valid @RequestBody SetTrackingInfoRequest req
+    ) {
+        verifyAuth(internalAuth, emailVerified, userSub);
+        UUID resolvedVendorId = orderService.resolveVendorIdForUser(userSub, vendorId);
+        return orderService.setTrackingInfo(vendorOrderId, req, resolvedVendorId);
     }
 
     private void verifyAuth(String internalAuth, String emailVerified, String userSub) {

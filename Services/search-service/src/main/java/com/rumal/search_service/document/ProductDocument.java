@@ -110,6 +110,9 @@ public class ProductDocument {
     @Field(type = FieldType.Date, format = DateFormat.epoch_millis)
     private Instant updatedAt;
 
+    @Field(type = FieldType.Date, format = DateFormat.epoch_millis)
+    private Instant indexedAt;
+
     @Getter
     @Setter
     @NoArgsConstructor

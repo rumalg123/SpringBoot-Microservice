@@ -3,6 +3,7 @@ package com.rumal.order_service.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rumal.order_service.client.InventoryClient;
 import com.rumal.order_service.client.PromotionClient;
+import com.rumal.order_service.dto.StockCheckRequest;
 import com.rumal.order_service.entity.OutboxEvent;
 import com.rumal.order_service.entity.OutboxEventStatus;
 import com.rumal.order_service.repo.OutboxEventRepository;
@@ -14,6 +15,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -91,6 +93,26 @@ public class OutboxService {
             case "RELEASE_INVENTORY_RESERVATION" -> {
                 String reason = (String) payload.get("reason");
                 inventoryClient.releaseReservation(event.getAggregateId(), reason);
+            }
+            case "COUPON_COMMIT" -> {
+                String reservationId = (String) payload.get("reservationId");
+                if (reservationId != null) {
+                    promotionClient.commitCouponReservation(UUID.fromString(reservationId), event.getAggregateId());
+                }
+            }
+            case "INVENTORY_RESERVE" -> {
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> stockItems = (List<Map<String, Object>>) payload.get("stockItems");
+                String expiresAtStr = (String) payload.get("expiresAt");
+                if (stockItems != null && !stockItems.isEmpty()) {
+                    List<StockCheckRequest> items = stockItems.stream()
+                            .map(item -> new StockCheckRequest(
+                                    UUID.fromString((String) item.get("productId")),
+                                    ((Number) item.get("quantity")).intValue()))
+                            .toList();
+                    Instant expiresAt = expiresAtStr != null ? Instant.parse(expiresAtStr) : Instant.now().plusSeconds(1800);
+                    inventoryClient.reserveStock(event.getAggregateId(), items, expiresAt);
+                }
             }
             default -> log.warn("Unknown outbox event type: {}", event.getEventType());
         }
