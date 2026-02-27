@@ -46,6 +46,10 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
     Set<UUID> findParentIdsWithActiveVariationChildren();
 
     @Modifying
+    @Query("update Product p set p.approvalStatus = com.rumal.product_service.entity.ApprovalStatus.APPROVED where p.approvalStatus = com.rumal.product_service.entity.ApprovalStatus.DRAFT")
+    int approveAllDraft();
+
+    @Modifying
     @Query("update Product p set p.active = false where p.vendorId = :vendorId and p.active = true")
     int deactivateAllByVendorId(@Param("vendorId") UUID vendorId);
 
