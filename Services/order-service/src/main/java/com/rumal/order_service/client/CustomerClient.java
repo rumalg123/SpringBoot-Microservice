@@ -27,7 +27,7 @@ public class CustomerClient {
             @Value("${internal.auth.shared-secret:}") String internalSharedSecret
     ) {
         this.restClient = lbRestClientBuilder.build();
-        this.internalSharedSecret = internalSharedSecret;
+        this.internalSharedSecret = internalSharedSecret == null ? "" : internalSharedSecret.trim();
     }
 
     @Retry(name = "customerService")
@@ -37,6 +37,7 @@ public class CustomerClient {
         try {
             restClient.get()
                     .uri("http://customer-service/customers/{id}", customerId)
+                    .header("X-Internal-Auth", internalSharedSecret)
                     .retrieve()
                     .toBodilessEntity();
 
@@ -57,6 +58,7 @@ public class CustomerClient {
         try {
             return restClient.get()
                     .uri("http://customer-service/customers/{id}", customerId)
+                    .header("X-Internal-Auth", internalSharedSecret)
                     .retrieve()
                     .body(CustomerSummary.class);
         } catch (HttpClientErrorException ex) {
@@ -99,6 +101,7 @@ public class CustomerClient {
         try {
             return restClient.get()
                     .uri("http://customer-service/customers/by-email?email={email}", normalizedEmail)
+                    .header("X-Internal-Auth", internalSharedSecret)
                     .retrieve()
                     .body(CustomerSummary.class);
         } catch (HttpClientErrorException ex) {
@@ -117,6 +120,7 @@ public class CustomerClient {
         try {
             return restClient.get()
                     .uri("http://customer-service/customers/{customerId}/addresses/{addressId}", customerId, addressId)
+                    .header("X-Internal-Auth", internalSharedSecret)
                     .retrieve()
                     .body(CustomerAddressSummary.class);
         } catch (HttpClientErrorException ex) {

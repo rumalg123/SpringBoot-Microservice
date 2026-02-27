@@ -116,10 +116,12 @@ public class ProductIndexService {
             log.debug("Index operation already in progress, skipping incremental sync");
             return;
         }
+        boolean needsFullReindex = false;
         try {
             Instant since = getLastSyncTime();
             if (since == null) {
-                log.info("No last sync time found, skipping incremental sync (awaiting full reindex)");
+                log.info("No last sync time found, will trigger full reindex");
+                needsFullReindex = true;
                 return;
             }
 
@@ -157,6 +159,9 @@ public class ProductIndexService {
             }
         } finally {
             indexLock.unlock();
+        }
+        if (needsFullReindex) {
+            fullReindex();
         }
     }
 
