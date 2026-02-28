@@ -1,6 +1,8 @@
 "use client";
 
 import FormField from "../ui/FormField";
+import VendorSearchField from "./VendorSearchField";
+import type { VendorSummary } from "../admin/products/types";
 import type { WarehouseFormData } from "./types";
 
 type Props = {
@@ -11,9 +13,11 @@ type Props = {
   onCancel: () => void;
   showVendorId?: boolean;
   showTypeSelect?: boolean;
+  vendors?: VendorSummary[];
+  loadingVendors?: boolean;
 };
 
-export default function WarehouseForm({ form, onChange, saving, onSave, onCancel, showVendorId = false, showTypeSelect = true }: Props) {
+export default function WarehouseForm({ form, onChange, saving, onSave, onCancel, showVendorId = false, showTypeSelect = true, vendors, loadingVendors = false }: Props) {
   const isEdit = Boolean(form.id);
 
   return (
@@ -39,7 +43,17 @@ export default function WarehouseForm({ form, onChange, saving, onSave, onCancel
         </FormField>
       )}
 
-      {showVendorId && (
+      {showVendorId && vendors && (
+        <VendorSearchField
+          vendors={vendors}
+          selectedVendorId={form.vendorId}
+          onSelect={(vendorId) => onChange({ vendorId })}
+          disabled={isEdit || saving}
+          loading={loadingVendors}
+        />
+      )}
+
+      {showVendorId && !vendors && (
         <FormField label="Vendor ID" htmlFor="wh-vendor" helpText="Leave empty for platform warehouse">
           <input id="wh-vendor" value={form.vendorId} onChange={(e) => onChange({ vendorId: e.target.value })} className="form-input w-full" placeholder="Vendor UUID" disabled={isEdit} />
         </FormField>

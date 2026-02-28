@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import type { AxiosInstance } from "axios";
+import { useQuery } from "@tanstack/react-query";
+import type { VendorSummary } from "../admin/products/types";
 import DataTable, { type Column } from "../ui/DataTable";
 import FilterBar, { type FilterDef } from "../ui/FilterBar";
 import StatusBadge, { WAREHOUSE_TYPE_COLORS, ACTIVE_INACTIVE_COLORS } from "../ui/StatusBadge";
@@ -32,6 +34,17 @@ export default function WarehousesTab({ apiClient, apiPrefix, isAdmin = false, v
 
   const [statusTarget, setStatusTarget] = useState<Warehouse | null>(null);
   const [statusLoading, setStatusLoading] = useState(false);
+
+  const vendorsQuery = useQuery<VendorSummary[]>({
+    queryKey: ["admin-vendors"],
+    queryFn: async () => {
+      const res = await apiClient.get("/admin/vendors");
+      return (((res.data as VendorSummary[]) || []).filter((v) => !v.deleted)).sort((a, b) =>
+        a.name.localeCompare(b.name)
+      );
+    },
+    enabled: isAdmin,
+  });
 
   const load = useCallback(async (pg = 0) => {
     setLoading(true);
@@ -140,6 +153,8 @@ export default function WarehousesTab({ apiClient, apiPrefix, isAdmin = false, v
           onCancel={() => { setShowForm(false); setForm({ ...EMPTY_WAREHOUSE_FORM }); }}
           showVendorId={isAdmin}
           showTypeSelect={isAdmin}
+          vendors={vendorsQuery.data}
+          loadingVendors={vendorsQuery.isLoading}
         />
       </div>
     );
