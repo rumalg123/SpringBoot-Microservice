@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import type { AxiosInstance } from "axios";
+import { useQuery } from "@tanstack/react-query";
+import type { VendorSummary } from "../admin/products/types";
 import DataTable, { type Column } from "../ui/DataTable";
 import FilterBar, { type FilterDef } from "../ui/FilterBar";
 import StatusBadge, { STOCK_STATUS_COLORS } from "../ui/StatusBadge";
@@ -39,6 +41,17 @@ export default function StockTab({ apiClient, apiPrefix, isAdmin = false, vendor
 
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [bulkLoading, setBulkLoading] = useState(false);
+
+  const vendorsQuery = useQuery<VendorSummary[]>({
+    queryKey: ["admin-vendors"],
+    queryFn: async () => {
+      const res = await apiClient.get("/admin/vendors");
+      return (((res.data as VendorSummary[]) || []).filter((v) => !v.deleted)).sort((a, b) =>
+        a.name.localeCompare(b.name)
+      );
+    },
+    enabled: isAdmin,
+  });
 
   /* ── Load warehouses (for forms/dropdowns) ── */
   useEffect(() => {
@@ -165,8 +178,8 @@ export default function StockTab({ apiClient, apiPrefix, isAdmin = false, vendor
 
   /* ── Columns & filters ── */
   const filterDefs: FilterDef[] = [
-    ...(isAdmin ? [{ key: "vendorId", label: "Vendor", type: "text" as const, placeholder: "Filter by vendor..." }] : []),
-    { key: "productId", label: "Product", type: "text" as const, placeholder: "Filter by product..." },
+    ...(isAdmin ? [{ key: "vendorId", label: "Vendor", type: "select" as const, options: (vendorsQuery.data || []).map((v) => ({ label: v.name, value: v.id })) }] : []),
+    { key: "productId", label: "Product", type: "searchable-select" as const, apiClient, endpoint: "/admin/products", searchParam: "q", labelField: "name", valueField: "id", placeholder: "Search products..." },
     { key: "sku", label: "SKU", type: "text" as const, placeholder: "Filter by SKU..." },
     { key: "stockStatus", label: "Status", type: "select" as const, options: [
       { label: "In Stock", value: "IN_STOCK" },

@@ -114,6 +114,17 @@ public class WarehouseService {
                 .orElseThrow(() -> new ResourceNotFoundException("Warehouse not found: " + id));
     }
 
+    /**
+     * C-03: Assert that a warehouse is owned by the specified vendor.
+     * Prevents cross-vendor stock placement.
+     */
+    public void assertWarehouseOwnedByVendor(UUID warehouseId, UUID vendorId) {
+        Warehouse warehouse = findById(warehouseId);
+        if (!vendorId.equals(warehouse.getVendorId())) {
+            throw new ResourceNotFoundException("Warehouse not found: " + warehouseId);
+        }
+    }
+
     private WarehouseType parseWarehouseType(String type) {
         try {
             return WarehouseType.valueOf(type);

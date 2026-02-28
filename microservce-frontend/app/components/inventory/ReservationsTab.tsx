@@ -51,8 +51,8 @@ export default function ReservationsTab({ apiClient, apiPrefix }: Props) {
       { label: "Released", value: "RELEASED" },
       { label: "Expired", value: "EXPIRED" },
     ]},
-    { key: "orderId", label: "Order", type: "text" as const, placeholder: "Filter by order..." },
-    { key: "productId", label: "Product", type: "text" as const, placeholder: "Filter by product..." },
+    { key: "orderId", label: "Order", type: "text" as const, placeholder: "Paste order ID..." },
+    { key: "productId", label: "Product", type: "searchable-select" as const, apiClient, endpoint: "/admin/products", searchParam: "q", labelField: "name", valueField: "id", placeholder: "Search products..." },
   ];
 
   const columns: Column<StockReservation>[] = [

@@ -12,6 +12,8 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import org.springframework.data.jpa.repository.EntityGraph;
+
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -25,6 +27,7 @@ public interface OrderRepository extends JpaRepository<Order, UUID>, JpaSpecific
     @Query("select o from Order o where o.id = :id")
     Optional<Order> findByIdForUpdate(@Param("id") UUID id);
 
+    @EntityGraph(attributePaths = {"orderItems", "vendorOrders"})
     Page<Order> findByCustomerId(UUID customerId, Pageable pageable);
 
     @Query(
@@ -105,6 +108,9 @@ public interface OrderRepository extends JpaRepository<Order, UUID>, JpaSpecific
     List<Object[]> findDeliveredOrderIdsByCustomerAndProduct(@Param("customerId") UUID customerId, @Param("productId") UUID productId);
 
     // --- Analytics queries ---
+
+    @Query("SELECT o.status, COUNT(o) FROM Order o GROUP BY o.status")
+    List<Object[]> countGroupedByStatus();
 
     long countByStatus(OrderStatus status);
 

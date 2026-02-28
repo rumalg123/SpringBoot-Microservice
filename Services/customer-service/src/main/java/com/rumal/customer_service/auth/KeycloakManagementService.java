@@ -18,11 +18,16 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 @Service
 public class KeycloakManagementService {
+
+    private static final Logger log = LoggerFactory.getLogger(KeycloakManagementService.class);
 
     private final String realm;
     private final Keycloak keycloakClient;
@@ -209,6 +214,21 @@ public class KeycloakManagementService {
             throw new KeycloakRequestException("Keycloak user not found for id: " + userId, ex);
         } catch (WebApplicationException ex) {
             throw new KeycloakRequestException("Keycloak user update failed: " + ex.getMessage(), ex);
+        }
+    }
+
+    @Retry(name = "keycloak")
+    @CircuitBreaker(name = "keycloak")
+    public void deleteUser(String userId) {
+        if (!StringUtils.hasText(userId)) {
+            throw new KeycloakRequestException("Keycloak user id is required");
+        }
+        try {
+            keycloakClient.realm(realm).users().delete(userId);
+        } catch (NotFoundException ex) {
+            log.warn("Keycloak user not found for deletion: {}", userId);
+        } catch (WebApplicationException ex) {
+            throw new KeycloakRequestException("Keycloak user deletion failed: " + ex.getMessage(), ex);
         }
     }
 

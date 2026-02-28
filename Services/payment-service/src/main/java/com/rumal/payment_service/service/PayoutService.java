@@ -18,6 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -48,6 +50,43 @@ public class PayoutService {
 
         if (!bankAccount.isActive()) {
             throw new ValidationException("Bank account is not active");
+        }
+
+        // H-07: Check for duplicate payouts — ensure no vendor order ID is already in an active payout
+        List<VendorPayout> activePayouts = payoutRepository.findActiveByVendorId(req.vendorId());
+        Set<String> alreadyPaidOrderIds = activePayouts.stream()
+                .filter(p -> p.getVendorOrderIds() != null && !p.getVendorOrderIds().isBlank())
+                .flatMap(p -> java.util.Arrays.stream(p.getVendorOrderIds().split(",")))
+                .map(String::trim)
+                .collect(Collectors.toSet());
+
+        for (UUID vendorOrderId : req.vendorOrderIds()) {
+            if (alreadyPaidOrderIds.contains(vendorOrderId.toString())) {
+                throw new ValidationException("Vendor order " + vendorOrderId + " is already included in an active payout");
+            }
+        }
+
+        // H-07: Validate payout amount against vendor order totals from order-service
+        BigDecimal computedPayoutTotal = BigDecimal.ZERO;
+        for (UUID vendorOrderId : req.vendorOrderIds()) {
+            try {
+                VendorOrderSummary vo = orderClient.getVendorOrderById(vendorOrderId);
+                if (vo == null) {
+                    throw new ValidationException("Vendor order not found: " + vendorOrderId);
+                }
+                if (!req.vendorId().equals(vo.vendorId())) {
+                    throw new ValidationException("Vendor order " + vendorOrderId + " does not belong to vendor " + req.vendorId());
+                }
+                computedPayoutTotal = computedPayoutTotal.add(vo.payoutAmount());
+            } catch (ResourceNotFoundException e) {
+                throw new ValidationException("Vendor order not found: " + vendorOrderId);
+            }
+        }
+
+        if (req.payoutAmount().compareTo(computedPayoutTotal) > 0) {
+            throw new ValidationException(
+                    "Payout amount (" + req.payoutAmount()
+                    + ") exceeds computed vendor order total (" + computedPayoutTotal + ")");
         }
 
         // 2. Convert vendor order IDs to comma-separated string

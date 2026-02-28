@@ -20,6 +20,8 @@ public class SearchController {
     private final AutocompleteService autocompleteService;
     private final PopularSearchService popularSearchService;
 
+    private static final int MAX_QUERY_LENGTH = 256;
+
     @GetMapping("/products")
     public SearchResponse searchProducts(
             @RequestParam(required = false) String q,
@@ -34,6 +36,9 @@ public class SearchController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
+        if (q != null && q.length() > MAX_QUERY_LENGTH) {
+            q = q.substring(0, MAX_QUERY_LENGTH);
+        }
         if (size > 50) size = 50;
         if (size < 1) size = 1;
         if (page < 0) page = 0;

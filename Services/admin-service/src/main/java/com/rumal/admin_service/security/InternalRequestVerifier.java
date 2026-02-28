@@ -62,10 +62,32 @@ public class InternalRequestVerifier {
         if (Math.abs(System.currentTimeMillis() - timestamp) > MAX_TIMESTAMP_DRIFT_MS) {
             throw new UnauthorizedException("Internal request timestamp expired");
         }
-        String payload = timestampStr + ":" + request.getMethod() + ":" + request.getRequestURI();
+        // H-03: Include body hash in HMAC payload to prevent request body tampering
+        String bodyHash = computeBodyHash(request);
+        String payload = timestampStr + ":" + request.getMethod() + ":" + request.getRequestURI() + ":" + bodyHash;
         String expected = computeHmac(payload);
         if (!MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8), signature.getBytes(StandardCharsets.UTF_8))) {
             throw new UnauthorizedException("Invalid internal HMAC signature");
+        }
+    }
+
+    private String computeBodyHash(HttpServletRequest request) {
+        String method = request.getMethod();
+        if (!"POST".equals(method) && !"PUT".equals(method) && !"PATCH".equals(method)) {
+            return "";
+        }
+        try {
+            byte[] body;
+            if (request instanceof InternalRequestBodyCachingFilter.CachedBodyRequestWrapper cached) {
+                body = cached.getCachedBody();
+            } else {
+                body = request.getInputStream().readAllBytes();
+            }
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(body);
+            return HexFormat.of().formatHex(hash);
+        } catch (Exception e) {
+            return "";
         }
     }
 
@@ -80,9 +102,17 @@ public class InternalRequestVerifier {
         }
     }
 
-    public static String sign(String secret, String method, String path) {
+    public static String sign(String secret, String method, String path, byte[] body) {
         long timestamp = System.currentTimeMillis();
-        String payload = timestamp + ":" + method + ":" + path;
+        String bodyHash = "";
+        if (body != null && body.length > 0
+                && ("POST".equals(method) || "PUT".equals(method) || "PATCH".equals(method))) {
+            try {
+                java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+                bodyHash = HexFormat.of().formatHex(digest.digest(body));
+            } catch (Exception ignored) {}
+        }
+        String payload = timestamp + ":" + method + ":" + path + ":" + bodyHash;
         try {
             Mac mac = Mac.getInstance(HMAC_ALGO);
             mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), HMAC_ALGO));
@@ -91,5 +121,10 @@ public class InternalRequestVerifier {
         } catch (Exception e) {
             return timestamp + ":";
         }
+    }
+
+    // Keep backward-compatible overload
+    public static String sign(String secret, String method, String path) {
+        return sign(secret, method, path, null);
     }
 }

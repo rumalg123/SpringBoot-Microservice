@@ -251,6 +251,24 @@ public class PaymentService {
             return;
         }
 
+        // C-02: Validate webhook amount matches stored payment amount
+        try {
+            BigDecimal receivedAmount = new BigDecimal(payhereAmount).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal expectedAmount = payment.getAmount().setScale(2, RoundingMode.HALF_UP);
+            if (receivedAmount.compareTo(expectedAmount) != 0) {
+                log.error("PAYMENT AMOUNT MISMATCH for payment {}: expected={}, received={}",
+                        paymentUuid, expectedAmount, receivedAmount);
+                paymentAuditService.writeAudit(paymentUuid, null, null,
+                        "AMOUNT_MISMATCH", oldStatus.name(), null,
+                        "payhere", null, null,
+                        "Expected: " + expectedAmount + ", Received: " + receivedAmount);
+                return;
+            }
+        } catch (NumberFormatException e) {
+            log.error("Invalid payhere_amount format for payment {}: '{}'", paymentUuid, payhereAmount);
+            return;
+        }
+
         // C-04: Webhook deduplication — hash of webhook params to detect retries
         String webhookHash = computeWebhookHash(merchantId, orderId, payhereAmount, currency, statusCode);
         if (webhookHash.equals(payment.getWebhookIdempotencyHash())) {

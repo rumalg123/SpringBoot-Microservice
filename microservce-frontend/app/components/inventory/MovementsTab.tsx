@@ -6,7 +6,7 @@ import type { AxiosInstance } from "axios";
 import DataTable, { type Column } from "../ui/DataTable";
 import FilterBar, { type FilterDef } from "../ui/FilterBar";
 import StatusBadge, { MOVEMENT_TYPE_COLORS } from "../ui/StatusBadge";
-import { type StockMovement, type PagedData, resolvePage } from "./types";
+import { type StockMovement, type Warehouse, type PagedData, resolvePage } from "./types";
 import { getErrorMessage } from "../../../lib/error";
 
 type Props = {
@@ -22,6 +22,19 @@ export default function MovementsTab({ apiClient, apiPrefix, isAdmin = false }: 
   const [totalElements, setTotalElements] = useState(0);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    const fetchWarehouses = async () => {
+      try {
+        const res = await apiClient.get(`${apiPrefix}/warehouses`, { params: { size: 100 } });
+        const data = res.data as PagedData<Warehouse>;
+        setWarehouses(data.content ?? []);
+      } catch { /* ignore */ }
+    };
+    void fetchWarehouses();
+  }, [apiClient, apiPrefix, isAdmin]);
 
   const load = useCallback(async (pg = 0) => {
     setLoading(true);
@@ -55,8 +68,8 @@ export default function MovementsTab({ apiClient, apiPrefix, isAdmin = false }: 
       { label: "Adjustment", value: "ADJUSTMENT" },
       { label: "Bulk Import", value: "BULK_IMPORT" },
     ]},
-    { key: "productId", label: "Product", type: "text" as const, placeholder: "Filter by product..." },
-    ...(isAdmin ? [{ key: "warehouseId", label: "Warehouse", type: "text" as const, placeholder: "Filter by warehouse..." }] : []),
+    { key: "productId", label: "Product", type: "searchable-select" as const, apiClient, endpoint: "/admin/products", searchParam: "q", labelField: "name", valueField: "id", placeholder: "Search products..." },
+    ...(isAdmin ? [{ key: "warehouseId", label: "Warehouse", type: "select" as const, options: warehouses.map((w) => ({ label: w.name, value: w.id })) }] : []),
   ];
 
   const columns: Column<StockMovement>[] = [

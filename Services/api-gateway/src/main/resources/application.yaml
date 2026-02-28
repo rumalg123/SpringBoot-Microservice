@@ -333,6 +333,21 @@ spring:
                   args:
                     name: promotionService
                     fallbackUri: forward:/fallback/unavailable
+            - id: review-vote-rate-limited
+              uri: lb://review-service
+              predicates:
+                - Path=/reviews/me/*/vote
+                - Method=POST
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    rate-limiter: "#{@reviewVoteRateLimiter}"
+                    key-resolver: "#{@userOrIpKeyResolver}"
+                    deny-empty-key: false
+                - name: CircuitBreaker
+                  args:
+                    name: reviewService
+                    fallbackUri: forward:/fallback/unavailable
             - id: reviews-public
               uri: lb://review-service
               predicates:
@@ -350,6 +365,21 @@ spring:
                 - name: CircuitBreaker
                   args:
                     name: reviewService
+                    fallbackUri: forward:/fallback/unavailable
+            - id: product-view-rate-limited
+              uri: lb://product-service
+              predicates:
+                - Path=/products/*/view
+                - Method=POST
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    rate-limiter: "#{@productViewRateLimiter}"
+                    key-resolver: "#{@ipKeyResolver}"
+                    deny-empty-key: false
+                - name: CircuitBreaker
+                  args:
+                    name: productService
                     fallbackUri: forward:/fallback/unavailable
             - id: products-catalog
               uri: lb://product-service

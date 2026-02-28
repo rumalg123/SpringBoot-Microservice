@@ -24,7 +24,7 @@ import java.util.Map;
 public class PayHereClient {
 
     private final PayHereProperties props;
-    private final RestClient.Builder restClientBuilder;
+    private final RestClient restClient;
 
     private volatile String cachedToken;
     private volatile Instant tokenExpiresAt = Instant.EPOCH;
@@ -32,7 +32,7 @@ public class PayHereClient {
     public PayHereClient(PayHereProperties props,
                          @Qualifier("restClientBuilder") RestClient.Builder restClientBuilder) {
         this.props = props;
-        this.restClientBuilder = restClientBuilder;
+        this.restClient = restClientBuilder.build();
     }
 
     /**
@@ -61,7 +61,7 @@ public class PayHereClient {
         String basicAuth = Base64.getEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8));
 
         try {
-            Map<String, Object> response = restClientBuilder.build()
+            Map<String, Object> response = restClient
                     .post()
                     .uri(props.getBaseUrl() + "/merchant/v1/oauth/token")
                     .header("Authorization", "Basic " + basicAuth)
@@ -116,7 +116,7 @@ public class PayHereClient {
                 body.put("amount", amount);
             }
 
-            Map<String, Object> response = restClientBuilder.build()
+            Map<String, Object> response = restClient
                     .post()
                     .uri(props.getBaseUrl() + "/merchant/v1/payment/refund")
                     .header("Authorization", "Bearer " + token)
@@ -147,7 +147,7 @@ public class PayHereClient {
         String token = getAccessToken();
 
         try {
-            return restClientBuilder.build()
+            return restClient
                     .get()
                     .uri(props.getBaseUrl() + "/merchant/v1/payment/search?order_id={orderId}", orderId)
                     .header("Authorization", "Bearer " + token)

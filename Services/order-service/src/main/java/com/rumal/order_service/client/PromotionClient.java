@@ -2,12 +2,15 @@ package com.rumal.order_service.client;
 
 import com.rumal.order_service.dto.CommitCouponReservationRequest;
 import com.rumal.order_service.dto.CouponReservationResponse;
+import com.rumal.order_service.dto.PromotionQuoteRequest;
+import com.rumal.order_service.dto.PromotionQuoteResponse;
 import com.rumal.order_service.dto.ReleaseCouponReservationRequest;
 import com.rumal.order_service.exception.ResourceNotFoundException;
 import com.rumal.order_service.exception.ServiceUnavailableException;
 import com.rumal.order_service.exception.ValidationException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
@@ -18,6 +21,7 @@ import org.springframework.web.client.RestClient;
 import java.util.UUID;
 
 @Component
+@Slf4j
 public class PromotionClient {
 
     private final RestClient restClient;
@@ -29,6 +33,34 @@ public class PromotionClient {
     ) {
         this.restClient = lbRestClientBuilder.build();
         this.internalSharedSecret = internalSharedSecret == null ? "" : internalSharedSecret.trim();
+    }
+
+    // C-07: Server-side promotion quote verification for discount validation
+    @Retry(name = "promotionService")
+    @CircuitBreaker(name = "promotionService", fallbackMethod = "promotionFallbackQuote")
+    public PromotionQuoteResponse quote(PromotionQuoteRequest request) {
+        try {
+            return restClient
+                    .post()
+                    .uri("http://promotion-service/internal/promotions/quote")
+                    .header("X-Internal-Auth", internalSharedSecret)
+                    .body(request)
+                    .retrieve()
+                    .body(PromotionQuoteResponse.class);
+        } catch (HttpClientErrorException ex) {
+            int code = ex.getStatusCode().value();
+            if (code == 400 || code == 422) {
+                throw new ValidationException(resolveErrorMessage(ex, "Promotion quote validation failed"));
+            }
+            throw new ServiceUnavailableException("Promotion service error during quote.", ex);
+        }
+    }
+
+    @SuppressWarnings("unused")
+    public PromotionQuoteResponse promotionFallbackQuote(PromotionQuoteRequest request, Throwable ex) {
+        if (ex instanceof ValidationException ve) throw ve;
+        log.warn("Promotion service unavailable for quote verification, returning null (fail-closed)", ex);
+        return null; // caller will reject non-zero discounts when quote is unavailable
     }
 
     @Retry(name = "promotionService")

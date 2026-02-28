@@ -210,16 +210,33 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
         String path = exchange.getRequest().getPath().value();
         String requestId = exchange.getRequest().getHeaders().getFirst(RequestIdFilter.REQUEST_ID_HEADER);
         log.warn("Rate limiter unavailable for policy={} path={} requestId={} failOpen={}",
-                policyId, path, requestId, failOpenOnRateLimiterError, error);
+                policyId, path, requestId, shouldFailOpen(path), error);
 
         exchange.getResponse().getHeaders().set("X-RateLimit-Policy", policyId);
         exchange.getResponse().getHeaders().set("X-RateLimit-Status", "ERROR");
 
-        if (failOpenOnRateLimiterError) {
-            exchange.getResponse().getHeaders().set("X-RateLimit-Bypass", "RATE_LIMITER_UNAVAILABLE");
+        // H-01: Critical endpoints fail CLOSED even when global setting is fail-open
+        if (shouldFailOpen(path)) {
             return chain.filter(exchange);
         }
         return writeRateLimitServiceUnavailable(exchange, policyId);
+    }
+
+    /**
+     * H-01: Determines whether to fail open or closed when the rate limiter is unavailable.
+     * Critical financial, auth, and registration endpoints always fail CLOSED to prevent abuse.
+     */
+    private boolean shouldFailOpen(String path) {
+        if (!failOpenOnRateLimiterError) {
+            return false;
+        }
+        if (path.startsWith("/orders") || path.startsWith("/cart/me/checkout")
+                || path.startsWith("/payments") || path.startsWith("/webhooks")
+                || "/customers/register".equals(path) || "/customers/register-identity".equals(path)
+                || path.startsWith("/auth")) {
+            return false;
+        }
+        return true;
     }
 
     private Mono<Void> writeRateLimitServiceUnavailable(ServerWebExchange exchange, String policyId) {

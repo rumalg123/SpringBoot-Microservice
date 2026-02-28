@@ -13,6 +13,7 @@ import com.rumal.admin_service.security.InternalRequestVerifier;
 import com.rumal.admin_service.service.AdminActorScopeService;
 import com.rumal.admin_service.service.AdminAuditService;
 import com.rumal.admin_service.service.AdminOrderService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -67,12 +68,13 @@ public class AdminOrderController {
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @PathVariable UUID orderId,
-            @Valid @org.springframework.web.bind.annotation.RequestBody UpdateOrderStatusRequest request
+            @Valid @org.springframework.web.bind.annotation.RequestBody UpdateOrderStatusRequest request,
+            HttpServletRequest httpRequest
     ) {
         internalRequestVerifier.verify(internalAuth);
         adminActorScopeService.assertCanUpdateOrderStatus(userSub, userRoles, orderId, internalAuth);
         OrderResponse response = adminOrderService.updateOrderStatus(orderId, request.status(), internalAuth, userSub, userRoles, idempotencyKey);
-        auditService.log(userSub, userRoles, "UPDATE_ORDER_STATUS", "ORDER", orderId.toString(), "status=" + request.status(), null);
+        auditService.log(userSub, userRoles, "UPDATE_ORDER_STATUS", "ORDER", orderId.toString(), "status=" + request.status(), extractClientIp(httpRequest));
         return response;
     }
 
@@ -121,12 +123,13 @@ public class AdminOrderController {
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @PathVariable UUID vendorOrderId,
-            @Valid @org.springframework.web.bind.annotation.RequestBody UpdateOrderStatusRequest request
+            @Valid @org.springframework.web.bind.annotation.RequestBody UpdateOrderStatusRequest request,
+            HttpServletRequest httpRequest
     ) {
         internalRequestVerifier.verify(internalAuth);
         adminActorScopeService.assertCanUpdateVendorOrderStatus(userSub, userRoles, vendorOrderId, internalAuth);
         VendorOrderResponse response = adminOrderService.updateVendorOrderStatus(vendorOrderId, request.status(), internalAuth, userSub, userRoles, idempotencyKey);
-        auditService.log(userSub, userRoles, "UPDATE_VENDOR_ORDER_STATUS", "VENDOR_ORDER", vendorOrderId.toString(), "status=" + request.status(), null);
+        auditService.log(userSub, userRoles, "UPDATE_VENDOR_ORDER_STATUS", "VENDOR_ORDER", vendorOrderId.toString(), "status=" + request.status(), extractClientIp(httpRequest));
         return response;
     }
 
@@ -135,14 +138,15 @@ public class AdminOrderController {
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
-            @Valid @RequestBody BulkUpdateOrderStatusRequest request
+            @Valid @RequestBody BulkUpdateOrderStatusRequest request,
+            HttpServletRequest httpRequest
     ) {
         internalRequestVerifier.verify(internalAuth);
         adminActorScopeService.assertCanManageOrders(userSub, userRoles, internalAuth);
         BulkOperationResult result = adminOrderService.bulkUpdateOrderStatus(
                 request.orderIds(), request.status(), internalAuth, userSub, userRoles);
         auditService.log(userSub, userRoles, "BULK_UPDATE_ORDER_STATUS", "ORDER",
-                request.orderIds().size() + " orders", "status=" + request.status() + " succeeded=" + result.succeeded() + " failed=" + result.failed(), null);
+                request.orderIds().size() + " orders", "status=" + request.status() + " succeeded=" + result.succeeded() + " failed=" + result.failed(), extractClientIp(httpRequest));
         return result;
     }
 
@@ -180,5 +184,13 @@ public class AdminOrderController {
         } catch (java.io.IOException e) {
             throw new RuntimeException("Failed to write CSV export", e);
         }
+    }
+
+    private String extractClientIp(HttpServletRequest request) {
+        String xff = request.getHeader("X-Forwarded-For");
+        if (xff != null && !xff.isBlank()) {
+            return xff.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 }

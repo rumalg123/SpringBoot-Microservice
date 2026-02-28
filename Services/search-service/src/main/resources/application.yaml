@@ -11,6 +11,8 @@ spring:
       timeout: ${REDIS_TIMEOUT:2s}
   elasticsearch:
     uris: ${ELASTICSEARCH_URIS:http://elasticsearch:9200}
+    username: ${ELASTICSEARCH_USERNAME:elastic}
+    password: ${ELASTICSEARCH_PASSWORD:}
     connection-timeout: ${ELASTICSEARCH_CONNECTION_TIMEOUT:5s}
     socket-timeout: ${ELASTICSEARCH_SOCKET_TIMEOUT:30s}
 

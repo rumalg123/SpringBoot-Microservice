@@ -169,6 +169,17 @@ public class StockService {
             StockItem stockItem = stockItemRepository.findByIdForUpdate(reservation.getStockItem().getId())
                     .orElseThrow(() -> new ResourceNotFoundException("StockItem not found: " + reservation.getStockItem().getId()));
 
+            // H-15: Guard against negative on-hand (can occur if admin adjusts stock downward between reservation and confirmation)
+            if (stockItem.getQuantityOnHand() < reservation.getQuantityReserved()) {
+                log.error("Insufficient on-hand ({}) for reservation confirmation ({}). Stock item: {}, Reservation: {}, Order: {}",
+                        stockItem.getQuantityOnHand(), reservation.getQuantityReserved(),
+                        stockItem.getId(), reservation.getId(), orderId);
+                throw new InsufficientStockException(
+                        "On-hand quantity (" + stockItem.getQuantityOnHand()
+                        + ") insufficient for confirmation of " + reservation.getQuantityReserved()
+                        + " units. Stock item: " + stockItem.getId());
+            }
+
             int quantityBefore = stockItem.getQuantityAvailable();
             stockItem.setQuantityOnHand(stockItem.getQuantityOnHand() - reservation.getQuantityReserved());
             stockItem.setQuantityReserved(stockItem.getQuantityReserved() - reservation.getQuantityReserved());
@@ -224,6 +235,71 @@ public class StockService {
         }
 
         log.info("Released {} reservations for order {} (reason: {})", reservations.size(), orderId, reason);
+    }
+
+    // ─── Internal: Cancel/Reverse All Reservations (handles both RESERVED and CONFIRMED) ───
+
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    public void cancelOrderReservations(UUID orderId, String reason) {
+        // Release any still-RESERVED reservations
+        List<StockReservation> reserved = stockReservationRepository
+                .findByOrderIdAndStatusWithStockItem(orderId, ReservationStatus.RESERVED);
+        // Reverse any CONFIRMED reservations (stock already deducted from on-hand)
+        List<StockReservation> confirmed = stockReservationRepository
+                .findByOrderIdAndStatusWithStockItem(orderId, ReservationStatus.CONFIRMED);
+
+        if (reserved.isEmpty() && confirmed.isEmpty()) {
+            log.warn("No active reservations found to cancel for order {}", orderId);
+            return;
+        }
+
+        Instant now = Instant.now();
+
+        for (StockReservation reservation : reserved) {
+            StockItem stockItem = stockItemRepository.findByIdForUpdate(reservation.getStockItem().getId())
+                    .orElseThrow(() -> new ResourceNotFoundException("StockItem not found: " + reservation.getStockItem().getId()));
+
+            int quantityBefore = stockItem.getQuantityAvailable();
+            stockItem.setQuantityReserved(stockItem.getQuantityReserved() - reservation.getQuantityReserved());
+            stockItem.recalculateAvailable();
+            stockItem.recalculateStatus();
+            stockItemRepository.save(stockItem);
+
+            reservation.setStatus(ReservationStatus.RELEASED);
+            reservation.setReleasedAt(now);
+            reservation.setReleaseReason(reason);
+            stockReservationRepository.save(reservation);
+
+            recordMovement(stockItem, MovementType.RESERVATION_RELEASE, reservation.getQuantityReserved(),
+                    quantityBefore, stockItem.getQuantityAvailable(),
+                    "order", orderId, "system", "order-cancellation",
+                    "Released (RESERVED): " + reason);
+        }
+
+        for (StockReservation reservation : confirmed) {
+            StockItem stockItem = stockItemRepository.findByIdForUpdate(reservation.getStockItem().getId())
+                    .orElseThrow(() -> new ResourceNotFoundException("StockItem not found: " + reservation.getStockItem().getId()));
+
+            int quantityBefore = stockItem.getQuantityAvailable();
+            // Reverse the on-hand deduction that happened during confirmation
+            stockItem.setQuantityOnHand(stockItem.getQuantityOnHand() + reservation.getQuantityReserved());
+            stockItem.recalculateAvailable();
+            stockItem.recalculateStatus();
+            stockItemRepository.save(stockItem);
+
+            reservation.setStatus(ReservationStatus.RELEASED);
+            reservation.setReleasedAt(now);
+            reservation.setReleaseReason("REVERSAL: " + reason);
+            stockReservationRepository.save(reservation);
+
+            recordMovement(stockItem, MovementType.RESERVATION_RELEASE, reservation.getQuantityReserved(),
+                    quantityBefore, stockItem.getQuantityAvailable(),
+                    "order", orderId, "system", "order-cancellation",
+                    "Reversed (CONFIRMED): " + reason);
+        }
+
+        log.info("Cancelled {} reserved + {} confirmed reservations for order {} (reason: {})",
+                reserved.size(), confirmed.size(), orderId, reason);
     }
 
     // ─── Internal: Stock Summary ───

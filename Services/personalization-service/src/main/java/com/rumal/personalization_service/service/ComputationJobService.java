@@ -43,6 +43,15 @@ public class ComputationJobService {
     @Value("${personalization.computation.affinity-max-aggregates:500000}")
     private int affinityMaxAggregates;
 
+    @Value("${personalization.computation.co-purchase-lookback-days:90}")
+    private int coPurchaseLookbackDays;
+
+    @Value("${personalization.computation.similarity-lookback-days:30}")
+    private int similarityLookbackDays;
+
+    @Value("${personalization.computation.affinity-lookback-days:30}")
+    private int affinityLookbackDays;
+
     private static record ProductFeatures(UUID productId, Set<String> categories, UUID vendorId, String brandName) {}
 
     // ---- Co-purchase computation (every 6h) ----
@@ -51,7 +60,7 @@ public class ComputationJobService {
     @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 300)
     public void computeCoPurchases() {
         log.info("Starting co-purchase computation");
-        Instant since = Instant.now().minus(90, ChronoUnit.DAYS);
+        Instant since = Instant.now().minus(coPurchaseLookbackDays, ChronoUnit.DAYS);
         List<Object[]> purchaseEvents = userEventRepository.findPurchaseEventsForCoPurchase(
                 since, PageRequest.of(0, coPurchaseMaxEvents));
 
@@ -130,7 +139,7 @@ public class ComputationJobService {
     @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 300)
     public void computeProductSimilarity() {
         log.info("Starting product similarity computation");
-        Instant since = Instant.now().minus(30, ChronoUnit.DAYS);
+        Instant since = Instant.now().minus(similarityLookbackDays, ChronoUnit.DAYS);
         List<Object[]> productData = userEventRepository.findProductsWithRecentActivity(since, 3);
 
         if (productData.isEmpty()) {
@@ -250,7 +259,7 @@ public class ComputationJobService {
     @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 300)
     public void computeUserAffinities() {
         log.info("Starting user affinity computation");
-        Instant since = Instant.now().minus(30, ChronoUnit.DAYS);
+        Instant since = Instant.now().minus(affinityLookbackDays, ChronoUnit.DAYS);
         List<Object[]> aggregates = userEventRepository.findUserEventAggregates(
                 since, PageRequest.of(0, affinityMaxAggregates));
 

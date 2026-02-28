@@ -26,6 +26,7 @@ import com.rumal.customer_service.repo.CustomerActivityLogRepository;
 import com.rumal.customer_service.repo.CustomerAddressRepository;
 import com.rumal.customer_service.repo.CustomerRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
@@ -44,6 +45,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
@@ -113,21 +115,33 @@ public class CustomerServiceImpl implements CustomerService {
             keycloakId = keycloakManagementService.getUserIdByEmail(email);
         }
         final String resolvedKeycloakId = keycloakId;
+        final boolean keycloakUserWasCreated = !resolvedKeycloakId.equals(keycloakId) || keycloakId != null;
 
-        return transactionTemplate.execute(status -> {
+        try {
+            return transactionTemplate.execute(status -> {
+                try {
+                    Customer saved = customerRepository.save(
+                            Customer.builder()
+                                    .name(request.name().trim())
+                                    .email(email)
+                                    .keycloakId(resolvedKeycloakId)
+                                    .build()
+                    );
+                    return toResponse(saved);
+                } catch (DataIntegrityViolationException ex) {
+                    throw new DuplicateResourceException("Customer already exists with email: " + email);
+                }
+            });
+        } catch (Exception e) {
+            // Compensating action: clean up orphaned Keycloak user if DB save failed
             try {
-                Customer saved = customerRepository.save(
-                        Customer.builder()
-                                .name(request.name().trim())
-                                .email(email)
-                                .keycloakId(resolvedKeycloakId)
-                                .build()
-                );
-                return toResponse(saved);
-            } catch (DataIntegrityViolationException ex) {
-                throw new DuplicateResourceException("Customer already exists with email: " + email);
+                keycloakManagementService.deleteUser(resolvedKeycloakId);
+            } catch (Exception cleanupEx) {
+                log.error("Failed to cleanup orphaned Keycloak user {} after DB failure: {}",
+                        resolvedKeycloakId, cleanupEx.getMessage());
             }
-        });
+            throw e;
+        }
     }
 
     @Override
@@ -509,6 +523,9 @@ public class CustomerServiceImpl implements CustomerService {
     @CachePut(cacheNames = "customerByKeycloak", key = "#result.keycloakId()")
     @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 20)
     public CustomerResponse addLoyaltyPoints(UUID customerId, int points) {
+        if (points <= 0) throw new ValidationException("Points must be positive");
+        if (points > 10_000) throw new ValidationException("Points per transaction cannot exceed 10,000");
+
         int updated = customerRepository.addLoyaltyPointsAtomically(customerId, points);
         if (updated == 0) {
             throw new ResourceNotFoundException("Customer not found: " + customerId);
@@ -522,6 +539,8 @@ public class CustomerServiceImpl implements CustomerService {
             customer.setLoyaltyTier(newTier);
             customer = customerRepository.save(customer);
         }
+
+        logActivity(customerId, "LOYALTY_POINTS_ADDED", "Added " + points + " points, new total: " + customer.getLoyaltyPoints(), null);
 
         return toResponse(customer);
     }

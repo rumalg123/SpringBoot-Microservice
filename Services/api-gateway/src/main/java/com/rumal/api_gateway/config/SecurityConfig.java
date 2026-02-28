@@ -36,7 +36,7 @@ public class SecurityConfig {
     public SecurityConfig(
             @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}") String issuerUri,
             @Value("${keycloak.audience}") String audience,
-            @Value("${keycloak.accept-azp-as-audience:true}") boolean acceptAzpAsAudience,
+            @Value("${keycloak.accept-azp-as-audience:false}") boolean acceptAzpAsAudience,
             @Value("${keycloak.claims-namespace:}") String claimsNamespace
     ) {
         this.issuerUri = issuerUri;

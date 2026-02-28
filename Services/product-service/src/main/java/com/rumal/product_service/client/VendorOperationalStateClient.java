@@ -80,16 +80,27 @@ public class VendorOperationalStateClient {
         }
     }
 
+    // H-05: Fail CLOSED — hide products when vendor status cannot be determined
     @SuppressWarnings("unused")
     public VendorOperationalStateResponse fallbackGetState(UUID vendorId, String internalAuth, Throwable ex) {
-        log.warn("Vendor service unavailable for operational-state lookup (vendorId={}). Falling back to visible default.", vendorId, ex);
-        return new VendorOperationalStateResponse(vendorId, null, true, false, "APPROVED", true, true, true);
+        log.warn("Vendor service unavailable for operational-state lookup (vendorId={}). Falling back to hidden (fail-closed).", vendorId, ex);
+        return new VendorOperationalStateResponse(vendorId, null, false, false, "UNKNOWN", false, false, false);
     }
 
+    // H-05: Fail CLOSED — return invisible defaults so no products are accidentally shown
     @SuppressWarnings("unused")
     public Map<UUID, VendorOperationalStateResponse> fallbackGetStates(Collection<UUID> vendorIds, String internalAuth, Throwable ex) {
-        log.warn("Vendor service unavailable for operational-state batch lookup. Falling back to empty map (all vendors treated as visible).", ex);
-        return Map.of();
+        log.warn("Vendor service unavailable for operational-state batch lookup. Falling back to hidden defaults (fail-closed).", ex);
+        if (vendorIds == null || vendorIds.isEmpty()) {
+            return Map.of();
+        }
+        return vendorIds.stream()
+                .distinct()
+                .collect(Collectors.toMap(
+                        id -> id,
+                        id -> new VendorOperationalStateResponse(id, null, false, false, "UNKNOWN", false, false, false),
+                        (a, b) -> a
+                ));
     }
 
     private URI buildUri(String path) {

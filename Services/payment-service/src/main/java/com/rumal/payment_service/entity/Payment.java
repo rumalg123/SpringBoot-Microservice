@@ -114,6 +114,11 @@ public class Payment {
     @Column(name = "order_sync_max_retries", nullable = false)
     private int orderSyncMaxRetries = 10;
 
+    // H-04: Flag for permanently failed order syncs requiring manual reconciliation
+    @Builder.Default
+    @Column(name = "order_sync_failed", nullable = false)
+    private boolean orderSyncFailed = false;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private Instant createdAt;

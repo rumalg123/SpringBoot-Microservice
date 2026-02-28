@@ -128,7 +128,7 @@ export default function WarehousesTab({ apiClient, apiPrefix, isAdmin = false, v
   };
 
   const filterDefs: FilterDef[] = [
-    ...(isAdmin ? [{ key: "vendorId", label: "Vendor ID", type: "text" as const, placeholder: "Filter by vendor..." }] : []),
+    ...(isAdmin ? [{ key: "vendorId", label: "Vendor", type: "select" as const, options: (vendorsQuery.data || []).map((v) => ({ label: v.name, value: v.id })) }] : []),
     { key: "warehouseType", label: "Type", type: "select" as const, options: [{ label: "Vendor Owned", value: "VENDOR_OWNED" }, { label: "Platform Managed", value: "PLATFORM_MANAGED" }] },
     { key: "active", label: "Status", type: "select" as const, options: [{ label: "Active", value: "true" }, { label: "Inactive", value: "false" }] },
   ];

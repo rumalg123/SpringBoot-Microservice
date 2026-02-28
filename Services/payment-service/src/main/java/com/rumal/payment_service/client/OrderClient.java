@@ -158,6 +158,33 @@ public class OrderClient {
         }
     }
 
+    // H-07: Fetch vendor order by ID alone (no parent orderId needed) for payout validation
+    @Retry(name = "orderService")
+    @CircuitBreaker(name = "orderService", fallbackMethod = "getVendorOrderByIdFallback")
+    public VendorOrderSummary getVendorOrderById(UUID vendorOrderId) {
+        try {
+            return restClient
+                    .get()
+                    .uri("http://order-service/vendor-orders/{vendorOrderId}", vendorOrderId)
+                    .header("X-Internal-Auth", internalSharedSecret)
+                    .retrieve()
+                    .body(VendorOrderSummary.class);
+        } catch (HttpClientErrorException ex) {
+            if (ex.getStatusCode() == HttpStatus.NOT_FOUND) {
+                throw new ResourceNotFoundException("Vendor order not found: " + vendorOrderId);
+            }
+            throw ex;
+        } catch (RestClientException ex) {
+            throw new ServiceUnavailableException("Order service unavailable: " + ex.getMessage(), ex);
+        }
+    }
+
+    @SuppressWarnings("unused")
+    public VendorOrderSummary getVendorOrderByIdFallback(UUID vendorOrderId, Throwable ex) {
+        if (ex instanceof ResourceNotFoundException rnfe) throw rnfe;
+        throw new ServiceUnavailableException("Order service unavailable for vendor order " + vendorOrderId + ". Try again later.", ex);
+    }
+
     // Fallback methods
     @SuppressWarnings("unused")
     public OrderSummary getOrderFallback(UUID orderId, Throwable ex) {

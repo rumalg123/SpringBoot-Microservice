@@ -58,6 +58,17 @@ public class InternalInventoryController {
         stockService.releaseReservation(orderId, reason);
     }
 
+    @PostMapping("/reservations/{orderId}/cancel")
+    public void cancelOrderReservations(
+            @RequestHeader("X-Internal-Auth") String internalAuth,
+            @PathVariable UUID orderId,
+            @RequestBody(required = false) ReleaseRequest request
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        String reason = request != null && request.reason() != null ? request.reason() : "Order cancelled";
+        stockService.cancelOrderReservations(orderId, reason);
+    }
+
     @GetMapping("/products/{productId}/stock-summary")
     public StockAvailabilitySummary getStockSummary(
             @RequestHeader("X-Internal-Auth") String internalAuth,

@@ -87,13 +87,22 @@ public class PromotionQuoteService {
 
         String customerSegment = request.customerSegment() == null ? null : request.customerSegment().trim();
 
+        // Extract vendor IDs from cart lines for scope-based pre-filtering
+        Set<UUID> cartVendorIds = request.lines().stream()
+                .map(PromotionQuoteLineRequest::vendorId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (cartVendorIds.isEmpty()) {
+            cartVendorIds = Set.of(UUID.fromString("00000000-0000-0000-0000-000000000000"));
+        }
+
         Map<UUID, PromotionCandidate> candidatesById = new LinkedHashMap<>();
         List<PromotionApprovalStatus> eligibleStatuses = List.of(PromotionApprovalStatus.NOT_REQUIRED, PromotionApprovalStatus.APPROVED);
         int pageNum = 0;
         Page<PromotionCampaign> promoPage;
         do {
-            promoPage = promotionCampaignRepository.findByLifecycleStatusAndApprovalStatusIn(
-                    PromotionLifecycleStatus.ACTIVE, eligibleStatuses, PageRequest.of(pageNum, 200));
+            promoPage = promotionCampaignRepository.findActiveByScope(
+                    PromotionLifecycleStatus.ACTIVE, eligibleStatuses, cartVendorIds, PageRequest.of(pageNum, 200));
             promoPage.getContent().stream()
                     .filter(p -> withinWindow(p, pricedAt))
                     .filter(p -> matchesSegment(p, customerSegment))

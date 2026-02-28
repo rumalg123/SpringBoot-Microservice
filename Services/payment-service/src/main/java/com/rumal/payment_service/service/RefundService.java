@@ -64,6 +64,11 @@ public class RefundService {
             throw new ValidationException("Payment must be successful to request refund");
         }
 
+        // C-01: Verify the requesting customer owns this payment
+        if (!keycloakId.equals(payment.getCustomerKeycloakId())) {
+            throw new UnauthorizedException("You are not authorized to request a refund for this order");
+        }
+
         // 2. Check no existing active refund for this vendor order (with lock to prevent duplicates)
         refundRequestRepository.findByVendorOrderIdAndStatusNotInForUpdate(
                 req.vendorOrderId(),
@@ -85,6 +90,15 @@ public class RefundService {
                     "Refund amount would exceed vendor order total. Order total: " + vendorOrder.orderTotal()
                     + ", already refunded/processing: " + alreadyRefunded
                     + ", requested: " + req.refundAmount());
+        }
+
+        // H-14: Validate cumulative refunds across ALL vendor orders don't exceed the payment amount
+        BigDecimal totalPaymentRefunds = refundRequestRepository.sumActiveRefundsByPaymentId(payment.getId());
+        BigDecimal totalPaymentRefundsAfterThis = totalPaymentRefunds.add(req.refundAmount());
+        if (totalPaymentRefundsAfterThis.compareTo(payment.getAmount()) > 0) {
+            throw new ValidationException(
+                    "Cumulative refunds (" + totalPaymentRefundsAfterThis
+                    + ") would exceed payment amount (" + payment.getAmount() + ")");
         }
 
         // 4. Build RefundRequest entity
@@ -204,19 +218,20 @@ public class RefundService {
         }
 
         // ── Phase 2: Call PayHere API *outside* any transaction (no DB lock held) ──
+        // M-04: Use values captured in Phase 1 instead of re-querying
+        RefundRequest snapshot = refundRequestRepository.findById(refundId)
+                .orElseThrow(() -> new ResourceNotFoundException("Refund request not found: " + refundId));
+        UUID orderId = snapshot.getOrderId();
+        BigDecimal refundAmount = snapshot.getRefundAmount();
+
+        Payment payment = paymentRepository.findTopByOrderIdOrderByCreatedAtDesc(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Payment not found for refund: " + refundId));
+        String payherePaymentId = payment.getPayherePaymentId();
+
         Map<String, Object> payHereResult = null;
         PayHereApiException payHereError = null;
         try {
-            Payment payment = paymentRepository.findTopByOrderIdOrderByCreatedAtDesc(
-                    refundRequestRepository.findById(refundId)
-                            .orElseThrow(() -> new ResourceNotFoundException("Refund request not found: " + refundId))
-                            .getOrderId()
-            ).orElseThrow(() -> new ResourceNotFoundException("Payment not found for refund: " + refundId));
-
-            payHereResult = payHereClient.refund(
-                    payment.getPayherePaymentId(),
-                    refundRequestRepository.findById(refundId).orElseThrow().getRefundAmount(),
-                    "Refund for order " + refundRequestRepository.findById(refundId).orElseThrow().getOrderId());
+            payHereResult = payHereClient.refund(payherePaymentId, refundAmount, "Refund for order " + orderId);
         } catch (PayHereApiException ex) {
             log.error("PayHere refund failed for refund request {}: {}", refundId, ex.getMessage());
             payHereError = ex;

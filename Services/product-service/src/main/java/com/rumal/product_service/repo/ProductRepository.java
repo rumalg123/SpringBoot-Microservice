@@ -78,6 +78,18 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
 
     List<Product> findByIdInAndDeletedFalseAndActiveTrue(Collection<UUID> ids);
 
+    @Query(value = "SELECT MAX(CAST(SUBSTRING(p.slug, LENGTH(:base) + 2) AS integer)) " +
+            "FROM Product p WHERE p.slug LIKE CONCAT(:base, '-%') " +
+            "AND p.slug ~ CONCAT(:base, '-[0-9]+$')",
+            nativeQuery = true)
+    Integer findMaxSlugSuffix(@Param("base") String base);
+
+    @Query(value = "SELECT MAX(CAST(SUBSTRING(p.slug, LENGTH(:base) + 2) AS integer)) " +
+            "FROM Product p WHERE p.slug LIKE CONCAT(:base, '-%') " +
+            "AND p.slug ~ CONCAT(:base, '-[0-9]+$') AND p.id <> :excludeId",
+            nativeQuery = true)
+    Integer findMaxSlugSuffixExcluding(@Param("base") String base, @Param("excludeId") UUID excludeId);
+
     // --- Analytics queries ---
 
     long countByDeletedFalseAndActiveTrue();

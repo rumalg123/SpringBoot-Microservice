@@ -3,6 +3,7 @@ package com.rumal.admin_service.controller;
 import com.rumal.admin_service.dto.VendorAdminOnboardRequest;
 import com.rumal.admin_service.dto.VendorAdminOnboardResponse;
 import com.rumal.admin_service.security.InternalRequestVerifier;
+import com.rumal.admin_service.service.AdminActorScopeService;
 import com.rumal.admin_service.service.AdminAuditService;
 import com.rumal.admin_service.service.AdminVendorService;
 import jakarta.validation.Valid;
@@ -32,48 +33,65 @@ public class AdminVendorController {
 
     private final AdminVendorService adminVendorService;
     private final InternalRequestVerifier internalRequestVerifier;
+    private final AdminActorScopeService actorScopeService;
     private final AdminAuditService auditService;
 
+    // H-11: All GET endpoints require platform role to prevent vendor staff from enumerating all vendors
     @GetMapping
     public List<Map<String, Object>> listAll(
-            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles
     ) {
         internalRequestVerifier.verify(internalAuth);
+        actorScopeService.assertHasRole(userSub, userRoles, "super_admin", "platform_staff");
         return adminVendorService.listAll(internalAuth);
     }
 
     @GetMapping("/deleted")
     public List<Map<String, Object>> listDeleted(
-            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles
     ) {
         internalRequestVerifier.verify(internalAuth);
+        actorScopeService.assertHasRole(userSub, userRoles, "super_admin", "platform_staff");
         return adminVendorService.listDeleted(internalAuth);
     }
 
     @GetMapping("/{id}/lifecycle-audit")
     public Map<String, Object> listLifecycleAudit(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
+        actorScopeService.assertHasRole(userSub, userRoles, "super_admin", "platform_staff");
         return adminVendorService.listLifecycleAudit(id, internalAuth);
     }
 
     @GetMapping("/{id}")
     public Map<String, Object> getById(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
+        actorScopeService.assertHasRole(userSub, userRoles, "super_admin", "platform_staff");
         return adminVendorService.getById(id, internalAuth);
     }
 
     @GetMapping("/{id}/deletion-eligibility")
     public Map<String, Object> getDeletionEligibility(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
+        actorScopeService.assertHasRole(userSub, userRoles, "super_admin", "platform_staff");
         return adminVendorService.getDeletionEligibility(id, internalAuth);
     }
 
@@ -228,9 +246,12 @@ public class AdminVendorController {
     @GetMapping("/{vendorId}/users")
     public List<Map<String, Object>> listVendorUsers(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID vendorId
     ) {
         internalRequestVerifier.verify(internalAuth);
+        actorScopeService.assertHasRole(userSub, userRoles, "super_admin", "platform_staff");
         return adminVendorService.listVendorUsers(vendorId, internalAuth);
     }
 

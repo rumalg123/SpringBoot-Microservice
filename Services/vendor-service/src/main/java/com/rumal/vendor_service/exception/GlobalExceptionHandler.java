@@ -46,13 +46,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<?> handleMethodArgumentNotValid(MethodArgumentNotValidException ex) {
         log.warn("Vendor request argument validation failed: {}", ex.getMessage());
-        Map<String, Object> body = error(HttpStatus.BAD_REQUEST, "Validation failed");
         Map<String, String> fieldErrors = new LinkedHashMap<>();
         for (FieldError fieldError : ex.getBindingResult().getFieldErrors()) {
             fieldErrors.putIfAbsent(fieldError.getField(), fieldError.getDefaultMessage());
         }
-        body.put("fieldErrors", fieldErrors);
-        return ResponseEntity.badRequest().body(body);
+        return ResponseEntity.badRequest().body(new ApiError(Instant.now(), 400, "Validation failed", "Validation failed", fieldErrors));
     }
 
     @ExceptionHandler(OptimisticLockingFailureException.class)
@@ -74,12 +72,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error(HttpStatus.INTERNAL_SERVER_ERROR, "Unexpected error"));
     }
 
-    private Map<String, Object> error(HttpStatus status, String message) {
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("timestamp", Instant.now());
-        body.put("status", status.value());
-        body.put("error", message);
-        body.put("message", message);
-        return body;
+    private ApiError error(HttpStatus status, String message) {
+        return new ApiError(Instant.now(), status.value(), message, message);
     }
 }

@@ -3,6 +3,7 @@ package com.rumal.personalization_service.controller;
 import com.rumal.personalization_service.client.dto.ProductSummary;
 import com.rumal.personalization_service.service.RecentlyViewedService;
 import com.rumal.personalization_service.service.RecommendationService;
+import com.rumal.personalization_service.service.TrackingOptOutService;
 import com.rumal.personalization_service.service.TrendingService;
 import jakarta.validation.constraints.Max;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,7 @@ public class PersonalizationController {
     private final RecommendationService recommendationService;
     private final RecentlyViewedService recentlyViewedService;
     private final TrendingService trendingService;
+    private final TrackingOptOutService trackingOptOutService;
 
     @GetMapping("/me/recommended")
     public List<ProductSummary> getRecommended(
@@ -56,6 +58,36 @@ public class PersonalizationController {
     @GetMapping("/trending")
     public List<ProductSummary> getTrending(@RequestParam(defaultValue = "20") @Max(100) int limit) {
         return trendingService.getTrending(limit);
+    }
+
+    @PostMapping("/me/tracking/opt-out")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void optOutOfTracking(@RequestHeader(value = "X-User-Sub") String userSub) {
+        UUID userId = parseUuidOrNull(userSub);
+        if (userId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valid user identity required");
+        }
+        trackingOptOutService.optOut(userId);
+    }
+
+    @PostMapping("/me/tracking/opt-in")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void optInToTracking(@RequestHeader(value = "X-User-Sub") String userSub) {
+        UUID userId = parseUuidOrNull(userSub);
+        if (userId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valid user identity required");
+        }
+        trackingOptOutService.optIn(userId);
+    }
+
+    @GetMapping("/me/tracking/status")
+    public java.util.Map<String, Boolean> getTrackingStatus(@RequestHeader(value = "X-User-Sub") String userSub) {
+        UUID userId = parseUuidOrNull(userSub);
+        if (userId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valid user identity required");
+        }
+        boolean optedOut = trackingOptOutService.hasOptedOut(userId);
+        return java.util.Map.of("trackingEnabled", !optedOut);
     }
 
     private UUID parseUuidOrNull(String value) {

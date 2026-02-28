@@ -50,4 +50,11 @@ public interface RefundRequestRepository extends JpaRepository<RefundRequest, UU
             "AND r.status NOT IN (com.rumal.payment_service.entity.RefundStatus.ADMIN_REJECTED, " +
             "com.rumal.payment_service.entity.RefundStatus.REFUND_FAILED)")
     BigDecimal sumRefundedAmountByVendorOrderId(@Param("vendorOrderId") UUID vendorOrderId);
+
+    // H-14: Sum of all active refund amounts across ALL vendor orders for a given payment
+    @Query("SELECT COALESCE(SUM(r.refundAmount), 0) FROM RefundRequest r " +
+            "WHERE r.payment.id = :paymentId " +
+            "AND r.status NOT IN (com.rumal.payment_service.entity.RefundStatus.ADMIN_REJECTED, " +
+            "com.rumal.payment_service.entity.RefundStatus.REFUND_FAILED)")
+    BigDecimal sumActiveRefundsByPaymentId(@Param("paymentId") UUID paymentId);
 }

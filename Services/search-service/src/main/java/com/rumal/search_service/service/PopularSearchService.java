@@ -24,11 +24,26 @@ public class PopularSearchService {
     private int maxEntries;
 
     public void recordSearch(String query) {
+        recordSearch(query, null, null);
+    }
+
+    public void recordSearch(String query, String userId, String sessionId) {
         if (query == null || query.isBlank()) return;
         String normalized = query.trim().toLowerCase();
         if (normalized.length() < 2) return;
 
         try {
+            // Deduplicate by user/session to prevent gaming
+            String identity = userId != null ? userId : sessionId;
+            if (identity != null) {
+                String dedupeKey = "search:dedup:" + identity + ":" + normalized;
+                Boolean isNew = stringRedisTemplate.opsForValue()
+                        .setIfAbsent(dedupeKey, "1", java.time.Duration.ofMinutes(30));
+                if (!Boolean.TRUE.equals(isNew)) {
+                    return;
+                }
+            }
+
             stringRedisTemplate.opsForZSet().incrementScore(POPULAR_KEY, normalized, 1);
             Long size = stringRedisTemplate.opsForZSet().size(POPULAR_KEY);
             if (size != null && size > maxEntries * 2) {

@@ -3,13 +3,23 @@ package com.rumal.api_gateway.config;
 import org.jspecify.annotations.NullMarked;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
+import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.core.io.buffer.DataBufferUtils;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.server.reactive.ServerHttpRequest;
+import org.springframework.http.server.reactive.ServerHttpRequestDecorator;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -43,6 +53,8 @@ public class AuthHeaderRelayFilter implements GlobalFilter, Ordered {
                     headers.remove("X-User-Email-Verified");
                     headers.remove("X-User-Roles");
                     headers.remove("X-Internal-Auth");
+                    headers.remove("X-Internal-Signature");
+                    headers.remove("X-Internal-Timestamp");
                 })
                 .build();
         ServerWebExchange sanitizedExchange = exchange.mutate().request(sanitizedRequest).build();
@@ -87,7 +99,90 @@ public class AuthHeaderRelayFilter implements GlobalFilter, Ordered {
                     return sanitizedExchange.mutate().request(requestBuilder.build()).build();
                 })
                 .defaultIfEmpty(sanitizedExchange)
-                .flatMap(chain::filter);
+                .flatMap(ex -> attachHmacSignature(ex, chain));
+    }
+
+    private Mono<Void> attachHmacSignature(ServerWebExchange exchange, org.springframework.cloud.gateway.filter.GatewayFilterChain chain) {
+        if (internalSharedSecret.isBlank()) {
+            return chain.filter(exchange);
+        }
+
+        return resolveBodyBytes(exchange)
+                .flatMap(bodyBytes -> {
+                    String bodyHash = bodyBytes.length > 0 ? sha256Hex(bodyBytes) : "";
+                    String timestamp = String.valueOf(System.currentTimeMillis());
+                    String method = exchange.getRequest().getMethod().name();
+                    String path = exchange.getRequest().getURI().getRawPath();
+
+                    String payload = timestamp + ":" + method + ":" + path + ":" + bodyHash;
+                    String signature = computeHmac(internalSharedSecret, payload);
+
+                    ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
+                            .headers(headers -> {
+                                headers.set("X-Internal-Timestamp", timestamp);
+                                headers.set("X-Internal-Signature", signature);
+                            })
+                            .build();
+
+                    if (bodyBytes.length > 0) {
+                        ServerHttpRequestDecorator decoratedRequest = new ServerHttpRequestDecorator(mutatedRequest) {
+                            @Override
+                            public Flux<DataBuffer> getBody() {
+                                return Flux.just(exchange.getResponse().bufferFactory().wrap(bodyBytes));
+                            }
+                        };
+                        return chain.filter(exchange.mutate().request(decoratedRequest).build());
+                    }
+
+                    return chain.filter(exchange.mutate().request(mutatedRequest).build());
+                });
+    }
+
+    private Mono<byte[]> resolveBodyBytes(ServerWebExchange exchange) {
+        HttpMethod method = exchange.getRequest().getMethod();
+        if (method == HttpMethod.GET || method == HttpMethod.DELETE
+                || method == HttpMethod.HEAD || method == HttpMethod.OPTIONS) {
+            return Mono.just(new byte[0]);
+        }
+        return exchange.getRequest().getBody()
+                .map(dataBuffer -> {
+                    byte[] bytes = new byte[dataBuffer.readableByteCount()];
+                    dataBuffer.read(bytes);
+                    DataBufferUtils.release(dataBuffer);
+                    return bytes;
+                })
+                .collectList()
+                .map(list -> {
+                    int total = list.stream().mapToInt(b -> b.length).sum();
+                    byte[] combined = new byte[total];
+                    int offset = 0;
+                    for (byte[] chunk : list) {
+                        System.arraycopy(chunk, 0, combined, offset, chunk.length);
+                        offset += chunk.length;
+                    }
+                    return combined;
+                })
+                .defaultIfEmpty(new byte[0]);
+    }
+
+    private String computeHmac(String secret, String payload) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            byte[] hash = mac.doFinal(payload.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    private String sha256Hex(byte[] data) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(data));
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     @Override

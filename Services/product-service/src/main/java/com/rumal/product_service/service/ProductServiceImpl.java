@@ -173,6 +173,13 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    public List<ProductResponse> getFullDetailsByIds(List<UUID> ids) {
+        if (ids == null || ids.isEmpty()) return List.of();
+        List<Product> products = productRepository.findByIdInAndDeletedFalseAndActiveTrue(ids);
+        return products.stream().map(this::toResponse).toList();
+    }
+
+    @Override
     public Page<ProductSummaryResponse> listUpdatedSince(Instant since, Pageable pageable) {
         Specification<ProductCatalogRead> spec = (root, query, cb) -> cb.and(
                 cb.isFalse(root.get("deleted")),
@@ -1502,15 +1509,12 @@ public class ProductServiceImpl implements ProductService {
         if (!allowAutoSuffix) {
             throw new ValidationException("Product slug must be unique: " + normalizedSeed);
         }
-        int suffix = 2;
-        while (suffix < 100_000) {
-            String candidate = appendSlugSuffix(normalizedSeed, suffix, 180);
-            if (isSlugAvailable(candidate, existingId)) {
-                return candidate;
-            }
-            suffix++;
-        }
-        throw new ValidationException("Unable to generate a unique product slug");
+        // Single query to find the max existing numeric suffix instead of iterating up to 100K
+        Integer maxSuffix = existingId != null
+                ? productRepository.findMaxSlugSuffixExcluding(normalizedSeed, existingId)
+                : productRepository.findMaxSlugSuffix(normalizedSeed);
+        int nextSuffix = (maxSuffix == null ? 1 : maxSuffix) + 1;
+        return appendSlugSuffix(normalizedSeed, nextSuffix, 180);
     }
 
     private String appendSlugSuffix(String slug, int suffix, int maxLen) {

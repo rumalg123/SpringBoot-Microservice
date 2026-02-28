@@ -1,11 +1,19 @@
 "use client";
 
+import type { AxiosInstance } from "axios";
+import SearchableSelect from "./SearchableSelect";
+
 export type FilterDef = {
   key: string;
   label: string;
-  type: "text" | "select" | "date" | "dateRange";
+  type: "text" | "select" | "date" | "dateRange" | "searchable-select";
   placeholder?: string;
   options?: { label: string; value: string }[];
+  apiClient?: AxiosInstance | null;
+  endpoint?: string;
+  searchParam?: string;
+  labelField?: string;
+  valueField?: string;
 };
 
 type Props = {
@@ -110,6 +118,24 @@ export default function FilterBar({ filters, values, onChange, onClear }: Props)
                   style={{ colorScheme: "dark" }}
                 />
               </div>
+            </div>
+          );
+        }
+
+        if (filter.type === "searchable-select") {
+          return (
+            <div key={filter.key} className="flex-[1_1_200px] min-w-[180px]">
+              <label className="block mb-1 text-xs font-semibold text-muted uppercase tracking-wide">{filter.label}</label>
+              <SearchableSelect
+                apiClient={filter.apiClient || null}
+                endpoint={filter.endpoint || ""}
+                searchParam={filter.searchParam || "q"}
+                labelField={filter.labelField || "name"}
+                valueField={filter.valueField || "id"}
+                placeholder={filter.placeholder || `Search ${filter.label.toLowerCase()}...`}
+                value={currentValue}
+                onChange={(value) => onChange(filter.key, value)}
+              />
             </div>
           );
         }

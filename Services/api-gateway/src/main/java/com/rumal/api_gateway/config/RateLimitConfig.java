@@ -275,6 +275,22 @@ public class RateLimitConfig {
     }
 
     @Bean
+    public RedisRateLimiter reviewVoteRateLimiter(
+            @Value("${RATE_LIMIT_REVIEW_VOTE_REPLENISH:3}") int replenishRate,
+            @Value("${RATE_LIMIT_REVIEW_VOTE_BURST:6}") int burstCapacity
+    ) {
+        return redisRateLimiter(replenishRate, burstCapacity);
+    }
+
+    @Bean
+    public RedisRateLimiter productViewRateLimiter(
+            @Value("${RATE_LIMIT_PRODUCT_VIEW_REPLENISH:2}") int replenishRate,
+            @Value("${RATE_LIMIT_PRODUCT_VIEW_BURST:5}") int burstCapacity
+    ) {
+        return redisRateLimiter(replenishRate, burstCapacity);
+    }
+
+    @Bean
     public RedisRateLimiter webhookRateLimiter(
             @Value("${RATE_LIMIT_WEBHOOK_REPLENISH:100}") int replenishRate,
             @Value("${RATE_LIMIT_WEBHOOK_BURST:200}") int burstCapacity

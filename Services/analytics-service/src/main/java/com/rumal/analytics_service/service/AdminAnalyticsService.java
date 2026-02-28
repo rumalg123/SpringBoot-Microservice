@@ -36,28 +36,17 @@ public class AdminAnalyticsService {
 
     @Cacheable(cacheNames = "dashboardSummary", key = "#periodDays")
     public AdminDashboardAnalytics getDashboardSummary(int periodDays) {
-        var ordersFuture = CompletableFuture.supplyAsync(() ->
-                safeCall(() -> orderClient.getPlatformSummary(periodDays), null), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
-        var customersFuture = CompletableFuture.supplyAsync(() ->
-                safeCall(() -> customerClient.getPlatformSummary(), null), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
-        var productsFuture = CompletableFuture.supplyAsync(() ->
-                safeCall(() -> productClient.getPlatformSummary(), null), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
-        var vendorsFuture = CompletableFuture.supplyAsync(() ->
-                safeCall(() -> vendorClient.getPlatformSummary(), null), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
-        var paymentsFuture = CompletableFuture.supplyAsync(() ->
-                safeCall(() -> paymentClient.getPlatformSummary(), null), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
-        var inventoryFuture = CompletableFuture.supplyAsync(() ->
-                safeCall(() -> inventoryClient.getPlatformHealth(), null), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
-        var promotionsFuture = CompletableFuture.supplyAsync(() ->
-                safeCall(() -> promotionClient.getPlatformSummary(), null), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
-        var reviewsFuture = CompletableFuture.supplyAsync(() ->
-                safeCall(() -> reviewClient.getPlatformSummary(), null), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
-        var wishlistFuture = CompletableFuture.supplyAsync(() ->
-                safeCall(() -> wishlistClient.getPlatformSummary(), null), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
-        var cartFuture = CompletableFuture.supplyAsync(() ->
-                safeCall(() -> cartClient.getPlatformSummary(), null), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
-        var revenueTrendFuture = CompletableFuture.supplyAsync(() ->
-                safeCall(() -> orderClient.getRevenueTrend(periodDays), List.<DailyRevenueBucket>of()), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
+        var ordersFuture = asyncWithFallback(() -> orderClient.getPlatformSummary(periodDays), null);
+        var customersFuture = asyncWithFallback(() -> customerClient.getPlatformSummary(), null);
+        var productsFuture = asyncWithFallback(() -> productClient.getPlatformSummary(), null);
+        var vendorsFuture = asyncWithFallback(() -> vendorClient.getPlatformSummary(), null);
+        var paymentsFuture = asyncWithFallback(() -> paymentClient.getPlatformSummary(), null);
+        var inventoryFuture = asyncWithFallback(() -> inventoryClient.getPlatformHealth(), null);
+        var promotionsFuture = asyncWithFallback(() -> promotionClient.getPlatformSummary(), null);
+        var reviewsFuture = asyncWithFallback(() -> reviewClient.getPlatformSummary(), null);
+        var wishlistFuture = asyncWithFallback(() -> wishlistClient.getPlatformSummary(), null);
+        var cartFuture = asyncWithFallback(() -> cartClient.getPlatformSummary(), null);
+        var revenueTrendFuture = asyncWithFallback(() -> orderClient.getRevenueTrend(periodDays), List.<DailyRevenueBucket>of());
 
         CompletableFuture.allOf(ordersFuture, customersFuture, productsFuture, vendorsFuture,
                 paymentsFuture, inventoryFuture, promotionsFuture, reviewsFuture,
@@ -73,24 +62,18 @@ public class AdminAnalyticsService {
 
     @Cacheable(cacheNames = "revenueSummary", key = "#days")
     public AdminRevenueTrendResponse getRevenueTrend(int days) {
-        var trendFuture = CompletableFuture.supplyAsync(() ->
-                safeCall(() -> orderClient.getRevenueTrend(days), List.<DailyRevenueBucket>of()), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
-        var statusFuture = CompletableFuture.supplyAsync(() ->
-                safeCall(() -> orderClient.getStatusBreakdown(), Map.<String, Long>of()), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
+        var trendFuture = asyncWithFallback(() -> orderClient.getRevenueTrend(days), List.<DailyRevenueBucket>of());
+        var statusFuture = asyncWithFallback(() -> orderClient.getStatusBreakdown(), Map.<String, Long>of());
         CompletableFuture.allOf(trendFuture, statusFuture).join();
         return new AdminRevenueTrendResponse(trendFuture.join(), statusFuture.join());
     }
 
     @Cacheable(cacheNames = "topProducts")
     public AdminTopProductsResponse getTopProducts() {
-        var byRevenueFuture = CompletableFuture.supplyAsync(() ->
-                safeCall(() -> orderClient.getTopProducts(20), List.<TopProductEntry>of()), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
-        var byViewsFuture = CompletableFuture.supplyAsync(() ->
-                safeCall(() -> productClient.getTopViewed(20), List.<ProductViewEntry>of()), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
-        var bySoldFuture = CompletableFuture.supplyAsync(() ->
-                safeCall(() -> productClient.getTopSold(20), List.<ProductSoldEntry>of()), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
-        var byWishlistedFuture = CompletableFuture.supplyAsync(() ->
-                safeCall(() -> wishlistClient.getMostWished(20), List.<MostWishedProduct>of()), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
+        var byRevenueFuture = asyncWithFallback(() -> orderClient.getTopProducts(20), List.<TopProductEntry>of());
+        var byViewsFuture = asyncWithFallback(() -> productClient.getTopViewed(20), List.<ProductViewEntry>of());
+        var bySoldFuture = asyncWithFallback(() -> productClient.getTopSold(20), List.<ProductSoldEntry>of());
+        var byWishlistedFuture = asyncWithFallback(() -> wishlistClient.getMostWished(20), List.<MostWishedProduct>of());
         CompletableFuture.allOf(byRevenueFuture, byViewsFuture, bySoldFuture, byWishlistedFuture).join();
         return new AdminTopProductsResponse(
                 byRevenueFuture.join(), byViewsFuture.join(),
@@ -99,50 +82,40 @@ public class AdminAnalyticsService {
 
     @Cacheable(cacheNames = "customerSegmentation")
     public AdminCustomerSegmentationResponse getCustomerSegmentation() {
-        var summaryFuture = CompletableFuture.supplyAsync(() ->
-                safeCall(() -> customerClient.getPlatformSummary(), null), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
-        var growthFuture = CompletableFuture.supplyAsync(() ->
-                safeCall(() -> customerClient.getGrowthTrend(12), List.<MonthlyGrowthBucket>of()), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
+        var summaryFuture = asyncWithFallback(() -> customerClient.getPlatformSummary(), null);
+        var growthFuture = asyncWithFallback(() -> customerClient.getGrowthTrend(12), List.<MonthlyGrowthBucket>of());
         CompletableFuture.allOf(summaryFuture, growthFuture).join();
         return new AdminCustomerSegmentationResponse(summaryFuture.join(), growthFuture.join());
     }
 
     @Cacheable(cacheNames = "vendorLeaderboard", key = "#sortBy")
     public AdminVendorLeaderboardResponse getVendorLeaderboard(String sortBy) {
-        var summaryFuture = CompletableFuture.supplyAsync(() ->
-                safeCall(() -> vendorClient.getPlatformSummary(), null), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
-        var leaderboardFuture = CompletableFuture.supplyAsync(() ->
-                safeCall(() -> vendorClient.getLeaderboard(sortBy, 20), List.<VendorLeaderboardEntry>of()), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
+        var summaryFuture = asyncWithFallback(() -> vendorClient.getPlatformSummary(), null);
+        var leaderboardFuture = asyncWithFallback(() -> vendorClient.getLeaderboard(sortBy, 20), List.<VendorLeaderboardEntry>of());
         CompletableFuture.allOf(summaryFuture, leaderboardFuture).join();
         return new AdminVendorLeaderboardResponse(summaryFuture.join(), leaderboardFuture.join());
     }
 
     @Cacheable(cacheNames = "inventoryHealth")
     public AdminInventoryHealthResponse getInventoryHealth() {
-        var healthFuture = CompletableFuture.supplyAsync(() ->
-                safeCall(() -> inventoryClient.getPlatformHealth(), null), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
-        var alertsFuture = CompletableFuture.supplyAsync(() ->
-                safeCall(() -> inventoryClient.getLowStockAlerts(50), List.<LowStockAlert>of()), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
+        var healthFuture = asyncWithFallback(() -> inventoryClient.getPlatformHealth(), null);
+        var alertsFuture = asyncWithFallback(() -> inventoryClient.getLowStockAlerts(50), List.<LowStockAlert>of());
         CompletableFuture.allOf(healthFuture, alertsFuture).join();
         return new AdminInventoryHealthResponse(healthFuture.join(), alertsFuture.join());
     }
 
     @Cacheable(cacheNames = "promotionRoi")
     public AdminPromotionRoiResponse getPromotionRoi() {
-        var summaryFuture = CompletableFuture.supplyAsync(() ->
-                safeCall(() -> promotionClient.getPlatformSummary(), null), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
-        var roiFuture = CompletableFuture.supplyAsync(() ->
-                safeCall(() -> promotionClient.getPromotionRoi(20), List.<PromotionRoiEntry>of()), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
+        var summaryFuture = asyncWithFallback(() -> promotionClient.getPlatformSummary(), null);
+        var roiFuture = asyncWithFallback(() -> promotionClient.getPromotionRoi(20), List.<PromotionRoiEntry>of());
         CompletableFuture.allOf(summaryFuture, roiFuture).join();
         return new AdminPromotionRoiResponse(summaryFuture.join(), roiFuture.join());
     }
 
     @Cacheable(cacheNames = "reviewAnalytics")
     public AdminReviewAnalyticsResponse getReviewAnalytics() {
-        var summaryFuture = CompletableFuture.supplyAsync(() ->
-                safeCall(() -> reviewClient.getPlatformSummary(), null), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
-        var distFuture = CompletableFuture.supplyAsync(() ->
-                safeCall(() -> reviewClient.getRatingDistribution(), Map.<Integer, Long>of()), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
+        var summaryFuture = asyncWithFallback(() -> reviewClient.getPlatformSummary(), null);
+        var distFuture = asyncWithFallback(() -> reviewClient.getRatingDistribution(), Map.<Integer, Long>of());
         CompletableFuture.allOf(summaryFuture, distFuture).join();
         return new AdminReviewAnalyticsResponse(summaryFuture.join(), distFuture.join());
     }
@@ -156,14 +129,10 @@ public class AdminAnalyticsService {
 
     @Cacheable(cacheNames = "dashboardSummary", key = "'legacy'")
     public DashboardSummaryResponse getLegacyDashboardSummary() {
-        var ordersFuture = CompletableFuture.supplyAsync(() ->
-                safeCall(() -> orderClient.getPlatformSummary(30), null), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
-        var vendorsFuture = CompletableFuture.supplyAsync(() ->
-                safeCall(() -> vendorClient.getPlatformSummary(), null), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
-        var productsFuture = CompletableFuture.supplyAsync(() ->
-                safeCall(() -> productClient.getPlatformSummary(), null), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
-        var promotionsFuture = CompletableFuture.supplyAsync(() ->
-                safeCall(() -> promotionClient.getPlatformSummary(), null), analyticsExecutor).orTimeout(10, TimeUnit.SECONDS);
+        var ordersFuture = asyncWithFallback(() -> orderClient.getPlatformSummary(30), null);
+        var vendorsFuture = asyncWithFallback(() -> vendorClient.getPlatformSummary(), null);
+        var productsFuture = asyncWithFallback(() -> productClient.getPlatformSummary(), null);
+        var promotionsFuture = asyncWithFallback(() -> promotionClient.getPlatformSummary(), null);
 
         CompletableFuture.allOf(ordersFuture, vendorsFuture, productsFuture, promotionsFuture).join();
 
@@ -221,6 +190,15 @@ public class AdminAnalyticsService {
                 totalVendors, activeVendors, totalProducts, activePromotions,
                 ordersByStatus, Instant.now()
         );
+    }
+
+    private <T> CompletableFuture<T> asyncWithFallback(java.util.function.Supplier<T> action, T fallback) {
+        return CompletableFuture.supplyAsync(() -> safeCall(action, fallback), analyticsExecutor)
+                .orTimeout(10, TimeUnit.SECONDS)
+                .exceptionally(ex -> {
+                    log.warn("Analytics async call timed out or failed: {}", ex.getMessage());
+                    return fallback;
+                });
     }
 
     private <T> T safeCall(java.util.function.Supplier<T> action, T fallback) {

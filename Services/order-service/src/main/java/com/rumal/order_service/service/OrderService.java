@@ -7,6 +7,8 @@ import com.rumal.order_service.client.ProductClient;
 import com.rumal.order_service.client.PromotionClient;
 import com.rumal.order_service.client.VendorClient;
 import com.rumal.order_service.client.VendorOperationalStateClient;
+import com.rumal.order_service.dto.PromotionQuoteRequest;
+import com.rumal.order_service.dto.PromotionQuoteResponse;
 import com.rumal.order_service.dto.StockCheckRequest;
 import com.rumal.order_service.dto.CreateOrderItemRequest;
 import com.rumal.order_service.dto.InvoiceResponse;
@@ -480,6 +482,13 @@ public class OrderService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add));
         BigDecimal computedShippingAmount = calculateShippingForOrder(lines, addresses.shippingAddress().countryCode());
         PromotionPricingSnapshot pricing = validateAndResolvePricingSnapshot(requestedPricing, itemSubtotal, computedShippingAmount);
+
+        // C-07: Verify non-coupon promotion discounts against the promotion service.
+        // Coupon-based discounts are verified later via maybeCommitCouponReservation.
+        if (pricing.couponReservationId() == null && hasNonZeroDiscounts(pricing)) {
+            pricing = verifyPromotionDiscounts(customerId, lines, pricing, addresses.shippingAddress().countryCode());
+        }
+
         BigDecimal orderTotal = pricing.grandTotal();
         if (orderTotal == null || orderTotal.compareTo(BigDecimal.ZERO) <= 0) {
             throw new ValidationException("Order grandTotal must be positive");
@@ -753,14 +762,43 @@ public class OrderService {
             throw new ValidationException("Order cannot contain more than " + MAX_DISTINCT_ITEMS + " distinct items");
         }
 
+        // Batch-fetch all products in one call instead of N sequential HTTP calls
+        List<UUID> productIds = new ArrayList<>(normalized.keySet());
+        Map<UUID, ProductSummary> productMap;
+        try {
+            List<ProductSummary> products = productClient.getBatch(productIds);
+            productMap = products.stream()
+                    .collect(java.util.stream.Collectors.toMap(ProductSummary::id, p -> p, (a, b) -> a));
+        } catch (Exception e) {
+            // Fallback to individual calls if batch endpoint is unavailable
+            productMap = new LinkedHashMap<>();
+            for (UUID pid : productIds) {
+                productMap.put(pid, resolvePurchasableProduct(pid));
+            }
+        }
+
+        final Map<UUID, ProductSummary> resolvedProducts = productMap;
         return normalized.entrySet().stream()
                 .map(entry -> {
-                    ProductSummary product = resolvePurchasableProduct(entry.getKey());
+                    ProductSummary product = resolvedProducts.get(entry.getKey());
+                    if (product == null) {
+                        throw new com.rumal.order_service.exception.ResourceNotFoundException("Product not found: " + entry.getKey());
+                    }
+                    validatePurchasableProduct(product);
                     BigDecimal unitPrice = normalizeMoney(product.sellingPrice());
                     BigDecimal lineTotal = normalizeMoney(unitPrice.multiply(BigDecimal.valueOf(entry.getValue())));
                     return new ResolvedOrderLine(product, entry.getValue(), unitPrice, lineTotal);
                 })
                 .toList();
+    }
+
+    private void validatePurchasableProduct(ProductSummary product) {
+        if (!product.active()) {
+            throw new ValidationException("Product is not active: " + product.id());
+        }
+        if ("PARENT".equalsIgnoreCase(product.productType())) {
+            throw new ValidationException("Cannot order a parent product directly. Choose a variation: " + product.id());
+        }
     }
 
     private void assertVendorsAcceptingOrders(List<ResolvedOrderLine> lines) {
@@ -874,6 +912,81 @@ public class OrderService {
             throw new ValidationException("promotionPricing shippingAmount does not match computed shipping fee");
         }
         return requestedPricing;
+    }
+
+    // C-07: Check if pricing snapshot has any non-zero discount amounts
+    private boolean hasNonZeroDiscounts(PromotionPricingSnapshot pricing) {
+        return pricing.lineDiscountTotal().signum() != 0
+                || pricing.cartDiscountTotal().signum() != 0
+                || pricing.shippingDiscountTotal().signum() != 0;
+    }
+
+    // C-07: Verify submitted promotion discounts against the promotion service.
+    // Clamps submitted discounts to server-computed maximums to prevent inflation.
+    private PromotionPricingSnapshot verifyPromotionDiscounts(
+            UUID customerId,
+            List<ResolvedOrderLine> lines,
+            PromotionPricingSnapshot submitted,
+            String countryCode
+    ) {
+        List<PromotionQuoteRequest.LineItem> quoteLines = lines.stream()
+                .map(line -> new PromotionQuoteRequest.LineItem(
+                        line.product().id(),
+                        line.product().vendorId(),
+                        null, // categoryIds not available in order-service
+                        line.unitPrice(),
+                        line.quantity()
+                ))
+                .toList();
+
+        PromotionQuoteRequest quoteRequest = new PromotionQuoteRequest(
+                quoteLines,
+                submitted.shippingAmount(),
+                customerId,
+                submitted.couponCode(),
+                countryCode
+        );
+
+        PromotionQuoteResponse serverQuote;
+        try {
+            serverQuote = promotionClient.quote(quoteRequest);
+        } catch (Exception ex) {
+            log.warn("Promotion service unavailable for discount verification, rejecting non-zero discounts", ex);
+            serverQuote = null;
+        }
+
+        if (serverQuote == null) {
+            // Fail-closed: if we can't verify discounts, reject them
+            throw new ValidationException("Unable to verify promotion discounts. Please try again.");
+        }
+
+        // Clamp each discount to the server-computed maximum
+        BigDecimal lineDiscount = clampDiscount(submitted.lineDiscountTotal(), normalizeMoney(serverQuote.lineDiscountTotal()));
+        BigDecimal cartDiscount = clampDiscount(submitted.cartDiscountTotal(), normalizeMoney(serverQuote.cartDiscountTotal()));
+        BigDecimal shippingDiscount = clampDiscount(submitted.shippingDiscountTotal(), normalizeMoney(serverQuote.shippingDiscountTotal()));
+        BigDecimal totalDiscount = normalizeMoney(lineDiscount.add(cartDiscount).add(shippingDiscount));
+        BigDecimal grandTotal = normalizeMoney(
+                submitted.subtotal().subtract(lineDiscount).subtract(cartDiscount)
+                        .add(submitted.shippingAmount()).subtract(shippingDiscount)
+        );
+
+        return new PromotionPricingSnapshot(
+                submitted.couponReservationId(),
+                submitted.couponCode(),
+                submitted.subtotal(),
+                lineDiscount,
+                cartDiscount,
+                submitted.shippingAmount(),
+                shippingDiscount,
+                totalDiscount,
+                grandTotal
+        );
+    }
+
+    private BigDecimal clampDiscount(BigDecimal submitted, BigDecimal serverComputed) {
+        if (submitted == null || submitted.signum() == 0) return normalizeMoney(BigDecimal.ZERO);
+        if (serverComputed == null || serverComputed.signum() == 0) return normalizeMoney(BigDecimal.ZERO);
+        return submitted.compareTo(serverComputed) <= 0 ? normalizeMoney(submitted) : normalizeMoney(serverComputed);
     }
 
     private BigDecimal calculateShippingForOrder(List<ResolvedOrderLine> lines, String destinationCountryCode) {
@@ -1289,7 +1402,21 @@ public class OrderService {
         if (effectiveStatuses.contains(OrderStatus.RETURN_REJECTED)) return OrderStatus.RETURN_REJECTED;
         if (effectiveStatuses.contains(OrderStatus.PAYMENT_PENDING)) return OrderStatus.PAYMENT_PENDING;
         if (effectiveStatuses.contains(OrderStatus.PAYMENT_FAILED)) return OrderStatus.PAYMENT_FAILED;
-        if (effectiveStatuses.contains(OrderStatus.SHIPPED)) return OrderStatus.SHIPPED;
+
+        // Use lowest-common-denominator: if SHIPPED is mixed with less-advanced statuses, use the least advanced
+        if (effectiveStatuses.contains(OrderStatus.SHIPPED)) {
+            boolean allShippedOrBeyond = effectiveStatuses.stream()
+                    .allMatch(s -> s == OrderStatus.SHIPPED || s == OrderStatus.DELIVERED);
+            if (!allShippedOrBeyond) {
+                // Some vendor orders haven't shipped yet — use the least advanced active status
+                if (effectiveStatuses.contains(OrderStatus.CONFIRMED)) return OrderStatus.CONFIRMED;
+                if (effectiveStatuses.contains(OrderStatus.PROCESSING)) return OrderStatus.PROCESSING;
+                return OrderStatus.PROCESSING;
+            }
+            // All are shipped or delivered — if any still shipping, show SHIPPED
+            if (effectiveStatuses.contains(OrderStatus.SHIPPED)) return OrderStatus.SHIPPED;
+        }
+
         if (effectiveStatuses.contains(OrderStatus.PROCESSING)) return OrderStatus.PROCESSING;
         if (effectiveStatuses.contains(OrderStatus.CONFIRMED)) return OrderStatus.CONFIRMED;
         if (effectiveStatuses.contains(OrderStatus.PENDING)) return OrderStatus.PENDING;

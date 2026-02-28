@@ -12,8 +12,6 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestControllerAdvice
@@ -66,22 +64,12 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<Map<String, Object>> handleUnexpected(Exception ex) {
+    public ResponseEntity<?> handleUnexpected(Exception ex) {
         log.error("Unexpected error", ex);
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("timestamp", Instant.now());
-        body.put("status", 500);
-        body.put("error", "Unexpected error");
-        body.put("message", "Unexpected error");
-        return ResponseEntity.status(500).body(body);
+        return ResponseEntity.status(500).body(error(HttpStatus.INTERNAL_SERVER_ERROR, "Unexpected error"));
     }
 
-    private Map<String, Object> error(HttpStatusCode statusCode, String message) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("timestamp", Instant.now());
-        m.put("status", statusCode.value());
-        m.put("error", message);
-        m.put("message", message);
-        return m;
+    private ApiError error(HttpStatusCode statusCode, String message) {
+        return new ApiError(Instant.now(), statusCode.value(), message, message);
     }
 }

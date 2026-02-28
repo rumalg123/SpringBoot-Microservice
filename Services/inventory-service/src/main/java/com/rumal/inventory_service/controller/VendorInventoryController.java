@@ -127,6 +127,8 @@ public class VendorInventoryController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         UUID resolvedVendorId = resolveVendorId(userSub, userRoles, internalAuth, vendorId);
+        // C-03: Validate warehouse belongs to this vendor before creating stock
+        warehouseService.assertWarehouseOwnedByVendor(request.warehouseId(), resolvedVendorId);
         StockItemCreateRequest vendorRequest = new StockItemCreateRequest(
                 request.productId(), resolvedVendorId, request.warehouseId(),
                 request.sku(), request.quantityOnHand(), request.lowStockThreshold(), request.backorderable()
@@ -176,6 +178,11 @@ public class VendorInventoryController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         UUID resolvedVendorId = resolveVendorId(userSub, userRoles, internalAuth, vendorId);
+        // C-03: Validate all warehouse IDs belong to this vendor before bulk import
+        request.items().stream()
+                .map(StockItemCreateRequest::warehouseId)
+                .distinct()
+                .forEach(whId -> warehouseService.assertWarehouseOwnedByVendor(whId, resolvedVendorId));
         var vendorItems = request.items().stream()
                 .map(item -> new StockItemCreateRequest(
                         item.productId(), resolvedVendorId, item.warehouseId(),

@@ -45,15 +45,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<?> validation(MethodArgumentNotValidException ex) {
         log.warn("Wishlist request argument validation failed: {}", ex.getMessage());
-        Map<String, Object> body = error(HttpStatus.BAD_REQUEST, "Validation failed");
         Map<String, String> fieldErrors = new LinkedHashMap<>();
 
         for (FieldError fieldError : ex.getBindingResult().getFieldErrors()) {
             fieldErrors.putIfAbsent(fieldError.getField(), fieldError.getDefaultMessage());
         }
-        body.put("fieldErrors", fieldErrors);
 
-        return ResponseEntity.badRequest().body(body);
+        return ResponseEntity.badRequest().body(new ApiError(Instant.now(), 400, "Validation failed", "Validation failed", fieldErrors));
     }
 
     @ExceptionHandler(org.springframework.orm.ObjectOptimisticLockingFailureException.class)
@@ -64,22 +62,12 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<Map<String, Object>> handleUnexpected(Exception ex) {
+    public ResponseEntity<?> handleUnexpected(Exception ex) {
         log.error("Unexpected error", ex);
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("timestamp", Instant.now());
-        body.put("status", 500);
-        body.put("error", "Unexpected error");
-        body.put("message", "Unexpected error");
-        return ResponseEntity.status(500).body(body);
+        return ResponseEntity.status(500).body(error(HttpStatus.INTERNAL_SERVER_ERROR, "Unexpected error"));
     }
 
-    private Map<String, Object> error(HttpStatus status, String message) {
-        Map<String, Object> response = new LinkedHashMap<>();
-        response.put("timestamp", Instant.now());
-        response.put("status", status.value());
-        response.put("error", message);
-        response.put("message", message);
-        return response;
+    private ApiError error(HttpStatus status, String message) {
+        return new ApiError(Instant.now(), status.value(), message, message);
     }
 }

@@ -24,11 +24,18 @@ public class EventService {
     private final UserEventRepository userEventRepository;
     private final AnonymousSessionRepository anonymousSessionRepository;
     private final RecentlyViewedService recentlyViewedService;
+    private final TrackingOptOutService trackingOptOutService;
 
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public void recordEvent(UUID userId, String sessionId, RecordEventRequest request) {
         if (userId == null && (sessionId == null || sessionId.isBlank())) {
             throw new ValidationException("Either userId or sessionId must be provided");
+        }
+
+        // GDPR: respect user's tracking opt-out preference
+        if (userId != null && trackingOptOutService.hasOptedOut(userId)) {
+            log.debug("Skipping event recording for opted-out user {}", userId);
+            return;
         }
 
         UserEvent event = UserEvent.builder()

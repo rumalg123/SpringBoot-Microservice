@@ -27,6 +27,21 @@ public interface PromotionCampaignRepository extends JpaRepository<PromotionCamp
             Pageable pageable
     );
 
+    @Query("""
+            SELECT p FROM PromotionCampaign p
+            WHERE p.lifecycleStatus = :status
+              AND p.approvalStatus IN :approvalStatuses
+              AND (p.scopeType = 'ORDER'
+                   OR (p.scopeType = 'VENDOR' AND p.vendorId IN :vendorIds)
+                   OR p.scopeType IN ('PRODUCT', 'CATEGORY'))
+            """)
+    Page<PromotionCampaign> findActiveByScope(
+            @Param("status") PromotionLifecycleStatus status,
+            @Param("approvalStatuses") Collection<PromotionApprovalStatus> approvalStatuses,
+            @Param("vendorIds") Collection<UUID> vendorIds,
+            Pageable pageable
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from PromotionCampaign p where p.id = :id")
     Optional<PromotionCampaign> findByIdForUpdate(@Param("id") UUID id);

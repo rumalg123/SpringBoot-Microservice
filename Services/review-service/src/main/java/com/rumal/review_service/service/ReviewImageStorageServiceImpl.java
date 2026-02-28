@@ -67,6 +67,15 @@ public class ReviewImageStorageServiceImpl implements ReviewImageStorageService 
 
             try {
                 byte[] originalBytes = file.getBytes();
+
+                // Validate actual image content before uploading
+                try (ByteArrayInputStream probe = new ByteArrayInputStream(originalBytes)) {
+                    BufferedImage img = ImageIO.read(probe);
+                    if (img == null) {
+                        throw new ValidationException("File " + file.getOriginalFilename() + " is not a valid image");
+                    }
+                }
+
                 String key = "reviews/" + UUID.randomUUID() + "." + ext;
                 String contentType = file.getContentType() != null ? file.getContentType() : "image/" + ext;
 

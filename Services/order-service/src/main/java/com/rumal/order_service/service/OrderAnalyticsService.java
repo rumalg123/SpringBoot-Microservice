@@ -39,15 +39,17 @@ public class OrderAnalyticsService {
     );
 
     public PlatformOrderSummary getPlatformSummary(int periodDays) {
-        long total = orderRepository.count();
-        long pending = orderRepository.countByStatus(OrderStatus.PENDING)
-                     + orderRepository.countByStatus(OrderStatus.PAYMENT_PENDING);
-        long processing = orderRepository.countByStatus(OrderStatus.CONFIRMED)
-                        + orderRepository.countByStatus(OrderStatus.PROCESSING);
-        long shipped = orderRepository.countByStatus(OrderStatus.SHIPPED);
-        long delivered = orderRepository.countByStatusIn(COMPLETED_STATUSES);
-        long cancelled = orderRepository.countByStatus(OrderStatus.CANCELLED);
-        long refunded = orderRepository.countByStatus(OrderStatus.REFUNDED);
+        Map<OrderStatus, Long> statusCounts = resolveStatusCounts();
+        long total = statusCounts.values().stream().mapToLong(Long::longValue).sum();
+        long pending = statusCounts.getOrDefault(OrderStatus.PENDING, 0L)
+                     + statusCounts.getOrDefault(OrderStatus.PAYMENT_PENDING, 0L);
+        long processing = statusCounts.getOrDefault(OrderStatus.CONFIRMED, 0L)
+                        + statusCounts.getOrDefault(OrderStatus.PROCESSING, 0L);
+        long shipped = statusCounts.getOrDefault(OrderStatus.SHIPPED, 0L);
+        long delivered = COMPLETED_STATUSES.stream()
+                .mapToLong(s -> statusCounts.getOrDefault(s, 0L)).sum();
+        long cancelled = statusCounts.getOrDefault(OrderStatus.CANCELLED, 0L);
+        long refunded = statusCounts.getOrDefault(OrderStatus.REFUNDED, 0L);
 
         BigDecimal totalRevenue = orderRepository.sumOrderTotalByStatusIn(REVENUE_STATUSES);
         BigDecimal totalDiscount = orderRepository.sumTotalDiscountByStatusIn(REVENUE_STATUSES);
@@ -86,12 +88,22 @@ public class OrderAnalyticsService {
     }
 
     public Map<String, Long> getStatusBreakdown() {
+        Map<OrderStatus, Long> statusCounts = resolveStatusCounts();
         Map<String, Long> breakdown = new LinkedHashMap<>();
         for (OrderStatus status : OrderStatus.values()) {
-            long count = orderRepository.countByStatus(status);
+            long count = statusCounts.getOrDefault(status, 0L);
             if (count > 0) breakdown.put(status.name(), count);
         }
         return breakdown;
+    }
+
+    private Map<OrderStatus, Long> resolveStatusCounts() {
+        List<Object[]> rows = orderRepository.countGroupedByStatus();
+        Map<OrderStatus, Long> map = new EnumMap<>(OrderStatus.class);
+        for (Object[] row : rows) {
+            map.put((OrderStatus) row[0], (Long) row[1]);
+        }
+        return map;
     }
 
     public VendorOrderSummary getVendorSummary(UUID vendorId, int periodDays) {

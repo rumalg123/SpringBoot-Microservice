@@ -4,6 +4,7 @@ import com.rumal.payment_service.client.OrderClient;
 import com.rumal.payment_service.entity.Payment;
 import com.rumal.payment_service.entity.PaymentStatus;
 import com.rumal.payment_service.repo.PaymentRepository;
+import com.rumal.payment_service.service.PaymentAuditService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -25,6 +26,7 @@ public class OrderSyncRetryScheduler {
     private final PaymentRepository paymentRepository;
     private final OrderClient orderClient;
     private final TransactionTemplate transactionTemplate;
+    private final PaymentAuditService paymentAuditService;
 
     @Scheduled(fixedDelayString = "${payment.order-sync.retry-interval:PT2M}")
     public void retryPendingOrderSyncs() {
@@ -58,8 +60,15 @@ public class OrderSyncRetryScheduler {
                                 p.setOrderSyncRetryCount(p.getOrderSyncRetryCount() + 1);
                                 if (p.getOrderSyncRetryCount() >= p.getOrderSyncMaxRetries()) {
                                     p.setOrderSyncPending(false);
-                                    log.error("Order sync permanently failed for payment {} after {} retries",
-                                            p.getId(), p.getOrderSyncRetryCount());
+                                    // H-04: Flag permanently failed syncs and write audit for reconciliation
+                                    p.setOrderSyncFailed(true);
+                                    log.error("CRITICAL: Order sync permanently failed for payment {} (order {}) " +
+                                            "after {} retries. Manual reconciliation required.",
+                                            p.getId(), p.getOrderId(), p.getOrderSyncRetryCount());
+                                    paymentAuditService.writeAudit(p.getId(), null, null,
+                                            "ORDER_SYNC_PERMANENT_FAILURE", p.getStatus().name(), null,
+                                            "system", null, null,
+                                            "Sync abandoned after " + p.getOrderSyncRetryCount() + " retries for order " + p.getOrderId());
                                 }
                                 paymentRepository.save(p);
                             }
