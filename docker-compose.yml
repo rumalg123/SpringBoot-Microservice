@@ -14,14 +14,14 @@ services:
       discovery.type: single-node
       xpack.security.enabled: "true"
       xpack.security.http.ssl.enabled: "false"
-      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-elastic-change-me}
       ES_JAVA_OPTS: "-Xms512m -Xmx512m"
     volumes:
       - elasticsearch-data:/usr/share/elasticsearch/data
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
     healthcheck:
-      test: ["CMD-SHELL", "curl -s -u elastic:${ELASTIC_PASSWORD} http://localhost:9200/_cluster/health || exit 1"]
+      test: ["CMD-SHELL", "curl -s -u elastic:${ELASTIC_PASSWORD:-elastic-change-me} http://localhost:9200/_cluster/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 20
@@ -301,6 +301,8 @@ services:
     environment:
       TZ: Asia/Colombo
       LOGGING_FILE_NAME: /logs/search-service.log
+      ELASTICSEARCH_USERNAME: ${ELASTICSEARCH_USERNAME:-elastic}
+      ELASTICSEARCH_PASSWORD: ${ELASTIC_PASSWORD:-elastic-change-me}
     volumes:
       - /home/ubuntu/microservice-logs:/logs
       - /etc/localtime:/etc/localtime:ro
@@ -362,4 +364,3 @@ services:
 
 volumes:
   elasticsearch-data:
-

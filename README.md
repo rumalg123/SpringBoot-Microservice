@@ -407,6 +407,8 @@ Copy-Item env/product-service-sample.env env/product-service.env
 Copy-Item env/poster-service-sample.env env/poster-service.env
 Copy-Item env/vendor-service-sample.env env/vendor-service.env
 Copy-Item env/admin-service-sample.env env/admin-service.env
+Copy-Item env/payment-service-sample.env env/payment-service.env
+Copy-Item env/search-service-sample.env env/search-service.env
 Copy-Item env/frontend-sample.env env/frontend.env
 ```
 
@@ -425,6 +427,10 @@ Fill required values:
   - `NEXT_PUBLIC_KEYCLOAK_AUDIENCE`
 - Internal trust:
   - `INTERNAL_AUTH_SHARED_SECRET` (same value across gateway and all internal services that verify it)
+- Elasticsearch:
+  - `ELASTIC_PASSWORD` (used by the `elasticsearch` container)
+  - `ELASTICSEARCH_USERNAME` (usually `elastic`)
+  - `ELASTICSEARCH_PASSWORD` (must match `ELASTIC_PASSWORD`)
 - Cart DB:
   - `CART_DB_URL`
   - `CART_DB_USER`

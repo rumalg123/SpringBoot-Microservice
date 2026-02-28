@@ -12,6 +12,7 @@ import com.rumal.payment_service.repo.PaymentRepository;
 import com.rumal.payment_service.repo.RefundRequestRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -45,8 +46,7 @@ public class RefundService {
     private final OrderClient orderClient;
     private final PayHereClient payHereClient;
     private final TransactionTemplate transactionTemplate;
-    @org.springframework.context.annotation.Lazy
-    private final RefundService self;
+    private final ObjectProvider<RefundService> selfProvider;
 
     @Value("${payment.refund.vendor-response-days:7}")
     private int vendorResponseDays;
@@ -366,7 +366,7 @@ public class RefundService {
 
             for (RefundRequest refund : page.getContent()) {
                 try {
-                    self.escalateSingleRefund(refund.getId());
+                    selfProvider.getObject().escalateSingleRefund(refund.getId());
                     totalEscalated++;
                 } catch (Exception ex) {
                     log.warn("Failed to escalate refund {}: {}", refund.getId(), ex.getMessage());
