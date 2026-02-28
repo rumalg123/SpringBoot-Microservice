@@ -55,6 +55,8 @@ public class AuthHeaderRelayFilter implements GlobalFilter, Ordered {
                     headers.remove("X-Internal-Auth");
                     headers.remove("X-Internal-Signature");
                     headers.remove("X-Internal-Timestamp");
+                    headers.remove("X-Internal-Path");
+                    headers.remove("X-Internal-Body-Hash");
                 })
                 .build();
         ServerWebExchange sanitizedExchange = exchange.mutate().request(sanitizedRequest).build();
@@ -121,6 +123,8 @@ public class AuthHeaderRelayFilter implements GlobalFilter, Ordered {
                             .headers(headers -> {
                                 headers.set("X-Internal-Timestamp", timestamp);
                                 headers.set("X-Internal-Signature", signature);
+                                headers.set("X-Internal-Path", path);
+                                headers.set("X-Internal-Body-Hash", bodyHash);
                             })
                             .build();
 

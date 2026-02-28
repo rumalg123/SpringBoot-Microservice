@@ -62,9 +62,14 @@ public class InternalRequestVerifier {
         if (Math.abs(System.currentTimeMillis() - timestamp) > MAX_TIMESTAMP_DRIFT_MS) {
             throw new UnauthorizedException("Internal request timestamp expired");
         }
-        // H-03: Include body hash in HMAC payload to prevent request body tampering
-        String bodyHash = computeBodyHash(request);
-        String payload = timestampStr + ":" + request.getMethod() + ":" + request.getRequestURI() + ":" + bodyHash;
+        String signedPath = request.getHeader("X-Internal-Path");
+        String canonicalPath = (signedPath != null && !signedPath.isBlank()) ? signedPath : request.getRequestURI();
+
+        // Prefer gateway-provided body hash if present to avoid proxy/body-wrapper drift.
+        String signedBodyHash = request.getHeader("X-Internal-Body-Hash");
+        String bodyHash = (signedBodyHash != null) ? signedBodyHash : computeBodyHash(request);
+
+        String payload = timestampStr + ":" + request.getMethod() + ":" + canonicalPath + ":" + bodyHash;
         String expected = computeHmac(payload);
         if (!MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8), signature.getBytes(StandardCharsets.UTF_8))) {
             throw new UnauthorizedException("Invalid internal HMAC signature");
