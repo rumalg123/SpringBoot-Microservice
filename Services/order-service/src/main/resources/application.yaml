@@ -18,7 +18,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: update
     show-sql: false
 
 eureka:
@@ -185,3 +185,4 @@ shipping:
     base-per-vendor: ${SHIPPING_FEE_BASE_PER_VENDOR:4.99}
     per-item: ${SHIPPING_FEE_PER_ITEM:0.80}
     international-surcharge-per-vendor: ${SHIPPING_FEE_INTL_SURCHARGE_PER_VENDOR:3.50}
+

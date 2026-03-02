@@ -12,7 +12,7 @@ spring:
     password: ${ACCESS_DB_PASS:access_pass}
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: update
     show-sql: false
 
 server:
@@ -39,3 +39,4 @@ cache:
 access:
   expiry:
     check-interval-ms: ${ACCESS_EXPIRY_CHECK_INTERVAL_MS:60000}
+

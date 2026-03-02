@@ -12,7 +12,7 @@ spring:
     password: ${VENDOR_DB_PASS:vendor_pass}
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: update
     show-sql: false
 
 server:
@@ -102,3 +102,4 @@ vendor:
     key-prefix: ${VENDOR_IDEMPOTENCY_KEY_PREFIX:vs:idem:v1::}
     pending-ttl: ${VENDOR_IDEMPOTENCY_PENDING_TTL:30s}
     response-ttl: ${VENDOR_IDEMPOTENCY_RESPONSE_TTL:6h}
+

@@ -18,7 +18,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: update
     show-sql: false
 
 eureka:
@@ -97,3 +97,4 @@ inventory:
   reservation:
     ttl-seconds: ${INVENTORY_RESERVATION_TTL_SECONDS:1800}
     cleanup-interval: ${INVENTORY_RESERVATION_CLEANUP_INTERVAL:PT1M}
+

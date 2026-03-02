@@ -15,7 +15,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: update
     show-sql: false
 
 server:
@@ -92,3 +92,4 @@ wishlist:
 
 cache:
   wishlist-by-keycloak-ttl: ${CACHE_WISHLIST_BY_KEYCLOAK_TTL:45s}
+

@@ -9,7 +9,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: update
     show-sql: false
 
   data:
@@ -140,3 +140,4 @@ review.idempotency:
   response-ttl: 6h
   key-header-name: Idempotency-Key
   key-prefix: rs:idem:v1
+

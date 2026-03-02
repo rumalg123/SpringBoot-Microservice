@@ -12,7 +12,7 @@ spring:
       timeout: ${REDIS_TIMEOUT:2s}
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: update
     show-sql: false
 
 server:
@@ -45,3 +45,4 @@ object-storage:
 internal:
   auth:
     shared-secret: ${INTERNAL_AUTH_SHARED_SECRET:}
+

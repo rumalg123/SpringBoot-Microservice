@@ -18,7 +18,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: update
     show-sql: false
 
 eureka:
@@ -131,3 +131,4 @@ payment:
   refund:
     vendor-response-days: ${REFUND_VENDOR_RESPONSE_DAYS:7}
     escalation-check-interval: ${REFUND_ESCALATION_CHECK_INTERVAL:PT1H}
+

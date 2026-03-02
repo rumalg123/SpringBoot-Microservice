@@ -10,7 +10,7 @@ spring:
     password: ${ADMIN_DB_PASS:admin_pass}
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: update
     show-sql: false
   data:
     redis:
@@ -71,3 +71,4 @@ resilience:
   retry:
     max-attempts: ${ADMIN_RETRY_MAX_ATTEMPTS:3}
     wait-duration-ms: ${ADMIN_RETRY_WAIT_DURATION_MS:500}
+
