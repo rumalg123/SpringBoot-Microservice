@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 
 /**
  * H-03: Caches the request body for POST/PUT/PATCH requests that carry HMAC signatures,
@@ -25,7 +26,10 @@ public class InternalRequestBodyCachingFilter implements Filter {
         String method = httpRequest.getMethod();
         boolean hasBody = "POST".equals(method) || "PUT".equals(method) || "PATCH".equals(method);
         boolean hasHmac = httpRequest.getHeader("X-Internal-Signature") != null;
-        if (hasBody && hasHmac) {
+        String contentType = httpRequest.getContentType();
+        boolean isMultipart = contentType != null
+                && contentType.toLowerCase(Locale.ROOT).startsWith("multipart/");
+        if (hasBody && hasHmac && !isMultipart) {
             chain.doFilter(new CachedBodyRequestWrapper(httpRequest), response);
         } else {
             chain.doFilter(request, response);
