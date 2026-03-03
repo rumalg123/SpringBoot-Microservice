@@ -36,6 +36,7 @@ export default function ProductDetailClient() {
     logout,
     isSuperAdmin,
     isVendorAdmin,
+    isVendorStaff,
     canViewAdmin,
     canManageAdminOrders,
     canManageAdminProducts,
@@ -272,10 +273,12 @@ export default function ProductDetailClient() {
     return (
       <div className="min-h-screen bg-bg">
         {isAuthenticated && (
-          <AppNav
-            email={(profile?.email as string) || ""}
-            canViewAdmin={canViewAdmin}
-            canManageAdminOrders={canManageAdminOrders}
+        <AppNav
+          email={(profile?.email as string) || ""}
+          isVendorAdmin={isVendorAdmin}
+          isVendorStaff={isVendorStaff}
+          canViewAdmin={canViewAdmin}
+          canManageAdminOrders={canManageAdminOrders}
             canManageAdminProducts={canManageAdminProducts}
             canManageAdminPosters={canManageAdminPosters}
             apiClient={apiClient}
@@ -305,6 +308,7 @@ export default function ProductDetailClient() {
           email={(profile?.email as string) || ""}
           isSuperAdmin={isSuperAdmin}
           isVendorAdmin={isVendorAdmin}
+          isVendorStaff={isVendorStaff}
           canViewAdmin={canViewAdmin}
           canManageAdminOrders={canManageAdminOrders}
           canManageAdminProducts={canManageAdminProducts}

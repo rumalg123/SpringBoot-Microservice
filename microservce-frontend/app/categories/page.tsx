@@ -66,6 +66,7 @@ export default function CategoriesPage() {
           email={(session.profile?.email as string) || ""}
           isSuperAdmin={session.isSuperAdmin}
           isVendorAdmin={session.isVendorAdmin}
+        isVendorStaff={session.isVendorStaff}
           canViewAdmin={session.canViewAdmin}
           canManageAdminOrders={session.canManageAdminOrders}
           canManageAdminProducts={session.canManageAdminProducts}
@@ -269,3 +270,4 @@ export default function CategoriesPage() {
     </div>
   );
 }
+

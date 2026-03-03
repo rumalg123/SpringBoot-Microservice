@@ -105,6 +105,7 @@ export default function CategoryProductsPage() {
     logout,
     isSuperAdmin,
     isVendorAdmin,
+    isVendorStaff,
     canViewAdmin,
     canManageAdminOrders,
     canManageAdminProducts,
@@ -456,6 +457,7 @@ export default function CategoryProductsPage() {
           email={(profile?.email as string) || ""}
           isSuperAdmin={isSuperAdmin}
           isVendorAdmin={isVendorAdmin}
+          isVendorStaff={isVendorStaff}
           canViewAdmin={canViewAdmin}
           canManageAdminOrders={canManageAdminOrders}
           canManageAdminProducts={canManageAdminProducts}

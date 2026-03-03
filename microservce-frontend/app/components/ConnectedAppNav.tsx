@@ -15,12 +15,14 @@ export default function ConnectedAppNav() {
       email={(session.profile?.email as string) || ""}
       isSuperAdmin={session.isSuperAdmin}
       isVendorAdmin={session.isVendorAdmin}
+      isVendorStaff={session.isVendorStaff}
       canViewAdmin={session.canViewAdmin}
       canManageAdminOrders={session.canManageAdminOrders}
       canManageAdminProducts={session.canManageAdminProducts}
       canManageAdminCategories={session.canManageAdminCategories}
       canManageAdminVendors={session.canManageAdminVendors}
       canManageAdminPosters={session.canManageAdminPosters}
+      canManageAdminPromotions={session.canManageAdminPromotions}
       apiClient={session.apiClient}
       emailVerified={session.emailVerified}
       onLogout={() => {

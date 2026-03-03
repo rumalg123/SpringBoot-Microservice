@@ -68,6 +68,7 @@ function ProductsPageContent() {
     logout,
     isSuperAdmin,
     isVendorAdmin,
+    isVendorStaff,
     canViewAdmin,
     canManageAdminOrders,
     canManageAdminProducts,
@@ -351,6 +352,7 @@ function ProductsPageContent() {
           email={(profile?.email as string) || ""}
           isSuperAdmin={isSuperAdmin}
           isVendorAdmin={isVendorAdmin}
+          isVendorStaff={isVendorStaff}
           canViewAdmin={canViewAdmin}
           canManageAdminOrders={canManageAdminOrders}
           canManageAdminProducts={canManageAdminProducts}

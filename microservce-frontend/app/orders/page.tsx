@@ -170,6 +170,7 @@ export default function OrdersPage() {
         email={(profile?.email as string) || ""}
         isSuperAdmin={session.isSuperAdmin}
         isVendorAdmin={session.isVendorAdmin}
+        isVendorStaff={session.isVendorStaff}
         canViewAdmin={canViewAdmin}
         canManageAdminOrders={session.canManageAdminOrders}
         canManageAdminProducts={session.canManageAdminProducts}
@@ -344,3 +345,4 @@ export default function OrdersPage() {
     </div>
   );
 }
+
