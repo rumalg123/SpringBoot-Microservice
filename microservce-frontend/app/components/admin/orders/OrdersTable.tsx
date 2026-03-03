@@ -101,7 +101,11 @@ export default function OrdersTable({
                   disabled={isVendorScopedActor || ordersLoading || bulkSaving || statusSavingId !== null}
                 />
               </td>
-              <td className="text-[0.82rem] text-ink-light">{order.customerName || order.customerEmail || "—"}</td>
+              <td className="text-[0.82rem] text-ink-light">
+                {order.customerName
+                  || order.customerEmail
+                  || (order.customerId ? `ID: ${order.customerId.slice(0, 8)}...` : "-")}
+              </td>
               <td>
                 {(() => {
                   const chip = getStatusChip(order.status || "PENDING");

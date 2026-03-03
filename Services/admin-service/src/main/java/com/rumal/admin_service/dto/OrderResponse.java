@@ -32,6 +32,8 @@ public record OrderResponse(
         Instant refundInitiatedAt,
         Instant refundCompletedAt,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        String customerName,
+        String customerEmail
 ) {
 }

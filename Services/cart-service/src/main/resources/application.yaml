@@ -118,7 +118,8 @@ resilience4j:
           - org.springframework.web.client.HttpServerErrorException
           - com.rumal.cart_service.exception.ServiceUnavailableException
       orderService:
-        maxAttempts: 3
+        # Checkout creates orders; avoid internal retries that can race against idempotent in-flight requests.
+        maxAttempts: 1
         waitDuration: 300ms
         enableExponentialBackoff: true
         exponentialBackoffMultiplier: 2

@@ -192,6 +192,10 @@ public class OrderService {
     }
 
     private OrderResponse toResponse(Order o) {
+        return toResponse(o, null);
+    }
+
+    private OrderResponse toResponse(Order o, CustomerSummary customer) {
         return new OrderResponse(
                 o.getId(),
                 o.getCustomerId(),
@@ -220,7 +224,9 @@ public class OrderService {
                 o.getRefundInitiatedAt(),
                 o.getRefundCompletedAt(),
                 o.getCreatedAt(),
-                o.getUpdatedAt()
+                o.getUpdatedAt(),
+                customer == null ? null : customer.name(),
+                customer == null ? null : customer.email()
         );
     }
 
@@ -234,9 +240,10 @@ public class OrderService {
             Pageable pageable
     ) {
         UUID resolvedCustomerId = customerId;
+        CustomerSummary resolvedCustomerSummary = null;
         if (StringUtils.hasText(customerEmail)) {
-            CustomerSummary customer = customerClient.getCustomerByEmail(customerEmail.trim());
-            resolvedCustomerId = customer.id();
+            resolvedCustomerSummary = customerClient.getCustomerByEmail(customerEmail.trim());
+            resolvedCustomerId = resolvedCustomerSummary.id();
         }
 
         Page<Order> page = orderRepository.findAll(
@@ -244,7 +251,29 @@ public class OrderService {
                 pageable
         );
 
-        return page.map(this::toResponse);
+        Map<UUID, CustomerSummary> customerCache = new HashMap<>();
+        if (resolvedCustomerSummary != null && resolvedCustomerSummary.id() != null) {
+            customerCache.put(resolvedCustomerSummary.id(), resolvedCustomerSummary);
+        }
+        return page.map(order -> toResponse(order, resolveCustomerSummary(order.getCustomerId(), customerCache)));
+    }
+
+    private CustomerSummary resolveCustomerSummary(UUID customerId, Map<UUID, CustomerSummary> customerCache) {
+        if (customerId == null) {
+            return null;
+        }
+        if (customerCache.containsKey(customerId)) {
+            return customerCache.get(customerId);
+        }
+        try {
+            CustomerSummary customer = customerClient.getCustomer(customerId);
+            customerCache.put(customerId, customer);
+            return customer;
+        } catch (Exception ex) {
+            log.warn("Failed to fetch customer summary for order list, customerId={}", customerId, ex);
+            customerCache.put(customerId, null);
+            return null;
+        }
     }
 
     @Cacheable(
