@@ -64,7 +64,7 @@ export default function AdminInventoryPage() {
         <MovementsTab apiClient={session.apiClient} apiPrefix="/admin/inventory" isAdmin />
       )}
       {session.apiClient && activeTab === "Reservations" && (
-        <ReservationsTab apiClient={session.apiClient} apiPrefix="/admin/inventory" />
+        <ReservationsTab apiClient={session.apiClient} apiPrefix="/admin/inventory" isAdmin />
       )}
     </AdminPageShell>
   );

@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import type { AxiosInstance } from "axios";
+import { useQuery } from "@tanstack/react-query";
+import type { VendorSummary } from "../admin/products/types";
 import DataTable, { type Column } from "../ui/DataTable";
 import FilterBar, { type FilterDef } from "../ui/FilterBar";
 import StatusBadge, { RESERVATION_STATUS_COLORS } from "../ui/StatusBadge";
@@ -12,15 +14,33 @@ import { getErrorMessage } from "../../../lib/error";
 type Props = {
   apiClient: AxiosInstance;
   apiPrefix: string;
+  isAdmin?: boolean;
+  vendorId?: string;
 };
 
-export default function ReservationsTab({ apiClient, apiPrefix }: Props) {
+export default function ReservationsTab({ apiClient, apiPrefix, isAdmin = false, vendorId }: Props) {
   const [reservations, setReservations] = useState<StockReservation[]>([]);
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<Record<string, string>>({});
+
+  const vendorsQuery = useQuery<VendorSummary[]>({
+    queryKey: ["admin-vendors"],
+    queryFn: async () => {
+      const res = await apiClient.get("/admin/vendors");
+      return (((res.data as VendorSummary[]) || []).filter((v) => !v.deleted)).sort((a, b) =>
+        a.name.localeCompare(b.name)
+      );
+    },
+    enabled: isAdmin,
+  });
+
+  const productVendorId = isAdmin ? (filters.vendorId || "") : (vendorId || "");
+  const productEndpoint = productVendorId
+    ? `/admin/products?vendorId=${encodeURIComponent(productVendorId)}`
+    : "/admin/products";
 
   const load = useCallback(async (pg = 0) => {
     setLoading(true);
@@ -45,6 +65,7 @@ export default function ReservationsTab({ apiClient, apiPrefix }: Props) {
   useEffect(() => { void load(0); }, [load]);
 
   const filterDefs: FilterDef[] = [
+    ...(isAdmin ? [{ key: "vendorId", label: "Vendor", type: "select" as const, options: (vendorsQuery.data || []).map((v) => ({ label: v.name, value: v.id })) }] : []),
     { key: "status", label: "Status", type: "select" as const, options: [
       { label: "Reserved", value: "RESERVED" },
       { label: "Confirmed", value: "CONFIRMED" },
@@ -52,7 +73,7 @@ export default function ReservationsTab({ apiClient, apiPrefix }: Props) {
       { label: "Expired", value: "EXPIRED" },
     ]},
     { key: "orderId", label: "Order", type: "text" as const, placeholder: "Paste order ID..." },
-    { key: "productId", label: "Product", type: "searchable-select" as const, apiClient, endpoint: "/admin/products", searchParam: "q", labelField: "name", valueField: "id", placeholder: "Search products..." },
+    { key: "productId", label: "Product", type: "searchable-select" as const, apiClient, endpoint: productEndpoint, searchParam: "q", labelField: "name", valueField: "id", placeholder: "Search products..." },
   ];
 
   const columns: Column<StockReservation>[] = [
@@ -86,7 +107,13 @@ export default function ReservationsTab({ apiClient, apiPrefix }: Props) {
       <FilterBar
         filters={filterDefs}
         values={filters}
-        onChange={(key, val) => setFilters((prev) => ({ ...prev, [key]: val }))}
+        onChange={(key, val) => setFilters((prev) => {
+          const next = { ...prev, [key]: val };
+          if (key === "vendorId") {
+            next.productId = "";
+          }
+          return next;
+        })}
         onClear={() => setFilters({})}
       />
 

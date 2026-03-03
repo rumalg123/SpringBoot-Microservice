@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import type { AxiosInstance } from "axios";
+import { useQuery } from "@tanstack/react-query";
+import type { VendorSummary } from "../admin/products/types";
 import DataTable, { type Column } from "../ui/DataTable";
 import FilterBar, { type FilterDef } from "../ui/FilterBar";
 import StatusBadge, { MOVEMENT_TYPE_COLORS } from "../ui/StatusBadge";
@@ -13,9 +15,10 @@ type Props = {
   apiClient: AxiosInstance;
   apiPrefix: string;
   isAdmin?: boolean;
+  vendorId?: string;
 };
 
-export default function MovementsTab({ apiClient, apiPrefix, isAdmin = false }: Props) {
+export default function MovementsTab({ apiClient, apiPrefix, isAdmin = false, vendorId }: Props) {
   const [movements, setMovements] = useState<StockMovement[]>([]);
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -23,6 +26,26 @@ export default function MovementsTab({ apiClient, apiPrefix, isAdmin = false }: 
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+
+  const vendorsQuery = useQuery<VendorSummary[]>({
+    queryKey: ["admin-vendors"],
+    queryFn: async () => {
+      const res = await apiClient.get("/admin/vendors");
+      return (((res.data as VendorSummary[]) || []).filter((v) => !v.deleted)).sort((a, b) =>
+        a.name.localeCompare(b.name)
+      );
+    },
+    enabled: isAdmin,
+  });
+
+  const productVendorId = isAdmin ? (filters.vendorId || "") : (vendorId || "");
+  const productEndpoint = productVendorId
+    ? `/admin/products?vendorId=${encodeURIComponent(productVendorId)}`
+    : "/admin/products";
+
+  const warehouseOptions = warehouses
+    .filter((w) => !isAdmin || !filters.vendorId || w.vendorId === filters.vendorId)
+    .map((w) => ({ label: w.name, value: w.id }));
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -59,6 +82,7 @@ export default function MovementsTab({ apiClient, apiPrefix, isAdmin = false }: 
   useEffect(() => { void load(0); }, [load]);
 
   const filterDefs: FilterDef[] = [
+    ...(isAdmin ? [{ key: "vendorId", label: "Vendor", type: "select" as const, options: (vendorsQuery.data || []).map((v) => ({ label: v.name, value: v.id })) }] : []),
     { key: "movementType", label: "Type", type: "select" as const, options: [
       { label: "Stock In", value: "STOCK_IN" },
       { label: "Stock Out", value: "STOCK_OUT" },
@@ -68,8 +92,8 @@ export default function MovementsTab({ apiClient, apiPrefix, isAdmin = false }: 
       { label: "Adjustment", value: "ADJUSTMENT" },
       { label: "Bulk Import", value: "BULK_IMPORT" },
     ]},
-    { key: "productId", label: "Product", type: "searchable-select" as const, apiClient, endpoint: "/admin/products", searchParam: "q", labelField: "name", valueField: "id", placeholder: "Search products..." },
-    ...(isAdmin ? [{ key: "warehouseId", label: "Warehouse", type: "select" as const, options: warehouses.map((w) => ({ label: w.name, value: w.id })) }] : []),
+    { key: "productId", label: "Product", type: "searchable-select" as const, apiClient, endpoint: productEndpoint, searchParam: "q", labelField: "name", valueField: "id", placeholder: "Search products..." },
+    ...(isAdmin ? [{ key: "warehouseId", label: "Warehouse", type: "select" as const, options: warehouseOptions }] : []),
   ];
 
   const columns: Column<StockMovement>[] = [
@@ -109,7 +133,14 @@ export default function MovementsTab({ apiClient, apiPrefix, isAdmin = false }: 
       <FilterBar
         filters={filterDefs}
         values={filters}
-        onChange={(key, val) => setFilters((prev) => ({ ...prev, [key]: val }))}
+        onChange={(key, val) => setFilters((prev) => {
+          const next = { ...prev, [key]: val };
+          if (key === "vendorId") {
+            next.productId = "";
+            next.warehouseId = "";
+          }
+          return next;
+        })}
         onClear={() => setFilters({})}
       />
 

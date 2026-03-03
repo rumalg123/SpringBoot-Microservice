@@ -88,7 +88,7 @@ export default function VendorInventoryPage() {
         <StockTab apiClient={session.apiClient} apiPrefix="/inventory/vendor/me" vendorId={vendorId} />
       )}
       {session.apiClient && activeTab === "Movements" && (
-        <MovementsTab apiClient={session.apiClient} apiPrefix="/inventory/vendor/me" />
+        <MovementsTab apiClient={session.apiClient} apiPrefix="/inventory/vendor/me" vendorId={vendorId} />
       )}
     </VendorPageShell>
   );
