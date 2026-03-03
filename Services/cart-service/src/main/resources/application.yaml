@@ -33,7 +33,7 @@ logging:
 http:
   client:
     connect-timeout-seconds: ${HTTP_CLIENT_CONNECT_TIMEOUT_SECONDS:2}
-    response-timeout-seconds: ${HTTP_CLIENT_RESPONSE_TIMEOUT_SECONDS:5}
+    response-timeout-seconds: ${HTTP_CLIENT_RESPONSE_TIMEOUT_SECONDS:12}
     idle-evict-seconds: ${HTTP_CLIENT_IDLE_EVICT_SECONDS:30}
 
 resilience4j:

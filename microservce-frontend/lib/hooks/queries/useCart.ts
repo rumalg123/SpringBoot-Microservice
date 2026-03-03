@@ -3,6 +3,14 @@ import type { AxiosInstance } from "axios";
 import type { CartResponse, CheckoutPreviewResponse, CheckoutResponse } from "../../types/cart";
 import { emptyCart } from "../../types/cart";
 import { queryKeys } from "./keys";
+import type { ApiRequestConfig } from "../../apiClient";
+
+function generateCheckoutIdempotencyKey(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `checkout-${crypto.randomUUID()}`;
+  }
+  return `checkout-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
 
 export function useCart(apiClient: AxiosInstance | null) {
   return useQuery({
@@ -104,7 +112,11 @@ export function useCheckout(apiClient: AxiosInstance | null) {
       couponCode: string | null;
       shippingAmount: number;
     }) => {
-      const res = await apiClient!.post<CheckoutResponse>("/cart/me/checkout", body);
+      const requestConfig: ApiRequestConfig = {
+        // Use an explicit per-click key for checkout to avoid stale fingerprint-cache reuse.
+        idempotencyKey: generateCheckoutIdempotencyKey(),
+      };
+      const res = await apiClient!.post<CheckoutResponse>("/cart/me/checkout", body, requestConfig);
       return res.data;
     },
     onSuccess: () => {

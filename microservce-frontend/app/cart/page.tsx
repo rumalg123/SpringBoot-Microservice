@@ -26,6 +26,7 @@ export default function CartPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const checkoutRef = useRef<HTMLDivElement>(null);
+  const checkoutInFlightRef = useRef(false);
   const session = useAuthSession();
   const {
     status: sessionStatus, isAuthenticated, canViewAdmin,
@@ -189,10 +190,11 @@ export default function CartPage() {
   };
 
   const checkout = () => {
-    if (!apiClient || busy || cart.items.length === 0) return;
+    if (!apiClient || busy || cart.items.length === 0 || checkoutInFlightRef.current) return;
     const resolvedShipping = shippingAddressId.trim();
     const resolvedBilling = (billingSameAsShipping ? shippingAddressId : billingAddressId).trim();
     if (!resolvedShipping || !resolvedBilling) { toast.error("Select shipping and billing addresses"); return; }
+    checkoutInFlightRef.current = true;
     setStatus("Placing order...");
     checkoutMut.mutate(
       {
@@ -204,20 +206,35 @@ export default function CartPage() {
       {
         onSuccess: async (data) => {
           setPreview(null);
-          setStatus("Redirecting to payment...");
+          setStatus("Order placed. Redirecting to payment...");
           toast.success(`Order placed! Total: ${money(data.grandTotal)}`);
           trackPurchase(cart.items.map((item) => ({ id: item.productId, price: item.unitPrice })), session.token);
-          const payRes = await apiClient.post<PayHereFormData>("/payments/me/initiate", { orderId: data.orderId });
-          submitToPayHere(payRes.data);
+          try {
+            const payRes = await apiClient.post<PayHereFormData>("/payments/me/initiate", { orderId: data.orderId });
+            submitToPayHere(payRes.data);
+          } catch (err) {
+            const paymentError = getErrorMessage(err).toLowerCase();
+            const message = paymentError.includes("temporarily unavailable")
+              ? "Order placed, but payment service is temporarily unavailable. Open My Orders and click Pay Now."
+              : "Order placed, but payment initiation failed. Open My Orders and click Pay Now.";
+            setStatus(message);
+            toast.error(message);
+            router.push("/orders");
+          }
         },
         onError: (err) => {
           const raw = getErrorMessage(err);
           const lower = raw.toLowerCase();
           const message = lower.includes("idempotency key is still processing")
             ? "Your previous checkout is still processing. Please wait a few seconds and check My Orders before retrying."
-            : raw;
+            : (lower.includes("temporarily unavailable") || lower.includes("503"))
+              ? "Checkout request timed out on a downstream service. Check My Orders before retrying to avoid duplicate orders."
+              : raw;
           setStatus(message);
           toast.error(message);
+        },
+        onSettled: () => {
+          checkoutInFlightRef.current = false;
         },
       },
     );
