@@ -21,9 +21,9 @@ export default function VendorInventoryPage() {
   const { data: vendorId = "", isLoading: loadingVendor } = useQuery({
     queryKey: ["vendor-inventory-id"],
     queryFn: async () => {
-      const res = await session.apiClient!.get("/vendor/me");
-      const data = res.data as { id?: string };
-      return data.id || "";
+      const res = await session.apiClient!.get("/vendors/me");
+      const data = res.data as { id?: string; vendorId?: string };
+      return data.id || data.vendorId || "";
     },
     enabled: ready,
   });
