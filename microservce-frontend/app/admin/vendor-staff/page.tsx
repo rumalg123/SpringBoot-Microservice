@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import ConfirmModal from "@/app/components/ConfirmModal";
@@ -55,8 +55,12 @@ const EMPTY_FORM: FormState = {
 
 const VENDOR_PERMISSION_OPTIONS = [
   { value: "PRODUCTS_MANAGE", label: "Manage Products", description: "Can create/edit vendor products." },
+  { value: "PROMOTIONS_MANAGE", label: "Manage Promotions", description: "Can create/edit vendor promotions." },
   { value: "ORDERS_READ", label: "View Orders", description: "Can read vendor orders." },
   { value: "ORDERS_MANAGE", label: "Manage Orders", description: "Can update/process vendor orders." },
+  { value: "ANALYTICS_READ", label: "View Analytics", description: "Can access vendor analytics dashboards." },
+  { value: "FINANCE_READ", label: "View Finance", description: "Can access payouts and bank account views." },
+  { value: "SETTINGS_MANAGE", label: "Manage Settings", description: "Can update vendor portal settings." },
 ] as const;
 
 
@@ -108,26 +112,18 @@ export default function AdminVendorStaffPage() {
 
   const vendorNameMap = useMemo(() => new Map(vendors.map((v) => [v.id, v.name])), [vendors]);
   const multipleVendorOptions = vendors.length > 1;
-
-  // Auto-select vendor when only one option
-  useEffect(() => {
-    if (vendors.length === 0) return;
-    setVendorFilterId((current) => current || (vendors.length === 1 ? vendors[0].id : current));
-    setForm((current) => {
-      if (current.vendorId) return current;
-      if (vendors.length === 1) return { ...current, vendorId: vendors[0].id };
-      return current;
-    });
-  }, [vendors]);
-
-  const vendorSelectionRequired = session.isVendorAdmin && multipleVendorOptions && !vendorFilterId.trim();
+  const defaultVendorId = vendors.length === 1 ? vendors[0].id : "";
+  const effectiveVendorFilterId = vendorFilterId || defaultVendorId;
+  const effectiveFormVendorId = form.vendorId || defaultVendorId;
+  const vendorSelectionRequired =
+    session.isVendorAdmin && multipleVendorOptions && !effectiveVendorFilterId.trim();
 
   // --- Active vendor staff query ---
   const { data: staffPage, isLoading: loading } = useQuery({
-    queryKey: ["admin-vendor-staff", vendorFilterId, page],
+    queryKey: ["admin-vendor-staff", effectiveVendorFilterId, page],
     queryFn: async () => {
       const params = new URLSearchParams({ page: String(page), size: String(PAGE_SIZE) });
-      const effectiveVendorId = vendorFilterId.trim();
+      const effectiveVendorId = effectiveVendorFilterId.trim();
       if (effectiveVendorId) params.set("vendorId", effectiveVendorId);
       const res = await session.apiClient!.get(`/admin/vendor-staff?${params.toString()}`);
       return normalizePage(res.data as PagedResponse<VendorStaffRow>);
@@ -140,10 +136,10 @@ export default function AdminVendorStaffPage() {
 
   // --- Deleted vendor staff query ---
   const { data: deletedStaffPage, isLoading: loadingDeleted } = useQuery({
-    queryKey: ["admin-vendor-staff-deleted", vendorFilterId, deletedPage],
+    queryKey: ["admin-vendor-staff-deleted", effectiveVendorFilterId, deletedPage],
     queryFn: async () => {
       const params = new URLSearchParams({ page: String(deletedPage), size: String(PAGE_SIZE) });
-      const effectiveVendorId = vendorFilterId.trim();
+      const effectiveVendorId = effectiveVendorFilterId.trim();
       if (effectiveVendorId) params.set("vendorId", effectiveVendorId);
       const res = await session.apiClient!.get(`/admin/vendor-staff/deleted?${params.toString()}`);
       return normalizePage(res.data as PagedResponse<VendorStaffRow>);
@@ -164,7 +160,7 @@ export default function AdminVendorStaffPage() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const vendorId = form.vendorId.trim();
+      const vendorId = effectiveFormVendorId.trim();
       if (!vendorId || !form.keycloakUserId.trim() || !form.email.trim()) {
         throw new Error("Vendor, Keycloak user ID and email are required");
       }
@@ -186,7 +182,7 @@ export default function AdminVendorStaffPage() {
     },
     onSuccess: (result) => {
       toast.success(result === "updated" ? "Vendor staff updated" : "Vendor staff created");
-      setForm((old) => ({ ...EMPTY_FORM, vendorId: old.vendorId || form.vendorId.trim() }));
+      setForm((old) => ({ ...EMPTY_FORM, vendorId: old.vendorId || effectiveFormVendorId.trim() }));
       invalidateAll();
     },
     onError: (error) => toast.error(getErrorMessage(error)),
@@ -257,7 +253,7 @@ export default function AdminVendorStaffPage() {
                 Vendor
               </span>
               <select
-                value={form.vendorId}
+                value={effectiveFormVendorId}
                 onChange={(e) => setForm((old) => ({ ...old, vendorId: e.target.value }))}
                 disabled={vendorsLoading || (session.isVendorAdmin && vendors.length === 1)}
                 className="w-full rounded-xl px-3 py-2 bg-surface-2 border border-line text-ink"
@@ -341,7 +337,12 @@ export default function AdminVendorStaffPage() {
                 {saving ? "Saving..." : form.id ? "Update Vendor Staff" : "Create Vendor Staff"}
               </button>
               {form.id && (
-                <button type="button" className="btn-ghost" onClick={() => setForm((old) => ({ ...EMPTY_FORM, vendorId: old.vendorId }))} disabled={saving}>
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  onClick={() => setForm((old) => ({ ...EMPTY_FORM, vendorId: old.vendorId || effectiveFormVendorId }))}
+                  disabled={saving}
+                >
                   Cancel Edit
                 </button>
               )}
@@ -369,7 +370,7 @@ export default function AdminVendorStaffPage() {
                 Vendor Filter
               </span>
               <select
-                value={vendorFilterId}
+                value={effectiveVendorFilterId}
                 onChange={(e) => {
                   setVendorFilterId(e.target.value);
                   setPage(0);
@@ -497,7 +498,7 @@ export default function AdminVendorStaffPage() {
               title="Vendor Staff Access Audit"
               targetType="VENDOR_STAFF"
               targetId={auditTargetRow?.id || null}
-              vendorId={auditTargetRow?.vendorId || vendorFilterId || null}
+              vendorId={auditTargetRow?.vendorId || effectiveVendorFilterId || null}
               reloadKey={accessAuditReloadKey}
             />
           </section>

@@ -34,7 +34,8 @@ const emptyForm: FormData = { bankName: "", branchName: "", branchCode: "", acco
 
 export default function VendorBankAccountsPage() {
   const session = useAuthSession();
-  const { status: sessionStatus, isAuthenticated, isVendorAdmin, apiClient } = session;
+  const { status: sessionStatus, isAuthenticated, apiClient } = session;
+  const canViewFinance = session.isVendorAdmin || session.canViewVendorFinance;
   const queryClient = useQueryClient();
 
   const [showForm, setShowForm] = useState(false);
@@ -43,7 +44,7 @@ export default function VendorBankAccountsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [settingPrimaryId, setSettingPrimaryId] = useState<string | null>(null);
 
-  const ready = sessionStatus === "ready" && isAuthenticated && isVendorAdmin && !!apiClient;
+  const ready = sessionStatus === "ready" && isAuthenticated && canViewFinance && !!apiClient;
 
   const { data: accounts = [], isLoading: loading } = useQuery({
     queryKey: ["vendor-bank-accounts"],
@@ -146,6 +147,14 @@ export default function VendorBankAccountsPage() {
     return (
       <VendorPageShell title="Bank Accounts" breadcrumbs={[{ label: "Vendor Portal", href: "/vendor" }, { label: "Bank Accounts" }]}>
         <p className="text-muted text-center py-10">Loading...</p>
+      </VendorPageShell>
+    );
+  }
+
+  if (!canViewFinance) {
+    return (
+      <VendorPageShell title="Bank Accounts" breadcrumbs={[{ label: "Vendor Portal", href: "/vendor" }, { label: "Bank Accounts" }]}>
+        <p className="text-muted text-center py-10">Unauthorized.</p>
       </VendorPageShell>
     );
   }

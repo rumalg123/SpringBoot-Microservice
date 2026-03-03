@@ -29,12 +29,13 @@ type Paged<T> = { content: T[]; totalPages: number; totalElements: number };
 
 export default function VendorPayoutsPage() {
   const session = useAuthSession();
-  const { status: sessionStatus, isAuthenticated, isVendorAdmin, apiClient } = session;
+  const { status: sessionStatus, isAuthenticated, apiClient } = session;
+  const canViewFinance = session.isVendorAdmin || session.canViewVendorFinance;
 
   const [page, setPage] = useState(0);
   const [statusFilter, setStatusFilter] = useState("all");
 
-  const ready = sessionStatus === "ready" && isAuthenticated && isVendorAdmin && !!apiClient;
+  const ready = sessionStatus === "ready" && isAuthenticated && canViewFinance && !!apiClient;
 
   const { data: payoutsData, isLoading: loading } = useQuery({
     queryKey: ["vendor-payouts", page, statusFilter],
@@ -67,6 +68,14 @@ export default function VendorPayoutsPage() {
     return (
       <VendorPageShell title="Payout History" breadcrumbs={[{ label: "Vendor Portal", href: "/vendor" }, { label: "Payouts" }]}>
         <p className="text-muted text-center py-10">Loading...</p>
+      </VendorPageShell>
+    );
+  }
+
+  if (!canViewFinance) {
+    return (
+      <VendorPageShell title="Payout History" breadcrumbs={[{ label: "Vendor Portal", href: "/vendor" }, { label: "Payouts" }]}>
+        <p className="text-muted text-center py-10">Unauthorized.</p>
       </VendorPageShell>
     );
   }

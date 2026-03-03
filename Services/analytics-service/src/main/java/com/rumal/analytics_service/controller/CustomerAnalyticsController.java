@@ -5,8 +5,11 @@ import com.rumal.analytics_service.exception.UnauthorizedException;
 import com.rumal.analytics_service.security.InternalRequestVerifier;
 import com.rumal.analytics_service.service.CustomerAnalyticsService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.LinkedHashSet;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 
@@ -15,7 +18,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class CustomerAnalyticsController {
 
-    private static final Set<String> ADMIN_ROLES = Set.of("super_admin", "platform_staff");
+    private static final Set<String> ADMIN_ROLES = Set.of("super_admin", "platform_admin", "platform_staff");
 
     private final InternalRequestVerifier internalRequestVerifier;
     private final CustomerAnalyticsService customerAnalyticsService;
@@ -32,12 +35,9 @@ public class CustomerAnalyticsController {
     }
 
     private void verifyCustomerAccess(String userSub, String userRoles, UUID requestedCustomerId) {
-        if (userRoles != null && !userRoles.isBlank()) {
-            for (String role : userRoles.split(",")) {
-                if (ADMIN_ROLES.contains(role.trim().toLowerCase())) {
-                    return;
-                }
-            }
+        Set<String> roles = parseRoles(userRoles);
+        if (roles.stream().anyMatch(ADMIN_ROLES::contains)) {
+            return;
         }
         if (userSub == null || userSub.isBlank()) {
             throw new UnauthorizedException("User identification required");
@@ -50,5 +50,26 @@ public class CustomerAnalyticsController {
         } catch (IllegalArgumentException e) {
             throw new UnauthorizedException("Invalid user identification");
         }
+    }
+
+    private Set<String> parseRoles(String userRoles) {
+        if (!StringUtils.hasText(userRoles)) {
+            return Set.of();
+        }
+        Set<String> roles = new LinkedHashSet<>();
+        for (String role : userRoles.split(",")) {
+            if (!StringUtils.hasText(role)) {
+                continue;
+            }
+            String normalized = role.trim()
+                    .toLowerCase(Locale.ROOT)
+                    .replace("role_", "")
+                    .replace('-', '_')
+                    .replace(' ', '_');
+            if (!normalized.isEmpty()) {
+                roles.add(normalized);
+            }
+        }
+        return Set.copyOf(roles);
     }
 }

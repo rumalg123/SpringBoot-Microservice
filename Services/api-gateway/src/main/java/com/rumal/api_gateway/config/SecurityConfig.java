@@ -111,7 +111,9 @@ public class SecurityConfig {
                 .filter(auth -> auth instanceof JwtAuthenticationToken)
                 .cast(JwtAuthenticationToken.class)
                 .map(JwtAuthenticationToken::getToken)
-                .map(jwt -> (AuthorizationResult) new AuthorizationDecision(isEmailVerified(jwt) && hasRole(jwt, "super_admin")))
+                .map(jwt -> (AuthorizationResult) new AuthorizationDecision(
+                        isEmailVerified(jwt) && hasPlatformAdminLikeRole(jwt)
+                ))
                 .defaultIfEmpty(new AuthorizationDecision(false));
     }
 
@@ -122,7 +124,7 @@ public class SecurityConfig {
                 .cast(JwtAuthenticationToken.class)
                 .map(JwtAuthenticationToken::getToken)
                 .map(jwt -> (AuthorizationResult) new AuthorizationDecision(
-                        isEmailVerified(jwt) && (hasRole(jwt, "super_admin") || hasRole(jwt, "vendor_admin"))
+                        isEmailVerified(jwt) && (hasPlatformAdminLikeRole(jwt) || hasRole(jwt, "vendor_admin"))
                 ))
                 .defaultIfEmpty(new AuthorizationDecision(false));
     }
@@ -134,7 +136,7 @@ public class SecurityConfig {
                 .cast(JwtAuthenticationToken.class)
                 .map(JwtAuthenticationToken::getToken)
                 .map(jwt -> (AuthorizationResult) new AuthorizationDecision(
-                        isEmailVerified(jwt) && (hasRole(jwt, "super_admin") || hasRole(jwt, "platform_staff"))
+                        isEmailVerified(jwt) && (hasPlatformAdminLikeRole(jwt) || hasRole(jwt, "platform_staff"))
                 ))
                 .defaultIfEmpty(new AuthorizationDecision(false));
     }
@@ -146,7 +148,7 @@ public class SecurityConfig {
                 .cast(JwtAuthenticationToken.class)
                 .map(JwtAuthenticationToken::getToken)
                 .map(jwt -> (AuthorizationResult) new AuthorizationDecision(
-                        isEmailVerified(jwt) && (hasRole(jwt, "super_admin")
+                        isEmailVerified(jwt) && (hasPlatformAdminLikeRole(jwt)
                                 || hasRole(jwt, "platform_staff")
                                 || hasRole(jwt, "vendor_admin")
                                 || hasRole(jwt, "vendor_staff"))
@@ -198,7 +200,7 @@ public class SecurityConfig {
         if (!StringUtils.hasText(requiredRole)) {
             return false;
         }
-        String normalizedRole = requiredRole.trim();
+        String normalizedRole = normalizeRole(requiredRole);
 
         if (containsRole(jwt.getClaimAsStringList("roles"), normalizedRole)) {
             return true;
@@ -227,8 +229,29 @@ public class SecurityConfig {
         return false;
     }
 
+    private boolean hasPlatformAdminLikeRole(Jwt jwt) {
+        return hasRole(jwt, "super_admin") || hasRole(jwt, "platform_admin");
+    }
+
     private boolean containsRole(List<String> roles, String requiredRole) {
-        return roles != null && roles.stream().anyMatch(requiredRole::equalsIgnoreCase);
+        return roles != null && roles.stream()
+                .map(this::normalizeRole)
+                .anyMatch(requiredRole::equalsIgnoreCase);
+    }
+
+    private String normalizeRole(String role) {
+        if (!StringUtils.hasText(role)) {
+            return "";
+        }
+        String normalized = role.trim().toLowerCase();
+        if (normalized.startsWith("role_")) {
+            normalized = normalized.substring("role_".length());
+        } else if (normalized.startsWith("role-")) {
+            normalized = normalized.substring("role-".length());
+        } else if (normalized.startsWith("role:")) {
+            normalized = normalized.substring("role:".length());
+        }
+        return normalized.replace('-', '_').replace(' ', '_');
     }
 
     private List<String> extractRoles(Object claimValue) {

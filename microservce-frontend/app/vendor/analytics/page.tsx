@@ -71,7 +71,8 @@ export default function VendorAnalyticsPage() {
   const [vendorId, setVendorId] = useState<string | null>(null);
   const api = session.apiClient;
 
-  const vendorReady = !!api && (session.isVendorAdmin || session.isVendorStaff);
+  const canViewAnalytics = session.isVendorAdmin || session.canViewVendorAnalytics;
+  const vendorReady = !!api && canViewAnalytics;
 
   // First get vendor ID from /vendors/me
   useQuery({
@@ -95,7 +96,7 @@ export default function VendorAnalyticsPage() {
     enabled: vendorReady && !!vendorId,
   });
 
-  if (session.status === "ready" && !session.isVendorAdmin && !session.isVendorStaff) {
+  if (session.status === "ready" && !canViewAnalytics) {
     return (
       <VendorPageShell title="Vendor Analytics" breadcrumbs={[{ label: "Vendor Portal", href: "/vendor" }, { label: "Analytics" }]}>
         <div className="flex items-center justify-center min-h-[320px]">

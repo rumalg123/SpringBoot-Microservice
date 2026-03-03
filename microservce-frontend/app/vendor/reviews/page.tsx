@@ -12,7 +12,8 @@ type PagedReviews = { content: Review[]; totalPages: number; totalElements: numb
 
 export default function VendorReviewsPage() {
   const session = useAuthSession();
-  const { status: sessionStatus, isAuthenticated, isVendorAdmin, apiClient } = session;
+  const { status: sessionStatus, isAuthenticated, apiClient } = session;
+  const canManageReviews = session.isVendorAdmin || (session.isVendorStaff && session.canManageAdminProducts);
   const queryClient = useQueryClient();
 
   const [page, setPage] = useState(0);
@@ -28,7 +29,7 @@ export default function VendorReviewsPage() {
   // Delete reply state
   const [deletingReplyId, setDeletingReplyId] = useState<string | null>(null);
 
-  const ready = sessionStatus === "ready" && isAuthenticated && isVendorAdmin && !!apiClient;
+  const ready = sessionStatus === "ready" && isAuthenticated && canManageReviews && !!apiClient;
 
   const { data: reviewsData, isLoading: loading } = useQuery({
     queryKey: ["vendor-reviews", page],
@@ -99,6 +100,14 @@ export default function VendorReviewsPage() {
     return (
       <VendorPageShell title="Customer Reviews" breadcrumbs={[{ label: "Vendor Portal", href: "/vendor" }, { label: "Reviews" }]}>
         <p className="text-muted text-center py-10">Loading...</p>
+      </VendorPageShell>
+    );
+  }
+
+  if (!canManageReviews) {
+    return (
+      <VendorPageShell title="Customer Reviews" breadcrumbs={[{ label: "Vendor Portal", href: "/vendor" }, { label: "Reviews" }]}>
+        <p className="text-muted text-center py-10">Unauthorized.</p>
       </VendorPageShell>
     );
   }

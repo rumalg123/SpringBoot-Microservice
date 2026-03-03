@@ -40,7 +40,8 @@ export default function VendorSettingsPage() {
   const [verificationDocUrl, setVerificationDocUrl] = useState("");
   const [verificationNotes, setVerificationNotes] = useState("");
 
-  const ready = session.status === "ready" && !!session.apiClient && (session.isVendorAdmin || session.isVendorStaff);
+  const canManageSettings = session.isVendorAdmin || session.canManageVendorSettings;
+  const ready = session.status === "ready" && !!session.apiClient && canManageSettings;
 
   /* ---------------------------------------------------------------- */
   /*  Queries                                                          */
@@ -249,7 +250,7 @@ export default function VendorSettingsPage() {
     );
   }
 
-  if (!session.isVendorAdmin && !session.isVendorStaff) {
+  if (!canManageSettings) {
     return (
       <VendorPageShell
         title="Vendor Settings"

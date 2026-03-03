@@ -8,9 +8,12 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.util.StringUtils;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.LinkedHashSet;
+import java.util.Locale;
 import java.util.Set;
 
 @Validated
@@ -19,7 +22,7 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class AdminAnalyticsController {
 
-    private static final Set<String> ADMIN_ROLES = Set.of("super_admin", "platform_staff");
+    private static final Set<String> ADMIN_ROLES = Set.of("super_admin", "platform_admin", "platform_staff");
     private static final Set<String> ALLOWED_SORT_BY = Set.of(
         "ORDERS_COMPLETED", "AVERAGE_RATING", "FULFILLMENT_RATE", "DISPUTE_RATE", "REVENUE"
     );
@@ -109,18 +112,34 @@ public class AdminAnalyticsController {
 
     private void verifyAdminAccess(String internalAuth, String userRoles) {
         internalRequestVerifier.verify(internalAuth);
-        if (userRoles == null || userRoles.isBlank()) {
+        Set<String> roles = parseRoles(userRoles);
+        if (roles.isEmpty()) {
             throw new UnauthorizedException("Admin role required");
         }
-        boolean hasAdminRole = false;
-        for (String role : userRoles.split(",")) {
-            if (ADMIN_ROLES.contains(role.trim().toLowerCase())) {
-                hasAdminRole = true;
-                break;
-            }
-        }
+        boolean hasAdminRole = roles.stream().anyMatch(ADMIN_ROLES::contains);
         if (!hasAdminRole) {
             throw new UnauthorizedException("Admin role required");
         }
+    }
+
+    private Set<String> parseRoles(String userRoles) {
+        if (!StringUtils.hasText(userRoles)) {
+            return Set.of();
+        }
+        Set<String> roles = new LinkedHashSet<>();
+        for (String role : userRoles.split(",")) {
+            if (!StringUtils.hasText(role)) {
+                continue;
+            }
+            String normalized = role.trim()
+                    .toLowerCase(Locale.ROOT)
+                    .replace("role_", "")
+                    .replace('-', '_')
+                    .replace(' ', '_');
+            if (!normalized.isEmpty()) {
+                roles.add(normalized);
+            }
+        }
+        return Set.copyOf(roles);
     }
 }

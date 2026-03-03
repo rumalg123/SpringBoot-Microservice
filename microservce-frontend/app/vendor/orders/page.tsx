@@ -22,7 +22,8 @@ export default function VendorOrdersPage() {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
-  const ready = session.status === "ready" && session.isAuthenticated && (session.isVendorAdmin || session.isVendorStaff) && !!session.apiClient;
+  const canAccessOrders = session.isVendorAdmin || session.canManageAdminOrders;
+  const ready = session.status === "ready" && session.isAuthenticated && canAccessOrders && !!session.apiClient;
 
   /* ── Orders query ── */
   const { data: ordersData, isLoading: loading } = useQuery({
@@ -89,7 +90,7 @@ export default function VendorOrdersPage() {
     );
   }
 
-  if (!session.isVendorAdmin && !session.isVendorStaff) {
+  if (!canAccessOrders) {
     return (
       <VendorPageShell
         title="Vendor Orders"
