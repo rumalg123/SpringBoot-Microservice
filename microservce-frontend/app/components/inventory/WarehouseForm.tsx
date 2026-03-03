@@ -19,6 +19,7 @@ type Props = {
 
 export default function WarehouseForm({ form, onChange, saving, onSave, onCancel, showVendorId = false, showTypeSelect = true, vendors, loadingVendors = false }: Props) {
   const isEdit = Boolean(form.id);
+  const vendorOptions = vendors ?? [];
 
   return (
     <div>
@@ -43,20 +44,14 @@ export default function WarehouseForm({ form, onChange, saving, onSave, onCancel
         </FormField>
       )}
 
-      {showVendorId && vendors && (
+      {showVendorId && (
         <VendorSearchField
-          vendors={vendors}
+          vendors={vendorOptions}
           selectedVendorId={form.vendorId}
           onSelect={(vendorId) => onChange({ vendorId })}
           disabled={isEdit || saving}
           loading={loadingVendors}
         />
-      )}
-
-      {showVendorId && !vendors && (
-        <FormField label="Vendor ID" htmlFor="wh-vendor" helpText="Leave empty for platform warehouse">
-          <input id="wh-vendor" value={form.vendorId} onChange={(e) => onChange({ vendorId: e.target.value })} className="form-input w-full" placeholder="Vendor UUID" disabled={isEdit} />
-        </FormField>
       )}
 
       <div className="text-[0.78rem] font-bold text-brand uppercase tracking-[0.06em] mb-3 mt-5">Address</div>

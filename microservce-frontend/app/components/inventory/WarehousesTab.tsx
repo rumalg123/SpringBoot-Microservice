@@ -153,7 +153,7 @@ export default function WarehousesTab({ apiClient, apiPrefix, isAdmin = false, v
           onCancel={() => { setShowForm(false); setForm({ ...EMPTY_WAREHOUSE_FORM }); }}
           showVendorId={isAdmin}
           showTypeSelect={isAdmin}
-          vendors={vendorsQuery.data}
+          vendors={vendorsQuery.data ?? []}
           loadingVendors={vendorsQuery.isLoading}
         />
       </div>

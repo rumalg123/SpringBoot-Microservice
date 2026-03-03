@@ -3,6 +3,8 @@
 import type { AxiosInstance } from "axios";
 import FormField from "../ui/FormField";
 import SearchableSelect from "../ui/SearchableSelect";
+import VendorSearchField from "./VendorSearchField";
+import type { VendorSummary } from "../admin/products/types";
 import type { StockItemFormData } from "./types";
 import type { Warehouse } from "./types";
 
@@ -15,10 +17,32 @@ type Props = {
   onCancel: () => void;
   showVendorId?: boolean;
   apiClient: AxiosInstance | null;
+  productEndpoint?: string;
+  vendors?: VendorSummary[];
+  loadingVendors?: boolean;
 };
 
-export default function StockItemForm({ form, onChange, warehouses, saving, onSave, onCancel, showVendorId = false, apiClient }: Props) {
+export default function StockItemForm({
+  form,
+  onChange,
+  warehouses,
+  saving,
+  onSave,
+  onCancel,
+  showVendorId = false,
+  apiClient,
+  productEndpoint = "/admin/products",
+  vendors,
+  loadingVendors = false,
+}: Props) {
   const isEdit = Boolean(form.id);
+  const vendorOptions = vendors ?? [];
+  const requiresVendorFirst = showVendorId && !isEdit && !form.vendorId;
+  const activeWarehouses = warehouses.filter((w) => {
+    if (!w.active) return false;
+    if (showVendorId && form.vendorId) return w.vendorId === form.vendorId;
+    return true;
+  });
 
   return (
     <div>
@@ -26,48 +50,45 @@ export default function StockItemForm({ form, onChange, warehouses, saving, onSa
         {isEdit ? "Edit Stock Item" : "New Stock Item"}
       </h3>
 
+      {showVendorId && isEdit && (
+        <FormField label="Vendor" htmlFor="si-vendor" required>
+          <input value={form.vendorId} className="form-input w-full" disabled />
+        </FormField>
+      )}
+
+      {showVendorId && !isEdit && (
+        <VendorSearchField
+          vendors={vendorOptions}
+          selectedVendorId={form.vendorId}
+          onSelect={(vendorId) => onChange({ vendorId, productId: "", warehouseId: "" })}
+          disabled={saving}
+          loading={loadingVendors}
+          helpText="Search by vendor name, slug, email, or UUID"
+        />
+      )}
+
       <FormField label="Product" htmlFor="si-product" required>
         {isEdit ? (
           <input value={form.productId} className="form-input w-full" disabled />
         ) : (
           <SearchableSelect
             apiClient={apiClient}
-            endpoint="/admin/products"
+            endpoint={productEndpoint}
             searchParam="q"
             labelField="name"
             valueField="id"
-            placeholder="Search products by name or SKU..."
+            placeholder={requiresVendorFirst ? "Select vendor first to search products..." : "Search products by name or SKU..."}
             value={form.productId}
             onChange={(value) => onChange({ productId: value })}
-            disabled={isEdit}
+            disabled={isEdit || requiresVendorFirst}
           />
         )}
       </FormField>
 
-      {showVendorId && (
-        <FormField label="Vendor" htmlFor="si-vendor" required>
-          {isEdit ? (
-            <input value={form.vendorId} className="form-input w-full" disabled />
-          ) : (
-            <SearchableSelect
-              apiClient={apiClient}
-              endpoint="/admin/vendors"
-              searchParam="q"
-              labelField="name"
-              valueField="id"
-              placeholder="Search vendors by name..."
-              value={form.vendorId}
-              onChange={(value) => onChange({ vendorId: value })}
-              disabled={isEdit}
-            />
-          )}
-        </FormField>
-      )}
-
       <FormField label="Warehouse" htmlFor="si-warehouse" required>
         <select id="si-warehouse" value={form.warehouseId} onChange={(e) => onChange({ warehouseId: e.target.value })} className="form-select w-full" disabled={isEdit}>
-          <option value="">Select warehouse...</option>
-          {warehouses.filter((w) => w.active).map((w) => (
+          <option value="">{requiresVendorFirst ? "Select vendor first..." : "Select warehouse..."}</option>
+          {activeWarehouses.map((w) => (
             <option key={w.id} value={w.id}>{w.name}</option>
           ))}
         </select>

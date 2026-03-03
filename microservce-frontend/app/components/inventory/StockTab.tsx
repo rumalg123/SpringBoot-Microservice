@@ -53,19 +53,31 @@ export default function StockTab({ apiClient, apiPrefix, isAdmin = false, vendor
     enabled: isAdmin,
   });
 
-  /* ── Load warehouses (for forms/dropdowns) ── */
+  const listProductVendorId = isAdmin ? (filters.vendorId || "") : (vendorId || "");
+  const listProductEndpoint = listProductVendorId
+    ? `/admin/products?vendorId=${encodeURIComponent(listProductVendorId)}`
+    : "/admin/products";
+
+  const formProductVendorId = isAdmin ? form.vendorId : (vendorId || "");
+  const formProductEndpoint = formProductVendorId
+    ? `/admin/products?vendorId=${encodeURIComponent(formProductVendorId)}`
+    : "/admin/products";
+
+  // Load warehouses for forms/dropdowns.
   useEffect(() => {
     const fetchWarehouses = async () => {
       try {
         const res = await apiClient.get(`${apiPrefix}/warehouses`, { params: { size: 100 } });
         const data = res.data as PagedData<Warehouse>;
         setWarehouses(data.content ?? []);
-      } catch { /* ignore */ }
+      } catch {
+        // ignore
+      }
     };
     void fetchWarehouses();
   }, [apiClient, apiPrefix]);
 
-  /* ── Load stock items ── */
+  // Load stock items.
   const load = useCallback(async (pg = 0) => {
     setLoading(true);
     try {
@@ -89,12 +101,25 @@ export default function StockTab({ apiClient, apiPrefix, isAdmin = false, vendor
     }
   }, [apiClient, apiPrefix, filters, lowStockOnly, isAdmin]);
 
-  useEffect(() => { void load(0); }, [load]);
+  useEffect(() => {
+    void load(0);
+  }, [load]);
 
-  /* ── Save stock item ── */
+  // Save stock item.
   const handleSave = async () => {
-    if (!form.productId.trim()) { toast.error("Product ID is required"); return; }
-    if (!form.warehouseId) { toast.error("Warehouse is required"); return; }
+    if (!form.productId.trim()) {
+      toast.error("Product ID is required");
+      return;
+    }
+    if (isAdmin && !form.vendorId.trim()) {
+      toast.error("Vendor is required");
+      return;
+    }
+    if (!form.warehouseId) {
+      toast.error("Warehouse is required");
+      return;
+    }
+
     setSaving(true);
     try {
       if (form.id) {
@@ -105,9 +130,10 @@ export default function StockTab({ apiClient, apiPrefix, isAdmin = false, vendor
         });
         toast.success("Stock item updated");
       } else {
+        const resolvedVendorId = isAdmin ? form.vendorId : vendorId;
         await apiClient.post(`${apiPrefix}/stock`, {
           productId: form.productId,
-          vendorId: vendorId || form.vendorId,
+          vendorId: resolvedVendorId || undefined,
           warehouseId: form.warehouseId,
           sku: form.sku || null,
           quantityOnHand: Number(form.quantityOnHand) || 0,
@@ -116,6 +142,7 @@ export default function StockTab({ apiClient, apiPrefix, isAdmin = false, vendor
         });
         toast.success("Stock item created");
       }
+
       setShowForm(false);
       setForm({ ...EMPTY_STOCK_FORM });
       await load(page);
@@ -126,7 +153,6 @@ export default function StockTab({ apiClient, apiPrefix, isAdmin = false, vendor
     }
   };
 
-  /* ── Edit ── */
   const handleEdit = (item: StockItem) => {
     setForm({
       id: item.id,
@@ -141,7 +167,6 @@ export default function StockTab({ apiClient, apiPrefix, isAdmin = false, vendor
     setShowForm(true);
   };
 
-  /* ── Adjust stock ── */
   const handleAdjust = async (quantityChange: number, reason: string) => {
     if (!adjustTarget) return;
     setAdjustLoading(true);
@@ -157,7 +182,6 @@ export default function StockTab({ apiClient, apiPrefix, isAdmin = false, vendor
     }
   };
 
-  /* ── Bulk import ── */
   const handleBulkImport = async (bulkItems: BulkStockItem[]) => {
     setBulkLoading(true);
     try {
@@ -176,39 +200,64 @@ export default function StockTab({ apiClient, apiPrefix, isAdmin = false, vendor
     }
   };
 
-  /* ── Columns & filters ── */
   const filterDefs: FilterDef[] = [
-    ...(isAdmin ? [{ key: "vendorId", label: "Vendor", type: "select" as const, options: (vendorsQuery.data || []).map((v) => ({ label: v.name, value: v.id })) }] : []),
-    { key: "productId", label: "Product", type: "searchable-select" as const, apiClient, endpoint: "/admin/products", searchParam: "q", labelField: "name", valueField: "id", placeholder: "Search products..." },
+    ...(isAdmin
+      ? [{ key: "vendorId", label: "Vendor", type: "select" as const, options: (vendorsQuery.data || []).map((v) => ({ label: v.name, value: v.id })) }]
+      : []),
+    {
+      key: "productId",
+      label: "Product",
+      type: "searchable-select" as const,
+      apiClient,
+      endpoint: listProductEndpoint,
+      searchParam: "q",
+      labelField: "name",
+      valueField: "id",
+      placeholder: isAdmin && !filters.vendorId ? "Search products..." : "Search products by name...",
+    },
     { key: "sku", label: "SKU", type: "text" as const, placeholder: "Filter by SKU..." },
-    { key: "stockStatus", label: "Status", type: "select" as const, options: [
-      { label: "In Stock", value: "IN_STOCK" },
-      { label: "Low Stock", value: "LOW_STOCK" },
-      { label: "Out of Stock", value: "OUT_OF_STOCK" },
-      { label: "Backorder", value: "BACKORDER" },
-    ]},
+    {
+      key: "stockStatus",
+      label: "Status",
+      type: "select" as const,
+      options: [
+        { label: "In Stock", value: "IN_STOCK" },
+        { label: "Low Stock", value: "LOW_STOCK" },
+        { label: "Out of Stock", value: "OUT_OF_STOCK" },
+        { label: "Backorder", value: "BACKORDER" },
+      ],
+    },
     { key: "warehouseId", label: "Warehouse", type: "select" as const, options: warehouses.map((w) => ({ label: w.name, value: w.id })) },
   ];
 
   const columns: Column<StockItem>[] = [
     { key: "sku", header: "SKU", render: (v) => String(v || "-"), width: "12%" },
-    { key: "productId", header: "Product", render: (_, row) => {
-      const item = row as unknown as StockItem;
-      const label = item.productName || item.sku || "—";
-      return <span title={item.productName || item.productId} className="text-[0.75rem]">{label}</span>;
-    }},
+    {
+      key: "productId",
+      header: "Product",
+      render: (_, row) => {
+        const item = row as unknown as StockItem;
+        const label = item.productName || item.sku || "-";
+        return <span title={item.productName || item.productId} className="text-[0.75rem]">{label}</span>;
+      },
+    },
     { key: "warehouseName", header: "Warehouse" },
     { key: "quantityOnHand", header: "On Hand", width: "8%", render: (v) => <span className="font-bold">{String(v)}</span> },
     { key: "quantityReserved", header: "Reserved", width: "8%", render: (v) => String(v) },
-    { key: "quantityAvailable", header: "Available", width: "8%", render: (v, row) => {
-      const item = row as unknown as StockItem;
-      const avail = item.quantityAvailable;
-      const threshold = item.lowStockThreshold;
-      const color = avail <= 0 ? "var(--danger)" : avail <= threshold ? "var(--warning-text)" : "var(--success)";
-      return <span className="font-bold" style={{ color }}>{avail}</span>;
-    }},
+    {
+      key: "quantityAvailable",
+      header: "Available",
+      width: "8%",
+      render: (_, row) => {
+        const item = row as unknown as StockItem;
+        const avail = item.quantityAvailable;
+        const threshold = item.lowStockThreshold;
+        const color = avail <= 0 ? "var(--danger)" : avail <= threshold ? "var(--warning-text)" : "var(--success)";
+        return <span className="font-bold" style={{ color }}>{avail}</span>;
+      },
+    },
     { key: "stockStatus", header: "Status", render: (v) => <StatusBadge value={String(v)} colorMap={STOCK_STATUS_COLORS} /> },
-    { key: "backorderable", header: "Backorder", width: "7%", render: (v) => v ? "Yes" : "No" },
+    { key: "backorderable", header: "Backorder", width: "7%", render: (v) => (v ? "Yes" : "No") },
   ];
 
   if (showForm) {
@@ -220,9 +269,15 @@ export default function StockTab({ apiClient, apiPrefix, isAdmin = false, vendor
           warehouses={warehouses}
           saving={saving}
           onSave={handleSave}
-          onCancel={() => { setShowForm(false); setForm({ ...EMPTY_STOCK_FORM }); }}
+          onCancel={() => {
+            setShowForm(false);
+            setForm({ ...EMPTY_STOCK_FORM });
+          }}
           showVendorId={isAdmin}
           apiClient={apiClient}
+          productEndpoint={formProductEndpoint}
+          vendors={vendorsQuery.data ?? []}
+          loadingVendors={vendorsQuery.isLoading}
         />
       </div>
     );
@@ -241,7 +296,17 @@ export default function StockTab({ apiClient, apiPrefix, isAdmin = false, vendor
         <button type="button" className="btn-ghost text-[0.78rem] px-3.5 py-[7px]" onClick={() => setShowBulkImport(true)}>
           Bulk Import
         </button>
-        <button type="button" className="btn-primary text-[0.82rem] px-4.5 py-2" onClick={() => { setForm({ ...EMPTY_STOCK_FORM, vendorId: vendorId || "" }); setShowForm(true); }}>
+        <button
+          type="button"
+          className="btn-primary text-[0.82rem] px-4.5 py-2"
+          onClick={() => {
+            setForm({
+              ...EMPTY_STOCK_FORM,
+              vendorId: isAdmin ? (filters.vendorId || "") : (vendorId || ""),
+            });
+            setShowForm(true);
+          }}
+        >
           + Add Stock
         </button>
       </div>
@@ -250,7 +315,11 @@ export default function StockTab({ apiClient, apiPrefix, isAdmin = false, vendor
         <FilterBar
           filters={filterDefs}
           values={filters}
-          onChange={(key, val) => setFilters((prev) => ({ ...prev, [key]: val }))}
+          onChange={(key, val) => setFilters((prev) => {
+            const next = { ...prev, [key]: val };
+            if (key === "vendorId") next.productId = "";
+            return next;
+          })}
           onClear={() => setFilters({})}
         />
       )}
