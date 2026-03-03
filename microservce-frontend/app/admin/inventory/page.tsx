@@ -26,7 +26,7 @@ export default function AdminInventoryPage() {
     );
   }
 
-  if (!session.canViewAdmin) {
+  if (!session.canManageAdminInventory) {
     return (
       <AdminPageShell title="Inventory" breadcrumbs={[{ label: "Admin", href: "/admin/dashboard" }, { label: "Inventory" }]}>
         <div className="flex items-center justify-center min-h-[300px] flex-col gap-3">

@@ -23,6 +23,10 @@ export default function ConnectedAppNav() {
       canManageAdminVendors={session.canManageAdminVendors}
       canManageAdminPosters={session.canManageAdminPosters}
       canManageAdminPromotions={session.canManageAdminPromotions}
+      canManageAdminInventory={session.canManageAdminInventory}
+      canViewVendorAnalytics={session.canViewVendorAnalytics}
+      canViewVendorFinance={session.canViewVendorFinance}
+      canManageVendorSettings={session.canManageVendorSettings}
       apiClient={session.apiClient}
       emailVerified={session.emailVerified}
       onLogout={() => {

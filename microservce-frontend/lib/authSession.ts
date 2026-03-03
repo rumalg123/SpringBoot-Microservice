@@ -59,13 +59,99 @@ function toTrimmedString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+const PLATFORM_ORDERS_READ = "platform.orders.read";
+const PLATFORM_ORDERS_MANAGE = "platform.orders.manage";
+const PLATFORM_PRODUCTS_MANAGE = "platform.products.manage";
+const PLATFORM_CATEGORIES_MANAGE = "platform.categories.manage";
+const PLATFORM_POSTERS_MANAGE = "platform.posters.manage";
+const PLATFORM_PROMOTIONS_MANAGE = "platform.promotions.manage";
+const PLATFORM_REVIEWS_MANAGE = "platform.reviews.manage";
+const PLATFORM_INVENTORY_MANAGE = "platform.inventory.manage";
+
+const VENDOR_ORDERS_READ = "vendor.orders.read";
+const VENDOR_ORDERS_MANAGE = "vendor.orders.manage";
+const VENDOR_PRODUCTS_MANAGE = "vendor.products.manage";
+const VENDOR_PROMOTIONS_MANAGE = "vendor.promotions.manage";
+const VENDOR_INVENTORY_MANAGE = "vendor.inventory.manage";
+const VENDOR_ANALYTICS_READ = "vendor.analytics.read";
+const VENDOR_FINANCE_READ = "vendor.finance.read";
+const VENDOR_SETTINGS_MANAGE = "vendor.settings.manage";
+
+function normalizePermissionCode(permission: string): string {
+  const normalized = permission.trim().toLowerCase();
+  if (!normalized) return "";
+  if (normalized.includes(".")) return normalized;
+
+  switch (normalized) {
+    case "orders_read":
+      return VENDOR_ORDERS_READ;
+    case "orders_manage":
+      return VENDOR_ORDERS_MANAGE;
+    case "products_manage":
+      return VENDOR_PRODUCTS_MANAGE;
+    case "promotions_manage":
+      return VENDOR_PROMOTIONS_MANAGE;
+    case "inventory_manage":
+      return VENDOR_INVENTORY_MANAGE;
+    case "analytics_read":
+      return VENDOR_ANALYTICS_READ;
+    case "finance_read":
+      return VENDOR_FINANCE_READ;
+    case "settings_manage":
+      return VENDOR_SETTINGS_MANAGE;
+    default:
+      return normalized;
+  }
+}
+
+function toPermissionCodeSet(value: unknown): Set<string> {
+  const codes = new Set<string>();
+  for (const item of toStringArray(value)) {
+    const normalized = normalizePermissionCode(item);
+    if (normalized) {
+      codes.add(normalized);
+    }
+  }
+  return codes;
+}
+
+function toBoolean(value: unknown): boolean {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    return value.trim().toLowerCase() === "true";
+  }
+  return false;
+}
+
+function collectActiveVendorPermissionCodes(vendorStaffAccess: unknown): Set<string> {
+  if (!Array.isArray(vendorStaffAccess)) return new Set<string>();
+
+  const codes = new Set<string>();
+  for (const row of vendorStaffAccess) {
+    const record = asObject(row);
+    if (!record || !toBoolean(record.active)) continue;
+    for (const permission of toPermissionCodeSet(record.permissions)) {
+      codes.add(permission);
+    }
+  }
+  return codes;
+}
+
 function composeName(first: string, last: string): string {
   return `${first} ${last}`.trim();
 }
 
+function normalizeRoleValue(role: string): string {
+  return role
+    .trim()
+    .toLowerCase()
+    .replace(/^role[_:-]?/, "")
+    .replace(/[-\s]+/g, "_");
+}
+
 function hasRole(roles: string[], requiredRole: string): boolean {
-  const normalizedRequiredRole = requiredRole.trim().toLowerCase();
-  return roles.some((role) => role.trim().toLowerCase() === normalizedRequiredRole);
+  const normalizedRequiredRole = normalizeRoleValue(requiredRole);
+  return roles.some((role) => normalizeRoleValue(role) === normalizedRequiredRole);
 }
 
 function hasRoleByClaims(
@@ -112,7 +198,8 @@ function isSuperAdminByClaims(
   claims: Record<string, unknown> | null,
   namespace: string
 ): boolean {
-  return hasRoleByClaims(claims, namespace, "super_admin");
+  return hasRoleByClaims(claims, namespace, "super_admin")
+    || hasRoleByClaims(claims, namespace, "platform_admin");
 }
 
 function isVendorAdminByClaims(
@@ -298,6 +385,10 @@ export function useAuthSession() {
   const [canManageAdminVendors, setCanManageAdminVendors] = useState(false);
   const [canManageAdminPromotions, setCanManageAdminPromotions] = useState(false);
   const [canManageAdminReviews, setCanManageAdminReviews] = useState(false);
+  const [canManageAdminInventory, setCanManageAdminInventory] = useState(false);
+  const [canViewVendorAnalytics, setCanViewVendorAnalytics] = useState(false);
+  const [canViewVendorFinance, setCanViewVendorFinance] = useState(false);
+  const [canManageVendorSettings, setCanManageVendorSettings] = useState(false);
   const [hasCustomerRole, setHasCustomerRole] = useState(false);
   const [emailVerified, setEmailVerified] = useState<boolean | null>(null);
   const customerBootstrapDoneRef = useRef(false);
@@ -390,13 +481,17 @@ export function useAuthSession() {
           const vendorStaff = isVendorStaffByClaims(parsedClaims, env.claimsNamespace);
           const customerRole = isCustomerByClaims(parsedClaims, env.claimsNamespace);
           const anyAdmin = superAdmin || platformStaff || vendorAdmin || vendorStaff;
-          let manageOrders = superAdmin || platformStaff || vendorAdmin || vendorStaff;
-          let manageProducts = superAdmin || platformStaff || vendorAdmin || vendorStaff;
+          let manageOrders = superAdmin || vendorAdmin;
+          let manageProducts = superAdmin || vendorAdmin;
           let manageCategories = superAdmin;
           let managePosters = superAdmin;
           let manageVendors = superAdmin;
-          let managePromotions = superAdmin || platformStaff || vendorAdmin || vendorStaff;
-          let manageReviews = superAdmin || platformStaff;
+          let managePromotions = superAdmin || vendorAdmin;
+          let manageReviews = superAdmin;
+          let manageInventory = superAdmin || vendorAdmin;
+          let viewVendorAnalytics = superAdmin || vendorAdmin;
+          let viewVendorFinance = superAdmin || vendorAdmin;
+          let manageVendorSettings = superAdmin || vendorAdmin;
 
           if (anyAdmin && keycloak.token) {
             try {
@@ -408,13 +503,82 @@ export function useAuthSession() {
               });
               if (capabilitiesRes.ok) {
                 const capabilities = (await capabilitiesRes.json()) as Record<string, unknown>;
-                manageOrders = Boolean(capabilities.canManageAdminOrders);
-                manageProducts = Boolean(capabilities.canManageAdminProducts);
-                manageCategories = Boolean(capabilities.canManageAdminCategories);
-                managePosters = Boolean(capabilities.canManageAdminPosters);
-                manageVendors = Boolean(capabilities.canManageAdminVendors);
-                managePromotions = Boolean(capabilities.canManageAdminPromotions);
-                manageReviews = Boolean(capabilities.canManageAdminReviews);
+                const platformPermissionCodes = toPermissionCodeSet(capabilities.platformPermissions);
+                const vendorPermissionCodes = collectActiveVendorPermissionCodes(capabilities.vendorStaffAccess);
+
+                const platformCanManageOrders =
+                  platformPermissionCodes.has(PLATFORM_ORDERS_READ)
+                  || platformPermissionCodes.has(PLATFORM_ORDERS_MANAGE);
+                const platformCanManageProducts = platformPermissionCodes.has(PLATFORM_PRODUCTS_MANAGE);
+                const platformCanManageCategories = platformPermissionCodes.has(PLATFORM_CATEGORIES_MANAGE);
+                const platformCanManagePosters = platformPermissionCodes.has(PLATFORM_POSTERS_MANAGE);
+                const platformCanManagePromotions = platformPermissionCodes.has(PLATFORM_PROMOTIONS_MANAGE);
+                const platformCanManageReviews = platformPermissionCodes.has(PLATFORM_REVIEWS_MANAGE);
+                const platformCanManageInventory =
+                  platformPermissionCodes.has(PLATFORM_INVENTORY_MANAGE)
+                  || platformCanManageProducts;
+
+                const vendorStaffCanManageOrders =
+                  vendorPermissionCodes.has(VENDOR_ORDERS_READ)
+                  || vendorPermissionCodes.has(VENDOR_ORDERS_MANAGE);
+                const vendorStaffCanManageProducts = vendorPermissionCodes.has(VENDOR_PRODUCTS_MANAGE);
+                const vendorStaffCanManagePromotions = vendorPermissionCodes.has(VENDOR_PROMOTIONS_MANAGE);
+                const vendorStaffCanManageInventory =
+                  vendorPermissionCodes.has(VENDOR_INVENTORY_MANAGE)
+                  || vendorStaffCanManageProducts;
+                const vendorStaffCanViewAnalytics = vendorPermissionCodes.has(VENDOR_ANALYTICS_READ);
+                const vendorStaffCanViewFinance = vendorPermissionCodes.has(VENDOR_FINANCE_READ);
+                const vendorStaffCanManageSettings = vendorPermissionCodes.has(VENDOR_SETTINGS_MANAGE);
+
+                manageOrders =
+                  superAdmin
+                  || vendorAdmin
+                  || (vendorStaff && vendorStaffCanManageOrders)
+                  || platformCanManageOrders
+                  || Boolean(capabilities.canManageAdminOrders);
+                manageProducts =
+                  superAdmin
+                  || vendorAdmin
+                  || (vendorStaff && vendorStaffCanManageProducts)
+                  || platformCanManageProducts
+                  || Boolean(capabilities.canManageAdminProducts);
+                manageCategories =
+                  superAdmin
+                  || platformCanManageCategories
+                  || Boolean(capabilities.canManageAdminCategories);
+                managePosters =
+                  superAdmin
+                  || platformCanManagePosters
+                  || Boolean(capabilities.canManageAdminPosters);
+                manageVendors = superAdmin || Boolean(capabilities.canManageAdminVendors);
+                managePromotions =
+                  superAdmin
+                  || vendorAdmin
+                  || (vendorStaff && vendorStaffCanManagePromotions)
+                  || platformCanManagePromotions
+                  || Boolean(capabilities.canManageAdminPromotions);
+                manageReviews =
+                  superAdmin
+                  || platformCanManageReviews
+                  || Boolean(capabilities.canManageAdminReviews);
+                manageInventory =
+                  superAdmin
+                  || vendorAdmin
+                  || (vendorStaff && vendorStaffCanManageInventory)
+                  || platformCanManageInventory
+                  || Boolean(capabilities.canManageAdminInventory);
+                viewVendorAnalytics =
+                  superAdmin
+                  || vendorAdmin
+                  || (vendorStaff && vendorStaffCanViewAnalytics);
+                viewVendorFinance =
+                  superAdmin
+                  || vendorAdmin
+                  || (vendorStaff && vendorStaffCanViewFinance);
+                manageVendorSettings =
+                  superAdmin
+                  || vendorAdmin
+                  || (vendorStaff && vendorStaffCanManageSettings);
               }
             } catch {
               // Keep coarse-role fallback if capabilities endpoint is unavailable.
@@ -434,6 +598,10 @@ export function useAuthSession() {
           setCanManageAdminVendors(manageVendors);
           setCanManageAdminPromotions(managePromotions);
           setCanManageAdminReviews(manageReviews);
+          setCanManageAdminInventory(manageInventory);
+          setCanViewVendorAnalytics(viewVendorAnalytics);
+          setCanViewVendorFinance(viewVendorFinance);
+          setCanManageVendorSettings(manageVendorSettings);
           setHasCustomerRole(customerRole);
           setEmailVerified(resolveEmailVerified(parsedClaims, userProfile, env.claimsNamespace));
         } else {
@@ -450,6 +618,10 @@ export function useAuthSession() {
           setCanManageAdminVendors(false);
           setCanManageAdminPromotions(false);
           setCanManageAdminReviews(false);
+          setCanManageAdminInventory(false);
+          setCanViewVendorAnalytics(false);
+          setCanViewVendorFinance(false);
+          setCanManageVendorSettings(false);
           setHasCustomerRole(false);
           setEmailVerified(null);
         }
@@ -618,6 +790,10 @@ export function useAuthSession() {
     canManageAdminVendors,
     canManageAdminPromotions,
     canManageAdminReviews,
+    canManageAdminInventory,
+    canViewVendorAnalytics,
+    canViewVendorFinance,
+    canManageVendorSettings,
     hasCustomerRole,
     emailVerified,
     profile,

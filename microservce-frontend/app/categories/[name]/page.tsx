@@ -112,6 +112,11 @@ export default function CategoryProductsPage() {
     canManageAdminCategories,
     canManageAdminVendors,
     canManageAdminPosters,
+    canManageAdminPromotions,
+    canManageAdminInventory,
+    canViewVendorAnalytics,
+    canViewVendorFinance,
+    canManageVendorSettings,
     apiClient,
     emailVerified,
   } = useAuthSession();
@@ -464,6 +469,11 @@ export default function CategoryProductsPage() {
           canManageAdminCategories={canManageAdminCategories}
           canManageAdminVendors={canManageAdminVendors}
           canManageAdminPosters={canManageAdminPosters}
+          canManageAdminPromotions={canManageAdminPromotions}
+          canManageAdminInventory={canManageAdminInventory}
+          canViewVendorAnalytics={canViewVendorAnalytics}
+          canViewVendorFinance={canViewVendorFinance}
+          canManageVendorSettings={canManageVendorSettings}
           apiClient={apiClient}
           emailVerified={emailVerified}
           onLogout={() => { void logout(); }}

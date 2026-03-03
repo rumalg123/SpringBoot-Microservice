@@ -282,6 +282,11 @@ export default function WishlistPage() {
         canManageAdminCategories={session.canManageAdminCategories}
         canManageAdminVendors={session.canManageAdminVendors}
         canManageAdminPosters={session.canManageAdminPosters}
+        canManageAdminPromotions={session.canManageAdminPromotions}
+        canManageAdminInventory={session.canManageAdminInventory}
+        canViewVendorAnalytics={session.canViewVendorAnalytics}
+        canViewVendorFinance={session.canViewVendorFinance}
+        canManageVendorSettings={session.canManageVendorSettings}
         apiClient={apiClient}
         emailVerified={emailVerified}
         onLogout={() => { void logout(); }}

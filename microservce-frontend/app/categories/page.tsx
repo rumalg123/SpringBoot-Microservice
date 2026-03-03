@@ -73,6 +73,11 @@ export default function CategoriesPage() {
           canManageAdminCategories={session.canManageAdminCategories}
           canManageAdminVendors={session.canManageAdminVendors}
           canManageAdminPosters={session.canManageAdminPosters}
+          canManageAdminPromotions={session.canManageAdminPromotions}
+          canManageAdminInventory={session.canManageAdminInventory}
+          canViewVendorAnalytics={session.canViewVendorAnalytics}
+          canViewVendorFinance={session.canViewVendorFinance}
+          canManageVendorSettings={session.canManageVendorSettings}
           apiClient={session.apiClient}
           emailVerified={session.emailVerified}
           onLogout={() => { void session.logout(); }}

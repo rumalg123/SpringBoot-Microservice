@@ -25,8 +25,11 @@ public class AdminActorScopeService {
     public static final String PLATFORM_POSTERS_MANAGE = "platform.posters.manage";
     public static final String PLATFORM_PROMOTIONS_MANAGE = "platform.promotions.manage";
     public static final String PLATFORM_REVIEWS_MANAGE = "platform.reviews.manage";
+    public static final String PLATFORM_INVENTORY_MANAGE = "platform.inventory.manage";
 
     public static final String VENDOR_PRODUCTS_MANAGE = "vendor.products.manage";
+    public static final String VENDOR_PROMOTIONS_MANAGE = "vendor.promotions.manage";
+    public static final String VENDOR_INVENTORY_MANAGE = "vendor.inventory.manage";
     public static final String VENDOR_ORDERS_READ = "vendor.orders.read";
     public static final String VENDOR_ORDERS_MANAGE = "vendor.orders.manage";
 
@@ -333,15 +336,24 @@ public class AdminActorScopeService {
         List<Map<String, Object>> vendorStaffAccess = (superAdmin || vendorStaff) && StringUtils.hasText(userSub)
                 ? adminAccessService.listVendorStaffAccessByKeycloakUser(userSub.trim(), internalAuth)
                 : List.of();
+        Set<String> vendorPermissions = extractActiveVendorPermissionCodes(vendorStaffAccess);
 
-        boolean canManageOrders = superAdmin || vendorAdmin || vendorStaff
+        boolean vendorStaffCanManageOrders = vendorPermissions.contains(VENDOR_ORDERS_READ) || vendorPermissions.contains(VENDOR_ORDERS_MANAGE);
+        boolean vendorStaffCanManageProducts = vendorPermissions.contains(VENDOR_PRODUCTS_MANAGE);
+        boolean vendorStaffCanManagePromotions = vendorPermissions.contains(VENDOR_PROMOTIONS_MANAGE);
+        boolean vendorStaffCanManageInventory = vendorPermissions.contains(VENDOR_INVENTORY_MANAGE) || vendorStaffCanManageProducts;
+
+        boolean canManageOrders = superAdmin || vendorAdmin || (vendorStaff && vendorStaffCanManageOrders)
                 || platformPermissions.contains(PLATFORM_ORDERS_READ)
                 || platformPermissions.contains(PLATFORM_ORDERS_MANAGE);
-        boolean canManageProducts = superAdmin || vendorAdmin || vendorStaff
+        boolean canManageProducts = superAdmin || vendorAdmin || (vendorStaff && vendorStaffCanManageProducts)
                 || platformPermissions.contains(PLATFORM_PRODUCTS_MANAGE);
         boolean canManageCategories = superAdmin || platformPermissions.contains(PLATFORM_CATEGORIES_MANAGE);
         boolean canManagePosters = superAdmin || platformPermissions.contains(PLATFORM_POSTERS_MANAGE);
-        boolean canManagePromotions = superAdmin || vendorAdmin || vendorStaff
+        boolean canManageInventory = superAdmin || vendorAdmin || (vendorStaff && vendorStaffCanManageInventory)
+                || platformPermissions.contains(PLATFORM_INVENTORY_MANAGE)
+                || platformPermissions.contains(PLATFORM_PRODUCTS_MANAGE);
+        boolean canManagePromotions = superAdmin || vendorAdmin || (vendorStaff && vendorStaffCanManagePromotions)
                 || platformPermissions.contains(PLATFORM_PROMOTIONS_MANAGE);
         boolean canManageReviews = superAdmin || platformPermissions.contains(PLATFORM_REVIEWS_MANAGE);
 
@@ -358,6 +370,7 @@ public class AdminActorScopeService {
                 canManageCategories,
                 canManagePosters,
                 superAdmin,
+                canManageInventory,
                 canManagePromotions,
                 canManageReviews
         );
@@ -486,11 +499,58 @@ public class AdminActorScopeService {
         }
         Set<String> roles = new LinkedHashSet<>();
         for (String part : rolesHeader.split(",")) {
-            if (part != null && !part.isBlank()) {
-                roles.add(part.trim().toLowerCase(Locale.ROOT));
+            String normalized = normalizeRole(part);
+            if (!normalized.isEmpty()) {
+                roles.add(normalized);
+                if ("platform_admin".equals(normalized)) {
+                    roles.add("super_admin");
+                }
             }
         }
         return roles;
+    }
+
+    private String normalizeRole(String role) {
+        if (role == null || role.isBlank()) {
+            return "";
+        }
+        String normalized = role.trim().toLowerCase(Locale.ROOT);
+        if (normalized.startsWith("role_")) {
+            normalized = normalized.substring("role_".length());
+        } else if (normalized.startsWith("role-")) {
+            normalized = normalized.substring("role-".length());
+        } else if (normalized.startsWith("role:")) {
+            normalized = normalized.substring("role:".length());
+        }
+        return normalized.replace('-', '_').replace(' ', '_');
+    }
+
+    private Set<String> extractActiveVendorPermissionCodes(List<Map<String, Object>> accessRows) {
+        if (accessRows == null || accessRows.isEmpty()) {
+            return Set.of();
+        }
+        Set<String> permissions = new LinkedHashSet<>();
+        for (Map<String, Object> row : accessRows) {
+            if (row == null || !isTruthy(row.get("active"))) {
+                continue;
+            }
+            for (String permission : parseStringSet(row.get("permissions"))) {
+                if (StringUtils.hasText(permission)) {
+                    permissions.add(permission.trim().toLowerCase(Locale.ROOT));
+                }
+            }
+        }
+        return Set.copyOf(permissions);
+    }
+
+    private boolean isTruthy(Object value) {
+        if (value instanceof Boolean b) {
+            return b;
+        }
+        if (value == null) {
+            return false;
+        }
+        return Boolean.parseBoolean(String.valueOf(value));
     }
 
     private Set<String> parseStringSet(Object raw) {

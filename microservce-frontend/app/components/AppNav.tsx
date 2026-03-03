@@ -20,6 +20,10 @@ type Props = {
   canManageAdminVendors?: boolean;
   canManageAdminPosters?: boolean;
   canManageAdminPromotions?: boolean;
+  canManageAdminInventory?: boolean;
+  canViewVendorAnalytics?: boolean;
+  canViewVendorFinance?: boolean;
+  canManageVendorSettings?: boolean;
   apiClient?: AxiosInstance | null;
   emailVerified?: boolean | null;
   onLogout: () => void | Promise<void>;
@@ -64,6 +68,10 @@ export default function AppNav({
   canManageAdminVendors,
   canManageAdminPosters,
   canManageAdminPromotions,
+  canManageAdminInventory,
+  canViewVendorAnalytics,
+  canViewVendorFinance,
+  canManageVendorSettings,
   apiClient = null,
   emailVerified = null,
   onLogout,
@@ -108,7 +116,16 @@ export default function AppNav({
   const showAdminPosters = canManageAdminPosters ?? canViewAdmin;
   const showAdminPromotions = canManageAdminPromotions ?? canViewAdmin;
   const showAdminCategories = canManageAdminCategories ?? isSuperAdmin;
+  const showAdminInventory = canManageAdminInventory ?? showAdminProducts;
   const showVendorStaffAdmin = isSuperAdmin || isVendorAdmin;
+  const showVendorOrders = canAccessVendorPortal && showAdminOrders;
+  const showVendorProducts = canAccessVendorPortal && showAdminProducts;
+  const showVendorInventory = canAccessVendorPortal && showAdminInventory;
+  const showVendorPromotions = canAccessVendorPortal && showAdminPromotions;
+  const showVendorAnalytics = canAccessVendorPortal && (canViewVendorAnalytics ?? isVendorAdmin);
+  const showVendorFinance = canAccessVendorPortal && (canViewVendorFinance ?? isVendorAdmin);
+  const showVendorSettings = canAccessVendorPortal && (canManageVendorSettings ?? isVendorAdmin);
+  const showVendorReviews = canAccessVendorPortal && showAdminProducts;
 
   const navItems: NavItem[] = useMemo(() => [
     // User links
@@ -122,15 +139,15 @@ export default function AppNav({
     { href: "/profile/insights", label: "Insights", show: !canViewAdmin && !canAccessVendorPortal, color: "brand" },
     // Vendor links
     { href: "/vendor", label: "Vendor Portal", show: canAccessVendorPortal, color: "vendor" },
-    { href: "/vendor/orders", label: "Vendor Orders", show: canAccessVendorPortal, color: "vendor" },
-    { href: "/admin/products", label: "Vendor Products", show: canAccessVendorPortal && showAdminProducts, color: "vendor" },
-    { href: "/vendor/inventory", label: "Vendor Inventory", show: canAccessVendorPortal, color: "vendor" },
-    { href: "/admin/promotions", label: "Vendor Promotions", show: canAccessVendorPortal && showAdminPromotions, color: "vendor" },
-    { href: "/vendor/analytics", label: "Analytics", show: canAccessVendorPortal, color: "vendor" },
-    { href: "/vendor/reviews", label: "Reviews", show: canAccessVendorPortal, color: "vendor" },
-    { href: "/vendor/bank-accounts", label: "Bank Accounts", show: canAccessVendorPortal, color: "vendor" },
-    { href: "/vendor/payouts", label: "Payouts", show: canAccessVendorPortal, color: "vendor" },
-    { href: "/vendor/settings", label: "Vendor Settings", show: canAccessVendorPortal, color: "vendor" },
+    { href: "/vendor/orders", label: "Vendor Orders", show: showVendorOrders, color: "vendor" },
+    { href: "/admin/products", label: "Vendor Products", show: showVendorProducts, color: "vendor" },
+    { href: "/vendor/inventory", label: "Vendor Inventory", show: showVendorInventory, color: "vendor" },
+    { href: "/admin/promotions", label: "Vendor Promotions", show: showVendorPromotions, color: "vendor" },
+    { href: "/vendor/analytics", label: "Analytics", show: showVendorAnalytics, color: "vendor" },
+    { href: "/vendor/reviews", label: "Reviews", show: showVendorReviews, color: "vendor" },
+    { href: "/vendor/bank-accounts", label: "Bank Accounts", show: showVendorFinance, color: "vendor" },
+    { href: "/vendor/payouts", label: "Payouts", show: showVendorFinance, color: "vendor" },
+    { href: "/vendor/settings", label: "Vendor Settings", show: showVendorSettings, color: "vendor" },
     // Admin links
     { href: "/admin/dashboard", label: "Dashboard", show: isSuperAdmin, color: "admin" },
     { href: "/admin/orders", label: "Admin Orders", show: showAdminOrders, color: "admin" },
@@ -146,10 +163,10 @@ export default function AppNav({
     { href: "/admin/sessions", label: "Sessions", show: isSuperAdmin, color: "admin" },
     { href: "/admin/settings", label: "Settings", show: isSuperAdmin, color: "admin" },
     { href: "/admin/promotions", label: "Promotions", show: showAdminPromotions, color: "admin" },
-    { href: "/admin/inventory", label: "Inventory", show: canViewAdmin, color: "admin" },
+    { href: "/admin/inventory", label: "Inventory", show: showAdminInventory, color: "admin" },
     { href: "/admin/permission-groups", label: "Permissions", show: isSuperAdmin, color: "admin" },
     { href: "/admin/access-audit", label: "Access Audit", show: isSuperAdmin, color: "admin" },
-  ], [isSuperAdmin, canAccessVendorPortal, canViewAdmin, showAdminOrders, showAdminProducts, showAdminVendors, showAdminPosters, showAdminPromotions, showAdminCategories, showVendorStaffAdmin]);
+  ], [isSuperAdmin, canAccessVendorPortal, canViewAdmin, showAdminOrders, showAdminProducts, showAdminVendors, showAdminPosters, showAdminPromotions, showAdminCategories, showAdminInventory, showVendorStaffAdmin, showVendorOrders, showVendorProducts, showVendorInventory, showVendorPromotions, showVendorAnalytics, showVendorReviews, showVendorFinance, showVendorSettings]);
 
   const userLinks = navItems.filter((i) => i.color === "brand" && i.show);
   const vendorLinks = navItems.filter((i) => i.color === "vendor" && i.show);

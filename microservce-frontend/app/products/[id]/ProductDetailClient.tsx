@@ -43,6 +43,11 @@ export default function ProductDetailClient() {
     canManageAdminCategories,
     canManageAdminVendors,
     canManageAdminPosters,
+    canManageAdminPromotions,
+    canManageAdminInventory,
+    canViewVendorAnalytics,
+    canViewVendorFinance,
+    canManageVendorSettings,
     login,
     apiClient,
     emailVerified,
@@ -281,6 +286,11 @@ export default function ProductDetailClient() {
           canManageAdminOrders={canManageAdminOrders}
             canManageAdminProducts={canManageAdminProducts}
             canManageAdminPosters={canManageAdminPosters}
+            canManageAdminPromotions={canManageAdminPromotions}
+            canManageAdminInventory={canManageAdminInventory}
+            canViewVendorAnalytics={canViewVendorAnalytics}
+            canViewVendorFinance={canViewVendorFinance}
+            canManageVendorSettings={canManageVendorSettings}
             apiClient={apiClient}
             emailVerified={emailVerified}
             onLogout={() => { void logout(); }}
@@ -315,6 +325,11 @@ export default function ProductDetailClient() {
           canManageAdminCategories={canManageAdminCategories}
           canManageAdminVendors={canManageAdminVendors}
           canManageAdminPosters={canManageAdminPosters}
+          canManageAdminPromotions={canManageAdminPromotions}
+          canManageAdminInventory={canManageAdminInventory}
+          canViewVendorAnalytics={canViewVendorAnalytics}
+          canViewVendorFinance={canViewVendorFinance}
+          canManageVendorSettings={canManageVendorSettings}
           apiClient={apiClient}
           emailVerified={emailVerified}
           onLogout={() => { void logout(); }}

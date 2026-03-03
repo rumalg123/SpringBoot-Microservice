@@ -15,7 +15,8 @@ export default function VendorInventoryPage() {
   const session = useAuthSession();
   const [activeTab, setActiveTab] = useState<Tab>("Stock");
 
-  const ready = session.status === "ready" && !!session.apiClient && session.isVendorAdmin;
+  const canManageInventory = session.isVendorAdmin || session.canManageAdminInventory;
+  const ready = session.status === "ready" && !!session.apiClient && canManageInventory;
 
   /* ── Resolve vendor ID ── */
   const { data: vendorId = "", isLoading: loadingVendor } = useQuery({
@@ -39,12 +40,12 @@ export default function VendorInventoryPage() {
     );
   }
 
-  if (!session.isVendorAdmin) {
+  if (!canManageInventory) {
     return (
       <VendorPageShell title="Inventory" breadcrumbs={[{ label: "Vendor", href: "/vendor" }, { label: "Inventory" }]}>
         <div className="flex items-center justify-center min-h-[300px] flex-col gap-3">
           <p className="text-danger text-[1.1rem] font-bold font-[var(--font-display,Syne,sans-serif)]">Unauthorized</p>
-          <p className="text-muted text-sm">Only vendor admins can manage inventory.</p>
+          <p className="text-muted text-sm">You do not have inventory permissions for this tenant.</p>
         </div>
       </VendorPageShell>
     );

@@ -23,6 +23,8 @@ public class AdminInventoryAccessScopeService {
 
     public static final String PLATFORM_INVENTORY_MANAGE = "platform.inventory.manage";
     public static final String VENDOR_INVENTORY_MANAGE = "vendor.inventory.manage";
+    public static final String PLATFORM_PRODUCTS_MANAGE = "platform.products.manage";
+    public static final String VENDOR_PRODUCTS_MANAGE = "vendor.products.manage";
 
     private final AccessClient accessClient;
     private final VendorAccessClient vendorAccessClient;
@@ -77,7 +79,8 @@ public class AdminInventoryAccessScopeService {
         if (roles.contains("platform_staff")) {
             PlatformAccessLookupResponse platformAccess = accessClient.getPlatformAccessByKeycloakUser(requireUserSub(userSub), internalAuth);
             Set<String> permissions = platformAccess.permissions() == null ? Set.of() : platformAccess.permissions();
-            boolean inventoryManage = platformAccess.active() && permissions.contains(PLATFORM_INVENTORY_MANAGE);
+            boolean inventoryManage = platformAccess.active()
+                    && (permissions.contains(PLATFORM_INVENTORY_MANAGE) || permissions.contains(PLATFORM_PRODUCTS_MANAGE));
             if (inventoryManage) {
                 return new AdminActorScope(false, true, Set.of());
             }
@@ -99,7 +102,7 @@ public class AdminInventoryAccessScopeService {
                     continue;
                 }
                 Set<String> perms = row.permissions() == null ? Set.of() : row.permissions();
-                if (perms.contains(VENDOR_INVENTORY_MANAGE)) {
+                if (perms.contains(VENDOR_INVENTORY_MANAGE) || perms.contains(VENDOR_PRODUCTS_MANAGE)) {
                     vendorIds.add(row.vendorId());
                 }
             }
@@ -124,11 +127,30 @@ public class AdminInventoryAccessScopeService {
         }
         Set<String> roles = new LinkedHashSet<>();
         for (String role : rolesHeader.split(",")) {
-            if (role != null && !role.isBlank()) {
-                roles.add(role.trim().toLowerCase(Locale.ROOT));
+            String normalized = normalizeRole(role);
+            if (!normalized.isEmpty()) {
+                roles.add(normalized);
+                if ("platform_admin".equals(normalized)) {
+                    roles.add("super_admin");
+                }
             }
         }
         return Set.copyOf(roles);
+    }
+
+    private String normalizeRole(String role) {
+        if (role == null || role.isBlank()) {
+            return "";
+        }
+        String normalized = role.trim().toLowerCase(Locale.ROOT);
+        if (normalized.startsWith("role_")) {
+            normalized = normalized.substring("role_".length());
+        } else if (normalized.startsWith("role-")) {
+            normalized = normalized.substring("role-".length());
+        } else if (normalized.startsWith("role:")) {
+            normalized = normalized.substring("role:".length());
+        }
+        return normalized.replace('-', '_').replace(' ', '_');
     }
 
     private UUID resolveVendorIdForVendorScopedActor(Set<UUID> vendorIds, UUID requestedVendorId) {
