@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { useAuthSession } from "../../../lib/authSession";
 import { getErrorMessage } from "../../../lib/error";
@@ -11,7 +12,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
 
-import type { CustomerInsights, MonthlySpendBucket } from "../../../lib/types/customer";
+import type { CustomerInsights } from "../../../lib/types/customer";
 import { CHART_GRID, CHART_TEXT, TIER_COLORS } from "../../../lib/constants";
 
 /* ───── styles ───── */
@@ -49,17 +50,25 @@ function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: 
 /* ───── component ───── */
 
 export default function CustomerInsightsPage() {
+  const router = useRouter();
   const session = useAuthSession();
   const [data, setData] = useState<CustomerInsights | null>(null);
   const [loading, setLoading] = useState(true);
   const [customerId, setCustomerId] = useState<string | null>(null);
   const api = session.apiClient;
+  const isVendorAccount = session.isVendorAdmin || session.isVendorStaff;
   const isAdmin = session.canViewAdmin;
+  const blockedCustomerInsights = isAdmin || isVendorAccount;
   const sessionReady = session.status === "ready";
+
+  useEffect(() => {
+    if (!sessionReady || !isVendorAccount) return;
+    router.replace("/vendor/analytics");
+  }, [sessionReady, isVendorAccount, router]);
 
   // Get customer ID from /customers/me
   useEffect(() => {
-    if (!sessionReady || !api || !session.isAuthenticated || isAdmin) return;
+    if (!sessionReady || !api || !session.isAuthenticated || blockedCustomerInsights) return;
     let cancelled = false;
     (async () => {
       try {
@@ -70,11 +79,11 @@ export default function CustomerInsightsPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [sessionReady, api, session.isAuthenticated, isAdmin]);
+  }, [sessionReady, api, session.isAuthenticated, blockedCustomerInsights]);
 
   // Fetch insights
   useEffect(() => {
-    if (!api || !customerId || isAdmin) return;
+    if (!api || !customerId || blockedCustomerInsights) return;
     let cancelled = false;
     (async () => {
       setLoading(true);
@@ -88,7 +97,7 @@ export default function CustomerInsightsPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [api, customerId, isAdmin]);
+  }, [api, customerId, blockedCustomerInsights]);
 
   const o = data?.orderSummary;
   const p = data?.profile;
@@ -122,19 +131,28 @@ export default function CustomerInsightsPage() {
             My Insights
           </h1>
 
-          {isAdmin && (
+          {isVendorAccount && (
+            <div className="flex min-h-[220px] flex-col items-center justify-center gap-4">
+              <p className="text-[0.9rem] text-muted">Vendor accounts use vendor analytics instead of customer insights.</p>
+              <a href="/vendor/analytics" className="rounded-md border border-line-bright bg-brand-soft px-4 py-2 text-sm font-bold text-brand no-underline">
+                Go to Vendor Analytics
+              </a>
+            </div>
+          )}
+
+          {!isVendorAccount && isAdmin && (
             <div className="flex min-h-[200px] items-center justify-center">
               <p className="text-[0.9rem] text-muted">Insights are not available for admin accounts. Switch to a customer account to view shopping insights.</p>
             </div>
           )}
 
-          {!isAdmin && (loading || !sessionReady) && (
+          {!blockedCustomerInsights && (loading || !sessionReady) && (
             <div className="grid gap-3.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))" }}>
               {Array.from({ length: 4 }).map((_, i) => <div key={i} className="skeleton h-[100px] rounded-lg border border-line bg-[rgba(255,255,255,0.02)] p-5" />)}
             </div>
           )}
 
-          {!isAdmin && !loading && data && (
+          {!blockedCustomerInsights && !loading && data && (
             <>
               {/* Loyalty card */}
               {p && (
@@ -195,7 +213,7 @@ export default function CustomerInsightsPage() {
             </>
           )}
 
-          {!isAdmin && !loading && !data && (
+          {!blockedCustomerInsights && !loading && !data && (
             <div className="flex min-h-[200px] items-center justify-center">
               <p className="text-[0.9rem] text-muted">No insights data available yet. Start shopping to see your insights!</p>
             </div>

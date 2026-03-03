@@ -119,7 +119,7 @@ export default function AppNav({
     { href: "/orders", label: "My Orders", show: true, color: "brand" },
     { href: "/promotions", label: "Promotions", show: true, color: "brand" },
     { href: "/profile", label: "Profile", show: true, color: "brand" },
-    { href: "/profile/insights", label: "Insights", show: true, color: "brand" },
+    { href: "/profile/insights", label: "Insights", show: !canViewAdmin && !canAccessVendorPortal, color: "brand" },
     // Vendor links
     { href: "/vendor", label: "Vendor Portal", show: canAccessVendorPortal, color: "vendor" },
     { href: "/vendor/orders", label: "Vendor Orders", show: canAccessVendorPortal, color: "vendor" },
