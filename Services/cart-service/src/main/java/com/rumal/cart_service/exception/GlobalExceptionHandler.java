@@ -42,6 +42,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(error(HttpStatus.BAD_REQUEST, ex.getMessage()));
     }
 
+    @ExceptionHandler(ConflictException.class)
+    public ResponseEntity<?> conflict(ConflictException ex) {
+        log.warn("Cart conflict: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(error(HttpStatus.CONFLICT, ex.getMessage()));
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<?> validation(MethodArgumentNotValidException ex) {
         log.warn("Cart request argument validation failed: {}", ex.getMessage());

@@ -4,6 +4,7 @@ import com.rumal.cart_service.dto.CreateMyOrderItemRequest;
 import com.rumal.cart_service.dto.CreateMyOrderRequest;
 import com.rumal.cart_service.dto.OrderResponse;
 import com.rumal.cart_service.dto.PromotionCheckoutPricingRequest;
+import com.rumal.cart_service.exception.ConflictException;
 import com.rumal.cart_service.exception.ResourceNotFoundException;
 import com.rumal.cart_service.exception.ServiceUnavailableException;
 import com.rumal.cart_service.exception.ValidationException;
@@ -72,7 +73,10 @@ public class OrderClient {
             log.warn("Order service returned HTTP {} during checkout: {}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
             HttpStatusCode status = ex.getStatusCode();
             int statusCode = status.value();
-            if (statusCode == 400 || statusCode == 409 || statusCode == 422) {
+            if (statusCode == 409) {
+                throw new ConflictException(resolveErrorMessage(ex, "Checkout request with this idempotency key is still processing"));
+            }
+            if (statusCode == 400 || statusCode == 422) {
                 throw new ValidationException(resolveErrorMessage(ex, "Checkout validation failed"));
             }
             if (statusCode == 404) {
@@ -97,6 +101,7 @@ public class OrderClient {
             String idempotencyKey,
             Throwable ex
     ) {
+        if (ex instanceof ConflictException ce) throw ce;
         if (ex instanceof ValidationException ve) throw ve;
         if (ex instanceof ResourceNotFoundException rnfe) throw rnfe;
         throw new ServiceUnavailableException(
@@ -127,6 +132,11 @@ public class OrderClient {
             JsonNode message = tree.get("message");
             if (message != null && !message.asText().isBlank()) {
                 return message.asText();
+            }
+
+            JsonNode error = tree.get("error");
+            if (error != null && !error.asText().isBlank()) {
+                return error.asText();
             }
         } catch (Exception ignored) {
             // Non-JSON response — fall through to fallback

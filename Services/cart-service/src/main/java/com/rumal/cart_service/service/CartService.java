@@ -30,6 +30,7 @@ import com.rumal.cart_service.dto.UpdateCartNoteRequest;
 import com.rumal.cart_service.dto.VendorOperationalStateResponse;
 import com.rumal.cart_service.entity.Cart;
 import com.rumal.cart_service.entity.CartItem;
+import com.rumal.cart_service.exception.ConflictException;
 import com.rumal.cart_service.exception.ResourceNotFoundException;
 import com.rumal.cart_service.exception.ValidationException;
 import com.rumal.cart_service.repo.CartRepository;
@@ -298,6 +299,11 @@ public class CartService {
                     promotionPricing,
                     downstreamOrderIdempotencyKey(idempotencyKey)
             );
+        } catch (ConflictException ex) {
+            if (couponReservation != null && couponReservation.id() != null) {
+                releaseCouponReservationQuietly(couponReservation.id(), "order_create_failed:" + ex.getClass().getSimpleName());
+            }
+            throw ex;
         } catch (ValidationException ex) {
             if (couponReservation != null && couponReservation.id() != null) {
                 releaseCouponReservationQuietly(couponReservation.id(), "order_create_failed:" + ex.getClass().getSimpleName());

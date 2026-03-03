@@ -211,7 +211,11 @@ export default function CartPage() {
           submitToPayHere(payRes.data);
         },
         onError: (err) => {
-          const message = getErrorMessage(err);
+          const raw = getErrorMessage(err);
+          const lower = raw.toLowerCase();
+          const message = lower.includes("idempotency key is still processing")
+            ? "Your previous checkout is still processing. Please wait a few seconds and check My Orders before retrying."
+            : raw;
           setStatus(message);
           toast.error(message);
         },
