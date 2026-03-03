@@ -22,9 +22,14 @@ import CartSuggestions from "../components/cart/CartSuggestions";
 import EmptyState from "../components/ui/EmptyState";
 
 const CHECKOUT_PREFS_STORAGE_KEY = "cart_checkout_prefs_v1";
+const INVENTORY_NOT_READY_FRAGMENT = "inventory reservation is not ready yet";
 
 function normalizeText(value: string | null | undefined): string {
   return (value ?? "").trim().toLowerCase();
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function resolveCouponRejectionMessage(
@@ -39,6 +44,11 @@ function resolveCouponRejectionMessage(
   if (!rejectedCoupon) return null;
   const reason = rejectedCoupon.reason?.trim() || "Invalid coupon code";
   return `${reason}. Totals below include only eligible automatic promotions.`;
+}
+
+function isInventoryNotReadyError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err ?? "");
+  return message.toLowerCase().includes(INVENTORY_NOT_READY_FRAGMENT);
 }
 
 
@@ -295,8 +305,22 @@ export default function CartPage() {
           toast.success(`Order placed! Total: ${money(data.grandTotal)}`);
           trackPurchase(cart.items.map((item) => ({ id: item.productId, price: item.unitPrice })), session.token);
           try {
-            const payRes = await apiClient.post<PayHereFormData>("/payments/me/initiate", { orderId: data.orderId });
-            submitToPayHere(payRes.data);
+            let lastError: unknown = null;
+            for (let attempt = 1; attempt <= 4; attempt += 1) {
+              try {
+                const payRes = await apiClient.post<PayHereFormData>("/payments/me/initiate", { orderId: data.orderId });
+                submitToPayHere(payRes.data);
+                return;
+              } catch (err) {
+                lastError = err;
+                if (!isInventoryNotReadyError(err) || attempt === 4) {
+                  break;
+                }
+                setStatus("Order placed. Finalizing inventory, preparing payment...");
+                await sleep(attempt * 1500);
+              }
+            }
+            throw lastError ?? new Error("Payment initiation failed");
           } catch (err) {
             const paymentError = getErrorMessage(err).toLowerCase();
             const message = paymentError.includes("temporarily unavailable")

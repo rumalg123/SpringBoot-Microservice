@@ -18,6 +18,16 @@ import { useOrders, useOrderDetail, useOrderPayment, usePlaceOrder, useCancelOrd
 import { useAddresses } from "../../lib/hooks/queries/useAddresses";
 
 type ProductPageResponse = { content: ProductSummary[] };
+const INVENTORY_NOT_READY_FRAGMENT = "inventory reservation is not ready yet";
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isInventoryNotReadyError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err ?? "");
+  return message.toLowerCase().includes(INVENTORY_NOT_READY_FRAGMENT);
+}
 
 export default function OrdersPage() {
   const router = useRouter();
@@ -26,7 +36,7 @@ export default function OrdersPage() {
     resendVerificationEmail, profile, logout, emailVerified } = session;
 
   /* ── React Query hooks ── */
-  const { data: orders = [], isLoading: ordersLoading } = useOrders(apiClient);
+  const { data: orders = [] } = useOrders(apiClient);
   const { data: addresses = [] } = useAddresses(apiClient);
 
   const [products, setProducts] = useState<ProductSummary[]>([]);
@@ -40,7 +50,13 @@ export default function OrdersPage() {
   const [cancelReason, setCancelReason] = useState("");
 
   const { data: selectedDetail, isLoading: detailLoading } = useOrderDetail(apiClient, selectedId || null);
-  const { data: paymentInfo } = useOrderPayment(apiClient, selectedId || null);
+  const shouldFetchPaymentInfo = Boolean(
+    selectedDetail?.paymentId
+    || selectedDetail?.paidAt
+    || selectedDetail?.paymentMethod
+    || selectedDetail?.paymentGatewayRef
+  );
+  const { data: paymentInfo } = useOrderPayment(apiClient, selectedId || null, shouldFetchPaymentInfo);
 
   const placeOrderMutation = usePlaceOrder(apiClient);
   const cancelOrderMutation = useCancelOrder(apiClient);
@@ -125,8 +141,21 @@ export default function OrdersPage() {
     if (!apiClient || payingOrderId) return;
     setPayingOrderId(orderId);
     try {
-      const res = await apiClient.post<PayHereFormData>("/payments/me/initiate", { orderId });
-      submitToPayHere(res.data);
+      let lastError: unknown = null;
+      for (let attempt = 1; attempt <= 4; attempt += 1) {
+        try {
+          const res = await apiClient.post<PayHereFormData>("/payments/me/initiate", { orderId });
+          submitToPayHere(res.data);
+          return;
+        } catch (err) {
+          lastError = err;
+          if (!isInventoryNotReadyError(err) || attempt === 4) {
+            break;
+          }
+          await sleep(attempt * 1500);
+        }
+      }
+      throw lastError ?? new Error("Failed to initiate payment");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to initiate payment");
       setPayingOrderId(null);

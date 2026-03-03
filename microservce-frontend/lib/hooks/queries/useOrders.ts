@@ -28,7 +28,11 @@ export function useOrderDetail(apiClient: AxiosInstance | null, orderId: string 
   });
 }
 
-export function useOrderPayment(apiClient: AxiosInstance | null, orderId: string | null) {
+export function useOrderPayment(
+  apiClient: AxiosInstance | null,
+  orderId: string | null,
+  shouldFetch = true
+) {
   return useQuery({
     queryKey: queryKeys.orders.payment(orderId ?? ""),
     queryFn: async () => {
@@ -39,7 +43,7 @@ export function useOrderPayment(apiClient: AxiosInstance | null, orderId: string
         return null;
       }
     },
-    enabled: !!apiClient && !!orderId,
+    enabled: !!apiClient && !!orderId && shouldFetch,
   });
 }
 
