@@ -53,6 +53,17 @@ public class StockService {
         return results;
     }
 
+    @Transactional(readOnly = true)
+    public boolean isReservationReadyForPayment(UUID orderId) {
+        if (orderId == null) {
+            return false;
+        }
+        return stockReservationRepository.existsByOrderIdAndStatusIn(
+                orderId,
+                EnumSet.of(ReservationStatus.RESERVED, ReservationStatus.CONFIRMED)
+        );
+    }
+
     // ─── Internal: Reserve Stock ───
 
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)

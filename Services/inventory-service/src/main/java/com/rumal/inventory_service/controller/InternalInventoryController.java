@@ -69,6 +69,16 @@ public class InternalInventoryController {
         stockService.cancelOrderReservations(orderId, reason);
     }
 
+    @GetMapping("/reservations/{orderId}/readiness")
+    public OrderReservationReadinessResponse getReservationReadiness(
+            @RequestHeader("X-Internal-Auth") String internalAuth,
+            @PathVariable UUID orderId
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        boolean ready = stockService.isReservationReadyForPayment(orderId);
+        return new OrderReservationReadinessResponse(orderId, ready);
+    }
+
     @GetMapping("/products/{productId}/stock-summary")
     public StockAvailabilitySummary getStockSummary(
             @RequestHeader("X-Internal-Auth") String internalAuth,

@@ -9,12 +9,15 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
 public interface StockReservationRepository extends JpaRepository<StockReservation, UUID> {
 
     List<StockReservation> findByOrderIdAndStatus(UUID orderId, ReservationStatus status);
+
+    boolean existsByOrderIdAndStatusIn(UUID orderId, Collection<ReservationStatus> statuses);
 
     @Query("select r from StockReservation r join fetch r.stockItem where r.orderId = :orderId and r.status = :status")
     List<StockReservation> findByOrderIdAndStatusWithStockItem(

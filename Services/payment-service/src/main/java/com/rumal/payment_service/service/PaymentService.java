@@ -1,6 +1,7 @@
 package com.rumal.payment_service.service;
 
 import com.rumal.payment_service.client.CustomerClient;
+import com.rumal.payment_service.client.InventoryClient;
 import com.rumal.payment_service.client.OrderClient;
 import com.rumal.payment_service.config.PayHereProperties;
 import com.rumal.payment_service.dto.*;
@@ -46,6 +47,7 @@ public class PaymentService {
     private final PaymentAuditService paymentAuditService;
     private final PayHereProperties payHereProperties;
     private final OrderClient orderClient;
+    private final InventoryClient inventoryClient;
     private final CustomerClient customerClient;
     private final PayHereClient payHereClient;
 
@@ -68,10 +70,12 @@ public class PaymentService {
         }
 
         // 3. Validate order status and transition PENDING → PAYMENT_PENDING
+        if (!"PENDING".equals(order.status()) && !"PAYMENT_PENDING".equals(order.status())) {
+            throw new ValidationException("Order is not eligible for payment (status: " + order.status() + ")");
+        }
+        assertInventoryReservationReady(orderId);
         if ("PENDING".equals(order.status())) {
             orderClient.updateOrderStatus(orderId, "PAYMENT_PENDING", "Payment initiated by customer");
-        } else if (!"PAYMENT_PENDING".equals(order.status())) {
-            throw new ValidationException("Order is not eligible for payment (status: " + order.status() + ")");
         }
 
         // 4. Check for existing payment (with lock to prevent duplicate creation)
@@ -425,6 +429,15 @@ public class PaymentService {
     }
 
     // ── Private Helpers ────────────────────────────────────────────────
+
+    private void assertInventoryReservationReady(UUID orderId) {
+        boolean ready = inventoryClient.isReservationReadyForPayment(orderId);
+        if (!ready) {
+            throw new ValidationException(
+                    "Order inventory reservation is not ready yet. Please retry in a few seconds."
+            );
+        }
+    }
 
     private PaymentResponse toPaymentResponse(Payment p) {
         return new PaymentResponse(
