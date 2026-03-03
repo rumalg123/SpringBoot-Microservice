@@ -36,6 +36,7 @@ public class WarehouseService {
     @Transactional
     public WarehouseResponse create(WarehouseCreateRequest request) {
         WarehouseType type = parseWarehouseType(request.warehouseType());
+        validateWarehouseTypeOwnership(request.vendorId(), type);
 
         Warehouse warehouse = Warehouse.builder()
                 .name(request.name())
@@ -130,6 +131,15 @@ public class WarehouseService {
             return WarehouseType.valueOf(type);
         } catch (IllegalArgumentException e) {
             throw new ValidationException("Invalid warehouse type: " + type);
+        }
+    }
+
+    private void validateWarehouseTypeOwnership(UUID vendorId, WarehouseType type) {
+        if (type == WarehouseType.PLATFORM_MANAGED && vendorId != null) {
+            throw new ValidationException("PLATFORM_MANAGED warehouse must not include vendorId");
+        }
+        if (type == WarehouseType.VENDOR_OWNED && vendorId == null) {
+            throw new ValidationException("VENDOR_OWNED warehouse requires vendorId");
         }
     }
 
