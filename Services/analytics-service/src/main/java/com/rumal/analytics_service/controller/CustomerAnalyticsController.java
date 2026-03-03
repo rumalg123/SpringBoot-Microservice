@@ -1,10 +1,13 @@
 package com.rumal.analytics_service.controller;
 
+import com.rumal.analytics_service.client.CustomerAnalyticsClient;
 import com.rumal.analytics_service.dto.CustomerInsightsResponse;
+import com.rumal.analytics_service.exception.DownstreamHttpException;
 import com.rumal.analytics_service.exception.UnauthorizedException;
 import com.rumal.analytics_service.security.InternalRequestVerifier;
 import com.rumal.analytics_service.service.CustomerAnalyticsService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,6 +25,7 @@ public class CustomerAnalyticsController {
 
     private final InternalRequestVerifier internalRequestVerifier;
     private final CustomerAnalyticsService customerAnalyticsService;
+    private final CustomerAnalyticsClient customerAnalyticsClient;
 
     @GetMapping("/{customerId}/insights")
     public CustomerInsightsResponse customerInsights(
@@ -42,13 +46,23 @@ public class CustomerAnalyticsController {
         if (userSub == null || userSub.isBlank()) {
             throw new UnauthorizedException("User identification required");
         }
+        var customer = fetchCustomerByUserSub(userSub.trim());
+        if (customer == null || customer.id() == null) {
+            throw new UnauthorizedException("Customer profile not found for user");
+        }
+        if (!customer.id().equals(requestedCustomerId)) {
+            throw new UnauthorizedException("You can only view your own analytics");
+        }
+    }
+
+    private com.rumal.analytics_service.client.dto.InternalCustomerLookup fetchCustomerByUserSub(String userSub) {
         try {
-            UUID authenticatedUserId = UUID.fromString(userSub.trim());
-            if (!authenticatedUserId.equals(requestedCustomerId)) {
-                throw new UnauthorizedException("You can only view your own analytics");
+            return customerAnalyticsClient.getCustomerByKeycloakId(userSub);
+        } catch (DownstreamHttpException ex) {
+            if (ex.getStatusCode().value() == HttpStatus.NOT_FOUND.value()) {
+                throw new UnauthorizedException("Customer profile not found for user");
             }
-        } catch (IllegalArgumentException e) {
-            throw new UnauthorizedException("Invalid user identification");
+            throw ex;
         }
     }
 

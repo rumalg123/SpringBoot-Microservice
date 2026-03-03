@@ -13,7 +13,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
+import org.springframework.web.util.UriUtils;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -22,6 +24,7 @@ import java.util.function.Supplier;
 public class CustomerAnalyticsClient {
 
     private static final String BASE_URL = "http://customer-service/internal/customers/analytics";
+    private static final String CUSTOMER_LOOKUP_BASE_URL = "http://customer-service/internal/customers/keycloak";
 
     private final RestClient restClient;
     private final CircuitBreakerFactory<?, ?> circuitBreakerFactory;
@@ -50,6 +53,11 @@ public class CustomerAnalyticsClient {
 
     public CustomerProfileSummary getProfileSummary(UUID customerId) {
         return call(() -> get(BASE_URL + "/" + customerId + "/profile-summary", CustomerProfileSummary.class));
+    }
+
+    public InternalCustomerLookup getCustomerByKeycloakId(String keycloakId) {
+        String encoded = UriUtils.encodePathSegment(keycloakId, StandardCharsets.UTF_8);
+        return call(() -> get(CUSTOMER_LOOKUP_BASE_URL + "/" + encoded, InternalCustomerLookup.class));
     }
 
     private <T> T get(String url, Class<T> type) {

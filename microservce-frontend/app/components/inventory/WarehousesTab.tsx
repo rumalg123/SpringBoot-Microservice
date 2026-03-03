@@ -78,7 +78,10 @@ export default function WarehousesTab({ apiClient, apiPrefix, isAdmin = false, v
         toast.success("Warehouse updated");
       } else {
         const payload: Record<string, unknown> = { ...form };
-        if (!isAdmin) { delete payload.vendorId; delete payload.warehouseType; }
+        if (!isAdmin) {
+          delete payload.vendorId;
+          payload.warehouseType = "VENDOR_OWNED";
+        }
         await apiClient.post(`${apiPrefix}/warehouses`, payload);
         toast.success("Warehouse created");
       }
