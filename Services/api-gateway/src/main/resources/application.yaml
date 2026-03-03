@@ -631,7 +631,7 @@ resilience4j:
         base-config: default
       cartService:
         base-config: default
-        timeout-duration: 20s
+        timeout-duration: 35s
       wishlistService:
         base-config: default
       adminService:

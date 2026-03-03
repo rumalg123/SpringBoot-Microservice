@@ -21,6 +21,26 @@ import SavedForLaterSection from "../components/cart/SavedForLaterSection";
 import CartSuggestions from "../components/cart/CartSuggestions";
 import EmptyState from "../components/ui/EmptyState";
 
+const CHECKOUT_PREFS_STORAGE_KEY = "cart_checkout_prefs_v1";
+
+function normalizeText(value: string | null | undefined): string {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function resolveCouponRejectionMessage(
+  previewData: CheckoutPreviewResponse,
+  requestedCoupon: string
+): string | null {
+  const normalizedCoupon = normalizeText(requestedCoupon);
+  if (!normalizedCoupon) return null;
+  const rejectedCoupon = (previewData.rejectedPromotions || []).find((entry) => {
+    return normalizeText(entry.promotionName) === normalizedCoupon;
+  });
+  if (!rejectedCoupon) return null;
+  const reason = rejectedCoupon.reason?.trim() || "Invalid coupon code";
+  return `${reason}. Totals below include only eligible automatic promotions.`;
+}
+
 
 export default function CartPage() {
   const router = useRouter();
@@ -49,6 +69,7 @@ export default function CartPage() {
   const [removingItemId, setRemovingItemId] = useState<string | null>(null);
   const [savingItemId, setSavingItemId] = useState<string | null>(null);
   const [movingItemId, setMovingItemId] = useState<string | null>(null);
+  const [prefsHydrated, setPrefsHydrated] = useState(false);
 
   // --- React Query: data fetching ---
   const { data: cart = emptyCart, isLoading: cartLoading } = useCart(apiClient);
@@ -70,6 +91,34 @@ export default function CartPage() {
     void ensureCustomer();
   }, [sessionStatus, isAuthenticated, router, ensureCustomer]);
 
+  // --- Restore checkout preferences on load ---
+  useEffect(() => {
+    if (prefsHydrated) return;
+    try {
+      const raw = window.localStorage.getItem(CHECKOUT_PREFS_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as {
+          shippingAddressId?: string;
+          billingAddressId?: string;
+          billingSameAsShipping?: boolean;
+        };
+        if (typeof parsed.shippingAddressId === "string") {
+          setShippingAddressId(parsed.shippingAddressId);
+        }
+        if (typeof parsed.billingAddressId === "string") {
+          setBillingAddressId(parsed.billingAddressId);
+        }
+        if (typeof parsed.billingSameAsShipping === "boolean") {
+          setBillingSameAsShipping(parsed.billingSameAsShipping);
+        }
+      }
+    } catch {
+      // Ignore malformed local storage payloads.
+    } finally {
+      setPrefsHydrated(true);
+    }
+  }, [prefsHydrated]);
+
   // --- Buy Now: scroll to checkout and clean URL ---
   useEffect(() => {
     if (searchParams.get("buyNow") && !cartLoading && cart.items.length > 0) {
@@ -88,11 +137,37 @@ export default function CartPage() {
   // --- Default address selection when addresses load ---
   useEffect(() => {
     if (addresses.length === 0) return;
+    const addressIds = new Set(addresses.map((a) => a.id));
     const defaultShipping = addresses.find((a) => a.defaultShipping)?.id || addresses[0]?.id || "";
     const defaultBilling = addresses.find((a) => a.defaultBilling)?.id || defaultShipping;
-    setShippingAddressId((old) => old || defaultShipping);
-    setBillingAddressId((old) => old || defaultBilling);
-  }, [addresses]);
+    setShippingAddressId((old) => {
+      const normalized = old.trim();
+      if (normalized && addressIds.has(normalized)) return normalized;
+      return defaultShipping;
+    });
+    setBillingAddressId((old) => {
+      const normalized = old.trim();
+      if (normalized && addressIds.has(normalized)) return normalized;
+      return billingSameAsShipping ? defaultShipping : defaultBilling;
+    });
+  }, [addresses, billingSameAsShipping]);
+
+  // --- Persist checkout preferences for refresh/hard-refresh ---
+  useEffect(() => {
+    if (!prefsHydrated) return;
+    try {
+      window.localStorage.setItem(
+        CHECKOUT_PREFS_STORAGE_KEY,
+        JSON.stringify({
+          shippingAddressId: shippingAddressId.trim(),
+          billingAddressId: billingAddressId.trim(),
+          billingSameAsShipping,
+        })
+      );
+    } catch {
+      // Ignore storage write errors.
+    }
+  }, [prefsHydrated, shippingAddressId, billingAddressId, billingSameAsShipping]);
 
   // Fetch "Complete Your Purchase" suggestions
   useEffect(() => {
@@ -172,13 +247,23 @@ export default function CartPage() {
   const loadPreview = () => {
     if (!apiClient || cart.items.length === 0 || !couponCode.trim()) return;
     setCouponError("");
+    const requestedCoupon = couponCode.trim();
     checkoutPreviewMut.mutate(
-      { couponCode: couponCode.trim() || null, shippingAmount: 0 },
+      { couponCode: requestedCoupon || null, shippingAmount: 0 },
       {
-        onSuccess: (data) => { setPreview(data); },
+        onSuccess: (data) => {
+          const couponRejectionMessage = resolveCouponRejectionMessage(data, requestedCoupon);
+          if (couponRejectionMessage) {
+            setCouponError(couponRejectionMessage);
+            setPreview({ ...data, couponCode: null });
+            return;
+          }
+          setCouponError("");
+          setPreview(data);
+        },
         onError: (err) => {
           const msg = err instanceof Error ? err.message : "Preview failed";
-          if (couponCode.trim() && msg.toLowerCase().includes("coupon")) {
+          if (requestedCoupon && msg.toLowerCase().includes("coupon")) {
             setCouponError(msg);
           } else {
             toast.error(msg);

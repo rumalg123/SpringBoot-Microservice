@@ -20,9 +20,11 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
+import java.net.SocketTimeoutException;
 import java.util.List;
 import java.util.StringJoiner;
 import java.util.UUID;
@@ -86,6 +88,14 @@ public class OrderClient {
                 throw new ServiceUnavailableException("Order service rejected internal authentication.", ex);
             }
             throw new ServiceUnavailableException("Order service error during checkout.", ex);
+        } catch (ResourceAccessException ex) {
+            if (isReadTimeout(ex)) {
+                throw new ConflictException(
+                        "Checkout request timed out while order placement may still be processing. Check My Orders before retrying.",
+                        ex
+                );
+            }
+            throw new ServiceUnavailableException("Service unavailable: " + ex.getMessage(), ex);
         } catch (RestClientException ex) {
             throw new ServiceUnavailableException("Service unavailable: " + ex.getMessage());
         }
@@ -104,6 +114,12 @@ public class OrderClient {
         if (ex instanceof ConflictException ce) throw ce;
         if (ex instanceof ValidationException ve) throw ve;
         if (ex instanceof ResourceNotFoundException rnfe) throw rnfe;
+        if (isReadTimeout(ex)) {
+            throw new ConflictException(
+                    "Checkout request timed out while order placement may still be processing. Check My Orders before retrying.",
+                    ex
+            );
+        }
         throw new ServiceUnavailableException(
                 "Order service unavailable for checkout. Try again later.",
                 ex
@@ -142,5 +158,20 @@ public class OrderClient {
             // Non-JSON response — fall through to fallback
         }
         return fallback;
+    }
+
+    private boolean isReadTimeout(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof SocketTimeoutException) {
+                return true;
+            }
+            String message = current.getMessage();
+            if (message != null && message.toLowerCase().contains("read timed out")) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 }
