@@ -15,6 +15,10 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -68,6 +72,11 @@ public class OrderClient {
                     .patch()
                     .uri("http://order-service/orders/{id}/payment", orderId)
                     .header("X-Internal-Auth", internalSharedSecret)
+                    .header("Idempotency-Key", buildIdempotencyKey(
+                            "set-payment-info",
+                            orderId,
+                            paymentId + "|" + paymentMethod + "|" + String.valueOf(paymentGatewayRef)
+                    ))
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(body)
                     .retrieve()
@@ -96,6 +105,11 @@ public class OrderClient {
                     .patch()
                     .uri("http://order-service/orders/{id}/status", orderId)
                     .header("X-Internal-Auth", internalSharedSecret)
+                    .header("Idempotency-Key", buildIdempotencyKey(
+                            "update-order-status",
+                            orderId,
+                            status + "|" + String.valueOf(reason)
+                    ))
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(body)
                     .retrieve()
@@ -144,6 +158,11 @@ public class OrderClient {
                     .patch()
                     .uri("http://order-service/orders/{orderId}/vendor-orders/{vendorOrderId}/status", orderId, vendorOrderId)
                     .header("X-Internal-Auth", internalSharedSecret)
+                    .header("Idempotency-Key", buildIdempotencyKey(
+                            "update-vendor-order-status",
+                            vendorOrderId,
+                            String.valueOf(orderId) + "|" + status + "|" + String.valueOf(reason)
+                    ))
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(body)
                     .retrieve()
@@ -214,5 +233,38 @@ public class OrderClient {
     public void updateVendorOrderStatusFallback(UUID orderId, UUID vendorOrderId, String status, String reason, Throwable ex) {
         if (ex instanceof ResourceNotFoundException rnfe) throw rnfe;
         throw new ServiceUnavailableException("Order service unavailable for vendor order status update. Try again later.", ex);
+    }
+
+    private String buildIdempotencyKey(String action, UUID targetId, String payload) {
+        String normalizedAction = normalizeAction(action);
+        String raw = normalizedAction + "|" + String.valueOf(targetId) + "|" + String.valueOf(payload);
+        String digest = sha256Hex(raw);
+        // Keep key compact and within the gateway/order-service pattern and length constraints.
+        return "ps-" + normalizedAction + "-" + digest.substring(0, 32);
+    }
+
+    private String normalizeAction(String value) {
+        if (value == null || value.isBlank()) {
+            return "mutate";
+        }
+        String normalized = value.trim().toLowerCase()
+                .replaceAll("[^a-z0-9\\-_]", "-")
+                .replaceAll("-{2,}", "-");
+        if (normalized.isBlank()) {
+            return "mutate";
+        }
+        return normalized.length() > 24 ? normalized.substring(0, 24) : normalized;
+    }
+
+    private String sha256Hex(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hashed = digest.digest(value.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hashed);
+        } catch (NoSuchAlgorithmException ex) {
+            return UUID.nameUUIDFromBytes(value.getBytes(StandardCharsets.UTF_8))
+                    .toString()
+                    .replace("-", "");
+        }
     }
 }
