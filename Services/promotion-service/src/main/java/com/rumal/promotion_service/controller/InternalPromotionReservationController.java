@@ -8,6 +8,7 @@ import com.rumal.promotion_service.security.InternalRequestVerifier;
 import com.rumal.promotion_service.service.CouponReservationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -32,6 +33,15 @@ public class InternalPromotionReservationController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         return couponReservationService.reserve(request);
+    }
+
+    @GetMapping("/{reservationId}")
+    public CouponReservationResponse get(
+            @RequestHeader("X-Internal-Auth") String internalAuth,
+            @PathVariable UUID reservationId
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        return couponReservationService.get(reservationId);
     }
 
     @PostMapping("/{reservationId}/commit")

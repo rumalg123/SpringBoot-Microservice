@@ -96,9 +96,16 @@ export default function CheckoutSidebar({
         ))}
 
         <div className="flex justify-between mb-1.5 text-[0.82rem]">
-          <span className="text-muted">Subtotal</span>
+          <span className="text-muted">Products Subtotal</span>
           <span className="text-ink-light font-semibold">{money(preview?.subtotal ?? cart.subtotal)}</span>
         </div>
+
+        {preview && (
+          <div className="flex justify-between mb-1.5 text-[0.82rem]">
+            <span className="text-muted">Shipping</span>
+            <span className="text-ink-light font-semibold">{money(preview.shippingAmount)}</span>
+          </div>
+        )}
 
         {(preview?.lineDiscountTotal ?? 0) > 0 && (
           <div className="flex justify-between mb-1.5 text-[0.82rem]">
@@ -129,6 +136,11 @@ export default function CheckoutSidebar({
           <span className="text-white">Grand Total</span>
           <span className="text-brand text-lg">{money(preview?.grandTotal ?? cart.subtotal)}</span>
         </div>
+        {!preview && (
+          <p className="mt-2 text-[0.72rem] text-muted">
+            Shipping and promotion totals are calculated automatically before checkout.
+          </p>
+        )}
       </div>
 
       {/* Applied Promotions */}

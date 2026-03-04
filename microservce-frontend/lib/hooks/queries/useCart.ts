@@ -90,10 +90,19 @@ export function useClearCart(apiClient: AxiosInstance | null) {
 export function useCheckoutPreview(apiClient: AxiosInstance | null) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ couponCode, shippingAmount }: { couponCode: string | null; shippingAmount: number }) => {
+    mutationFn: async ({
+      couponCode,
+      shippingAmount,
+      countryCode,
+    }: {
+      couponCode: string | null;
+      shippingAmount: number;
+      countryCode?: string | null;
+    }) => {
       const res = await apiClient!.post<CheckoutPreviewResponse>("/cart/me/checkout/preview", {
         couponCode,
         shippingAmount,
+        countryCode: countryCode || null,
       });
       return res.data;
     },

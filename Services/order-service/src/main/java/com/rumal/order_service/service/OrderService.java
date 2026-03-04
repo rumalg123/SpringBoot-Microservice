@@ -511,6 +511,7 @@ public class OrderService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add));
         BigDecimal computedShippingAmount = calculateShippingForOrder(lines, addresses.shippingAddress().countryCode());
         PromotionPricingSnapshot pricing = validateAndResolvePricingSnapshot(requestedPricing, itemSubtotal, computedShippingAmount);
+        validateCouponReservationSnapshot(customerId, pricing, itemSubtotal);
 
         // C-07: Verify non-coupon promotion discounts against the promotion service.
         // Coupon-based discounts are verified later via maybeCommitCouponReservation.
@@ -910,6 +911,9 @@ public class OrderService {
         if (couponCode != null && request.couponReservationId() == null) {
             throw new ValidationException("promotionPricing.couponReservationId is required when couponCode is provided");
         }
+        if (couponCode == null && request.couponReservationId() != null) {
+            throw new ValidationException("promotionPricing.couponCode is required when couponReservationId is provided");
+        }
 
         return new PromotionPricingSnapshot(
                 request.couponReservationId(),
@@ -941,6 +945,49 @@ public class OrderService {
             throw new ValidationException("promotionPricing shippingAmount does not match computed shipping fee");
         }
         return requestedPricing;
+    }
+
+    private void validateCouponReservationSnapshot(
+            UUID customerId,
+            PromotionPricingSnapshot pricing,
+            BigDecimal itemSubtotal
+    ) {
+        if (pricing == null || pricing.couponReservationId() == null) {
+            return;
+        }
+        CouponReservationResponse reservation = promotionClient.getCouponReservation(pricing.couponReservationId());
+        if (reservation == null) {
+            throw new ValidationException("Coupon reservation lookup failed");
+        }
+        if (reservation.customerId() == null || !reservation.customerId().equals(customerId)) {
+            throw new ValidationException("Coupon reservation does not belong to this customer");
+        }
+        String status = reservation.status() == null ? "" : reservation.status().trim().toUpperCase(Locale.ROOT);
+        if (!"RESERVED".equals(status)) {
+            throw new ValidationException("Coupon reservation is not active");
+        }
+        if (reservation.orderId() != null) {
+            throw new ValidationException("Coupon reservation is already committed");
+        }
+        if (reservation.expiresAt() != null && !reservation.expiresAt().isAfter(Instant.now())) {
+            throw new ValidationException("Coupon reservation has expired");
+        }
+
+        String reservationCouponCode = trimToNull(reservation.couponCode());
+        if (reservationCouponCode != null && pricing.couponCode() != null
+                && !reservationCouponCode.equalsIgnoreCase(pricing.couponCode())) {
+            throw new ValidationException("Coupon reservation code does not match promotionPricing.couponCode");
+        }
+
+        BigDecimal expectedSubtotal = normalizeMoney(itemSubtotal);
+        if (reservation.quotedSubtotal() != null
+                && normalizeMoney(reservation.quotedSubtotal()).compareTo(expectedSubtotal) != 0) {
+            throw new ValidationException("Coupon reservation subtotal does not match order subtotal");
+        }
+        if (reservation.quotedGrandTotal() != null
+                && normalizeMoney(reservation.quotedGrandTotal()).compareTo(pricing.grandTotal()) != 0) {
+            throw new ValidationException("Coupon reservation grand total does not match order total");
+        }
     }
 
     // C-07: Check if pricing snapshot has any non-zero discount amounts

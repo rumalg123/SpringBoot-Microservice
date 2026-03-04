@@ -106,6 +106,13 @@ public class CouponReservationService {
         return toResponse(couponReservationRepository.save(reservation), quote);
     }
 
+    @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
+    public CouponReservationResponse get(UUID reservationId) {
+        CouponReservation reservation = couponReservationRepository.findById(reservationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Coupon reservation not found: " + reservationId));
+        return toResponse(reservation, null);
+    }
+
     @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 20)
     public CouponReservationResponse commit(UUID reservationId, CommitCouponReservationRequest request) {
         CouponReservation reservation = couponReservationRepository.findByIdForUpdate(reservationId)

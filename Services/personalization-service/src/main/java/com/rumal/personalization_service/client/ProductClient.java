@@ -36,7 +36,7 @@ public class ProductClient {
         this.restClient = lbRestClientBuilder.build();
         this.circuitBreakerFactory = circuitBreakerFactory;
         this.retryRegistry = retryRegistry;
-        this.internalAuth = internalAuth;
+        this.internalAuth = internalAuth == null ? "" : internalAuth.trim();
     }
 
     public List<ProductSummary> getBatchSummaries(List<UUID> productIds) {

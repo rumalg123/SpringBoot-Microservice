@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import AppNav from "../components/AppNav";
 import Footer from "../components/Footer";
@@ -185,6 +185,20 @@ export default function CartPage() {
     () => (cart.items.length > 0 ? cart.items[0]?.productId ?? null : null),
     [cart.items]
   );
+  const cartPricingKey = useMemo(
+    () => `${cart.subtotal}|${cart.items.map((item) => `${item.id}:${item.quantity}`).join("|")}`,
+    [cart.subtotal, cart.items]
+  );
+  const selectedShippingCountryCode = useMemo(() => {
+    const shippingId = shippingAddressId.trim();
+    if (!shippingId) return null;
+    const selected = addresses.find((a) => a.id === shippingId);
+    return selected?.countryCode ?? null;
+  }, [addresses, shippingAddressId]);
+  const hasRequiredAddresses = useMemo(
+    () => Boolean(shippingAddressId.trim() && (billingSameAsShipping || billingAddressId.trim())),
+    [shippingAddressId, billingSameAsShipping, billingAddressId]
+  );
 
   // Fetch "Complete Your Purchase" suggestions
   useEffect(() => {
@@ -265,19 +279,27 @@ export default function CartPage() {
     });
   };
 
-  const loadPreview = () => {
-    if (!apiClient || cart.items.length === 0 || !couponCode.trim()) return;
-    setCouponError("");
-    const requestedCoupon = couponCode.trim();
+  const runPreview = useCallback((requestedCouponRaw: string, silent: boolean) => {
+    if (!apiClient || cart.items.length === 0) return;
+    const requestedCoupon = requestedCouponRaw.trim();
+    if (!silent) {
+      setCouponError("");
+    }
     checkoutPreviewMut.mutate(
-      { couponCode: requestedCoupon || null, shippingAmount: 0 },
+      {
+        couponCode: requestedCoupon || null,
+        shippingAmount: 0,
+        countryCode: selectedShippingCountryCode,
+      },
       {
         onSuccess: (data) => {
-          const couponRejectionMessage = resolveCouponRejectionMessage(data, requestedCoupon);
-          if (couponRejectionMessage) {
-            setCouponError(couponRejectionMessage);
-            setPreview(null);
-            return;
+          if (requestedCoupon) {
+            const couponRejectionMessage = resolveCouponRejectionMessage(data, requestedCoupon);
+            if (couponRejectionMessage) {
+              setCouponError(couponRejectionMessage);
+              setPreview(null);
+              return;
+            }
           }
           setCouponError("");
           setPreview(data);
@@ -286,14 +308,29 @@ export default function CartPage() {
           const msg = err instanceof Error ? err.message : "Preview failed";
           if (requestedCoupon && msg.toLowerCase().includes("coupon")) {
             setCouponError(msg);
-          } else {
+          } else if (!silent) {
             toast.error(msg);
           }
           setPreview(null);
         },
       },
     );
+  }, [apiClient, cart.items.length, checkoutPreviewMut, selectedShippingCountryCode]);
+
+  const loadPreview = () => {
+    runPreview(couponCode, false);
   };
+
+  useEffect(() => {
+    if (!apiClient) return;
+    if (cart.items.length === 0) {
+      setPreview(null);
+      return;
+    }
+    if (!hasRequiredAddresses) return;
+    if (couponCode.trim()) return;
+    runPreview("", true);
+  }, [apiClient, cart.items.length, cartPricingKey, hasRequiredAddresses, couponCode, selectedShippingCountryCode, runPreview]);
 
   const checkout = () => {
     if (!apiClient || busy || cart.items.length === 0 || checkoutInFlightRef.current) return;
@@ -370,11 +407,6 @@ export default function CartPage() {
       toast.error(err instanceof Error ? err.message : "Failed to resend verification email");
     } finally { setResendingVerification(false); }
   };
-
-  const hasRequiredAddresses = useMemo(
-    () => Boolean(shippingAddressId.trim() && (billingSameAsShipping || billingAddressId.trim())),
-    [shippingAddressId, billingSameAsShipping, billingAddressId]
-  );
 
   if (sessionStatus === "loading" || sessionStatus === "idle") {
     return (

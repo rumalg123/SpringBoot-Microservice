@@ -90,6 +90,31 @@ public class PromotionClient {
     }
 
     @Retry(name = "promotionService")
+    @CircuitBreaker(name = "promotionService", fallbackMethod = "promotionFallbackGetReservation")
+    public CouponReservationResponse getCouponReservation(UUID reservationId) {
+        try {
+            return restClient
+                    .get()
+                    .uri("http://promotion-service/internal/promotions/reservations/{reservationId}", reservationId)
+                    .header("X-Internal-Auth", internalSharedSecret)
+                    .retrieve()
+                    .body(CouponReservationResponse.class);
+        } catch (HttpClientErrorException ex) {
+            int code = ex.getStatusCode().value();
+            if (code == 404) {
+                throw new ResourceNotFoundException(resolveErrorMessage(ex, "Coupon reservation not found"));
+            }
+            if (code == 400 || code == 409 || code == 422) {
+                throw new ValidationException(resolveErrorMessage(ex, "Coupon reservation validation failed"));
+            }
+            if (code == 401 || code == 403) {
+                throw new ServiceUnavailableException("Promotion service rejected internal authentication.", ex);
+            }
+            throw new ServiceUnavailableException("Promotion service error during coupon reservation lookup.", ex);
+        }
+    }
+
+    @Retry(name = "promotionService")
     @CircuitBreaker(name = "promotionService", fallbackMethod = "promotionFallbackRelease")
     public CouponReservationResponse releaseCouponReservation(UUID reservationId, String reason) {
         try {
@@ -125,6 +150,13 @@ public class PromotionClient {
         if (ex instanceof ValidationException ve) throw ve;
         if (ex instanceof ResourceNotFoundException rnfe) throw rnfe;
         throw new ServiceUnavailableException("Promotion service unavailable for coupon reservation release. Try again later.", ex);
+    }
+
+    @SuppressWarnings("unused")
+    public CouponReservationResponse promotionFallbackGetReservation(UUID reservationId, Throwable ex) {
+        if (ex instanceof ValidationException ve) throw ve;
+        if (ex instanceof ResourceNotFoundException rnfe) throw rnfe;
+        throw new ServiceUnavailableException("Promotion service unavailable for coupon reservation lookup. Try again later.", ex);
     }
 
     private String resolveErrorMessage(HttpClientErrorException ex, String fallback) {
