@@ -72,10 +72,7 @@ public class PaymentService {
                 customer.email(),
                 "Customer email is required to initiate payment. Please update your profile and retry."
         );
-        String customerPhone = requireNonBlank(
-                customer.phone(),
-                "Customer phone number is required to initiate payment. Please update your profile and retry."
-        );
+        String customerPhone = trimToNull(customer.phone());
 
         // 3. Validate order status and transition PENDING → PAYMENT_PENDING
         if (!"PENDING".equals(order.status()) && !"PAYMENT_PENDING".equals(order.status())) {
@@ -137,6 +134,7 @@ public class PaymentService {
             String customerAddress = null;
             String customerCity = null;
             String customerCountry = null;
+            String fallbackAddressPhone = null;
             if (address != null) {
                 customerAddress = address.line1();
                 if (address.line2() != null && !address.line2().isBlank()) {
@@ -144,6 +142,14 @@ public class PaymentService {
                 }
                 customerCity = address.city();
                 customerCountry = address.countryCode();
+                fallbackAddressPhone = trimToNull(address.phone());
+            }
+
+            String resolvedCustomerPhone = customerPhone != null ? customerPhone : fallbackAddressPhone;
+            if (resolvedCustomerPhone == null) {
+                throw new ValidationException(
+                        "Customer phone number is required to initiate payment. Add a phone in profile or address and retry."
+                );
             }
 
             String currency = order.currency() != null ? order.currency() : "USD";
@@ -159,7 +165,7 @@ public class PaymentService {
                     .customerFirstName(firstName)
                     .customerLastName(lastName)
                     .customerEmail(customerEmail)
-                    .customerPhone(customerPhone)
+                    .customerPhone(resolvedCustomerPhone)
                     .customerAddress(customerAddress)
                     .customerCity(customerCity)
                     .customerCountry(customerCountry)
@@ -452,6 +458,12 @@ public class PaymentService {
             throw new ValidationException(message);
         }
         return value.trim();
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) return null;
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private PaymentResponse toPaymentResponse(Payment p) {

@@ -711,6 +711,7 @@ export function useAuthSession() {
 
   const ensureCustomer = useCallback(async () => {
     if (!apiClient || !isAuthenticated) return;
+    if (canViewAdmin && !hasCustomerRole) return;
 
     try {
       await apiClient.get("/customers/me");
@@ -728,7 +729,7 @@ export function useAuthSession() {
       || (profile?.email as string)
       || "Customer";
     await apiClient.post("/customers/register-identity", { name: profileName });
-  }, [apiClient, isAuthenticated, profile]);
+  }, [apiClient, isAuthenticated, profile, canViewAdmin, hasCustomerRole]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -740,6 +741,7 @@ export function useAuthSession() {
     if (status !== "ready" || customerBootstrapDoneRef.current) return;
     if (!isAuthenticated || !apiClient) return;
     if (emailVerified === false) return;
+    if (canViewAdmin && !hasCustomerRole) return;
 
     let cancelled = false;
     const run = async () => {
@@ -757,7 +759,7 @@ export function useAuthSession() {
     return () => {
       cancelled = true;
     };
-  }, [status, isAuthenticated, apiClient, emailVerified, ensureCustomer]);
+  }, [status, isAuthenticated, apiClient, emailVerified, ensureCustomer, canViewAdmin, hasCustomerRole]);
 
   // Merge anonymous personalization session on login
   useEffect(() => {

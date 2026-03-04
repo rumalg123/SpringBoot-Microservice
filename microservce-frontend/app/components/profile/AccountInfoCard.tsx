@@ -7,13 +7,15 @@ type AccountInfoCardProps = {
   canViewAdmin: boolean;
   editFirstName: string;
   editLastName: string;
+  editPhone: string;
   onFirstNameChange: (value: string) => void;
   onLastNameChange: (value: string) => void;
+  onPhoneChange: (value: string) => void;
   savingProfile: boolean;
+  profileDirty: boolean;
   onSave: () => void;
   emailVerified: boolean | null;
   profile: Record<string, unknown> | null | undefined;
-  initialNameParts: { firstName: string; lastName: string };
 };
 
 export default function AccountInfoCard({
@@ -21,13 +23,15 @@ export default function AccountInfoCard({
   canViewAdmin,
   editFirstName,
   editLastName,
+  editPhone,
   onFirstNameChange,
   onLastNameChange,
+  onPhoneChange,
   savingProfile,
+  profileDirty,
   onSave,
   emailVerified,
   profile,
-  initialNameParts,
 }: AccountInfoCardProps) {
   return (
     <div className="grid gap-4 grid-cols-2 mb-5">
@@ -60,6 +64,17 @@ export default function AccountInfoCard({
                 placeholder="Enter first name"
               />
             </div>
+            {/* Phone */} 
+            <div className="rounded-md bg-brand-soft border border-brand-soft px-[14px] py-[10px]">
+              <p className="text-[0.65rem] text-muted uppercase tracking-[0.08em] mb-[6px]">Phone</p>
+              <input
+                value={editPhone}
+                onChange={(e) => onPhoneChange(e.target.value)}
+                disabled={savingProfile || emailVerified === false}
+                className="form-input px-[10px] py-[7px]"
+                placeholder="Enter phone number"
+              />
+            </div>
             {/* Last Name + Save */}
             <div className="rounded-md bg-brand-soft border border-brand-soft px-[14px] py-[10px]">
               <p className="text-[0.65rem] text-muted uppercase tracking-[0.08em] mb-[6px]">Last Name</p>
@@ -75,7 +90,7 @@ export default function AccountInfoCard({
                   onClick={onSave}
                   disabled={
                     savingProfile || emailVerified === false || !customer || !editFirstName.trim() || !editLastName.trim()
-                    || (editFirstName.trim() === initialNameParts.firstName && editLastName.trim() === initialNameParts.lastName)
+                    || !profileDirty
                   }
                   className="px-[14px] py-[7px] rounded-[8px] border-none shrink-0 bg-[image:var(--gradient-brand)] text-white text-[0.75rem] font-bold cursor-pointer"
                   style={{ opacity: savingProfile || !editFirstName.trim() || !editLastName.trim() ? 0.5 : 1 }}
@@ -87,6 +102,7 @@ export default function AccountInfoCard({
 
             {[
               { label: "Email", value: customer?.email || "\u2014" },
+              { label: "Phone", value: customer?.phone || "\u2014" },
               { label: "Member Since", value: customer?.createdAt ? new Date(customer.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : "\u2014" },
             ].map(({ label, value }) => (
               <div key={label} className="rounded-md bg-brand-soft border border-brand-soft px-[14px] py-[10px]">

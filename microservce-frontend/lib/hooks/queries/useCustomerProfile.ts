@@ -19,8 +19,16 @@ export function useCustomerProfile(apiClient: AxiosInstance | null) {
 export function useUpdateProfile(apiClient: AxiosInstance | null) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ firstName, lastName }: { firstName: string; lastName: string }) => {
-      const res = await apiClient!.put<Customer>("/customers/me", { firstName, lastName });
+    mutationFn: async ({
+      firstName,
+      lastName,
+      phone,
+    }: {
+      firstName: string;
+      lastName: string;
+      phone?: string | null;
+    }) => {
+      const res = await apiClient!.put<Customer>("/customers/me", { firstName, lastName, phone });
       return res.data;
     },
     onSuccess: (data) => {

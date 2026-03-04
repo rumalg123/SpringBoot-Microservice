@@ -45,6 +45,7 @@ export default function ProfilePage() {
   const [resendingVerification, setResendingVerification] = useState(false);
   const [editFirstName, setEditFirstName] = useState("");
   const [editLastName, setEditLastName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
   const [passwordActionPending, setPasswordActionPending] = useState(false);
   const [addressForm, setAddressForm] = useState<AddressForm>(emptyAddressForm);
   const [deletingAddressId, setDeletingAddressId] = useState<string | null>(null);
@@ -61,7 +62,6 @@ export default function ProfilePage() {
   const customerApi = apiClient;
   const { data: customer } = useCustomerProfile(customerApi);
   const updateProfileMutation = useUpdateProfile(customerApi);
-  const initialNameParts = splitDisplayName(customer?.name || "");
 
   /* ── React Query: Addresses ── */
   const { data: addresses = [], isLoading: addressLoading } = useAddresses(customerApi);
@@ -192,6 +192,7 @@ export default function ProfilePage() {
     const nameParts = splitDisplayName(customer.name || "");
     setEditFirstName(nameParts.firstName);
     setEditLastName(nameParts.lastName);
+    setEditPhone(customer.phone || "");
     setStatus("Account loaded.");
   }, [customer]);
 
@@ -209,12 +210,21 @@ export default function ProfilePage() {
   const saveProfile = async () => {
     if (!apiClient || !customer || updateProfileMutation.isPending) return;
     const f = editFirstName.trim(), l = editLastName.trim();
+    const p = editPhone.trim();
     if (!f || !l) { toast.error("First name and last name are required"); return; }
-    if (f === initialNameParts.firstName && l === initialNameParts.lastName) { setStatus("No changes to save."); return; }
-    updateProfileMutation.mutate({ firstName: f, lastName: l }, {
+
+    const originalNameParts = splitDisplayName(customer.name || "");
+    const originalPhone = (customer.phone || "").trim();
+    if (f === originalNameParts.firstName && l === originalNameParts.lastName && p === originalPhone) {
+      setStatus("No changes to save.");
+      return;
+    }
+
+    updateProfileMutation.mutate({ firstName: f, lastName: l, phone: p || null }, {
       onSuccess: (updated) => {
         const parts = splitDisplayName(updated.name || `${f} ${l}`);
         setEditFirstName(parts.firstName); setEditLastName(parts.lastName);
+        setEditPhone(updated.phone || "");
         setStatus("Profile updated."); toast.success("Profile updated");
       },
       onError: (err) => {
@@ -244,6 +254,15 @@ export default function ProfilePage() {
     );
   }
   if (!isAuthenticated) return null;
+
+  const profileDirty = (() => {
+    if (!customer) return false;
+    const original = splitDisplayName(customer.name || "");
+    const originalPhone = (customer.phone || "").trim();
+    return editFirstName.trim() !== original.firstName
+      || editLastName.trim() !== original.lastName
+      || editPhone.trim() !== originalPhone;
+  })();
 
   /* ── Tab definitions ── */
   const tabs: { key: TabKey; label: string }[] = [
@@ -359,13 +378,15 @@ export default function ProfilePage() {
               canViewAdmin={canViewAdmin}
               editFirstName={editFirstName}
               editLastName={editLastName}
+              editPhone={editPhone}
               onFirstNameChange={setEditFirstName}
               onLastNameChange={setEditLastName}
+              onPhoneChange={setEditPhone}
               savingProfile={updateProfileMutation.isPending}
+              profileDirty={profileDirty}
               onSave={() => { void saveProfile(); }}
               emailVerified={emailVerified}
               profile={profile}
-              initialNameParts={initialNameParts}
             />
 
             <AddressBook
