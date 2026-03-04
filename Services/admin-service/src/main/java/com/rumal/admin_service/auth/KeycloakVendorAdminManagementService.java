@@ -126,6 +126,43 @@ public class KeycloakVendorAdminManagementService {
         });
     }
 
+    public String resolveUserIdByEmail(String email) {
+        String normalizedEmail = normalizeEmail(email);
+        return runKeycloakCall(() -> {
+            try {
+                Keycloak keycloak = getOrCreateAdminClient();
+                var realmResource = keycloak.realm(realm);
+                List<UserRepresentation> users = realmResource.users().searchByEmail(normalizedEmail, true);
+                if (users == null || users.isEmpty()) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Keycloak user not found for email: " + normalizedEmail);
+                }
+                List<UserRepresentation> exactMatches = users.stream()
+                        .filter(user -> normalizedEmail.equalsIgnoreCase(resolveEmail(user)))
+                        .toList();
+                if (exactMatches.isEmpty()) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Keycloak user not found for email: " + normalizedEmail);
+                }
+                if (exactMatches.size() > 1) {
+                    throw new ResponseStatusException(
+                            HttpStatus.CONFLICT,
+                            "Multiple Keycloak users found for email. Resolve duplicates before granting staff access."
+                    );
+                }
+                UserRepresentation match = exactMatches.getFirst();
+                if (!StringUtils.hasText(match.getId())) {
+                    throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak user found without id for email: " + normalizedEmail);
+                }
+                return match.getId().trim();
+            } catch (ResponseStatusException ex) {
+                throw ex;
+            } catch (WebApplicationException ex) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak admin request failed: " + ex.getMessage(), ex);
+            } catch (Exception ex) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak admin operation failed", ex);
+            }
+        });
+    }
+
     public List<KeycloakUserSearchResult> searchUsers(String query, int limit) {
         String normalizedQuery = query == null ? "" : query.trim();
         if (normalizedQuery.isEmpty()) {

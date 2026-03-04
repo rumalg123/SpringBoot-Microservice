@@ -44,7 +44,7 @@ public class AdminVendorController {
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles
     ) {
         internalRequestVerifier.verify(internalAuth);
-        actorScopeService.assertHasRole(userSub, userRoles, "super_admin", "platform_staff");
+        actorScopeService.assertCanReadVendors(userSub, userRoles, internalAuth);
         return adminVendorService.listAll(internalAuth);
     }
 
@@ -55,7 +55,7 @@ public class AdminVendorController {
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles
     ) {
         internalRequestVerifier.verify(internalAuth);
-        actorScopeService.assertHasRole(userSub, userRoles, "super_admin", "platform_staff");
+        actorScopeService.assertCanReadVendors(userSub, userRoles, internalAuth);
         return adminVendorService.listDeleted(internalAuth);
     }
 
@@ -67,7 +67,7 @@ public class AdminVendorController {
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
-        actorScopeService.assertHasRole(userSub, userRoles, "super_admin", "platform_staff");
+        actorScopeService.assertCanReadVendors(userSub, userRoles, internalAuth);
         return adminVendorService.listLifecycleAudit(id, internalAuth);
     }
 
@@ -79,7 +79,7 @@ public class AdminVendorController {
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
-        actorScopeService.assertHasRole(userSub, userRoles, "super_admin", "platform_staff");
+        actorScopeService.assertCanReadVendors(userSub, userRoles, internalAuth);
         return adminVendorService.getById(id, internalAuth);
     }
 
@@ -91,7 +91,7 @@ public class AdminVendorController {
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
-        actorScopeService.assertHasRole(userSub, userRoles, "super_admin", "platform_staff");
+        actorScopeService.assertCanReadVendors(userSub, userRoles, internalAuth);
         return adminVendorService.getDeletionEligibility(id, internalAuth);
     }
 
@@ -104,6 +104,7 @@ public class AdminVendorController {
             @RequestBody @NotNull Map<String, Object> request
     ) {
         internalRequestVerifier.verify(internalAuth);
+        actorScopeService.assertCanManageVendors(userSub, userRoles, internalAuth);
         Map<String, Object> result = adminVendorService.create(request, internalAuth, userSub, userRoles);
         auditService.log(userSub, userRoles, "CREATE_VENDOR", "VENDOR", String.valueOf(result.get("id")), null, null);
         return result;
@@ -118,6 +119,7 @@ public class AdminVendorController {
             @RequestBody @NotNull Map<String, Object> request
     ) {
         internalRequestVerifier.verify(internalAuth);
+        actorScopeService.assertCanManageVendors(userSub, userRoles, internalAuth);
         Map<String, Object> result = adminVendorService.update(id, request, internalAuth, userSub, userRoles);
         auditService.log(userSub, userRoles, "UPDATE_VENDOR", "VENDOR", id.toString(), null, null);
         return result;
@@ -132,6 +134,7 @@ public class AdminVendorController {
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
+        actorScopeService.assertCanManageVendors(userSub, userRoles, internalAuth);
         throw new ResponseStatusException(
                 HttpStatus.METHOD_NOT_ALLOWED,
                 "Legacy DELETE is disabled. Use /delete-request then /confirm-delete."
@@ -148,6 +151,7 @@ public class AdminVendorController {
             @RequestBody(required = false) Map<String, Object> request
     ) {
         internalRequestVerifier.verify(internalAuth);
+        actorScopeService.assertCanManageVendors(userSub, userRoles, internalAuth);
         Map<String, Object> result = adminVendorService.requestDelete(id, request, internalAuth, userSub, userRoles, idempotencyKey);
         auditService.log(userSub, userRoles, "REQUEST_DELETE_VENDOR", "VENDOR", id.toString(), null, null);
         return result;
@@ -164,6 +168,7 @@ public class AdminVendorController {
             @RequestBody(required = false) Map<String, Object> request
     ) {
         internalRequestVerifier.verify(internalAuth);
+        actorScopeService.assertCanManageVendors(userSub, userRoles, internalAuth);
         adminVendorService.confirmDelete(id, request, internalAuth, userSub, userRoles, idempotencyKey);
         auditService.log(userSub, userRoles, "CONFIRM_DELETE_VENDOR", "VENDOR", id.toString(), null, null);
     }
@@ -178,6 +183,7 @@ public class AdminVendorController {
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
+        actorScopeService.assertCanManageVendors(userSub, userRoles, internalAuth);
         Map<String, Object> result = adminVendorService.stopReceivingOrders(id, request, internalAuth, userSub, userRoles, idempotencyKey);
         auditService.log(userSub, userRoles, "STOP_VENDOR_ORDERS", "VENDOR", id.toString(), null, null);
         return result;
@@ -193,6 +199,7 @@ public class AdminVendorController {
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
+        actorScopeService.assertCanManageVendors(userSub, userRoles, internalAuth);
         Map<String, Object> result = adminVendorService.resumeReceivingOrders(id, request, internalAuth, userSub, userRoles, idempotencyKey);
         auditService.log(userSub, userRoles, "RESUME_VENDOR_ORDERS", "VENDOR", id.toString(), null, null);
         return result;
@@ -208,6 +215,7 @@ public class AdminVendorController {
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
+        actorScopeService.assertCanManageVendors(userSub, userRoles, internalAuth);
         Map<String, Object> result = adminVendorService.approveVerification(id, request, internalAuth, userSub, userRoles, idempotencyKey);
         auditService.log(userSub, userRoles, "APPROVE_VENDOR_VERIFICATION", "VENDOR", id.toString(), null, null);
         return result;
@@ -223,6 +231,7 @@ public class AdminVendorController {
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
+        actorScopeService.assertCanManageVendors(userSub, userRoles, internalAuth);
         Map<String, Object> result = adminVendorService.rejectVerification(id, request, internalAuth, userSub, userRoles, idempotencyKey);
         auditService.log(userSub, userRoles, "REJECT_VENDOR_VERIFICATION", "VENDOR", id.toString(), null, null);
         return result;
@@ -238,6 +247,7 @@ public class AdminVendorController {
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
+        actorScopeService.assertCanManageVendors(userSub, userRoles, internalAuth);
         Map<String, Object> result = adminVendorService.restore(id, request, internalAuth, userSub, userRoles, idempotencyKey);
         auditService.log(userSub, userRoles, "RESTORE_VENDOR", "VENDOR", id.toString(), null, null);
         return result;
@@ -251,7 +261,7 @@ public class AdminVendorController {
             @PathVariable UUID vendorId
     ) {
         internalRequestVerifier.verify(internalAuth);
-        actorScopeService.assertHasRole(userSub, userRoles, "super_admin", "platform_staff");
+        actorScopeService.assertCanReadVendors(userSub, userRoles, internalAuth);
         return adminVendorService.listVendorUsers(vendorId, internalAuth);
     }
 
@@ -259,21 +269,27 @@ public class AdminVendorController {
     @ResponseStatus(HttpStatus.CREATED)
     public Map<String, Object> addVendorUser(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID vendorId,
             @RequestBody @NotNull Map<String, Object> request
     ) {
         internalRequestVerifier.verify(internalAuth);
+        actorScopeService.assertCanManageVendors(userSub, userRoles, internalAuth);
         return adminVendorService.addVendorUser(vendorId, request, internalAuth);
     }
 
     @PutMapping("/{vendorId}/users/{membershipId}")
     public Map<String, Object> updateVendorUser(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID vendorId,
             @PathVariable UUID membershipId,
             @RequestBody @NotNull Map<String, Object> request
     ) {
         internalRequestVerifier.verify(internalAuth);
+        actorScopeService.assertCanManageVendors(userSub, userRoles, internalAuth);
         return adminVendorService.updateVendorUser(vendorId, membershipId, request, internalAuth);
     }
 
@@ -281,10 +297,13 @@ public class AdminVendorController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void removeVendorUser(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID vendorId,
             @PathVariable UUID membershipId
     ) {
         internalRequestVerifier.verify(internalAuth);
+        actorScopeService.assertCanManageVendors(userSub, userRoles, internalAuth);
         adminVendorService.removeVendorUser(vendorId, membershipId, internalAuth);
     }
 
@@ -292,10 +311,13 @@ public class AdminVendorController {
     @ResponseStatus(HttpStatus.CREATED)
     public VendorAdminOnboardResponse onboardVendorAdmin(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID vendorId,
             @Valid @RequestBody VendorAdminOnboardRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
+        actorScopeService.assertCanManageVendors(userSub, userRoles, internalAuth);
         return adminVendorService.onboardVendorAdmin(vendorId, request, internalAuth);
     }
 }

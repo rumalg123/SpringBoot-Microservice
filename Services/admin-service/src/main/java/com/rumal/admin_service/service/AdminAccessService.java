@@ -5,8 +5,12 @@ import com.rumal.admin_service.client.AccessClient;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -38,11 +42,11 @@ public class AdminAccessService {
     }
 
     public Map<String, Object> createPlatformStaff(Map<String, Object> request, String internalAuth) {
-        return accessClient.createPlatformStaff(request, internalAuth);
+        return accessClient.createPlatformStaff(prepareStaffUpsertPayload(request), internalAuth);
     }
 
     public Map<String, Object> createPlatformStaff(Map<String, Object> request, String internalAuth, String userSub, String userRoles, String actionReason) {
-        return accessClient.createPlatformStaff(request, internalAuth, userSub, userRoles, actionReason);
+        return accessClient.createPlatformStaff(prepareStaffUpsertPayload(request), internalAuth, userSub, userRoles, actionReason);
     }
 
     public Map<String, Object> updatePlatformStaff(UUID id, Map<String, Object> request, String internalAuth) {
@@ -50,7 +54,14 @@ public class AdminAccessService {
     }
 
     public Map<String, Object> updatePlatformStaff(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles, String actionReason) {
-        Map<String, Object> updated = accessClient.updatePlatformStaff(id, request, internalAuth, userSub, userRoles, actionReason);
+        Map<String, Object> updated = accessClient.updatePlatformStaff(
+                id,
+                prepareStaffUpsertPayload(request),
+                internalAuth,
+                userSub,
+                userRoles,
+                actionReason
+        );
         if (!isTruthy(updated.get("active"))) {
             revokeKeycloakSessions(extractString(updated.get("keycloakUserId")));
         }
@@ -108,7 +119,7 @@ public class AdminAccessService {
     }
 
     public Map<String, Object> createVendorStaff(Map<String, Object> request, String internalAuth, String userSub, String userRoles, String actionReason) {
-        return accessClient.createVendorStaff(request, internalAuth, userSub, userRoles, actionReason);
+        return accessClient.createVendorStaff(prepareStaffUpsertPayload(request), internalAuth, userSub, userRoles, actionReason);
     }
 
     public Map<String, Object> updateVendorStaff(UUID id, Map<String, Object> request, String internalAuth) {
@@ -116,7 +127,14 @@ public class AdminAccessService {
     }
 
     public Map<String, Object> updateVendorStaff(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles, String actionReason) {
-        Map<String, Object> updated = accessClient.updateVendorStaff(id, request, internalAuth, userSub, userRoles, actionReason);
+        Map<String, Object> updated = accessClient.updateVendorStaff(
+                id,
+                prepareStaffUpsertPayload(request),
+                internalAuth,
+                userSub,
+                userRoles,
+                actionReason
+        );
         if (!isTruthy(updated.get("active"))) {
             revokeKeycloakSessions(extractString(updated.get("keycloakUserId")));
         }
@@ -164,5 +182,30 @@ public class AdminAccessService {
             return false;
         }
         return Boolean.parseBoolean(String.valueOf(value));
+    }
+
+    private Map<String, Object> prepareStaffUpsertPayload(Map<String, Object> request) {
+        Map<String, Object> payload = new LinkedHashMap<>(request == null ? Map.of() : request);
+        String email = normalizeRequiredEmail(payload.get("email"));
+        String requestedKeycloakUserId = extractString(payload.get("keycloakUserId"));
+        String resolvedKeycloakUserId = keycloakVendorAdminManagementService.resolveUserIdByEmail(email);
+        if (StringUtils.hasText(requestedKeycloakUserId)
+                && !requestedKeycloakUserId.equalsIgnoreCase(resolvedKeycloakUserId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Provided keycloakUserId does not match the user resolved from email"
+            );
+        }
+        payload.put("email", email);
+        payload.put("keycloakUserId", resolvedKeycloakUserId);
+        return payload;
+    }
+
+    private String normalizeRequiredEmail(Object emailRaw) {
+        String email = extractString(emailRaw);
+        if (!StringUtils.hasText(email)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "email is required");
+        }
+        return email.toLowerCase(Locale.ROOT);
     }
 }

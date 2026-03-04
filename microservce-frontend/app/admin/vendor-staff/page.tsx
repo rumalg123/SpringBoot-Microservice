@@ -161,8 +161,8 @@ export default function AdminVendorStaffPage() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       const vendorId = effectiveFormVendorId.trim();
-      if (!vendorId || !form.keycloakUserId.trim() || !form.email.trim()) {
-        throw new Error("Vendor, Keycloak user ID and email are required");
+      if (!vendorId || !form.email.trim()) {
+        throw new Error("Vendor and email are required");
       }
       const payload = {
         vendorId,
@@ -279,12 +279,13 @@ export default function AdminVendorStaffPage() {
 
             <label className="space-y-1 text-sm">
               <span className="block text-xs font-semibold uppercase tracking-[0.12em] text-[rgba(255,255,255,0.65)]">
-                Keycloak User ID
+                Keycloak User ID (optional)
               </span>
               <input
                 value={form.keycloakUserId}
                 onChange={(e) => setForm((old) => ({ ...old, keycloakUserId: e.target.value }))}
                 className="w-full rounded-xl px-3 py-2 bg-[rgba(255,255,255,0.03)] border border-line text-ink"
+                placeholder="Auto-resolved from email when empty"
               />
             </label>
 

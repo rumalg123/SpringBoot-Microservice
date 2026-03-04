@@ -26,6 +26,8 @@ public class AdminActorScopeService {
     public static final String PLATFORM_PROMOTIONS_MANAGE = "platform.promotions.manage";
     public static final String PLATFORM_REVIEWS_MANAGE = "platform.reviews.manage";
     public static final String PLATFORM_INVENTORY_MANAGE = "platform.inventory.manage";
+    public static final String PLATFORM_VENDORS_READ = "platform.vendors.read";
+    public static final String PLATFORM_VENDORS_MANAGE = "platform.vendors.manage";
 
     public static final String VENDOR_PRODUCTS_MANAGE = "vendor.products.manage";
     public static final String VENDOR_PROMOTIONS_MANAGE = "vendor.promotions.manage";
@@ -91,6 +93,35 @@ public class AdminActorScopeService {
         Set<String> platformPermissions = resolvePlatformPermissionsForUser(userSub, internalAuth);
         if (!platformPermissions.contains(PLATFORM_POSTERS_MANAGE)) {
             throw new UnauthorizedException("platform_staff does not have poster management permission");
+        }
+    }
+
+    public void assertCanReadVendors(String userSub, String userRolesHeader, String internalAuth) {
+        Set<String> roles = parseRoles(userRolesHeader);
+        if (roles.contains("super_admin")) {
+            return;
+        }
+        if (!roles.contains("platform_staff")) {
+            throw new UnauthorizedException("Caller does not have vendor read access");
+        }
+        Set<String> platformPermissions = resolvePlatformPermissionsForUser(userSub, internalAuth);
+        if (!platformPermissions.contains(PLATFORM_VENDORS_READ)
+                && !platformPermissions.contains(PLATFORM_VENDORS_MANAGE)) {
+            throw new UnauthorizedException("platform_staff does not have vendor read permission");
+        }
+    }
+
+    public void assertCanManageVendors(String userSub, String userRolesHeader, String internalAuth) {
+        Set<String> roles = parseRoles(userRolesHeader);
+        if (roles.contains("super_admin")) {
+            return;
+        }
+        if (!roles.contains("platform_staff")) {
+            throw new UnauthorizedException("Caller does not have vendor management access");
+        }
+        Set<String> platformPermissions = resolvePlatformPermissionsForUser(userSub, internalAuth);
+        if (!platformPermissions.contains(PLATFORM_VENDORS_MANAGE)) {
+            throw new UnauthorizedException("platform_staff does not have vendor management permission");
         }
     }
 
@@ -357,6 +388,8 @@ public class AdminActorScopeService {
                 || platformPermissions.contains(PLATFORM_PROMOTIONS_MANAGE);
         boolean canManageReviews = superAdmin || platformPermissions.contains(PLATFORM_REVIEWS_MANAGE);
 
+        boolean canManageVendors = superAdmin || platformPermissions.contains(PLATFORM_VENDORS_MANAGE);
+
         return new AdminCapabilitiesResponse(
                 superAdmin,
                 platformStaff,
@@ -369,7 +402,7 @@ public class AdminActorScopeService {
                 canManageProducts,
                 canManageCategories,
                 canManagePosters,
-                superAdmin,
+                canManageVendors,
                 canManageInventory,
                 canManagePromotions,
                 canManageReviews

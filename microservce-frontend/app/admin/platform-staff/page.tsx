@@ -77,7 +77,6 @@ export default function AdminPlatformStaffPage() {
     enabled: ready && !!session.apiClient,
   });
 
-  const rows = staffPage?.content ?? [];
   const totalPages = staffPage?.totalPages ?? 0;
 
   const { data: deletedStaffPage, isLoading: loadingDeleted } = useQuery({
@@ -93,10 +92,10 @@ export default function AdminPlatformStaffPage() {
   const deletedRows = deletedStaffPage?.content ?? [];
   const deletedTotalPages = deletedStaffPage?.totalPages ?? 0;
 
-  const activeRows = useMemo(
-    () => [...rows].sort((a, b) => `${a.email}`.localeCompare(`${b.email}`)),
-    [rows]
-  );
+  const activeRows = useMemo(() => {
+    const rows = staffPage?.content ?? [];
+    return [...rows].sort((a, b) => `${a.email}`.localeCompare(`${b.email}`));
+  }, [staffPage?.content]);
 
   const invalidateAll = () => {
     setPage(0);
@@ -108,8 +107,8 @@ export default function AdminPlatformStaffPage() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      if (!form.keycloakUserId.trim() || !form.email.trim()) {
-        throw new Error("Keycloak user ID and email are required");
+      if (!form.email.trim()) {
+        throw new Error("Email is required");
       }
       const payload = {
         keycloakUserId: form.keycloakUserId.trim(),
@@ -213,13 +212,13 @@ export default function AdminPlatformStaffPage() {
 
               <label className="space-y-1 text-sm">
                 <span className="block text-xs font-semibold uppercase tracking-[0.12em] text-[rgba(255,255,255,0.65)]">
-                  Keycloak User ID
+                  Keycloak User ID (optional)
                 </span>
                 <input
                   value={form.keycloakUserId}
                   onChange={(e) => setForm((old) => ({ ...old, keycloakUserId: e.target.value }))}
                   className="w-full rounded-xl px-3 py-2 bg-[rgba(255,255,255,0.03)] border border-line text-ink"
-                  placeholder="keycloak user UUID / subject"
+                  placeholder="Auto-resolved from email when empty"
                 />
               </label>
 
