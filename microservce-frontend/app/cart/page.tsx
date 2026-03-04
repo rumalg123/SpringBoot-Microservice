@@ -39,11 +39,13 @@ function resolveCouponRejectionMessage(
   const normalizedCoupon = normalizeText(requestedCoupon);
   if (!normalizedCoupon) return null;
   const rejectedCoupon = (previewData.rejectedPromotions || []).find((entry) => {
-    return normalizeText(entry.promotionName) === normalizedCoupon;
+    const promotionName = normalizeText(entry.promotionName);
+    const reason = normalizeText(entry.reason);
+    return promotionName === normalizedCoupon || reason.includes("coupon");
   });
   if (!rejectedCoupon) return null;
   const reason = rejectedCoupon.reason?.trim() || "Invalid coupon code";
-  return `${reason}. Totals below include only eligible automatic promotions.`;
+  return `${reason}. Coupon was not applied.`;
 }
 
 function isInventoryNotReadyError(err: unknown): boolean {
@@ -179,12 +181,21 @@ export default function CartPage() {
     }
   }, [prefsHydrated, shippingAddressId, billingAddressId, billingSameAsShipping]);
 
+  const firstCartProductId = useMemo(
+    () => (cart.items.length > 0 ? cart.items[0]?.productId ?? null : null),
+    [cart.items]
+  );
+
   // Fetch "Complete Your Purchase" suggestions
   useEffect(() => {
-    const firstProduct = cart.items[0];
-    if (!firstProduct) { setSuggestions([]); return; }
-    fetchSimilarProducts(firstProduct.productId, 4).then(setSuggestions).catch((e) => console.error("Failed to load suggestions:", e));
-  }, [cart.items.length > 0 ? cart.items[0]?.productId : null]);
+    if (!firstCartProductId) {
+      setSuggestions([]);
+      return;
+    }
+    fetchSimilarProducts(firstCartProductId, 4)
+      .then(setSuggestions)
+      .catch((e) => console.error("Failed to load suggestions:", e));
+  }, [firstCartProductId]);
 
   useEffect(() => {
     if (!billingSameAsShipping) return;
@@ -265,7 +276,7 @@ export default function CartPage() {
           const couponRejectionMessage = resolveCouponRejectionMessage(data, requestedCoupon);
           if (couponRejectionMessage) {
             setCouponError(couponRejectionMessage);
-            setPreview({ ...data, couponCode: null });
+            setPreview(null);
             return;
           }
           setCouponError("");

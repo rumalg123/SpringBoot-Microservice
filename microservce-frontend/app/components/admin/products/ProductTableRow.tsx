@@ -22,7 +22,7 @@ type ProductSummary = {
 };
 
 function money(value: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
+  return new Intl.NumberFormat("en-LK", { style: "currency", currency: "LKR" }).format(value);
 }
 
 type Props = {

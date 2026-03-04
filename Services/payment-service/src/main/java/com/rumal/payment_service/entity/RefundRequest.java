@@ -51,7 +51,7 @@ public class RefundRequest {
 
     @Builder.Default
     @Column(name = "currency", nullable = false, length = 3)
-    private String currency = "USD";
+    private String currency = "LKR";
 
     @Column(name = "customer_reason", nullable = false, length = 1000)
     private String customerReason;

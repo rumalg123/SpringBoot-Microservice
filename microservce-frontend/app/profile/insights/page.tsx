@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { useAuthSession } from "../../../lib/authSession";
 import { getErrorMessage } from "../../../lib/error";
-import { money } from "../../../lib/format";
+import { money, moneyCompact } from "../../../lib/format";
 import AppNav from "../../components/AppNav";
 import Footer from "../../components/Footer";
 import {
@@ -27,10 +27,7 @@ const sectionTitleCls = "mb-4 mt-0 text-lg font-bold text-ink";
 
 function num(v: number | null | undefined): string { return (v ?? 0).toLocaleString(); }
 function shortMoney(v: number | null | undefined): string {
-  const n = v ?? 0;
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `$${(n / 1_000).toFixed(1)}K`;
-  return money(n);
+  return moneyCompact(v);
 }
 
 function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: { name: string; value: number; color: string }[]; label?: string }) {

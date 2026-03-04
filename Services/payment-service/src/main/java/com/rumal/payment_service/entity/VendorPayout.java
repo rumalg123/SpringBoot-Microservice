@@ -36,7 +36,7 @@ public class VendorPayout {
 
     @Builder.Default
     @Column(name = "currency", nullable = false, length = 3)
-    private String currency = "USD";
+    private String currency = "LKR";
 
     @Column(name = "vendor_order_ids", nullable = false, length = 2000)
     private String vendorOrderIds;

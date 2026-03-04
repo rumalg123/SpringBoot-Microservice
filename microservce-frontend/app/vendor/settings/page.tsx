@@ -90,7 +90,7 @@ export default function VendorSettingsPage() {
         const res = await session.apiClient!.get("/vendors/me/payout-config");
         const d = res.data as Record<string, unknown>;
         const config: PayoutConfig = {
-          payoutCurrency: (d.payoutCurrency as string) || "USD",
+          payoutCurrency: (d.payoutCurrency as string) || "LKR",
           payoutSchedule: (d.payoutSchedule as string) || "MONTHLY",
           payoutMinimum: typeof d.payoutMinimum === "number" ? d.payoutMinimum : "",
           bankAccountHolder: (d.bankAccountHolder as string) || "",

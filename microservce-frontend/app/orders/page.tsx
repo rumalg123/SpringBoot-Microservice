@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
@@ -19,6 +19,7 @@ import { useAddresses } from "../../lib/hooks/queries/useAddresses";
 
 type ProductPageResponse = { content: ProductSummary[] };
 const INVENTORY_NOT_READY_FRAGMENT = "inventory reservation is not ready yet";
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -49,14 +50,22 @@ export default function OrdersPage() {
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState("");
 
-  const { data: selectedDetail, isLoading: detailLoading } = useOrderDetail(apiClient, selectedId || null);
+  const effectiveSelectedId = useMemo(() => {
+    const trimmed = selectedId.trim();
+    if (trimmed) return trimmed;
+    return orders[0]?.id || "";
+  }, [selectedId, orders]);
+  const { data: selectedDetail, isLoading: detailLoading, error: detailError } = useOrderDetail(
+    apiClient,
+    effectiveSelectedId || null
+  );
   const shouldFetchPaymentInfo = Boolean(
     selectedDetail?.paymentId
     || selectedDetail?.paidAt
     || selectedDetail?.paymentMethod
     || selectedDetail?.paymentGatewayRef
   );
-  const { data: paymentInfo } = useOrderPayment(apiClient, selectedId || null, shouldFetchPaymentInfo);
+  const { data: paymentInfo } = useOrderPayment(apiClient, effectiveSelectedId || null, shouldFetchPaymentInfo);
 
   const placeOrderMutation = usePlaceOrder(apiClient);
   const cancelOrderMutation = useCancelOrder(apiClient);
@@ -124,6 +133,21 @@ export default function OrdersPage() {
 
   const handleViewClick = (orderId: string) => {
     setSelectedId(orderId);
+  };
+
+  const loadSelectedOrderFromLookup = () => {
+    const candidate = selectedId.trim();
+    if (!candidate) return;
+    if (UUID_REGEX.test(candidate)) {
+      setSelectedId(candidate);
+      return;
+    }
+    const matched = orders.find((order) => (order.orderNumber || "").trim().toLowerCase() === candidate.toLowerCase());
+    if (matched) {
+      setSelectedId(matched.id);
+      return;
+    }
+    toast.error("Enter a valid order UUID or an order number from your history.");
   };
 
   const resendVerification = async () => {
@@ -299,7 +323,7 @@ export default function OrdersPage() {
                 onPayNow={(id) => { void payNow(id); }}
                 onCancelOrder={(id) => setCancellingOrderId(id)}
                 payingOrderId={payingOrderId}
-                detailLoadingTarget={detailLoading ? selectedId : null}
+                detailLoadingTarget={detailLoading ? effectiveSelectedId : null}
                 cancellingOrderId={cancellingOrderId}
                 cancelReason={cancelReason}
                 onCancelReasonChange={setCancelReason}
@@ -341,7 +365,7 @@ export default function OrdersPage() {
                   className="form-input"
                 />
                 <button
-                  onClick={() => { setSelectedId((id) => id.trim()); }}
+                  onClick={loadSelectedOrderFromLookup}
                   disabled={detailLoading || !selectedId.trim()}
                   className="rounded-md border border-line-bright bg-brand-soft p-2.5 text-base font-bold text-brand disabled:cursor-not-allowed disabled:opacity-40"
                 >
@@ -349,9 +373,14 @@ export default function OrdersPage() {
                 </button>
               </div>
 
-              {!selectedDetail && (
+              {!selectedDetail && !detailError && (
                 <div className="mt-3 rounded-md border border-dashed border-line-bright p-4 text-center text-sm text-muted">
                   Select or search for an order to view details
+                </div>
+              )}
+              {detailError && (
+                <div className="mt-3 rounded-md border border-[rgba(239,68,68,0.25)] bg-[rgba(239,68,68,0.08)] p-4 text-sm text-danger">
+                  {detailError instanceof Error ? detailError.message : "Failed to load order details"}
                 </div>
               )}
 

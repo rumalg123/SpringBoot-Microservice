@@ -99,7 +99,7 @@ public class PayoutService {
                 .vendorId(req.vendorId())
                 .payoutAmount(req.payoutAmount())
                 .platformFee(req.platformFee())
-                .currency("USD")
+                .currency("LKR")
                 .vendorOrderIds(vendorOrderIdsStr)
                 .bankAccount(bankAccount)
                 .bankNameSnapshot(bankAccount.getBankName())

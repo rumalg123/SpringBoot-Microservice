@@ -214,9 +214,13 @@ export default function AppNav({
         <div className="flex items-center gap-2 sm:gap-3">
           <WishlistNavWidget apiClient={apiClient} />
           <CartNavWidget apiClient={apiClient} emailVerified={emailVerified} />
-          <span className="hidden rounded-full border border-line-bright bg-brand-soft px-3 py-1.5 text-xs font-medium text-[rgba(0,212,255,0.8)] md:inline-block">
+          <Link
+            href="/profile"
+            className="hidden rounded-full border border-line-bright bg-brand-soft px-3 py-1.5 text-xs font-medium text-[rgba(0,212,255,0.8)] no-underline transition hover:border-[var(--line-bright)] hover:text-brand md:inline-block"
+            title="Open profile"
+          >
             {email || "User"}
-          </span>
+          </Link>
           <button type="button"
             disabled={logoutPending}
             onClick={() => { void handleLogout(); }}
@@ -279,9 +283,12 @@ export default function AppNav({
             <div className="mt-1 w-full border-t border-[var(--brand-soft)] pt-2">
               <div className="flex items-center justify-between gap-3">
                 {email && (
-                  <span className="text-xs font-medium text-[rgba(0,212,255,0.7)]">
+                  <Link
+                    href="/profile"
+                    className="text-xs font-medium text-[rgba(0,212,255,0.7)] no-underline"
+                  >
                     {email}
-                  </span>
+                  </Link>
                 )}
                 <button type="button"
                   disabled={logoutPending}

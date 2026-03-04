@@ -5,6 +5,7 @@ import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Locale;
 
 public final class PayHereHashUtil {
 
@@ -30,11 +31,15 @@ public final class PayHereHashUtil {
                                                   String amount, String currency,
                                                   int statusCode, String merchantSecret,
                                                   String receivedSig) {
+        if (receivedSig == null) {
+            return false;
+        }
         String hashedSecret = md5Upper(merchantSecret);
         String computed = md5Upper(merchantId + orderId + amount + currency + statusCode + hashedSecret);
+        String normalizedReceived = receivedSig.trim().toUpperCase(Locale.ROOT);
         return MessageDigest.isEqual(
                 computed.getBytes(StandardCharsets.UTF_8),
-                receivedSig.getBytes(StandardCharsets.UTF_8)
+                normalizedReceived.getBytes(StandardCharsets.UTF_8)
         );
     }
 

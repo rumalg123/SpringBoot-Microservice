@@ -152,7 +152,7 @@ public class PaymentService {
                 );
             }
 
-            String currency = order.currency() != null ? order.currency() : "USD";
+            String currency = order.currency() != null ? order.currency() : "LKR";
 
             payment = Payment.builder()
                     .orderId(orderId)

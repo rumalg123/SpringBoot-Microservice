@@ -3,7 +3,7 @@ import type { AxiosInstance } from "axios";
 import type { Order, OrderDetail } from "../../types/order";
 import { queryKeys } from "./keys";
 
-type PagedOrder = { content: Order[] };
+type PagedOrder = { content?: Order[] } | Order[];
 type PaymentInfo = { status: string; paymentMethod: string; cardNoMasked: string | null; paidAt: string | null };
 
 export function useOrders(apiClient: AxiosInstance | null) {
@@ -11,20 +11,24 @@ export function useOrders(apiClient: AxiosInstance | null) {
     queryKey: queryKeys.orders.me(),
     queryFn: async () => {
       const res = await apiClient!.get<PagedOrder>("/orders/me");
-      return res.data.content ?? [];
+      const data = res.data;
+      if (Array.isArray(data)) return data;
+      return data.content ?? [];
     },
     enabled: !!apiClient,
   });
 }
 
 export function useOrderDetail(apiClient: AxiosInstance | null, orderId: string | null) {
+  const normalizedOrderId = (orderId ?? "").trim();
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(normalizedOrderId);
   return useQuery({
-    queryKey: queryKeys.orders.detail(orderId ?? ""),
+    queryKey: queryKeys.orders.detail(normalizedOrderId),
     queryFn: async () => {
-      const res = await apiClient!.get<OrderDetail>(`/orders/me/${orderId}`);
+      const res = await apiClient!.get<OrderDetail>(`/orders/me/${normalizedOrderId}`);
       return res.data;
     },
-    enabled: !!apiClient && !!orderId,
+    enabled: !!apiClient && isUuid,
   });
 }
 

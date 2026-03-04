@@ -1,9 +1,21 @@
-const usdFormatter = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+const lkrFormatter = new Intl.NumberFormat("en-LK", { style: "currency", currency: "LKR" });
+const lkrCompactFormatter = new Intl.NumberFormat("en-LK", {
+  style: "currency",
+  currency: "LKR",
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
 
-/** Format a number as USD currency.  Handles null/NaN gracefully. */
+/** Format a number as LKR currency. Handles null/NaN gracefully. */
 export function money(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) return "\u2014";
-  return usdFormatter.format(value);
+  return lkrFormatter.format(value);
+}
+
+/** Format a number as compact LKR currency (e.g. "LKR 1.2M"). */
+export function moneyCompact(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return "\u2014";
+  return lkrCompactFormatter.format(value);
 }
 
 /** Percentage discount between regular and selling price. */

@@ -6,6 +6,7 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -63,6 +64,13 @@ public class GlobalExceptionHandler {
             fieldErrors.putIfAbsent(fe.getField(), fe.getDefaultMessage());
         }
         return ResponseEntity.badRequest().body(new ApiError(Instant.now(), 400, "Validation failed", "Validation failed", fieldErrors));
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<?> missingParam(MissingServletRequestParameterException ex) {
+        String message = "Missing required request parameter: " + ex.getParameterName();
+        log.warn("Payment request missing parameter: {}", message);
+        return ResponseEntity.badRequest().body(error(HttpStatus.BAD_REQUEST, message));
     }
 
     @ExceptionHandler(OptimisticLockingFailureException.class)

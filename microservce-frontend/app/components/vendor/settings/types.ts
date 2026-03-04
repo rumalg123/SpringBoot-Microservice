@@ -66,7 +66,7 @@ export const EMPTY_VENDOR: VendorProfile = {
 };
 
 export const EMPTY_PAYOUT: PayoutConfig = {
-  payoutCurrency: "USD",
+  payoutCurrency: "LKR",
   payoutSchedule: "MONTHLY",
   payoutMinimum: "",
   bankAccountHolder: "",

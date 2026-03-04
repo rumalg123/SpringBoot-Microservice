@@ -41,7 +41,7 @@ public class Payment {
 
     @Builder.Default
     @Column(name = "currency", nullable = false, length = 3)
-    private String currency = "USD";
+    private String currency = "LKR";
 
     @Column(name = "payhere_payment_id", length = 120)
     private String payherePaymentId;

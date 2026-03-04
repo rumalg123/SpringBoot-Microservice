@@ -81,11 +81,6 @@ export default function CheckoutSidebar({
         {couponError && (
           <p className="mt-1.5 text-[0.75rem] text-danger">{couponError}</p>
         )}
-        {preview?.couponCode && !couponError && (
-          <p className="mt-1.5 text-[0.75rem] text-success">
-            Coupon &quot;{preview.couponCode}&quot; applied
-          </p>
-        )}
       </div>
 
       {/* Totals */}

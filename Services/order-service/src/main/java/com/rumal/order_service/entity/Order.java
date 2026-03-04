@@ -48,7 +48,7 @@ public class Order {
 
     @Builder.Default
     @Column(name = "currency", nullable = false, length = 3)
-    private String currency = "USD";
+    private String currency = "LKR";
 
     @Column(name = "subtotal_amount", nullable = false, precision = 19, scale = 2)
     private BigDecimal subtotal;

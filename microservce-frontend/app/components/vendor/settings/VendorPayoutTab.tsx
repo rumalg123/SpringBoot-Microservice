@@ -74,7 +74,7 @@ export default function VendorPayoutTab({
           <div className="grid grid-cols-3 gap-4">
             {renderInput("Payout Currency", payoutConfig.payoutCurrency, (v) => onFieldChange("payoutCurrency", v), {
               maxLength: 3,
-              placeholder: "USD",
+              placeholder: "LKR",
             })}
             <div className="mb-4">
               <label className="block text-[0.78rem] font-semibold text-muted mb-1">Payout Schedule</label>

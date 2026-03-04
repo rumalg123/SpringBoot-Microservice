@@ -201,10 +201,6 @@ async function validateImageFile(file: File): Promise<void> {
   }
 }
 
-function money(value: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
-}
-
 function parseNumber(value: string): number | null {
   const n = Number(value);
   return Number.isFinite(n) ? n : null;

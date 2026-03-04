@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuthSession } from "../../../lib/authSession";
-import { money } from "../../../lib/format";
+import { money, moneyCompact } from "../../../lib/format";
 import VendorPageShell from "../../components/ui/VendorPageShell";
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
@@ -46,10 +46,7 @@ const CHART_TEXT = "#6868a0";
 function num(v: number | null | undefined): string { return (v ?? 0).toLocaleString(); }
 function pct(v: number | null | undefined): string { return `${(v ?? 0).toFixed(1)}%`; }
 function shortMoney(v: number | null | undefined): string {
-  const n = v ?? 0;
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `$${(n / 1_000).toFixed(1)}K`;
-  return money(n);
+  return moneyCompact(v);
 }
 
 function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: { name: string; value: number; color: string }[]; label?: string }) {
