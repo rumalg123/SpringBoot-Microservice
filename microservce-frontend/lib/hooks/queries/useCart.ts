@@ -88,7 +88,6 @@ export function useClearCart(apiClient: AxiosInstance | null) {
 }
 
 export function useCheckoutPreview(apiClient: AxiosInstance | null) {
-  const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({
       couponCode,
@@ -105,9 +104,6 @@ export function useCheckoutPreview(apiClient: AxiosInstance | null) {
         countryCode: countryCode || null,
       });
       return res.data;
-    },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: queryKeys.cart.me() });
     },
   });
 }

@@ -93,7 +93,7 @@ export default function CartPage() {
   const saveForLaterMut = useSaveForLater(apiClient);
   const moveToCartMut = useMoveToCart(apiClient);
   const clearCartMut = useClearCart(apiClient);
-  const checkoutPreviewMut = useCheckoutPreview(apiClient);
+  const { mutate: checkoutPreview, isPending: previewing } = useCheckoutPreview(apiClient);
   const checkoutMut = useCheckout(apiClient);
 
   // --- Auth guard & customer bootstrap ---
@@ -223,10 +223,9 @@ export default function CartPage() {
     movingItemId !== null ||
     clearCartMut.isPending ||
     checkoutMut.isPending ||
-    checkoutPreviewMut.isPending;
+    previewing;
 
   const clearingCart = clearCartMut.isPending;
-  const previewing = checkoutPreviewMut.isPending;
   const checkingOut = checkoutMut.isPending;
 
   const updateQuantity = (itemId: string, quantity: number) => {
@@ -285,7 +284,7 @@ export default function CartPage() {
     if (!silent) {
       setCouponError("");
     }
-    checkoutPreviewMut.mutate(
+    checkoutPreview(
       {
         couponCode: requestedCoupon || null,
         shippingAmount: 0,
@@ -315,7 +314,7 @@ export default function CartPage() {
         },
       },
     );
-  }, [apiClient, cart.items.length, checkoutPreviewMut, selectedShippingCountryCode]);
+  }, [apiClient, cart.items.length, checkoutPreview, selectedShippingCountryCode]);
 
   const loadPreview = () => {
     runPreview(couponCode, false);
