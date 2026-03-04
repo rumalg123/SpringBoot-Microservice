@@ -173,7 +173,7 @@ class CartServicePromotionFlowIntegrationTest {
                 eq(billingAddressId),
                 anyList(),
                 any(PromotionCheckoutPricingRequest.class),
-                eq("cart-checkout::idem-123")
+                eq("cart-checkout_idem-123")
         )).thenReturn(new OrderResponse(orderId, customerId, "Test Product", 2, Instant.parse("2026-02-23T10:01:00Z")));
 
         CheckoutResponse response = cartService.checkout(
@@ -205,7 +205,7 @@ class CartServicePromotionFlowIntegrationTest {
         CreateCouponReservationRequest reserveRequest = captureReserveRequest();
         assertEquals("SAVE3", reserveRequest.couponCode());
         assertEquals(customerId, reserveRequest.customerId());
-        assertEquals("cart-coupon-reserve::idem-123", reserveRequest.requestKey());
+        assertEquals("cart-coupon-reserve_idem-123", reserveRequest.requestKey());
         assertEquals(new BigDecimal("6.59"), reserveRequest.quoteRequest().shippingAmount());
 
         PromotionCheckoutPricingRequest pricingRequest = captureOrderPricingRequest(keycloakId, shippingAddressId, billingAddressId);
@@ -305,7 +305,7 @@ class CartServicePromotionFlowIntegrationTest {
                 eq(billingAddressId),
                 anyList(),
                 pricingCaptor.capture(),
-                eq("cart-checkout::idem-123")
+                eq("cart-checkout_idem-123")
         );
         return pricingCaptor.getValue();
     }

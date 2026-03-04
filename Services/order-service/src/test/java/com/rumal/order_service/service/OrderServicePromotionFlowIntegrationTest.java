@@ -17,6 +17,7 @@ import com.rumal.order_service.dto.CustomerSummary;
 import com.rumal.order_service.dto.OrderResponse;
 import com.rumal.order_service.dto.ProductSummary;
 import com.rumal.order_service.dto.PromotionCheckoutPricingRequest;
+import com.rumal.order_service.dto.StockCheckResult;
 import com.rumal.order_service.dto.VendorOperationalStateResponse;
 import com.rumal.order_service.entity.Order;
 import com.rumal.order_service.entity.OrderStatus;
@@ -26,15 +27,16 @@ import com.rumal.order_service.repo.VendorOrderRepository;
 import com.rumal.order_service.repo.VendorOrderStatusAuditRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.cache.CacheManager;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -43,8 +45,11 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -75,17 +80,21 @@ class OrderServicePromotionFlowIntegrationTest {
     private CustomerClient customerClient;
     private ProductClient productClient;
     private PromotionClient promotionClient;
+    private InventoryClient inventoryClient;
+    private VendorClient vendorClient;
     private VendorOperationalStateClient vendorOperationalStateClient;
+    private OutboxService outboxService;
 
     @BeforeEach
     void setUp() {
         customerClient = Mockito.mock(CustomerClient.class);
         productClient = Mockito.mock(ProductClient.class);
         promotionClient = Mockito.mock(PromotionClient.class);
-        InventoryClient inventoryClient = Mockito.mock(InventoryClient.class);
-        VendorClient vendorClient = Mockito.mock(VendorClient.class);
+        inventoryClient = Mockito.mock(InventoryClient.class);
+        vendorClient = Mockito.mock(VendorClient.class);
         vendorOperationalStateClient = Mockito.mock(VendorOperationalStateClient.class);
         OrderCacheVersionService orderCacheVersionService = Mockito.mock(OrderCacheVersionService.class);
+        outboxService = Mockito.mock(OutboxService.class);
 
         orderService = new OrderService(
                 orderRepository,
@@ -107,8 +116,9 @@ class OrderServicePromotionFlowIntegrationTest {
                 new OrderAggregationProperties(CustomerDetailsMode.GRACEFUL),
                 orderCacheVersionService,
                 transactionTemplate,
-                Mockito.mock(OutboxService.class)
+                outboxService
         );
+        ReflectionTestUtils.setField(orderService, "orderExpiryTtl", Duration.ofMinutes(30));
     }
 
     @Test
@@ -122,7 +132,7 @@ class OrderServicePromotionFlowIntegrationTest {
         UUID couponReservationId = UUID.fromString("60606060-6060-6060-6060-606060606060");
 
         when(customerClient.getCustomerByKeycloakId(keycloakId)).thenReturn(new CustomerSummary(customerId, "Customer", "c@example.com"));
-        when(productClient.getById(productId)).thenReturn(new ProductSummary(
+        when(productClient.getBatch(anyList())).thenReturn(List.of(new ProductSummary(
                 productId,
                 null,
                 vendorId,
@@ -131,49 +141,36 @@ class OrderServicePromotionFlowIntegrationTest {
                 "CHILD",
                 new BigDecimal("10.00"),
                 true
-        ));
+        )));
         @SuppressWarnings("unchecked")
         Set<UUID> anyVendorIds = any(Set.class);
         when(vendorOperationalStateClient.batchGetStates(anyVendorIds)).thenReturn(Map.of(
                 vendorId,
                 new VendorOperationalStateResponse(vendorId, true, false, "ACTIVE", true, true)
         ));
+        when(vendorClient.getVendorNames(anyList())).thenReturn(Map.of(vendorId, "Vendor One"));
+        when(inventoryClient.checkAvailability(anyList())).thenReturn(List.of(
+                new StockCheckResult(productId, 10, true, false, "IN_STOCK")
+        ));
         when(customerClient.getCustomerAddress(customerId, shippingAddressId)).thenReturn(address(shippingAddressId, customerId, "US"));
         when(customerClient.getCustomerAddress(customerId, billingAddressId)).thenReturn(address(billingAddressId, customerId, "US"));
 
-        when(promotionClient.commitCouponReservation(eq(couponReservationId), any(UUID.class))).thenReturn(new CouponReservationResponse(
+        when(promotionClient.getCouponReservation(eq(couponReservationId))).thenReturn(new CouponReservationResponse(
                 couponReservationId,
                 UUID.randomUUID(),
-                UUID.randomUUID(),
+                null,
                 "SAVE3",
-                "COMMITTED",
+                "RESERVED",
                 customerId,
                 null,
                 new BigDecimal("3.00"),
                 new BigDecimal("20.00"),
                 new BigDecimal("23.59"),
-                Instant.parse("2026-02-23T10:00:00Z"),
-                Instant.parse("2026-02-23T10:15:00Z"),
-                Instant.parse("2026-02-23T10:01:00Z"),
+                Instant.parse("2030-02-23T10:00:00Z"),
+                Instant.parse("2030-02-23T10:15:00Z"),
+                null,
                 null,
                 null
-        ));
-        when(promotionClient.releaseCouponReservation(eq(couponReservationId), eq("order_cancelled"))).thenReturn(new CouponReservationResponse(
-                couponReservationId,
-                null,
-                null,
-                "SAVE3",
-                "RELEASED",
-                customerId,
-                null,
-                new BigDecimal("3.00"),
-                new BigDecimal("20.00"),
-                new BigDecimal("23.59"),
-                Instant.parse("2026-02-23T10:00:00Z"),
-                Instant.parse("2026-02-23T10:15:00Z"),
-                Instant.parse("2026-02-23T10:01:00Z"),
-                Instant.parse("2026-02-23T10:05:00Z"),
-                "order_cancelled"
         ));
 
         CreateMyOrderRequest createRequest = new CreateMyOrderRequest(
@@ -208,20 +205,71 @@ class OrderServicePromotionFlowIntegrationTest {
         assertEquals(new BigDecimal("3.00"), created.totalDiscount());
         assertEquals(new BigDecimal("23.59"), created.orderTotal());
 
-        ArgumentCaptor<UUID> commitOrderIdCaptor = ArgumentCaptor.forClass(UUID.class);
-        verify(promotionClient).commitCouponReservation(eq(couponReservationId), commitOrderIdCaptor.capture());
-        assertEquals(created.id(), commitOrderIdCaptor.getValue());
+        verify(outboxService).enqueue(eq("Order"), eq(created.id()), eq("COUPON_COMMIT"), any(Map.class));
+        verify(outboxService).enqueue(eq("Order"), eq(created.id()), eq("INVENTORY_RESERVE"), any(Map.class));
 
         OrderResponse cancelled = orderService.updateStatus(created.id(), OrderStatus.CANCELLED, null, null, null, null, "admin-sub", "platform_staff");
         assertEquals("CANCELLED", cancelled.status());
         assertEquals(couponReservationId, cancelled.couponReservationId());
 
-        verify(promotionClient).releaseCouponReservation(couponReservationId, "order_cancelled");
+        verify(outboxService).enqueue(eq("Order"), eq(created.id()), eq("RELEASE_COUPON_RESERVATION"), any(Map.class));
+        verify(outboxService).enqueue(eq("Order"), eq(created.id()), eq("RELEASE_INVENTORY_RESERVATION"), any(Map.class));
 
         Order stored = orderRepository.findById(created.id()).orElseThrow();
         assertEquals(OrderStatus.CANCELLED, stored.getStatus());
         assertEquals(couponReservationId, stored.getCouponReservationId());
         assertEquals(new BigDecimal("23.59"), stored.getOrderTotal());
+    }
+
+    @Test
+    void createForKeycloak_rejectsWhenInventoryInsufficient_beforePersistingOrder() {
+        String keycloakId = "kc-user-2";
+        UUID customerId = UUID.fromString("11111111-2222-3333-4444-555555555555");
+        UUID productId = UUID.fromString("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+        UUID vendorId = UUID.fromString("99999999-8888-7777-6666-555555555555");
+        UUID shippingAddressId = UUID.fromString("12121212-3434-5656-7878-909090909090");
+        UUID billingAddressId = UUID.fromString("31313131-4141-5151-6161-717171717171");
+
+        when(customerClient.getCustomerByKeycloakId(keycloakId))
+                .thenReturn(new CustomerSummary(customerId, "Customer Two", "c2@example.com"));
+        when(productClient.getBatch(anyList())).thenReturn(List.of(new ProductSummary(
+                productId,
+                null,
+                vendorId,
+                "Out Of Stock Product",
+                "SKU-2",
+                "CHILD",
+                new BigDecimal("15.00"),
+                true
+        )));
+        @SuppressWarnings("unchecked")
+        Set<UUID> anyVendorIds = any(Set.class);
+        when(vendorOperationalStateClient.batchGetStates(anyVendorIds)).thenReturn(Map.of(
+                vendorId,
+                new VendorOperationalStateResponse(vendorId, true, false, "ACTIVE", true, true)
+        ));
+        when(inventoryClient.checkAvailability(anyList())).thenReturn(List.of(
+                new StockCheckResult(productId, 0, false, false, "OUT_OF_STOCK")
+        ));
+        when(customerClient.getCustomerAddress(customerId, shippingAddressId)).thenReturn(address(shippingAddressId, customerId, "LK"));
+        when(customerClient.getCustomerAddress(customerId, billingAddressId)).thenReturn(address(billingAddressId, customerId, "LK"));
+
+        CreateMyOrderRequest createRequest = new CreateMyOrderRequest(
+                null,
+                null,
+                List.of(new CreateOrderItemRequest(productId, 1)),
+                shippingAddressId,
+                billingAddressId,
+                null,
+                null
+        );
+
+        assertThrows(
+                com.rumal.order_service.exception.ValidationException.class,
+                () -> orderService.createForKeycloak(keycloakId, createRequest)
+        );
+        assertEquals(0L, orderRepository.count());
+        verify(outboxService, never()).enqueue(any(), any(), any(), any());
     }
 
     private CustomerAddressSummary address(UUID addressId, UUID customerId, String countryCode) {

@@ -32,6 +32,7 @@ import com.rumal.cart_service.entity.Cart;
 import com.rumal.cart_service.entity.CartItem;
 import com.rumal.cart_service.exception.ConflictException;
 import com.rumal.cart_service.exception.ResourceNotFoundException;
+import com.rumal.cart_service.exception.ServiceUnavailableException;
 import com.rumal.cart_service.exception.ValidationException;
 import com.rumal.cart_service.repo.CartRepository;
 import lombok.RequiredArgsConstructor;
@@ -299,6 +300,9 @@ public class CartService {
                     promotionPricing,
                     downstreamOrderIdempotencyKey(idempotencyKey)
             );
+            if (order == null || order.id() == null) {
+                throw new ServiceUnavailableException("Order service returned an invalid checkout response.");
+            }
         } catch (ConflictException ex) {
             if (couponReservation != null && couponReservation.id() != null) {
                 releaseCouponReservationQuietly(couponReservation.id(), "order_create_failed:" + ex.getClass().getSimpleName());

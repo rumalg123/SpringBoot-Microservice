@@ -10,6 +10,7 @@ import com.rumal.order_service.client.VendorOperationalStateClient;
 import com.rumal.order_service.dto.PromotionQuoteRequest;
 import com.rumal.order_service.dto.PromotionQuoteResponse;
 import com.rumal.order_service.dto.StockCheckRequest;
+import com.rumal.order_service.dto.StockCheckResult;
 import com.rumal.order_service.dto.CreateOrderItemRequest;
 import com.rumal.order_service.dto.InvoiceResponse;
 import com.rumal.order_service.dto.UpdateShippingAddressRequest;
@@ -131,6 +132,7 @@ public class OrderService {
         customerClient.assertCustomerExists(req.customerId());
         List<ResolvedOrderLine> lines = resolveOrderLines(req.productId(), req.quantity(), req.items());
         assertVendorsAcceptingOrders(lines);
+        assertInventoryCanReserve(lines);
         ResolvedOrderAddresses addresses = resolveOrderAddresses(req.customerId(), req.shippingAddressId(), req.billingAddressId());
         return transactionTemplate.execute(status -> {
             Order saved = orderRepository.save(buildOrder(req.customerId(), lines, addresses, null, req.customerNote()));
@@ -148,6 +150,7 @@ public class OrderService {
         CustomerSummary customer = customerClient.getCustomerByKeycloakId(keycloakId);
         List<ResolvedOrderLine> lines = resolveOrderLines(req.productId(), req.quantity(), req.items());
         assertVendorsAcceptingOrders(lines);
+        assertInventoryCanReserve(lines);
         ResolvedOrderAddresses addresses = resolveOrderAddresses(customer.id(), req.shippingAddressId(), req.billingAddressId());
         PromotionPricingSnapshot pricingSnapshot = toPromotionPricingSnapshot(req.promotionPricing());
         Order saved = transactionTemplate.execute(status -> {
@@ -852,6 +855,40 @@ public class OrderService {
                     && state.storefrontVisible();
             if (!visible) {
                 throw new ValidationException("Vendor is not accepting orders: " + vendorId);
+            }
+        }
+    }
+
+    private void assertInventoryCanReserve(List<ResolvedOrderLine> lines) {
+        if (lines == null || lines.isEmpty()) {
+            return;
+        }
+        List<StockCheckRequest> checks = lines.stream()
+                .map(line -> new StockCheckRequest(line.product().id(), line.quantity()))
+                .toList();
+        List<StockCheckResult> results = inventoryClient.checkAvailability(checks);
+        Map<UUID, StockCheckResult> byProduct = results == null
+                ? Map.of()
+                : results.stream().collect(java.util.stream.Collectors.toMap(
+                        StockCheckResult::productId,
+                        result -> result,
+                        (a, b) -> a
+                ));
+
+        for (ResolvedOrderLine line : lines) {
+            StockCheckResult stock = byProduct.get(line.product().id());
+            if (stock == null) {
+                throw new ServiceUnavailableException(
+                        "Inventory availability check returned incomplete data. Please retry checkout.",
+                        new IllegalStateException("Missing stock check result for product " + line.product().id())
+                );
+            }
+            if (!stock.sufficient()) {
+                throw new ValidationException(
+                        "Insufficient stock for product " + line.product().id()
+                                + ": requested=" + line.quantity()
+                                + ", available=" + stock.totalAvailable()
+                );
             }
         }
     }
