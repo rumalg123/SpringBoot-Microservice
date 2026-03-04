@@ -1,6 +1,7 @@
 package com.rumal.payment_service.controller;
 
 import com.rumal.payment_service.exception.ValidationException;
+import com.rumal.payment_service.security.InternalRequestBodyCachingFilter;
 import com.rumal.payment_service.service.PaymentService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -9,10 +10,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.io.IOException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
@@ -33,9 +34,9 @@ public class PayHereWebhookController {
             MediaType.ALL_VALUE
     })
     public ResponseEntity<String> notify(
-            HttpServletRequest request,
-            @RequestBody(required = false) String rawBody
+            HttpServletRequest request
     ) {
+        String rawBody = readRawBody(request);
         Map<String, String> params = extractParams(request, rawBody);
         String merchantId = requireParam(params, "merchant_id");
         String orderId = requireParam(params, "order_id");
@@ -57,6 +58,19 @@ public class PayHereWebhookController {
         );
 
         return ResponseEntity.ok("OK");
+    }
+
+    private String readRawBody(HttpServletRequest request) {
+        try {
+            if (request instanceof InternalRequestBodyCachingFilter.CachedBodyRequestWrapper cached) {
+                byte[] body = cached.getCachedBody();
+                return body.length == 0 ? null : new String(body, StandardCharsets.UTF_8);
+            }
+            byte[] body = request.getInputStream().readAllBytes();
+            return body.length == 0 ? null : new String(body, StandardCharsets.UTF_8);
+        } catch (IOException ignored) {
+            return null;
+        }
     }
 
     private Map<String, String> extractParams(HttpServletRequest request, String rawBody) {
@@ -146,7 +160,9 @@ public class PayHereWebhookController {
     private String requireParam(Map<String, String> params, String key) {
         String value = trimToNull(params.get(key));
         if (value == null) {
-            throw new ValidationException("Missing required PayHere parameter: " + key);
+            String availableKeys = String.join(",", params.keySet());
+            throw new ValidationException("Missing required PayHere parameter: " + key
+                    + (availableKeys.isEmpty() ? "" : " (received keys: " + availableKeys + ")"));
         }
         return value;
     }
