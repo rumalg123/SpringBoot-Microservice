@@ -14,6 +14,7 @@ services:
       discovery.type: single-node
       xpack.security.enabled: "true"
       xpack.security.http.ssl.enabled: "false"
+      node.store.allow_mmap: "false"
       ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-elastic-change-me}
       ES_JAVA_OPTS: "-Xms512m -Xmx512m"
     volumes:
@@ -21,11 +22,15 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
     healthcheck:
-      test: ["CMD-SHELL", "curl -s -u elastic:${ELASTIC_PASSWORD:-elastic-change-me} http://localhost:9200/_cluster/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 20
-      start_period: 30s
+      test:
+        [
+          "CMD-SHELL",
+          "if command -v curl >/dev/null 2>&1; then curl -fsS -u \"elastic:${ELASTIC_PASSWORD:-elastic-change-me}\" \"http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s\" >/dev/null; elif command -v wget >/dev/null 2>&1; then wget -q --user=elastic --password=\"${ELASTIC_PASSWORD:-elastic-change-me}\" -O /dev/null \"http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s\"; else exit 1; fi",
+        ]
+      interval: 15s
+      timeout: 10s
+      retries: 30
+      start_period: 90s
 
   discovery-server:
     build:
