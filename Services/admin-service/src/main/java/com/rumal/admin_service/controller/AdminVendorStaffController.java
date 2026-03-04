@@ -3,6 +3,7 @@ package com.rumal.admin_service.controller;
 import com.rumal.admin_service.security.InternalRequestVerifier;
 import com.rumal.admin_service.service.AdminActorScopeService;
 import com.rumal.admin_service.service.AdminAccessService;
+import com.rumal.admin_service.service.AdminVendorService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -30,6 +31,7 @@ import java.util.UUID;
 public class AdminVendorStaffController {
 
     private final AdminAccessService adminAccessService;
+    private final AdminVendorService adminVendorService;
     private final AdminActorScopeService adminActorScopeService;
     private final InternalRequestVerifier internalRequestVerifier;
 
@@ -75,7 +77,9 @@ public class AdminVendorStaffController {
         internalRequestVerifier.verify(internalAuth);
         UUID vendorId = parseUuid(request.get("vendorId"));
         UUID scopedVendorId = adminActorScopeService.resolveScopedVendorIdForVendorStaffManagement(userSub, userRoles, vendorId, internalAuth);
-        return adminAccessService.createVendorStaff(withVendorId(request, scopedVendorId), internalAuth, userSub, userRoles, actionReason);
+        Map<String, Object> created = adminAccessService.createVendorStaff(withVendorId(request, scopedVendorId), internalAuth, userSub, userRoles, actionReason);
+        adminVendorService.syncVendorStaffMembershipTransition(null, created, internalAuth);
+        return created;
     }
 
     @GetMapping("/{id}")
@@ -104,13 +108,15 @@ public class AdminVendorStaffController {
             @RequestBody @NotNull Map<String, Object> request
     ) {
         internalRequestVerifier.verify(internalAuth);
+        Map<String, Object> existing = adminAccessService.getVendorStaffById(id, internalAuth);
         UUID vendorId = parseUuid(request.get("vendorId"));
         if (vendorId == null) {
-            Map<String, Object> existing = adminAccessService.getVendorStaffById(id, internalAuth);
             vendorId = parseUuid(existing.get("vendorId"));
         }
         UUID scopedVendorId = adminActorScopeService.resolveScopedVendorIdForVendorStaffManagement(userSub, userRoles, vendorId, internalAuth);
-        return adminAccessService.updateVendorStaff(id, withVendorId(request, scopedVendorId), internalAuth, userSub, userRoles, actionReason);
+        Map<String, Object> updated = adminAccessService.updateVendorStaff(id, withVendorId(request, scopedVendorId), internalAuth, userSub, userRoles, actionReason);
+        adminVendorService.syncVendorStaffMembershipTransition(existing, updated, internalAuth);
+        return updated;
     }
 
     @DeleteMapping("/{id}")
@@ -129,6 +135,7 @@ public class AdminVendorStaffController {
             adminActorScopeService.assertCanManageVendorStaffVendor(userSub, userRoles, vendorId, internalAuth);
         }
         adminAccessService.deleteVendorStaff(id, internalAuth, userSub, userRoles, actionReason);
+        adminVendorService.syncVendorStaffMembershipTransition(existing, null, internalAuth);
     }
 
     @PostMapping("/{id}/restore")
@@ -145,7 +152,26 @@ public class AdminVendorStaffController {
         if (vendorId != null) {
             adminActorScopeService.assertCanManageVendorStaffVendor(userSub, userRoles, vendorId, internalAuth);
         }
-        return adminAccessService.restoreVendorStaff(id, internalAuth, userSub, userRoles, actionReason);
+        Map<String, Object> restored = adminAccessService.restoreVendorStaff(id, internalAuth, userSub, userRoles, actionReason);
+        adminVendorService.syncVendorStaffMembershipTransition(existing, restored, internalAuth);
+        return restored;
+    }
+
+    @PostMapping("/sync-memberships")
+    public Map<String, Object> syncMemberships(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
+            @RequestParam(required = false) UUID vendorId
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        UUID scopedVendorId = adminActorScopeService.resolveScopedVendorIdForVendorStaffManagement(userSub, userRoles, vendorId, internalAuth);
+        int synced = adminVendorService.reconcileVendorStaffMemberships(scopedVendorId, internalAuth);
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", true);
+        response.put("vendorId", scopedVendorId);
+        response.put("syncedCount", synced);
+        return response;
     }
 
     private UUID parseUuid(Object raw) {

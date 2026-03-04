@@ -13,6 +13,7 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
 
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
@@ -145,6 +146,45 @@ public class AdminVendorService {
         return vendorClient.listAccessibleVendorMembershipsByKeycloakUser(keycloakUserId, internalAuth);
     }
 
+    public int reconcileVendorStaffMemberships(UUID vendorId, String internalAuth) {
+        List<Map<String, Object>> rows = accessClient.listVendorStaff(vendorId, internalAuth);
+        for (Map<String, Object> row : rows) {
+            syncVendorStaffMembershipTransition(null, row, internalAuth);
+        }
+        return rows.size();
+    }
+
+    /**
+     * Keeps vendor membership (vendor_users) in sync with vendor_staff_access rows.
+     * This avoids tenant-access drift where vendor staff permissions exist but /vendors/me cannot resolve membership.
+     */
+    public void syncVendorStaffMembershipTransition(
+            Map<String, Object> beforeRow,
+            Map<String, Object> afterRow,
+            String internalAuth
+    ) {
+        if (beforeRow == null && afterRow == null) {
+            return;
+        }
+
+        if (beforeRow != null && afterRow == null) {
+            Map<String, Object> deactivate = new LinkedHashMap<>(beforeRow);
+            deactivate.put("active", false);
+            syncVendorStaffMembership(deactivate, internalAuth);
+            return;
+        }
+
+        if (beforeRow != null && afterRow != null && !isSameVendorPrincipal(beforeRow, afterRow)) {
+            Map<String, Object> deactivateOld = new LinkedHashMap<>(beforeRow);
+            deactivateOld.put("active", false);
+            syncVendorStaffMembership(deactivateOld, internalAuth);
+        }
+
+        if (afterRow != null) {
+            syncVendorStaffMembership(afterRow, internalAuth);
+        }
+    }
+
     public Map<String, Object> addVendorUser(UUID vendorId, Map<String, Object> request, String internalAuth) {
         return vendorClient.addVendorUser(vendorId, request, internalAuth);
     }
@@ -243,6 +283,99 @@ public class AdminVendorService {
         return vendorClient.updateVendorUser(vendorId, membershipId, membershipRequest, internalAuth);
     }
 
+    private void syncVendorStaffMembership(Map<String, Object> vendorStaffRow, String internalAuth) {
+        UUID vendorId = parseUuid(vendorStaffRow.get("vendorId"), "vendorId");
+        String keycloakUserId = stringOrNull(vendorStaffRow.get("keycloakUserId"));
+        if (!StringUtils.hasText(keycloakUserId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Access service response is missing vendor staff keycloakUserId");
+        }
+        boolean desiredActive = isTruthy(vendorStaffRow.get("active"));
+        String incomingEmail = stringOrNull(vendorStaffRow.get("email"));
+        String incomingDisplayName = stringOrNull(vendorStaffRow.get("displayName"));
+
+        List<Map<String, Object>> memberships = vendorClient.listVendorUsers(vendorId, internalAuth);
+        Map<String, Object> existing = findMembershipByKeycloakUserId(memberships, keycloakUserId);
+
+        if (existing == null) {
+            if (!desiredActive) {
+                return;
+            }
+            if (!StringUtils.hasText(incomingEmail)) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Access service response is missing vendor staff email");
+            }
+            Map<String, Object> payload = buildVendorManagerMembershipPayload(
+                    keycloakUserId,
+                    incomingEmail,
+                    incomingDisplayName,
+                    true
+            );
+            try {
+                vendorClient.addVendorUser(vendorId, payload, internalAuth);
+                return;
+            } catch (DownstreamHttpException ex) {
+                if (ex.getStatusCode().value() != 409) {
+                    throw ex;
+                }
+                memberships = vendorClient.listVendorUsers(vendorId, internalAuth);
+                existing = findMembershipByKeycloakUserId(memberships, keycloakUserId);
+                if (existing == null) {
+                    throw ex;
+                }
+            }
+        }
+
+        String existingRole = stringValue(existing.get("role")).trim().toUpperCase();
+        if ("OWNER".equals(existingRole)) {
+            return;
+        }
+
+        String effectiveEmail = StringUtils.hasText(incomingEmail) ? incomingEmail : stringOrNull(existing.get("email"));
+        if (!StringUtils.hasText(effectiveEmail)) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Vendor membership email cannot be resolved for vendor staff sync");
+        }
+        String effectiveDisplayName = StringUtils.hasText(incomingDisplayName)
+                ? incomingDisplayName
+                : stringOrNull(existing.get("displayName"));
+        UUID membershipId = parseUuid(existing.get("id"), "vendor membership id");
+        Map<String, Object> payload = buildVendorManagerMembershipPayload(
+                keycloakUserId,
+                effectiveEmail,
+                effectiveDisplayName,
+                desiredActive
+        );
+        vendorClient.updateVendorUser(vendorId, membershipId, payload, internalAuth);
+    }
+
+    private Map<String, Object> buildVendorManagerMembershipPayload(
+            String keycloakUserId,
+            String email,
+            String displayName,
+            boolean active
+    ) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("keycloakUserId", keycloakUserId);
+        payload.put("email", email);
+        payload.put("displayName", displayName);
+        payload.put("role", "MANAGER");
+        payload.put("active", active);
+        return payload;
+    }
+
+    private Map<String, Object> findMembershipByKeycloakUserId(List<Map<String, Object>> memberships, String keycloakUserId) {
+        if (memberships == null || memberships.isEmpty()) {
+            return null;
+        }
+        for (Map<String, Object> membership : memberships) {
+            if (membership == null) {
+                continue;
+            }
+            if (keycloakUserId.equalsIgnoreCase(stringValue(membership.get("keycloakUserId")).trim())) {
+                return membership;
+            }
+        }
+        return null;
+    }
+
     private UUID parseUuid(Object value, String fieldName) {
         String raw = stringValue(value);
         if (!StringUtils.hasText(raw)) {
@@ -274,6 +407,23 @@ public class AdminVendorService {
         } catch (IllegalArgumentException ex) {
             return null;
         }
+    }
+
+    private boolean isSameVendorPrincipal(Map<String, Object> left, Map<String, Object> right) {
+        UUID leftVendorId = tryParseUuid(left.get("vendorId"));
+        UUID rightVendorId = tryParseUuid(right.get("vendorId"));
+        String leftUserId = stringOrNull(left.get("keycloakUserId"));
+        String rightUserId = stringOrNull(right.get("keycloakUserId"));
+        if (leftVendorId == null || rightVendorId == null) {
+            return false;
+        }
+        if (!leftVendorId.equals(rightVendorId)) {
+            return false;
+        }
+        if (!StringUtils.hasText(leftUserId) || !StringUtils.hasText(rightUserId)) {
+            return false;
+        }
+        return leftUserId.equalsIgnoreCase(rightUserId);
     }
 
     private boolean isTruthy(Object value) {
