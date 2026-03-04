@@ -23,6 +23,7 @@ public interface VendorRepository extends JpaRepository<Vendor, UUID> {
     boolean existsBySlug(String slug);
     boolean existsBySlugAndIdNot(String slug, UUID id);
     Page<Vendor> findByDeletedFalseOrderByNameAsc(Pageable pageable);
+    Page<Vendor> findByDeletedFalseAndNormalizedNameContainingOrderByNameAsc(String normalizedName, Pageable pageable);
     Page<Vendor> findByDeletedTrueOrderByUpdatedAtDesc(Pageable pageable);
     Page<Vendor> findByDeletedFalseAndActiveTrueAndStatusOrderByNameAsc(VendorStatus status, Pageable pageable);
     Page<Vendor> findByDeletedFalseAndActiveTrueAndAcceptingOrdersTrueAndStatusOrderByNameAsc(VendorStatus status, Pageable pageable);

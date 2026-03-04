@@ -157,6 +157,11 @@ export type CouponFormState = {
   endsAt: string;
 };
 
+export type BatchCouponFormState = {
+  prefix: string;
+  count: string;
+};
+
 /* ───── helpers ───── */
 
 export const money = (v: number | null | undefined) => v != null ? `$${Number(v).toFixed(2)}` : "\u2014";

@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
@@ -45,10 +46,11 @@ public class AdminVendorController {
     @GetMapping
     public Page<VendorResponse> listAll(
             @RequestHeader(INTERNAL_HEADER) String internalAuth,
+            @RequestParam(required = false) String q,
             @PageableDefault(size = 20, sort = "name") Pageable pageable
     ) {
         internalRequestVerifier.verify(internalAuth);
-        return vendorService.listAllNonDeleted(pageable);
+        return vendorService.listAllNonDeleted(q, pageable);
     }
 
     @GetMapping("/deleted")

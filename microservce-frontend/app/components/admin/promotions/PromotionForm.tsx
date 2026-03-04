@@ -33,6 +33,22 @@ export default function PromotionForm({
   onRemoveTier,
   onUpdateTier,
 }: Props) {
+  const handleBenefitTypeChange = (benefitType: BenefitType) => {
+    setField("benefitType", benefitType);
+
+    if (benefitType === "FREE_SHIPPING") {
+      setField("applicationLevel", "SHIPPING");
+    } else if (benefitType === "BUY_X_GET_Y") {
+      setField("applicationLevel", "LINE_ITEM");
+    } else {
+      setField("applicationLevel", "CART");
+    }
+
+    if (benefitType === "BUNDLE_DISCOUNT") {
+      setField("scopeType", "PRODUCT");
+    }
+  };
+
   return (
     <>
       <div className="mb-4">
@@ -75,7 +91,12 @@ export default function PromotionForm({
           <div className="grid gap-3 md:grid-cols-4">
             <div>
               <label className="form-label">Scope Type</label>
-              <select value={form.scopeType} onChange={(e) => setField("scopeType", e.target.value as ScopeType)} className="form-select">
+              <select
+                value={form.scopeType}
+                onChange={(e) => setField("scopeType", e.target.value as ScopeType)}
+                disabled={form.benefitType === "BUNDLE_DISCOUNT"}
+                className="form-select"
+              >
                 {(["ORDER", "VENDOR", "PRODUCT", "CATEGORY"] as const).map((v) => <option key={v} value={v}>{v}</option>)}
               </select>
             </div>
@@ -87,7 +108,7 @@ export default function PromotionForm({
             </div>
             <div>
               <label className="form-label">Benefit Type</label>
-              <select value={form.benefitType} onChange={(e) => setField("benefitType", e.target.value as BenefitType)} className="form-select">
+              <select value={form.benefitType} onChange={(e) => handleBenefitTypeChange(e.target.value as BenefitType)} className="form-select">
                 {(["PERCENTAGE_OFF", "FIXED_AMOUNT_OFF", "FREE_SHIPPING", "BUY_X_GET_Y", "TIERED_SPEND", "BUNDLE_DISCOUNT"] as const).map((v) => <option key={v} value={v}>{v.replace(/_/g, " ")}</option>)}
               </select>
             </div>

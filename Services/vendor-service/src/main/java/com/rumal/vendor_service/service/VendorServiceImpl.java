@@ -148,6 +148,16 @@ public class VendorServiceImpl implements VendorService {
 
     @Override
     public Page<VendorResponse> listAllNonDeleted(Pageable pageable) {
+        return listAllNonDeleted(null, pageable);
+    }
+
+    @Override
+    public Page<VendorResponse> listAllNonDeleted(String q, Pageable pageable) {
+        if (StringUtils.hasText(q)) {
+            String normalized = q.trim().toLowerCase(Locale.ROOT);
+            return vendorRepository.findByDeletedFalseAndNormalizedNameContainingOrderByNameAsc(normalized, pageable)
+                    .map(this::toVendorResponse);
+        }
         return vendorRepository.findByDeletedFalseOrderByNameAsc(pageable).map(this::toVendorResponse);
     }
 

@@ -3,7 +3,7 @@
 import { FormEvent } from "react";
 import toast from "react-hot-toast";
 import StatusBadge, { LIFECYCLE_COLORS, APPROVAL_COLORS, ACTIVE_INACTIVE_COLORS } from "../../ui/StatusBadge";
-import type { Promotion, CouponCode, Analytics, CouponFormState } from "./types";
+import type { Promotion, CouponCode, Analytics, CouponFormState, BatchCouponFormState } from "./types";
 import { money } from "./types";
 
 type WorkflowButton = {
@@ -33,6 +33,10 @@ type Props = {
   onCouponFormChange: (form: CouponFormState) => void;
   couponSubmitting: boolean;
   onCreateCoupon: (e: FormEvent) => void;
+  batchCouponForm: BatchCouponFormState;
+  onBatchCouponFormChange: (form: BatchCouponFormState) => void;
+  batchCouponSubmitting: boolean;
+  onCreateCouponBatch: (e: FormEvent) => void;
   /* analytics */
   analytics: Analytics | null;
 };
@@ -77,6 +81,10 @@ export default function PromotionDetailPanel({
   onCouponFormChange,
   couponSubmitting,
   onCreateCoupon,
+  batchCouponForm,
+  onBatchCouponFormChange,
+  batchCouponSubmitting,
+  onCreateCouponBatch,
   analytics,
 }: Props) {
   const buttons = getWorkflowButtons(promotion);
@@ -191,22 +199,77 @@ export default function PromotionDetailPanel({
       {/* Coupons tab */}
       {tab === "coupons" && (
         <div className="grid gap-4">
-          <form onSubmit={(e) => { void onCreateCoupon(e); }} className="grid items-end gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          <div className="rounded-lg border border-line bg-white/[0.02] p-3">
+            <h4 className="m-0 mb-2 text-ink">Single Coupon</h4>
+            <p className="m-0 text-[0.78rem] text-muted">Create one explicit coupon code.</p>
+          </div>
+          <form onSubmit={(e) => { void onCreateCoupon(e); }} className="grid gap-3">
+            <div className="grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              <div>
+                <label className="form-label">Code</label>
+                <input value={couponForm.code} onChange={(e) => onCouponFormChange({ ...couponForm, code: e.target.value })} placeholder="SUMMER20" className="form-input" />
+              </div>
+              <div>
+                <label className="form-label">Max Uses</label>
+                <input value={couponForm.maxUses} onChange={(e) => onCouponFormChange({ ...couponForm, maxUses: e.target.value })} placeholder="1000" className="form-input" />
+              </div>
+              <div>
+                <label className="form-label">Per Customer</label>
+                <input value={couponForm.maxUsesPerCustomer} onChange={(e) => onCouponFormChange({ ...couponForm, maxUsesPerCustomer: e.target.value })} placeholder="1" className="form-input" />
+              </div>
+              <div>
+                <label className="form-label">TTL (seconds)</label>
+                <input value={couponForm.reservationTtlSeconds} onChange={(e) => onCouponFormChange({ ...couponForm, reservationTtlSeconds: e.target.value })} placeholder="300" className="form-input" />
+              </div>
+              <label className="flex items-center gap-2 pb-2 text-[0.85rem] text-ink-light">
+                <input type="checkbox" checked={couponForm.active} onChange={(e) => onCouponFormChange({ ...couponForm, active: e.target.checked })} />
+                Active
+              </label>
+            </div>
+
+            <div className="grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div>
+                <label className="form-label">Starts At (optional)</label>
+                <input type="datetime-local" value={couponForm.startsAt} onChange={(e) => onCouponFormChange({ ...couponForm, startsAt: e.target.value })} className="form-input" />
+              </div>
+              <div>
+                <label className="form-label">Ends At (optional)</label>
+                <input type="datetime-local" value={couponForm.endsAt} onChange={(e) => onCouponFormChange({ ...couponForm, endsAt: e.target.value })} className="form-input" />
+              </div>
+              <div>
+                <button type="submit" disabled={couponSubmitting} className="btn-primary w-full rounded-md px-3.5 py-2.5 font-extrabold">
+                  {couponSubmitting ? "Creating..." : "Create Coupon"}
+                </button>
+              </div>
+            </div>
+          </form>
+
+          <div className="rounded-lg border border-line bg-white/[0.02] p-3">
+            <h4 className="m-0 mb-2 text-ink">Batch Coupons</h4>
+            <p className="m-0 text-[0.78rem] text-muted">Generate many coupon codes from a readable prefix. Users never need UUIDs.</p>
+          </div>
+          <form onSubmit={(e) => { void onCreateCouponBatch(e); }} className="grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
             <div>
-              <label className="form-label">Code</label>
-              <input value={couponForm.code} onChange={(e) => onCouponFormChange({ ...couponForm, code: e.target.value })} placeholder="SUMMER20" className="form-input" />
+              <label className="form-label">Prefix</label>
+              <input
+                value={batchCouponForm.prefix}
+                onChange={(e) => onBatchCouponFormChange({ ...batchCouponForm, prefix: e.target.value })}
+                placeholder="NEWYEAR"
+                className="form-input"
+              />
             </div>
             <div>
-              <label className="form-label">Max Uses</label>
-              <input value={couponForm.maxUses} onChange={(e) => onCouponFormChange({ ...couponForm, maxUses: e.target.value })} placeholder="1000" className="form-input" />
+              <label className="form-label">Count</label>
+              <input
+                value={batchCouponForm.count}
+                onChange={(e) => onBatchCouponFormChange({ ...batchCouponForm, count: e.target.value })}
+                placeholder="100"
+                className="form-input"
+              />
             </div>
-            <div>
-              <label className="form-label">Per Customer</label>
-              <input value={couponForm.maxUsesPerCustomer} onChange={(e) => onCouponFormChange({ ...couponForm, maxUsesPerCustomer: e.target.value })} placeholder="1" className="form-input" />
-            </div>
-            <div>
-              <button type="submit" disabled={couponSubmitting} className="btn-primary w-full rounded-md px-3.5 py-2.5 font-extrabold">
-                {couponSubmitting ? "Creating..." : "Create Coupon"}
+            <div className="sm:col-span-1 lg:col-span-2">
+              <button type="submit" disabled={batchCouponSubmitting} className="btn-primary mt-6 w-full rounded-md px-3.5 py-2.5 font-extrabold">
+                {batchCouponSubmitting ? "Generating..." : "Generate Batch Coupons"}
               </button>
             </div>
           </form>
@@ -224,6 +287,9 @@ export default function PromotionDetailPanel({
                   <div className="flex items-center gap-3 text-[0.78rem] text-muted">
                     {c.maxUses != null && <span>Max: {c.maxUses}</span>}
                     {c.maxUsesPerCustomer != null && <span>Per user: {c.maxUsesPerCustomer}</span>}
+                    {c.reservationTtlSeconds != null && <span>TTL: {c.reservationTtlSeconds}s</span>}
+                    {c.startsAt && <span>Starts: {new Date(c.startsAt).toLocaleDateString()}</span>}
+                    {c.endsAt && <span>Ends: {new Date(c.endsAt).toLocaleDateString()}</span>}
                     <span>{new Date(c.createdAt).toLocaleDateString()}</span>
                   </div>
                 </div>

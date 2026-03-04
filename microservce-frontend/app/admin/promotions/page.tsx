@@ -18,6 +18,7 @@ import type {
   FormState,
   SpendTier,
   CouponFormState,
+  BatchCouponFormState,
 } from "../../components/admin/promotions/types";
 import { emptyForm } from "../../components/admin/promotions/types";
 
@@ -67,6 +68,8 @@ export default function AdminPromotionsPage() {
   /* coupons */
   const [couponForm, setCouponForm] = useState<CouponFormState>({ code: "", maxUses: "", maxUsesPerCustomer: "", reservationTtlSeconds: "300", active: true, startsAt: "", endsAt: "" });
   const [couponSubmitting, setCouponSubmitting] = useState(false);
+  const [batchCouponForm, setBatchCouponForm] = useState<BatchCouponFormState>({ prefix: "", count: "10" });
+  const [batchCouponSubmitting, setBatchCouponSubmitting] = useState(false);
 
   /* tabs for selected promo */
   const [tab, setTab] = useState<"details" | "coupons" | "analytics">("details");
@@ -158,7 +161,7 @@ export default function AdminPromotionsPage() {
       setApprovalNote("");
       void queryClient.invalidateQueries({ queryKey: ["admin-promotions"] });
     },
-    onError: (e, { action }) => {
+    onError: (e) => {
       toast.error(getErrorMessage(e));
     },
     onSettled: () => {
@@ -209,6 +212,25 @@ export default function AdminPromotionsPage() {
     },
     onSettled: () => {
       setCouponSubmitting(false);
+    },
+  });
+
+  const createBatchCouponMutation = useMutation({
+    mutationFn: async (payload: object) => {
+      const res = await session.apiClient!.post(`/admin/promotions/${selected!.id}/coupons/batch`, payload);
+      return res.data as { requestedCount?: number; createdCount?: number };
+    },
+    onSuccess: (res) => {
+      const createdCount = res?.createdCount ?? 0;
+      toast.success(createdCount > 0 ? `${createdCount} coupons created` : "Coupons created");
+      setBatchCouponForm({ prefix: "", count: "10" });
+      void queryClient.invalidateQueries({ queryKey: ["admin-promotions", selected?.id, "coupons"] });
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err));
+    },
+    onSettled: () => {
+      setBatchCouponSubmitting(false);
     },
   });
 
@@ -263,20 +285,40 @@ export default function AdminPromotionsPage() {
         return parts.length ? parts : undefined;
       };
       const toNum = (s: string) => { const n = Number(s); return s.trim() && Number.isFinite(n) ? n : undefined; };
+      const isBogo = form.benefitType === "BUY_X_GET_Y";
+      const isTiered = form.benefitType === "TIERED_SPEND";
+      const isBundle = form.benefitType === "BUNDLE_DISCOUNT";
+      const isFreeShipping = form.benefitType === "FREE_SHIPPING";
+
+      const resolvedApplicationLevel = isFreeShipping
+        ? "SHIPPING"
+        : isBogo
+          ? "LINE_ITEM"
+          : "CART";
+      const resolvedScopeType = isBundle ? "PRODUCT" : form.scopeType;
+      const resolvedTargetProductIds = resolvedScopeType === "PRODUCT"
+        ? parseIds(form.targetProductIds)
+        : undefined;
+      const resolvedTargetCategoryIds = resolvedScopeType === "CATEGORY"
+        ? parseIds(form.targetCategoryIds)
+        : undefined;
+      const resolvedBenefitValue = isBogo || isTiered || isFreeShipping
+        ? undefined
+        : toNum(form.benefitValue);
 
       const payload = {
         name: form.name.trim(),
         description: form.description.trim(),
         vendorId: form.vendorId.trim() || null,
-        scopeType: form.scopeType,
-        targetProductIds: parseIds(form.targetProductIds),
-        targetCategoryIds: parseIds(form.targetCategoryIds),
-        applicationLevel: form.applicationLevel,
+        scopeType: resolvedScopeType,
+        targetProductIds: resolvedTargetProductIds,
+        targetCategoryIds: resolvedTargetCategoryIds,
+        applicationLevel: resolvedApplicationLevel,
         benefitType: form.benefitType,
-        benefitValue: toNum(form.benefitValue),
-        buyQuantity: toNum(form.buyQuantity),
-        getQuantity: toNum(form.getQuantity),
-        spendTiers: form.spendTiers.length ? form.spendTiers : undefined,
+        benefitValue: resolvedBenefitValue,
+        buyQuantity: isBogo ? toNum(form.buyQuantity) : undefined,
+        getQuantity: isBogo ? toNum(form.getQuantity) : undefined,
+        spendTiers: isTiered && form.spendTiers.length ? form.spendTiers : undefined,
         minimumOrderAmount: toNum(form.minimumOrderAmount),
         maximumDiscountAmount: toNum(form.maximumDiscountAmount),
         budgetAmount: toNum(form.budgetAmount),
@@ -317,6 +359,33 @@ export default function AdminPromotionsPage() {
     } catch (err) {
       toast.error(getErrorMessage(err));
       setCouponSubmitting(false);
+    }
+  };
+
+  const createCouponBatch = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!session.apiClient || !selected || batchCouponSubmitting) return;
+    setBatchCouponSubmitting(true);
+    try {
+      if (!batchCouponForm.prefix.trim()) throw new Error("Coupon prefix is required");
+      const toInt = (s: string) => { const n = parseInt(s, 10); return s.trim() && Number.isFinite(n) ? n : undefined; };
+      const count = toInt(batchCouponForm.count);
+      if (!count || count < 1) throw new Error("Batch count must be at least 1");
+
+      const payload = {
+        prefix: batchCouponForm.prefix.trim().toUpperCase(),
+        count,
+        maxUses: toInt(couponForm.maxUses),
+        maxUsesPerCustomer: toInt(couponForm.maxUsesPerCustomer),
+        reservationTtlSeconds: toInt(couponForm.reservationTtlSeconds),
+        active: couponForm.active,
+        startsAt: toIsoOrNull(couponForm.startsAt),
+        endsAt: toIsoOrNull(couponForm.endsAt),
+      };
+      createBatchCouponMutation.mutate(payload);
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+      setBatchCouponSubmitting(false);
     }
   };
 
@@ -373,6 +442,10 @@ export default function AdminPromotionsPage() {
           onCouponFormChange={setCouponForm}
           couponSubmitting={couponSubmitting}
           onCreateCoupon={createCoupon}
+          batchCouponForm={batchCouponForm}
+          onBatchCouponFormChange={setBatchCouponForm}
+          batchCouponSubmitting={batchCouponSubmitting}
+          onCreateCouponBatch={createCouponBatch}
           analytics={analytics}
         />
       )}

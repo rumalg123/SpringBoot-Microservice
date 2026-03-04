@@ -31,6 +31,7 @@ public interface VendorService {
     VendorResponse getAdminById(UUID id);
     Page<PublicVendorResponse> listPublicActive(String category, Pageable pageable);
     Page<VendorResponse> listAllNonDeleted(Pageable pageable);
+    Page<VendorResponse> listAllNonDeleted(String q, Pageable pageable);
     Page<VendorResponse> listDeleted(Pageable pageable);
     Page<VendorLifecycleAuditResponse> listLifecycleAudit(UUID id, Pageable pageable);
     VendorDeletionEligibilityResponse getDeletionEligibility(UUID id);
