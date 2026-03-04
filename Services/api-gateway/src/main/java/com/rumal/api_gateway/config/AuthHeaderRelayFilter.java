@@ -36,8 +36,8 @@ public class AuthHeaderRelayFilter implements GlobalFilter, Ordered {
             @Value("${internal.auth.shared-secret:}") String internalSharedSecret,
             @Value("${keycloak.claims-namespace:}") String claimsNamespace
     ) {
-        this.internalSharedSecret = internalSharedSecret;
-        if (claimsNamespace.isBlank()) {
+        this.internalSharedSecret = internalSharedSecret == null ? "" : internalSharedSecret.trim();
+        if (claimsNamespace == null || claimsNamespace.isBlank()) {
             this.claimsNamespace = "";
         } else {
             this.claimsNamespace = claimsNamespace.endsWith("/") ? claimsNamespace : claimsNamespace + "/";

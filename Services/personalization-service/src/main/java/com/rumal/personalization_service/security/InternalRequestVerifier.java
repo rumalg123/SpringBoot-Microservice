@@ -22,30 +22,42 @@ public class InternalRequestVerifier {
     private final String sharedSecret;
 
     public InternalRequestVerifier(@Value("${internal.auth.shared-secret:}") String sharedSecret) {
-        this.sharedSecret = sharedSecret;
+        this.sharedSecret = sharedSecret == null ? "" : sharedSecret.trim();
     }
 
     public void verify(String headerValue) {
-        if (sharedSecret == null || sharedSecret.isBlank()) {
+        if (sharedSecret.isBlank()) {
             throw new UnauthorizedException("Internal auth secret is not configured");
         }
-        if (headerValue == null || !MessageDigest.isEqual(sharedSecret.getBytes(StandardCharsets.UTF_8), headerValue.getBytes(StandardCharsets.UTF_8))) {
+
+        String normalizedHeader = headerValue == null ? "" : headerValue.trim();
+        boolean headerMatches = !normalizedHeader.isBlank()
+                && MessageDigest.isEqual(
+                sharedSecret.getBytes(StandardCharsets.UTF_8),
+                normalizedHeader.getBytes(StandardCharsets.UTF_8)
+        );
+
+        if (!headerMatches && !verifyHmacFromRequest()) {
             throw new UnauthorizedException("Invalid internal authentication header");
         }
+
+        // If caller sent signature headers, they must always validate.
         verifyHmacFromRequest();
     }
 
-    private void verifyHmacFromRequest() {
+    private boolean verifyHmacFromRequest() {
         var attrs = RequestContextHolder.getRequestAttributes();
         if (!(attrs instanceof ServletRequestAttributes sra)) {
-            return;
+            return false;
         }
+
         HttpServletRequest request = sra.getRequest();
         String signature = request.getHeader("X-Internal-Signature");
         String timestampStr = request.getHeader("X-Internal-Timestamp");
         if (signature == null || timestampStr == null) {
-            return; // HMAC not yet deployed by caller — graceful
+            return false;
         }
+
         long timestamp;
         try {
             timestamp = Long.parseLong(timestampStr);
@@ -55,8 +67,11 @@ public class InternalRequestVerifier {
         if (Math.abs(System.currentTimeMillis() - timestamp) > MAX_TIMESTAMP_DRIFT_MS) {
             throw new UnauthorizedException("Internal request timestamp expired");
         }
+
         String signedPath = request.getHeader("X-Internal-Path");
-        String canonicalPath = (signedPath != null && !signedPath.isBlank()) ? signedPath : request.getRequestURI();
+        String canonicalPath = (signedPath != null && !signedPath.isBlank())
+                ? signedPath
+                : request.getRequestURI();
 
         // Prefer gateway-provided body hash if present to avoid proxy/body-wrapper drift.
         String signedBodyHash = request.getHeader("X-Internal-Body-Hash");
@@ -64,9 +79,14 @@ public class InternalRequestVerifier {
 
         String payload = timestampStr + ":" + request.getMethod() + ":" + canonicalPath + ":" + bodyHash;
         String expected = computeHmac(payload);
-        if (!MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8), signature.getBytes(StandardCharsets.UTF_8))) {
+        if (!MessageDigest.isEqual(
+                expected.getBytes(StandardCharsets.UTF_8),
+                signature.getBytes(StandardCharsets.UTF_8)
+        )) {
             throw new UnauthorizedException("Invalid internal HMAC signature");
         }
+
+        return true;
     }
 
     private String computeBodyHash(HttpServletRequest request) {
@@ -81,9 +101,8 @@ public class InternalRequestVerifier {
             } else {
                 body = request.getInputStream().readAllBytes();
             }
-            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(body);
-            return HexFormat.of().formatHex(hash);
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(body));
         } catch (Exception e) {
             return "";
         }
@@ -106,9 +125,11 @@ public class InternalRequestVerifier {
         if (body != null && body.length > 0
                 && ("POST".equals(method) || "PUT".equals(method) || "PATCH".equals(method))) {
             try {
-                java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+                MessageDigest digest = MessageDigest.getInstance("SHA-256");
                 bodyHash = HexFormat.of().formatHex(digest.digest(body));
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+                // Preserve compatibility with existing callers.
+            }
         }
         String payload = timestamp + ":" + method + ":" + path + ":" + bodyHash;
         try {

@@ -68,6 +68,14 @@ public class PaymentService {
             throw new com.rumal.payment_service.exception.UnauthorizedException(
                     "You are not authorized to pay for this order");
         }
+        String customerEmail = requireNonBlank(
+                customer.email(),
+                "Customer email is required to initiate payment. Please update your profile and retry."
+        );
+        String customerPhone = requireNonBlank(
+                customer.phone(),
+                "Customer phone number is required to initiate payment. Please update your profile and retry."
+        );
 
         // 3. Validate order status and transition PENDING → PAYMENT_PENDING
         if (!"PENDING".equals(order.status()) && !"PAYMENT_PENDING".equals(order.status())) {
@@ -150,8 +158,8 @@ public class PaymentService {
                     .itemsDescription(itemsDesc)
                     .customerFirstName(firstName)
                     .customerLastName(lastName)
-                    .customerEmail(customer.email())
-                    .customerPhone(customer.phone())
+                    .customerEmail(customerEmail)
+                    .customerPhone(customerPhone)
                     .customerAddress(customerAddress)
                     .customerCity(customerCity)
                     .customerCountry(customerCountry)
@@ -437,6 +445,13 @@ public class PaymentService {
                     "Order inventory reservation is not ready yet. Please retry in a few seconds."
             );
         }
+    }
+
+    private String requireNonBlank(String value, String message) {
+        if (value == null || value.isBlank()) {
+            throw new ValidationException(message);
+        }
+        return value.trim();
     }
 
     private PaymentResponse toPaymentResponse(Payment p) {
