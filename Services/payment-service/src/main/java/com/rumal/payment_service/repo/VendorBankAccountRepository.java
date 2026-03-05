@@ -18,6 +18,8 @@ public interface VendorBankAccountRepository extends JpaRepository<VendorBankAcc
 
     Page<VendorBankAccount> findByVendorIdAndActiveTrue(UUID vendorId, Pageable pageable);
 
+    Page<VendorBankAccount> findByVendorId(UUID vendorId, Pageable pageable);
+
     List<VendorBankAccount> findByVendorIdAndActiveTrue(UUID vendorId);
 
     Optional<VendorBankAccount> findByVendorIdAndPrimaryTrueAndActiveTrue(UUID vendorId);

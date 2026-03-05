@@ -36,6 +36,7 @@ export default function VendorBankAccountsPage() {
   const session = useAuthSession();
   const { status: sessionStatus, isAuthenticated, apiClient } = session;
   const canViewFinance = session.isVendorAdmin || session.canViewVendorFinance;
+  const canManageFinance = session.isVendorAdmin || session.canManageVendorFinance;
   const queryClient = useQueryClient();
 
   const [showForm, setShowForm] = useState(false);
@@ -49,7 +50,7 @@ export default function VendorBankAccountsPage() {
   const { data: accounts = [], isLoading: loading } = useQuery({
     queryKey: ["vendor-bank-accounts"],
     queryFn: async () => {
-      const res = await apiClient!.get("/admin/payments/bank-accounts?size=100");
+      const res = await apiClient!.get("/payments/vendor/me/bank-accounts?size=100");
       const data = res.data as { content: BankAccount[] };
       return data.content || [];
     },
@@ -66,7 +67,7 @@ export default function VendorBankAccountsPage() {
         if (form.accountNumber.trim()) body.accountNumber = form.accountNumber.trim();
         if (form.accountHolderName.trim()) body.accountHolderName = form.accountHolderName.trim();
         if (form.swiftCode.trim()) body.swiftCode = form.swiftCode.trim();
-        await apiClient!.put(`/admin/payments/bank-accounts/${editingId}`, body);
+        await apiClient!.put(`/payments/vendor/me/bank-accounts/${editingId}`, body);
       } else {
         const body = {
           bankName: form.bankName.trim(),
@@ -76,7 +77,7 @@ export default function VendorBankAccountsPage() {
           accountHolderName: form.accountHolderName.trim(),
           swiftCode: form.swiftCode.trim() || null,
         };
-        await apiClient!.post("/admin/payments/bank-accounts", body);
+        await apiClient!.post("/payments/vendor/me/bank-accounts", body);
       }
     },
     onSuccess: () => {
@@ -92,7 +93,7 @@ export default function VendorBankAccountsPage() {
 
   const deactivateMutation = useMutation({
     mutationFn: async (id: string) => {
-      await apiClient!.delete(`/admin/payments/bank-accounts/${id}`);
+      await apiClient!.delete(`/payments/vendor/me/bank-accounts/${id}`);
       return id;
     },
     onMutate: (id) => { setDeletingId(id); },
@@ -108,7 +109,7 @@ export default function VendorBankAccountsPage() {
 
   const setPrimaryMutation = useMutation({
     mutationFn: async (id: string) => {
-      await apiClient!.post(`/admin/payments/bank-accounts/${id}/set-primary`);
+      await apiClient!.post(`/payments/vendor/me/bank-accounts/${id}/set-primary`);
       return id;
     },
     onMutate: (id) => { setSettingPrimaryId(id); },
@@ -163,7 +164,7 @@ export default function VendorBankAccountsPage() {
       <VendorPageShell
         title="Bank Accounts"
         breadcrumbs={[{ label: "Vendor Portal", href: "/vendor" }, { label: "Bank Accounts" }]}
-        actions={
+        actions={canManageFinance ? (
           <button
             type="button"
             onClick={showForm ? () => { setShowForm(false); setEditingId(null); } : openCreate}
@@ -171,11 +172,11 @@ export default function VendorBankAccountsPage() {
           >
             {showForm ? "Cancel" : "+ Add Account"}
           </button>
-        }
+        ) : null}
       >
 
         {/* Form */}
-        {showForm && (
+        {showForm && canManageFinance && (
           <div className="mb-6 p-5 rounded-[14px] bg-[var(--card)] border border-line-bright">
             <h3 className="text-white text-[0.95rem] font-bold mb-4">
               {editingId ? "Edit Bank Account" : "Add Bank Account"}
@@ -277,7 +278,7 @@ export default function VendorBankAccountsPage() {
                       )}
                     </div>
                   </div>
-                  {a.active && (
+                  {a.active && canManageFinance && (
                     <div className="flex gap-1.5 shrink-0">
                       {!a.primary && (
                         <button

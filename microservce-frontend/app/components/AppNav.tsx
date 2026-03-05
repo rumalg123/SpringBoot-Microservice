@@ -15,11 +15,13 @@ type Props = {
   isVendorStaff?: boolean;
   canViewAdmin?: boolean;
   canManageAdminOrders?: boolean;
+  canManageAdminPayments?: boolean;
   canManageAdminProducts?: boolean;
   canManageAdminCategories?: boolean;
   canManageAdminVendors?: boolean;
   canManageAdminPosters?: boolean;
   canManageAdminPromotions?: boolean;
+  canManageAdminReviews?: boolean;
   canManageAdminInventory?: boolean;
   canViewVendorAnalytics?: boolean;
   canViewVendorFinance?: boolean;
@@ -63,11 +65,13 @@ export default function AppNav({
   isVendorStaff = false,
   canViewAdmin = false,
   canManageAdminOrders,
+  canManageAdminPayments,
   canManageAdminProducts,
   canManageAdminCategories,
   canManageAdminVendors,
   canManageAdminPosters,
   canManageAdminPromotions,
+  canManageAdminReviews,
   canManageAdminInventory,
   canViewVendorAnalytics,
   canViewVendorFinance,
@@ -111,10 +115,12 @@ export default function AppNav({
 
   const canAccessVendorPortal = isVendorAdmin || isVendorStaff;
   const showAdminOrders = canManageAdminOrders ?? canViewAdmin;
+  const showAdminPayments = canManageAdminPayments ?? isSuperAdmin;
   const showAdminProducts = canManageAdminProducts ?? canViewAdmin;
   const showAdminVendors = canManageAdminVendors ?? isSuperAdmin;
   const showAdminPosters = canManageAdminPosters ?? canViewAdmin;
   const showAdminPromotions = canManageAdminPromotions ?? canViewAdmin;
+  const showAdminReviews = canManageAdminReviews ?? isSuperAdmin;
   const showAdminCategories = canManageAdminCategories ?? isSuperAdmin;
   const showAdminInventory = canManageAdminInventory ?? showAdminProducts;
   const showVendorStaffAdmin = isSuperAdmin || isVendorAdmin;
@@ -157,8 +163,8 @@ export default function AppNav({
     { href: "/admin/vendor-staff", label: "Vendor Staff", show: showVendorStaffAdmin, color: "admin" },
     { href: "/admin/platform-staff", label: "Platform Staff", show: showAdminVendors, color: "admin" },
     { href: "/admin/posters", label: "Admin Posters", show: showAdminPosters, color: "admin" },
-    { href: "/admin/reviews", label: "Reviews", show: canViewAdmin, color: "admin" },
-    { href: "/admin/payments", label: "Payments", show: canViewAdmin, color: "admin" },
+    { href: "/admin/reviews", label: "Reviews", show: showAdminReviews, color: "admin" },
+    { href: "/admin/payments", label: "Payments", show: showAdminPayments, color: "admin" },
     { href: "/admin/api-keys", label: "API Keys", show: isSuperAdmin, color: "admin" },
     { href: "/admin/sessions", label: "Sessions", show: isSuperAdmin, color: "admin" },
     { href: "/admin/settings", label: "Settings", show: isSuperAdmin, color: "admin" },
@@ -166,7 +172,7 @@ export default function AppNav({
     { href: "/admin/inventory", label: "Inventory", show: showAdminInventory, color: "admin" },
     { href: "/admin/permission-groups", label: "Permissions", show: isSuperAdmin, color: "admin" },
     { href: "/admin/access-audit", label: "Access Audit", show: isSuperAdmin, color: "admin" },
-  ], [isSuperAdmin, canAccessVendorPortal, canViewAdmin, showAdminOrders, showAdminProducts, showAdminVendors, showAdminPosters, showAdminPromotions, showAdminCategories, showAdminInventory, showVendorStaffAdmin, showVendorOrders, showVendorProducts, showVendorInventory, showVendorPromotions, showVendorAnalytics, showVendorReviews, showVendorFinance, showVendorSettings]);
+  ], [isSuperAdmin, canAccessVendorPortal, canViewAdmin, showAdminOrders, showAdminPayments, showAdminProducts, showAdminVendors, showAdminPosters, showAdminPromotions, showAdminReviews, showAdminCategories, showAdminInventory, showVendorStaffAdmin, showVendorOrders, showVendorProducts, showVendorInventory, showVendorPromotions, showVendorAnalytics, showVendorReviews, showVendorFinance, showVendorSettings]);
 
   const userLinks = navItems.filter((i) => i.color === "brand" && i.show);
   const vendorLinks = navItems.filter((i) => i.color === "vendor" && i.show);

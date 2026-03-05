@@ -169,7 +169,7 @@ public class KeycloakVendorAdminManagementService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "q is required");
         }
 
-        int safeLimit = Math.max(1, Math.min(limit, 20));
+        int safeLimit = Math.max(1, Math.min(limit, 200));
 
         return runKeycloakCall(() -> {
             try {

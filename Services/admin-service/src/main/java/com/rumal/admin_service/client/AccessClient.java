@@ -94,12 +94,20 @@ public class AccessClient {
     }
 
     public List<Map<String, Object>> listVendorStaff(UUID vendorId, String internalAuth) {
+        return listVendorStaff(vendorId, internalAuth, null, null);
+    }
+
+    public List<Map<String, Object>> listVendorStaff(UUID vendorId, String internalAuth, String userRoles, UUID callerVendorId) {
         String path = vendorId == null ? "/admin/vendor-staff" : "/admin/vendor-staff?vendorId=" + vendorId;
-        return getPagedContentList(path, internalAuth);
+        return getPagedContentList(path, internalAuth, null, userRoles, null, callerVendorId);
     }
 
     public List<Map<String, Object>> listDeletedVendorStaff(String internalAuth) {
-        return getPagedContentList("/admin/vendor-staff/deleted", internalAuth);
+        return listDeletedVendorStaff(internalAuth, null, null);
+    }
+
+    public List<Map<String, Object>> listDeletedVendorStaff(String internalAuth, String userRoles, UUID callerVendorId) {
+        return getPagedContentList("/admin/vendor-staff/deleted", internalAuth, null, userRoles, null, callerVendorId);
     }
 
     public Map<String, Object> listAccessAudit(
@@ -160,7 +168,11 @@ public class AccessClient {
     }
 
     public Map<String, Object> getVendorStaffById(UUID id, String internalAuth) {
-        return getMap("/admin/vendor-staff/" + id, internalAuth);
+        return getVendorStaffById(id, internalAuth, null, null);
+    }
+
+    public Map<String, Object> getVendorStaffById(UUID id, String internalAuth, String userRoles, UUID callerVendorId) {
+        return getMap("/admin/vendor-staff/" + id, internalAuth, null, userRoles, null, callerVendorId);
     }
 
     public Map<String, Object> createVendorStaff(Map<String, Object> request, String internalAuth) {
@@ -184,7 +196,11 @@ public class AccessClient {
     }
 
     public void deleteVendorStaff(UUID id, String internalAuth, String userSub, String userRoles, String actionReason) {
-        deleteNoContent("/admin/vendor-staff/" + id, internalAuth, userSub, userRoles, actionReason);
+        deleteVendorStaff(id, internalAuth, userSub, userRoles, actionReason, null);
+    }
+
+    public void deleteVendorStaff(UUID id, String internalAuth, String userSub, String userRoles, String actionReason, UUID callerVendorId) {
+        deleteNoContent("/admin/vendor-staff/" + id, internalAuth, userSub, userRoles, actionReason, callerVendorId);
     }
 
     public Map<String, Object> restoreVendorStaff(UUID id, String internalAuth) {
@@ -192,12 +208,28 @@ public class AccessClient {
     }
 
     public Map<String, Object> restoreVendorStaff(UUID id, String internalAuth, String userSub, String userRoles, String actionReason) {
-        return postNoBody("/admin/vendor-staff/" + id + "/restore", internalAuth, userSub, userRoles, actionReason);
+        return restoreVendorStaff(id, internalAuth, userSub, userRoles, actionReason, null);
+    }
+
+    public Map<String, Object> restoreVendorStaff(UUID id, String internalAuth, String userSub, String userRoles, String actionReason, UUID callerVendorId) {
+        return postNoBody("/admin/vendor-staff/" + id + "/restore", internalAuth, userSub, userRoles, actionReason, callerVendorId);
     }
 
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> getPagedContentList(String path, String internalAuth) {
-        Map<String, Object> page = getMap(path, internalAuth);
+        return getPagedContentList(path, internalAuth, null, null, null, null);
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> getPagedContentList(
+            String path,
+            String internalAuth,
+            String userSub,
+            String userRoles,
+            String actionReason,
+            UUID callerVendorId
+    ) {
+        Map<String, Object> page = getMap(path, internalAuth, userSub, userRoles, actionReason, callerVendorId);
         Object content = page.get("content");
         if (content instanceof List<?> list) {
             return list.stream()
@@ -225,11 +257,24 @@ public class AccessClient {
     }
 
     private Map<String, Object> getMap(String path, String internalAuth) {
+        return getMap(path, internalAuth, null, null, null, null);
+    }
+
+    private Map<String, Object> getMap(
+            String path,
+            String internalAuth,
+            String userSub,
+            String userRoles,
+            String actionReason,
+            UUID callerVendorId
+    ) {
         return runAccessCall(() -> {
             RestClient rc = restClient;
             try {
-                Map<String, Object> response = rc.get().uri(buildUri(path))
-                        .header("X-Internal-Auth", internalAuth)
+                Map<String, Object> response = applyActorHeaders(
+                        rc.get().uri(buildUri(path)).header("X-Internal-Auth", internalAuth),
+                        userSub, userRoles, actionReason, callerVendorId
+                )
                         .retrieve().body(MAP_TYPE);
                 if (response == null) {
                     throw new ServiceUnavailableException("Access service returned an empty response", null);
@@ -244,10 +289,23 @@ public class AccessClient {
     }
 
     private Map<String, Object> jsonRequest(String method, String path, Map<String, Object> request, String internalAuth) {
-        return jsonRequest(method, path, request, internalAuth, null, null, null);
+        return jsonRequest(method, path, request, internalAuth, null, null, null, null);
     }
 
     private Map<String, Object> jsonRequest(String method, String path, Map<String, Object> request, String internalAuth, String userSub, String userRoles, String actionReason) {
+        return jsonRequest(method, path, request, internalAuth, userSub, userRoles, actionReason, null);
+    }
+
+    private Map<String, Object> jsonRequest(
+            String method,
+            String path,
+            Map<String, Object> request,
+            String internalAuth,
+            String userSub,
+            String userRoles,
+            String actionReason,
+            UUID callerVendorId
+    ) {
         return runAccessCall(() -> {
             RestClient rc = restClient;
             try {
@@ -256,7 +314,7 @@ public class AccessClient {
                     case "PUT" -> rc.put().uri(buildUri(path));
                     default -> throw new IllegalArgumentException("Unsupported method: " + method);
                 };
-                Map<String, Object> response = ((RestClient.RequestBodySpec) applyActorHeaders(spec.header("X-Internal-Auth", internalAuth), userSub, userRoles, actionReason))
+                Map<String, Object> response = ((RestClient.RequestBodySpec) applyActorHeaders(spec.header("X-Internal-Auth", internalAuth), userSub, userRoles, actionReason, callerVendorId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .body(request)
                         .retrieve()
@@ -274,14 +332,25 @@ public class AccessClient {
     }
 
     private void deleteNoContent(String path, String internalAuth) {
-        deleteNoContent(path, internalAuth, null, null, null);
+        deleteNoContent(path, internalAuth, null, null, null, null);
     }
 
     private void deleteNoContent(String path, String internalAuth, String userSub, String userRoles, String actionReason) {
+        deleteNoContent(path, internalAuth, userSub, userRoles, actionReason, null);
+    }
+
+    private void deleteNoContent(
+            String path,
+            String internalAuth,
+            String userSub,
+            String userRoles,
+            String actionReason,
+            UUID callerVendorId
+    ) {
         runAccessVoid(() -> {
             RestClient rc = restClient;
             try {
-                applyActorHeaders(rc.delete().uri(buildUri(path)).header("X-Internal-Auth", internalAuth), userSub, userRoles, actionReason)
+                applyActorHeaders(rc.delete().uri(buildUri(path)).header("X-Internal-Auth", internalAuth), userSub, userRoles, actionReason, callerVendorId)
                         .retrieve().toBodilessEntity();
             } catch (RestClientResponseException ex) {
                 throw toDownstream(ex);
@@ -292,15 +361,26 @@ public class AccessClient {
     }
 
     private Map<String, Object> postNoBody(String path, String internalAuth) {
-        return postNoBody(path, internalAuth, null, null, null);
+        return postNoBody(path, internalAuth, null, null, null, null);
     }
 
     private Map<String, Object> postNoBody(String path, String internalAuth, String userSub, String userRoles, String actionReason) {
+        return postNoBody(path, internalAuth, userSub, userRoles, actionReason, null);
+    }
+
+    private Map<String, Object> postNoBody(
+            String path,
+            String internalAuth,
+            String userSub,
+            String userRoles,
+            String actionReason,
+            UUID callerVendorId
+    ) {
         return runAccessCall(() -> {
             RestClient rc = restClient;
             try {
                 Map<String, Object> response = applyActorHeaders(rc.post().uri(buildUri(path))
-                        .header("X-Internal-Auth", internalAuth), userSub, userRoles, actionReason)
+                        .header("X-Internal-Auth", internalAuth), userSub, userRoles, actionReason, callerVendorId)
                         .retrieve().body(MAP_TYPE);
                 if (response == null) {
                     throw new ServiceUnavailableException("Access service returned an empty response", null);
@@ -339,6 +419,16 @@ public class AccessClient {
             String userRoles,
             String actionReason
     ) {
+        return applyActorHeaders(spec, userSub, userRoles, actionReason, null);
+    }
+
+    private RestClient.RequestHeadersSpec<?> applyActorHeaders(
+            RestClient.RequestHeadersSpec<?> spec,
+            String userSub,
+            String userRoles,
+            String actionReason,
+            UUID callerVendorId
+    ) {
         RestClient.RequestHeadersSpec<?> next = spec;
         if (StringUtils.hasText(userSub)) {
             next = next.header("X-User-Sub", userSub);
@@ -348,6 +438,9 @@ public class AccessClient {
         }
         if (StringUtils.hasText(actionReason)) {
             next = next.header("X-Action-Reason", actionReason.trim());
+        }
+        if (callerVendorId != null) {
+            next = next.header("X-Caller-Vendor-Id", String.valueOf(callerVendorId));
         }
         return next;
     }

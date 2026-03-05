@@ -44,7 +44,7 @@ public class AdminVendorStaffController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         UUID scopedVendorId = adminActorScopeService.resolveScopedVendorIdForVendorStaffManagement(userSub, userRoles, vendorId, internalAuth);
-        return adminAccessService.listVendorStaff(scopedVendorId, internalAuth);
+        return adminAccessService.listVendorStaff(scopedVendorId, internalAuth, userRoles, scopedVendorId);
     }
 
     @GetMapping("/deleted")
@@ -56,7 +56,7 @@ public class AdminVendorStaffController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         UUID scopedVendorId = adminActorScopeService.resolveScopedVendorIdForVendorStaffManagement(userSub, userRoles, vendorId, internalAuth);
-        List<Map<String, Object>> rows = adminAccessService.listDeletedVendorStaff(internalAuth);
+        List<Map<String, Object>> rows = adminAccessService.listDeletedVendorStaff(internalAuth, userRoles, scopedVendorId);
         if (scopedVendorId == null) {
             return rows;
         }
@@ -87,13 +87,15 @@ public class AdminVendorStaffController {
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
+            @RequestParam(required = false) UUID vendorId,
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
-        Map<String, Object> row = adminAccessService.getVendorStaffById(id, internalAuth);
-        UUID vendorId = parseUuid(row.get("vendorId"));
-        if (vendorId != null) {
-            adminActorScopeService.assertCanManageVendorStaffVendor(userSub, userRoles, vendorId, internalAuth);
+        UUID scopedVendorId = adminActorScopeService.resolveScopedVendorIdForVendorStaffManagement(userSub, userRoles, vendorId, internalAuth);
+        Map<String, Object> row = adminAccessService.getVendorStaffById(id, internalAuth, userRoles, scopedVendorId);
+        UUID rowVendorId = parseUuid(row.get("vendorId"));
+        if (rowVendorId != null) {
+            adminActorScopeService.assertCanManageVendorStaffVendor(userSub, userRoles, rowVendorId, internalAuth);
         }
         return row;
     }
@@ -104,17 +106,24 @@ public class AdminVendorStaffController {
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @RequestHeader(value = "X-Action-Reason", required = false) String actionReason,
+            @RequestParam(required = false) UUID vendorId,
             @PathVariable UUID id,
             @RequestBody @NotNull Map<String, Object> request
     ) {
         internalRequestVerifier.verify(internalAuth);
-        Map<String, Object> existing = adminAccessService.getVendorStaffById(id, internalAuth);
-        UUID vendorId = parseUuid(request.get("vendorId"));
-        if (vendorId == null) {
-            vendorId = parseUuid(existing.get("vendorId"));
+        UUID requestedVendorId = parseUuid(request.get("vendorId"));
+        if (requestedVendorId == null) {
+            requestedVendorId = vendorId;
         }
-        UUID scopedVendorId = adminActorScopeService.resolveScopedVendorIdForVendorStaffManagement(userSub, userRoles, vendorId, internalAuth);
-        Map<String, Object> updated = adminAccessService.updateVendorStaff(id, withVendorId(request, scopedVendorId), internalAuth, userSub, userRoles, actionReason);
+        UUID scopedVendorId = adminActorScopeService.resolveScopedVendorIdForVendorStaffManagement(userSub, userRoles, requestedVendorId, internalAuth);
+        Map<String, Object> existing = adminAccessService.getVendorStaffById(id, internalAuth, userRoles, scopedVendorId);
+        UUID existingVendorId = parseUuid(existing.get("vendorId"));
+        UUID effectiveVendorId = requestedVendorId != null ? requestedVendorId : existingVendorId;
+        if (effectiveVendorId != null) {
+            adminActorScopeService.assertCanManageVendorStaffVendor(userSub, userRoles, effectiveVendorId, internalAuth);
+        }
+        UUID updateVendorId = scopedVendorId != null ? scopedVendorId : effectiveVendorId;
+        Map<String, Object> updated = adminAccessService.updateVendorStaff(id, withVendorId(request, updateVendorId), internalAuth, userSub, userRoles, actionReason);
         adminVendorService.syncVendorStaffMembershipTransition(existing, updated, internalAuth);
         return updated;
     }
@@ -126,15 +135,17 @@ public class AdminVendorStaffController {
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @RequestHeader(value = "X-Action-Reason", required = false) String actionReason,
+            @RequestParam(required = false) UUID vendorId,
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
-        Map<String, Object> existing = adminAccessService.getVendorStaffById(id, internalAuth);
-        UUID vendorId = parseUuid(existing.get("vendorId"));
-        if (vendorId != null) {
-            adminActorScopeService.assertCanManageVendorStaffVendor(userSub, userRoles, vendorId, internalAuth);
+        UUID scopedVendorId = adminActorScopeService.resolveScopedVendorIdForVendorStaffManagement(userSub, userRoles, vendorId, internalAuth);
+        Map<String, Object> existing = adminAccessService.getVendorStaffById(id, internalAuth, userRoles, scopedVendorId);
+        UUID existingVendorId = parseUuid(existing.get("vendorId"));
+        if (existingVendorId != null) {
+            adminActorScopeService.assertCanManageVendorStaffVendor(userSub, userRoles, existingVendorId, internalAuth);
         }
-        adminAccessService.deleteVendorStaff(id, internalAuth, userSub, userRoles, actionReason);
+        adminAccessService.deleteVendorStaff(id, internalAuth, userSub, userRoles, actionReason, scopedVendorId);
         adminVendorService.syncVendorStaffMembershipTransition(existing, null, internalAuth);
     }
 
@@ -144,15 +155,17 @@ public class AdminVendorStaffController {
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @RequestHeader(value = "X-Action-Reason", required = false) String actionReason,
+            @RequestParam(required = false) UUID vendorId,
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
-        Map<String, Object> existing = adminAccessService.getVendorStaffById(id, internalAuth);
-        UUID vendorId = parseUuid(existing.get("vendorId"));
-        if (vendorId != null) {
-            adminActorScopeService.assertCanManageVendorStaffVendor(userSub, userRoles, vendorId, internalAuth);
+        UUID scopedVendorId = adminActorScopeService.resolveScopedVendorIdForVendorStaffManagement(userSub, userRoles, vendorId, internalAuth);
+        Map<String, Object> existing = adminAccessService.getVendorStaffById(id, internalAuth, userRoles, scopedVendorId);
+        UUID existingVendorId = parseUuid(existing.get("vendorId"));
+        if (existingVendorId != null) {
+            adminActorScopeService.assertCanManageVendorStaffVendor(userSub, userRoles, existingVendorId, internalAuth);
         }
-        Map<String, Object> restored = adminAccessService.restoreVendorStaff(id, internalAuth, userSub, userRoles, actionReason);
+        Map<String, Object> restored = adminAccessService.restoreVendorStaff(id, internalAuth, userSub, userRoles, actionReason, scopedVendorId);
         adminVendorService.syncVendorStaffMembershipTransition(existing, restored, internalAuth);
         return restored;
     }

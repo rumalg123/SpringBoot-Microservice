@@ -5,6 +5,7 @@ import com.rumal.payment_service.dto.RefundVendorResponseRequest;
 import com.rumal.payment_service.entity.RefundStatus;
 import com.rumal.payment_service.exception.UnauthorizedException;
 import com.rumal.payment_service.security.InternalRequestVerifier;
+import com.rumal.payment_service.service.PaymentAccessScopeService;
 import com.rumal.payment_service.service.RefundService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -30,21 +31,23 @@ public class VendorRefundController {
 
     private final RefundService refundService;
     private final InternalRequestVerifier internalRequestVerifier;
+    private final PaymentAccessScopeService paymentAccessScopeService;
 
     @GetMapping
     public Page<RefundRequestResponse> listVendorRefunds(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Email-Verified", required = false) String emailVerified,
-            @RequestHeader(value = "X-User-Vendor-Id", required = false) String vendorIdHeader,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
+            @RequestParam(required = false) UUID vendorId,
             @RequestParam(required = false) RefundStatus status,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(emailVerified);
-        requireUserSub(userSub);
-        UUID vendorId = requireVendorId(vendorIdHeader);
-        return refundService.listRefundsForVendor(vendorId, status, pageable);
+        var scope = paymentAccessScopeService.resolveScope(requireUserSub(userSub), userRoles, internalAuth);
+        UUID resolvedVendorId = paymentAccessScopeService.resolveVendorIdForVendorFinanceRead(scope, vendorId);
+        return refundService.listRefundsForVendor(resolvedVendorId, status, pageable);
     }
 
     @GetMapping("/{refundId}")
@@ -52,14 +55,15 @@ public class VendorRefundController {
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Email-Verified", required = false) String emailVerified,
-            @RequestHeader(value = "X-User-Vendor-Id", required = false) String vendorIdHeader,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
+            @RequestParam(required = false) UUID vendorId,
             @PathVariable UUID refundId
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(emailVerified);
-        requireUserSub(userSub);
-        UUID vendorId = requireVendorId(vendorIdHeader);
-        return refundService.getRefundByIdAndVendor(refundId, vendorId);
+        var scope = paymentAccessScopeService.resolveScope(requireUserSub(userSub), userRoles, internalAuth);
+        UUID resolvedVendorId = paymentAccessScopeService.resolveVendorIdForVendorFinanceRead(scope, vendorId);
+        return refundService.getRefundByIdAndVendor(refundId, resolvedVendorId);
     }
 
     @PostMapping("/{refundId}/respond")
@@ -67,15 +71,17 @@ public class VendorRefundController {
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Email-Verified", required = false) String emailVerified,
-            @RequestHeader(value = "X-User-Vendor-Id", required = false) String vendorIdHeader,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
+            @RequestParam(required = false) UUID vendorId,
             @PathVariable UUID refundId,
             @Valid @RequestBody RefundVendorResponseRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(emailVerified);
         String keycloakId = requireUserSub(userSub);
-        UUID vendorId = requireVendorId(vendorIdHeader);
-        return refundService.vendorRespond(keycloakId, vendorId, refundId, request);
+        var scope = paymentAccessScopeService.resolveScope(keycloakId, userRoles, internalAuth);
+        UUID resolvedVendorId = paymentAccessScopeService.resolveVendorIdForVendorFinanceManage(scope, vendorId);
+        return refundService.vendorRespond(keycloakId, resolvedVendorId, refundId, request);
     }
 
     private String requireUserSub(String userSub) {
@@ -91,14 +97,4 @@ public class VendorRefundController {
         }
     }
 
-    private UUID requireVendorId(String vendorIdHeader) {
-        if (vendorIdHeader == null || vendorIdHeader.isBlank()) {
-            throw new UnauthorizedException("Missing vendor identification header");
-        }
-        try {
-            return UUID.fromString(vendorIdHeader.trim());
-        } catch (IllegalArgumentException e) {
-            throw new UnauthorizedException("Invalid vendor identification header");
-        }
-    }
 }

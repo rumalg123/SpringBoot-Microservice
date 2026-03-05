@@ -4,6 +4,7 @@ import com.rumal.review_service.dto.*;
 import com.rumal.review_service.entity.ReportStatus;
 import com.rumal.review_service.entity.ReviewReport;
 import com.rumal.review_service.security.InternalRequestVerifier;
+import com.rumal.review_service.service.ReviewAdminAccessScopeService;
 import com.rumal.review_service.service.ReviewService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,7 @@ public class AdminReviewController {
 
     private final ReviewService reviewService;
     private final InternalRequestVerifier internalRequestVerifier;
+    private final ReviewAdminAccessScopeService reviewAdminAccessScopeService;
 
     @GetMapping
     public Page<ReviewResponse> list(
@@ -37,6 +39,7 @@ public class AdminReviewController {
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         internalRequestVerifier.verify(internalAuth);
+        reviewAdminAccessScopeService.assertCanManageReviews(userSub, userRoles, internalAuth);
         return reviewService.adminList(pageable, productId, vendorId, customerId, rating, active);
     }
 
@@ -49,6 +52,7 @@ public class AdminReviewController {
             @PathVariable UUID reviewId
     ) {
         internalRequestVerifier.verify(internalAuth);
+        reviewAdminAccessScopeService.assertCanManageReviews(userSub, userRoles, internalAuth);
         reviewService.adminDeactivate(reviewId);
     }
 
@@ -61,6 +65,7 @@ public class AdminReviewController {
             @PathVariable UUID reviewId
     ) {
         internalRequestVerifier.verify(internalAuth);
+        reviewAdminAccessScopeService.assertCanManageReviews(userSub, userRoles, internalAuth);
         reviewService.adminActivate(reviewId);
     }
 
@@ -73,6 +78,7 @@ public class AdminReviewController {
             @PathVariable UUID reviewId
     ) {
         internalRequestVerifier.verify(internalAuth);
+        reviewAdminAccessScopeService.assertCanManageReviews(userSub, userRoles, internalAuth);
         reviewService.adminDelete(reviewId);
     }
 
@@ -85,6 +91,7 @@ public class AdminReviewController {
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         internalRequestVerifier.verify(internalAuth);
+        reviewAdminAccessScopeService.assertCanManageReviews(userSub, userRoles, internalAuth);
         return reviewService.listReports(pageable, status);
     }
 
@@ -98,6 +105,7 @@ public class AdminReviewController {
             @Valid @RequestBody UpdateReportStatusRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
+        reviewAdminAccessScopeService.assertCanManageReviews(userSub, userRoles, internalAuth);
         reviewService.updateReportStatus(reportId, request);
     }
 }

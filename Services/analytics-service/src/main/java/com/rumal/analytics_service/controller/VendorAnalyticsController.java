@@ -20,7 +20,7 @@ import java.util.UUID;
 public class VendorAnalyticsController {
 
     private static final Set<String> VENDOR_ROLES = Set.of("vendor_admin", "vendor_staff");
-    private static final Set<String> ADMIN_ROLES = Set.of("super_admin", "platform_admin", "platform_staff");
+    private static final String PLATFORM_ANALYTICS_READ = "platform.analytics.read";
 
     private final InternalRequestVerifier internalRequestVerifier;
     private final VendorAnalyticsService vendorAnalyticsService;
@@ -43,9 +43,18 @@ public class VendorAnalyticsController {
             throw new UnauthorizedException("Vendor role required");
         }
 
-        boolean isPlatformAdminLike = roles.stream().anyMatch(ADMIN_ROLES::contains);
-        if (isPlatformAdminLike) {
+        if (roles.contains("super_admin")) {
             return;
+        }
+
+        if (roles.contains("platform_staff")) {
+            String normalizedUserSub = normalizeUserSub(userSub);
+            var platformAccess = accessScopeClient.getPlatformAccessByKeycloakUser(normalizedUserSub);
+            Set<String> permissions = platformAccess.permissions() == null ? Set.of() : platformAccess.permissions();
+            if (platformAccess.active() && permissions.contains(PLATFORM_ANALYTICS_READ)) {
+                return;
+            }
+            throw new UnauthorizedException("platform_staff does not have analytics read permission");
         }
 
         boolean hasVendorRole = roles.stream().anyMatch(VENDOR_ROLES::contains);
@@ -94,6 +103,9 @@ public class VendorAnalyticsController {
                     .replace(' ', '_');
             if (!normalized.isEmpty()) {
                 roles.add(normalized);
+                if ("platform_admin".equals(normalized)) {
+                    roles.add("super_admin");
+                }
             }
         }
         return Set.copyOf(roles);

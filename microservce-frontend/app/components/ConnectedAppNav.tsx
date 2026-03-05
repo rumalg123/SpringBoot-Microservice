@@ -18,11 +18,13 @@ export default function ConnectedAppNav() {
       isVendorStaff={session.isVendorStaff}
       canViewAdmin={session.canViewAdmin}
       canManageAdminOrders={session.canManageAdminOrders}
+      canManageAdminPayments={session.canManageAdminPayments}
       canManageAdminProducts={session.canManageAdminProducts}
       canManageAdminCategories={session.canManageAdminCategories}
       canManageAdminVendors={session.canManageAdminVendors}
       canManageAdminPosters={session.canManageAdminPosters}
       canManageAdminPromotions={session.canManageAdminPromotions}
+      canManageAdminReviews={session.canManageAdminReviews}
       canManageAdminInventory={session.canManageAdminInventory}
       canViewVendorAnalytics={session.canViewVendorAnalytics}
       canViewVendorFinance={session.canViewVendorFinance}

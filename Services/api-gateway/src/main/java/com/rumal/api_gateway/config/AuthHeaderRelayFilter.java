@@ -52,6 +52,8 @@ public class AuthHeaderRelayFilter implements GlobalFilter, Ordered {
                     headers.remove("X-User-Email");
                     headers.remove("X-User-Email-Verified");
                     headers.remove("X-User-Roles");
+                    headers.remove("X-User-Vendor-Id");
+                    headers.remove("X-Caller-Vendor-Id");
                     headers.remove("X-Internal-Auth");
                     headers.remove("X-Internal-Signature");
                     headers.remove("X-Internal-Timestamp");

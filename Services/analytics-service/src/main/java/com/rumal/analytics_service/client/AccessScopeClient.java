@@ -1,5 +1,6 @@
 package com.rumal.analytics_service.client;
 
+import com.rumal.analytics_service.client.dto.PlatformAccessLookup;
 import com.rumal.analytics_service.client.dto.VendorAccessMembershipLookup;
 import com.rumal.analytics_service.client.dto.VendorStaffAccessLookup;
 import com.rumal.analytics_service.exception.DownstreamHttpException;
@@ -23,6 +24,7 @@ import java.util.UUID;
 @Component
 public class AccessScopeClient {
 
+    private static final String PLATFORM_ACCESS_URL = "http://access-service/internal/access/platform/by-keycloak/";
     private static final String VENDOR_MEMBERSHIP_URL = "http://vendor-service/internal/vendors/access/by-keycloak/";
     private static final String VENDOR_STAFF_ACCESS_URL = "http://access-service/internal/access/vendors/by-keycloak/";
     private static final String VENDOR_ANALYTICS_READ = "vendor.analytics.read";
@@ -37,6 +39,15 @@ public class AccessScopeClient {
     ) {
         this.restClient = lbRestClientBuilder.build();
         this.internalAuth = internalAuth;
+    }
+
+    public PlatformAccessLookup getPlatformAccessByKeycloakUser(String keycloakUserId) {
+        String encodedUserId = UriUtils.encodePathSegment(keycloakUserId, StandardCharsets.UTF_8);
+        PlatformAccessLookup response = getBody(PLATFORM_ACCESS_URL + encodedUserId, PlatformAccessLookup.class);
+        if (response == null) {
+            return new PlatformAccessLookup(keycloakUserId, false, Set.of(), null, false, null);
+        }
+        return response;
     }
 
     public Set<UUID> listVendorMembershipVendorIds(String keycloakUserId) {
@@ -103,6 +114,20 @@ public class AccessScopeClient {
             case "reports_read" -> VENDOR_REPORTS_READ;
             default -> normalized;
         };
+    }
+
+    private <T> T getBody(String url, Class<T> type) {
+        try {
+            return restClient.get()
+                    .uri(url)
+                    .header("X-Internal-Auth", internalAuth)
+                    .retrieve()
+                    .body(type);
+        } catch (RestClientResponseException ex) {
+            throw new DownstreamHttpException(ex.getStatusCode(), "Access scope HTTP error: " + ex.getStatusCode().value(), ex);
+        } catch (RestClientException ex) {
+            throw new ServiceUnavailableException("Access scope service unavailable", ex);
+        }
     }
 
     private <T> List<T> getList(String url, ParameterizedTypeReference<List<T>> type) {

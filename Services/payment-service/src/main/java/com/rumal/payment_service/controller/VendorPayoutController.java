@@ -1,13 +1,12 @@
 package com.rumal.payment_service.controller;
 
-import com.rumal.payment_service.dto.RefundAdminFinalizeRequest;
-import com.rumal.payment_service.dto.RefundRequestResponse;
-import com.rumal.payment_service.entity.RefundStatus;
+import com.rumal.payment_service.dto.VendorPayoutResponse;
+import com.rumal.payment_service.entity.PayoutStatus;
+import com.rumal.payment_service.exception.ResourceNotFoundException;
 import com.rumal.payment_service.exception.UnauthorizedException;
 import com.rumal.payment_service.security.InternalRequestVerifier;
 import com.rumal.payment_service.service.PaymentAccessScopeService;
-import com.rumal.payment_service.service.RefundService;
-import jakarta.validation.Valid;
+import com.rumal.payment_service.service.PayoutService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -15,8 +14,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -25,55 +22,49 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/admin/payments/refunds")
+@RequestMapping("/payments/vendor/me/payouts")
 @RequiredArgsConstructor
-public class AdminRefundController {
+public class VendorPayoutController {
 
-    private final RefundService refundService;
+    private final PayoutService payoutService;
     private final InternalRequestVerifier internalRequestVerifier;
     private final PaymentAccessScopeService paymentAccessScopeService;
 
     @GetMapping
-    public Page<RefundRequestResponse> listRefunds(
+    public Page<VendorPayoutResponse> listPayouts(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Email-Verified", required = false) String emailVerified,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @RequestParam(required = false) UUID vendorId,
-            @RequestParam(required = false) RefundStatus status,
+            @RequestParam(required = false) PayoutStatus status,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         internalRequestVerifier.verify(internalAuth);
+        verifyEmailVerified(emailVerified);
         var scope = paymentAccessScopeService.resolveScope(requireUserSub(userSub), userRoles, internalAuth);
-        paymentAccessScopeService.assertCanReadAdminPayments(scope);
-        return refundService.listAllRefunds(vendorId, status, pageable);
+        UUID resolvedVendorId = paymentAccessScopeService.resolveVendorIdForVendorFinanceRead(scope, vendorId);
+        return payoutService.listPayouts(resolvedVendorId, status, pageable);
     }
 
     @GetMapping("/{id}")
-    public RefundRequestResponse getRefund(
+    public VendorPayoutResponse getPayout(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Email-Verified", required = false) String emailVerified,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
+            @RequestParam(required = false) UUID vendorId,
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
+        verifyEmailVerified(emailVerified);
         var scope = paymentAccessScopeService.resolveScope(requireUserSub(userSub), userRoles, internalAuth);
-        paymentAccessScopeService.assertCanReadAdminPayments(scope);
-        return refundService.getRefundById(id);
-    }
-
-    @PostMapping("/{id}/finalize")
-    public RefundRequestResponse finalizeRefund(
-            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
-            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
-            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
-            @PathVariable UUID id,
-            @Valid @RequestBody RefundAdminFinalizeRequest request
-    ) {
-        internalRequestVerifier.verify(internalAuth);
-        var scope = paymentAccessScopeService.resolveScope(requireUserSub(userSub), userRoles, internalAuth);
-        paymentAccessScopeService.assertCanManageAdminPayments(scope);
-        String adminKeycloakId = requireUserSub(userSub);
-        return refundService.adminFinalize(adminKeycloakId, id, request);
+        UUID resolvedVendorId = paymentAccessScopeService.resolveVendorIdForVendorFinanceRead(scope, vendorId);
+        VendorPayoutResponse payout = payoutService.getPayoutById(id);
+        if (!resolvedVendorId.equals(payout.vendorId())) {
+            throw new ResourceNotFoundException("Payout not found: " + id);
+        }
+        return payout;
     }
 
     private String requireUserSub(String userSub) {
@@ -81,5 +72,11 @@ public class AdminRefundController {
             throw new UnauthorizedException("Missing authentication header");
         }
         return userSub.trim();
+    }
+
+    private void verifyEmailVerified(String emailVerified) {
+        if (emailVerified == null || !"true".equalsIgnoreCase(emailVerified.trim())) {
+            throw new UnauthorizedException("Email is not verified");
+        }
     }
 }

@@ -29,10 +29,44 @@ type Payout = {
 type Paged<T> = { content: T[]; totalPages: number; totalElements: number };
 type Tab = "payments" | "refunds" | "payouts";
 
+function PaginationBar({
+  page,
+  totalPages,
+  setPage,
+}: {
+  page: number;
+  totalPages: number;
+  setPage: (fn: (p: number) => number) => void;
+}) {
+  if (totalPages <= 1) return null;
+  return (
+    <div className="flex justify-center gap-2 mt-5">
+      <button
+        onClick={() => setPage((p) => Math.max(0, p - 1))}
+        disabled={page === 0}
+        className={`py-2 px-4 rounded-md border border-line-bright text-sm font-semibold ${page === 0 ? "bg-transparent text-muted-2 cursor-not-allowed" : "bg-brand-soft text-brand cursor-pointer"}`}
+      >
+        {"< Prev"}
+      </button>
+      <span className="flex items-center text-sm text-muted">
+        {page + 1} / {totalPages}
+      </span>
+      <button
+        onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+        disabled={page >= totalPages - 1}
+        className={`py-2 px-4 rounded-md border border-line-bright text-sm font-semibold ${page >= totalPages - 1 ? "bg-transparent text-muted-2 cursor-not-allowed" : "bg-brand-soft text-brand cursor-pointer"}`}
+      >
+        {"Next >"}
+      </button>
+    </div>
+  );
+}
+
 export default function AdminPaymentsPage() {
   const session = useAuthSession();
   const { status: sessionStatus, apiClient } = session;
   const queryClient = useQueryClient();
+  const canManagePayments = session.isSuperAdmin || session.canManageAdminPayments;
 
   const [tab, setTab] = useState<Tab>("payments");
 
@@ -49,7 +83,7 @@ export default function AdminPaymentsPage() {
   const [finalizeNote, setFinalizeNote] = useState("");
   const [finalizeApproved, setFinalizeApproved] = useState(true);
 
-  const ready = sessionStatus === "ready" && !!apiClient;
+  const ready = sessionStatus === "ready" && !!apiClient && canManagePayments;
 
   // --- Payments query ---
   const { data: paymentsData, isLoading: paymentLoading } = useQuery({
@@ -139,19 +173,13 @@ export default function AdminPaymentsPage() {
     return <div className="min-h-screen bg-bg grid place-items-center"><p className="text-muted">Loading...</p></div>;
   }
 
+  if (!canManagePayments) {
+    return <div className="min-h-screen bg-bg grid place-items-center"><p className="text-muted">Unauthorized.</p></div>;
+  }
+
   const tabClasses = (t: Tab) =>
     `py-2.5 px-5 rounded-t-md border border-line-bright text-base font-bold cursor-pointer -mb-px ${tab === t ? "bg-[rgba(17,17,40,0.7)] text-white border-b-transparent" : "bg-transparent text-muted"}`;
 
-  const PaginationBar = ({ page, totalPages, setPage }: { page: number; totalPages: number; setPage: (fn: (p: number) => number) => void }) =>
-    totalPages > 1 ? (
-      <div className="flex justify-center gap-2 mt-5">
-        <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}
-          className={`py-2 px-4 rounded-md border border-line-bright text-sm font-semibold ${page === 0 ? "bg-transparent text-muted-2 cursor-not-allowed" : "bg-brand-soft text-brand cursor-pointer"}`}>← Prev</button>
-        <span className="flex items-center text-sm text-muted">{page + 1} / {totalPages}</span>
-        <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}
-          className={`py-2 px-4 rounded-md border border-line-bright text-sm font-semibold ${page >= totalPages - 1 ? "bg-transparent text-muted-2 cursor-not-allowed" : "bg-brand-soft text-brand cursor-pointer"}`}>Next →</button>
-      </div>
-    ) : null;
 
   return (
     <AdminPageShell
@@ -189,11 +217,11 @@ export default function AdminPaymentsPage() {
                     <tbody>
                       {payments.map((p) => (
                         <tr key={p.id} className="border-b border-line">
-                          <td className="py-2.5 px-3 text-ink-light">{p.customerName || p.customerEmail || "—"}</td>
+                          <td className="py-2.5 px-3 text-ink-light">{p.customerName || p.customerEmail || "â€”"}</td>
                           <td className="py-2.5 px-3 text-white font-semibold">{money(p.amount)}</td>
-                          <td className="py-2.5 px-3 text-ink-light">{p.paymentMethod || "—"}</td>
+                          <td className="py-2.5 px-3 text-ink-light">{p.paymentMethod || "â€”"}</td>
                           <td className="py-2.5 px-3">{statusBadge(p.status)}</td>
-                          <td className="py-2.5 px-3 text-muted">{p.paidAt ? new Date(p.paidAt).toLocaleDateString() : "—"}</td>
+                          <td className="py-2.5 px-3 text-muted">{p.paidAt ? new Date(p.paidAt).toLocaleDateString() : "â€”"}</td>
                           <td className="py-2.5 px-3 text-muted">{new Date(p.createdAt).toLocaleDateString()}</td>
                         </tr>
                       ))}
@@ -226,7 +254,7 @@ export default function AdminPaymentsPage() {
                         <div>
                           <div className="flex items-center gap-2 mb-1.5">{statusBadge(r.status)}<span className="text-[0.78rem] text-white font-semibold">{money(r.refundAmount)}</span></div>
                           {r.customerReason && <p className="mb-1 text-[0.82rem] text-ink-light">Reason: {r.customerReason}</p>}
-                          <p className="text-[0.72rem] text-muted-2">{r.customerName || r.customerEmail || "Customer"} · {new Date(r.createdAt).toLocaleDateString()}</p>
+                          <p className="text-[0.72rem] text-muted-2">{r.customerName || r.customerEmail || "Customer"} Â· {new Date(r.createdAt).toLocaleDateString()}</p>
                           {r.adminNote && <p className="mt-1 text-[0.78rem] text-brand italic">Admin: {r.adminNote}</p>}
                         </div>
                         {["ESCALATED_TO_ADMIN", "REQUESTED"].includes(r.status) && finalizingId !== r.id && (
@@ -279,11 +307,11 @@ export default function AdminPaymentsPage() {
                     <tbody>
                       {payouts.map((p) => (
                         <tr key={p.id} className="border-b border-line">
-                          <td className="py-2.5 px-3 text-ink-light">{p.vendorName || "—"}</td>
+                          <td className="py-2.5 px-3 text-ink-light">{p.vendorName || "â€”"}</td>
                           <td className="py-2.5 px-3 text-white font-semibold">{money(p.payoutAmount)}</td>
                           <td className="py-2.5 px-3 text-muted">{money(p.platformFee)}</td>
                           <td className="py-2.5 px-3">{statusBadge(p.status)}</td>
-                          <td className="py-2.5 px-3 text-ink-light">{p.referenceNumber || "—"}</td>
+                          <td className="py-2.5 px-3 text-ink-light">{p.referenceNumber || "â€”"}</td>
                           <td className="py-2.5 px-3 text-muted">{new Date(p.createdAt).toLocaleDateString()}</td>
                           <td className="py-2.5 px-3">
                             {p.status === "PENDING" && (

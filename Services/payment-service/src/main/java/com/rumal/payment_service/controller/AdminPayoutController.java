@@ -6,6 +6,7 @@ import com.rumal.payment_service.dto.VendorPayoutResponse;
 import com.rumal.payment_service.entity.PayoutStatus;
 import com.rumal.payment_service.exception.UnauthorizedException;
 import com.rumal.payment_service.security.InternalRequestVerifier;
+import com.rumal.payment_service.service.PaymentAccessScopeService;
 import com.rumal.payment_service.service.PayoutService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -31,17 +32,20 @@ public class AdminPayoutController {
 
     private final PayoutService payoutService;
     private final InternalRequestVerifier internalRequestVerifier;
+    private final PaymentAccessScopeService paymentAccessScopeService;
 
     @GetMapping
     public Page<VendorPayoutResponse> listPayouts(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @RequestParam(required = false) UUID vendorId,
             @RequestParam(required = false) PayoutStatus status,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         internalRequestVerifier.verify(internalAuth);
-        requireUserSub(userSub);
+        var scope = paymentAccessScopeService.resolveScope(requireUserSub(userSub), userRoles, internalAuth);
+        paymentAccessScopeService.assertCanReadAdminPayments(scope);
         return payoutService.listPayouts(vendorId, status, pageable);
     }
 
@@ -49,10 +53,12 @@ public class AdminPayoutController {
     public VendorPayoutResponse getPayout(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
-        requireUserSub(userSub);
+        var scope = paymentAccessScopeService.resolveScope(requireUserSub(userSub), userRoles, internalAuth);
+        paymentAccessScopeService.assertCanReadAdminPayments(scope);
         return payoutService.getPayoutById(id);
     }
 
@@ -60,9 +66,12 @@ public class AdminPayoutController {
     public VendorPayoutResponse createPayout(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @Valid @RequestBody CreatePayoutRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
+        var scope = paymentAccessScopeService.resolveScope(requireUserSub(userSub), userRoles, internalAuth);
+        paymentAccessScopeService.assertCanManageAdminPayments(scope);
         String adminKeycloakId = requireUserSub(userSub);
         return payoutService.createPayout(adminKeycloakId, request);
     }
@@ -71,9 +80,12 @@ public class AdminPayoutController {
     public VendorPayoutResponse approvePayout(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
+        var scope = paymentAccessScopeService.resolveScope(requireUserSub(userSub), userRoles, internalAuth);
+        paymentAccessScopeService.assertCanManageAdminPayments(scope);
         String adminKeycloakId = requireUserSub(userSub);
         return payoutService.approvePayout(adminKeycloakId, id);
     }
@@ -82,10 +94,13 @@ public class AdminPayoutController {
     public VendorPayoutResponse completePayout(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID id,
             @Valid @RequestBody CompletePayoutRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
+        var scope = paymentAccessScopeService.resolveScope(requireUserSub(userSub), userRoles, internalAuth);
+        paymentAccessScopeService.assertCanManageAdminPayments(scope);
         String adminKeycloakId = requireUserSub(userSub);
         return payoutService.completePayout(adminKeycloakId, id, request);
     }
@@ -94,10 +109,13 @@ public class AdminPayoutController {
     public VendorPayoutResponse cancelPayout(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID id,
             @RequestParam(required = false) String reason
     ) {
         internalRequestVerifier.verify(internalAuth);
+        var scope = paymentAccessScopeService.resolveScope(requireUserSub(userSub), userRoles, internalAuth);
+        paymentAccessScopeService.assertCanManageAdminPayments(scope);
         String adminKeycloakId = requireUserSub(userSub);
         return payoutService.cancelPayout(adminKeycloakId, id, reason);
     }

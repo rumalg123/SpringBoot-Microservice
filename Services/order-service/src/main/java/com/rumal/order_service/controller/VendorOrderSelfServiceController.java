@@ -7,6 +7,7 @@ import com.rumal.order_service.entity.OrderStatus;
 import com.rumal.order_service.exception.UnauthorizedException;
 import com.rumal.order_service.security.InternalRequestVerifier;
 import com.rumal.order_service.service.OrderService;
+import com.rumal.order_service.service.VendorOrderAccessScopeService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -31,43 +32,49 @@ public class VendorOrderSelfServiceController {
 
     private final OrderService orderService;
     private final InternalRequestVerifier internalRequestVerifier;
+    private final VendorOrderAccessScopeService vendorOrderAccessScopeService;
 
     @GetMapping
     public Page<VendorOrderResponse> listMyVendorOrders(
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Email-Verified", required = false) String emailVerified,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestParam(required = false) UUID vendorId,
             @RequestParam(required = false) OrderStatus status,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         verifyAuth(internalAuth, emailVerified, userSub);
-        return orderService.listVendorOrdersForVendorUser(userSub, vendorId, status, pageable);
+        UUID resolvedVendorId = vendorOrderAccessScopeService.resolveVendorIdForOrderRead(userSub, userRoles, internalAuth, vendorId);
+        return orderService.listVendorOrdersForVendorUser(userSub, resolvedVendorId, status, pageable);
     }
 
     @GetMapping("/{vendorOrderId}")
     public VendorOrderDetailResponse getMyVendorOrder(
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Email-Verified", required = false) String emailVerified,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestParam(required = false) UUID vendorId,
             @PathVariable UUID vendorOrderId
     ) {
         verifyAuth(internalAuth, emailVerified, userSub);
-        return orderService.getVendorOrderForVendorUser(userSub, vendorId, vendorOrderId);
+        UUID resolvedVendorId = vendorOrderAccessScopeService.resolveVendorIdForOrderRead(userSub, userRoles, internalAuth, vendorId);
+        return orderService.getVendorOrderForVendorUser(userSub, resolvedVendorId, vendorOrderId);
     }
 
     @PatchMapping("/{vendorOrderId}/tracking")
     public VendorOrderResponse setTrackingInfo(
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Email-Verified", required = false) String emailVerified,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestParam(required = false) UUID vendorId,
             @PathVariable UUID vendorOrderId,
             @Valid @RequestBody SetTrackingInfoRequest req
     ) {
         verifyAuth(internalAuth, emailVerified, userSub);
-        UUID resolvedVendorId = orderService.resolveVendorIdForUser(userSub, vendorId);
+        UUID resolvedVendorId = vendorOrderAccessScopeService.resolveVendorIdForOrderManage(userSub, userRoles, internalAuth, vendorId);
         return orderService.setTrackingInfo(vendorOrderId, req, resolvedVendorId);
     }
 

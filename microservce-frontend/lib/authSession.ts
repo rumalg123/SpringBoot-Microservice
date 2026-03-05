@@ -61,6 +61,8 @@ function toTrimmedString(value: unknown): string {
 
 const PLATFORM_ORDERS_READ = "platform.orders.read";
 const PLATFORM_ORDERS_MANAGE = "platform.orders.manage";
+const PLATFORM_PAYMENTS_READ = "platform.payments.read";
+const PLATFORM_PAYMENTS_MANAGE = "platform.payments.manage";
 const PLATFORM_PRODUCTS_MANAGE = "platform.products.manage";
 const PLATFORM_CATEGORIES_MANAGE = "platform.categories.manage";
 const PLATFORM_POSTERS_MANAGE = "platform.posters.manage";
@@ -75,6 +77,7 @@ const VENDOR_PROMOTIONS_MANAGE = "vendor.promotions.manage";
 const VENDOR_INVENTORY_MANAGE = "vendor.inventory.manage";
 const VENDOR_ANALYTICS_READ = "vendor.analytics.read";
 const VENDOR_FINANCE_READ = "vendor.finance.read";
+const VENDOR_FINANCE_MANAGE = "vendor.finance.manage";
 const VENDOR_SETTINGS_MANAGE = "vendor.settings.manage";
 
 function normalizePermissionCode(permission: string): string {
@@ -97,6 +100,8 @@ function normalizePermissionCode(permission: string): string {
       return VENDOR_ANALYTICS_READ;
     case "finance_read":
       return VENDOR_FINANCE_READ;
+    case "finance_manage":
+      return VENDOR_FINANCE_MANAGE;
     case "settings_manage":
       return VENDOR_SETTINGS_MANAGE;
     default:
@@ -379,6 +384,7 @@ export function useAuthSession() {
   const [isVendorStaff, setIsVendorStaff] = useState(false);
   const [canViewAdmin, setCanViewAdmin] = useState(false);
   const [canManageAdminOrders, setCanManageAdminOrders] = useState(false);
+  const [canManageAdminPayments, setCanManageAdminPayments] = useState(false);
   const [canManageAdminProducts, setCanManageAdminProducts] = useState(false);
   const [canManageAdminCategories, setCanManageAdminCategories] = useState(false);
   const [canManageAdminPosters, setCanManageAdminPosters] = useState(false);
@@ -388,6 +394,7 @@ export function useAuthSession() {
   const [canManageAdminInventory, setCanManageAdminInventory] = useState(false);
   const [canViewVendorAnalytics, setCanViewVendorAnalytics] = useState(false);
   const [canViewVendorFinance, setCanViewVendorFinance] = useState(false);
+  const [canManageVendorFinance, setCanManageVendorFinance] = useState(false);
   const [canManageVendorSettings, setCanManageVendorSettings] = useState(false);
   const [hasCustomerRole, setHasCustomerRole] = useState(false);
   const [emailVerified, setEmailVerified] = useState<boolean | null>(null);
@@ -482,6 +489,7 @@ export function useAuthSession() {
           const customerRole = isCustomerByClaims(parsedClaims, env.claimsNamespace);
           const anyAdmin = superAdmin || platformStaff || vendorAdmin || vendorStaff;
           let manageOrders = superAdmin || vendorAdmin;
+          let managePayments = superAdmin || platformStaff;
           let manageProducts = superAdmin || vendorAdmin;
           let manageCategories = superAdmin;
           let managePosters = superAdmin;
@@ -491,6 +499,7 @@ export function useAuthSession() {
           let manageInventory = superAdmin || vendorAdmin;
           let viewVendorAnalytics = superAdmin || vendorAdmin;
           let viewVendorFinance = superAdmin || vendorAdmin;
+          let manageVendorFinance = superAdmin || vendorAdmin;
           let manageVendorSettings = superAdmin || vendorAdmin;
 
           if (anyAdmin && keycloak.token) {
@@ -509,6 +518,9 @@ export function useAuthSession() {
                 const platformCanManageOrders =
                   platformPermissionCodes.has(PLATFORM_ORDERS_READ)
                   || platformPermissionCodes.has(PLATFORM_ORDERS_MANAGE);
+                const platformCanManagePayments =
+                  platformPermissionCodes.has(PLATFORM_PAYMENTS_READ)
+                  || platformPermissionCodes.has(PLATFORM_PAYMENTS_MANAGE);
                 const platformCanManageProducts = platformPermissionCodes.has(PLATFORM_PRODUCTS_MANAGE);
                 const platformCanManageCategories = platformPermissionCodes.has(PLATFORM_CATEGORIES_MANAGE);
                 const platformCanManagePosters = platformPermissionCodes.has(PLATFORM_POSTERS_MANAGE);
@@ -527,7 +539,10 @@ export function useAuthSession() {
                   vendorPermissionCodes.has(VENDOR_INVENTORY_MANAGE)
                   || vendorStaffCanManageProducts;
                 const vendorStaffCanViewAnalytics = vendorPermissionCodes.has(VENDOR_ANALYTICS_READ);
-                const vendorStaffCanViewFinance = vendorPermissionCodes.has(VENDOR_FINANCE_READ);
+                const vendorStaffCanManageFinance = vendorPermissionCodes.has(VENDOR_FINANCE_MANAGE);
+                const vendorStaffCanViewFinance =
+                  vendorStaffCanManageFinance
+                  || vendorPermissionCodes.has(VENDOR_FINANCE_READ);
                 const vendorStaffCanManageSettings = vendorPermissionCodes.has(VENDOR_SETTINGS_MANAGE);
 
                 manageOrders =
@@ -536,6 +551,9 @@ export function useAuthSession() {
                   || (vendorStaff && vendorStaffCanManageOrders)
                   || platformCanManageOrders
                   || Boolean(capabilities.canManageAdminOrders);
+                managePayments =
+                  superAdmin
+                  || platformCanManagePayments;
                 manageProducts =
                   superAdmin
                   || vendorAdmin
@@ -575,6 +593,10 @@ export function useAuthSession() {
                   superAdmin
                   || vendorAdmin
                   || (vendorStaff && vendorStaffCanViewFinance);
+                manageVendorFinance =
+                  superAdmin
+                  || vendorAdmin
+                  || (vendorStaff && vendorStaffCanManageFinance);
                 manageVendorSettings =
                   superAdmin
                   || vendorAdmin
@@ -592,6 +614,7 @@ export function useAuthSession() {
           setIsVendorStaff(vendorStaff);
           setCanViewAdmin(anyAdmin);
           setCanManageAdminOrders(manageOrders);
+          setCanManageAdminPayments(managePayments);
           setCanManageAdminProducts(manageProducts);
           setCanManageAdminCategories(manageCategories);
           setCanManageAdminPosters(managePosters);
@@ -601,6 +624,7 @@ export function useAuthSession() {
           setCanManageAdminInventory(manageInventory);
           setCanViewVendorAnalytics(viewVendorAnalytics);
           setCanViewVendorFinance(viewVendorFinance);
+          setCanManageVendorFinance(manageVendorFinance);
           setCanManageVendorSettings(manageVendorSettings);
           setHasCustomerRole(customerRole);
           setEmailVerified(resolveEmailVerified(parsedClaims, userProfile, env.claimsNamespace));
@@ -612,6 +636,7 @@ export function useAuthSession() {
           setIsVendorStaff(false);
           setCanViewAdmin(false);
           setCanManageAdminOrders(false);
+          setCanManageAdminPayments(false);
           setCanManageAdminProducts(false);
           setCanManageAdminCategories(false);
           setCanManageAdminPosters(false);
@@ -621,6 +646,7 @@ export function useAuthSession() {
           setCanManageAdminInventory(false);
           setCanViewVendorAnalytics(false);
           setCanViewVendorFinance(false);
+          setCanManageVendorFinance(false);
           setCanManageVendorSettings(false);
           setHasCustomerRole(false);
           setEmailVerified(null);
@@ -784,6 +810,7 @@ export function useAuthSession() {
     isVendorStaff,
     canViewAdmin,
     canManageAdminOrders,
+    canManageAdminPayments,
     canManageAdminProducts,
     canManageAdminCategories,
     canManageAdminPosters,
@@ -793,6 +820,7 @@ export function useAuthSession() {
     canManageAdminInventory,
     canViewVendorAnalytics,
     canViewVendorFinance,
+    canManageVendorFinance,
     canManageVendorSettings,
     hasCustomerRole,
     emailVerified,

@@ -15,6 +15,7 @@ import org.springframework.http.HttpStatus;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -146,8 +147,50 @@ public class AdminVendorService {
         return vendorClient.listAccessibleVendorMembershipsByKeycloakUser(keycloakUserId, internalAuth);
     }
 
+    public Set<String> listLinkedKeycloakUserIdsForVendorAdmin(String keycloakUserId, String internalAuth) {
+        String normalizedUserSub = normalizeRequired(keycloakUserId, "keycloakUserId", 120);
+        Set<UUID> vendorIds = new LinkedHashSet<>();
+        for (Map<String, Object> membership : vendorClient.listAccessibleVendorMembershipsByKeycloakUser(normalizedUserSub, internalAuth)) {
+            if (membership == null) {
+                continue;
+            }
+            UUID vendorId = tryParseUuid(membership.get("vendorId"));
+            if (vendorId != null) {
+                vendorIds.add(vendorId);
+            }
+        }
+
+        if (vendorIds.isEmpty()) {
+            return Set.of();
+        }
+
+        Set<String> linkedKeycloakUserIds = new LinkedHashSet<>();
+        for (UUID vendorId : vendorIds) {
+            for (Map<String, Object> vendorUser : vendorClient.listVendorUsers(vendorId, internalAuth)) {
+                if (vendorUser == null || !isTruthy(vendorUser.get("active"))) {
+                    continue;
+                }
+                String linkedUserId = stringOrNull(vendorUser.get("keycloakUserId"));
+                if (StringUtils.hasText(linkedUserId)) {
+                    linkedKeycloakUserIds.add(linkedUserId.trim().toLowerCase(Locale.ROOT));
+                }
+            }
+            for (Map<String, Object> vendorStaff : accessClient.listVendorStaff(vendorId, internalAuth, "vendor_admin", vendorId)) {
+                if (vendorStaff == null || !isTruthy(vendorStaff.get("active")) || isTruthy(vendorStaff.get("deleted"))) {
+                    continue;
+                }
+                String linkedUserId = stringOrNull(vendorStaff.get("keycloakUserId"));
+                if (StringUtils.hasText(linkedUserId)) {
+                    linkedKeycloakUserIds.add(linkedUserId.trim().toLowerCase(Locale.ROOT));
+                }
+            }
+        }
+
+        return Set.copyOf(linkedKeycloakUserIds);
+    }
+
     public int reconcileVendorStaffMemberships(UUID vendorId, String internalAuth) {
-        List<Map<String, Object>> rows = accessClient.listVendorStaff(vendorId, internalAuth);
+        List<Map<String, Object>> rows = accessClient.listVendorStaff(vendorId, internalAuth, "super_admin", null);
         for (Map<String, Object> row : rows) {
             syncVendorStaffMembershipTransition(null, row, internalAuth);
         }
@@ -457,7 +500,7 @@ public class AdminVendorService {
                 ids.add(keycloakUserId);
             }
         }
-        for (Map<String, Object> row : accessClient.listVendorStaff(vendorId, internalAuth)) {
+        for (Map<String, Object> row : accessClient.listVendorStaff(vendorId, internalAuth, "super_admin", null)) {
             String keycloakUserId = stringOrNull(row.get("keycloakUserId"));
             if (StringUtils.hasText(keycloakUserId)) {
                 ids.add(keycloakUserId);
@@ -487,5 +530,16 @@ public class AdminVendorService {
             return fullName;
         }
         return fallbackEmail;
+    }
+
+    private String normalizeRequired(String value, String fieldName, int maxLength) {
+        if (!StringUtils.hasText(value)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, fieldName + " is required");
+        }
+        String normalized = value.trim();
+        if (normalized.length() > maxLength) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, fieldName + " exceeds max length " + maxLength);
+        }
+        return normalized;
     }
 }

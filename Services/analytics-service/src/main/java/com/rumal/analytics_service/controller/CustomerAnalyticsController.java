@@ -1,5 +1,6 @@
 package com.rumal.analytics_service.controller;
 
+import com.rumal.analytics_service.client.AccessScopeClient;
 import com.rumal.analytics_service.client.CustomerAnalyticsClient;
 import com.rumal.analytics_service.dto.CustomerInsightsResponse;
 import com.rumal.analytics_service.exception.DownstreamHttpException;
@@ -21,11 +22,12 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class CustomerAnalyticsController {
 
-    private static final Set<String> ADMIN_ROLES = Set.of("super_admin", "platform_admin", "platform_staff");
+    private static final String PLATFORM_CUSTOMERS_READ = "platform.customers.read";
 
     private final InternalRequestVerifier internalRequestVerifier;
     private final CustomerAnalyticsService customerAnalyticsService;
     private final CustomerAnalyticsClient customerAnalyticsClient;
+    private final AccessScopeClient accessScopeClient;
 
     @GetMapping("/{customerId}/insights")
     public CustomerInsightsResponse customerInsights(
@@ -40,19 +42,35 @@ public class CustomerAnalyticsController {
 
     private void verifyCustomerAccess(String userSub, String userRoles, UUID requestedCustomerId) {
         Set<String> roles = parseRoles(userRoles);
-        if (roles.stream().anyMatch(ADMIN_ROLES::contains)) {
+        if (roles.contains("super_admin")) {
             return;
         }
-        if (userSub == null || userSub.isBlank()) {
-            throw new UnauthorizedException("User identification required");
+
+        if (roles.contains("platform_staff")) {
+            String normalizedUserSub = normalizeUserSub(userSub);
+            var platformAccess = accessScopeClient.getPlatformAccessByKeycloakUser(normalizedUserSub);
+            Set<String> permissions = platformAccess.permissions() == null ? Set.of() : platformAccess.permissions();
+            if (platformAccess.active() && permissions.contains(PLATFORM_CUSTOMERS_READ)) {
+                return;
+            }
+            throw new UnauthorizedException("platform_staff does not have customer analytics read permission");
         }
-        var customer = fetchCustomerByUserSub(userSub.trim());
+
+        String normalizedUserSub = normalizeUserSub(userSub);
+        var customer = fetchCustomerByUserSub(normalizedUserSub);
         if (customer == null || customer.id() == null) {
             throw new UnauthorizedException("Customer profile not found for user");
         }
         if (!customer.id().equals(requestedCustomerId)) {
             throw new UnauthorizedException("You can only view your own analytics");
         }
+    }
+
+    private String normalizeUserSub(String userSub) {
+        if (userSub == null || userSub.isBlank()) {
+            throw new UnauthorizedException("User identification required");
+        }
+        return userSub.trim();
     }
 
     private com.rumal.analytics_service.client.dto.InternalCustomerLookup fetchCustomerByUserSub(String userSub) {
@@ -82,6 +100,9 @@ public class CustomerAnalyticsController {
                     .replace(' ', '_');
             if (!normalized.isEmpty()) {
                 roles.add(normalized);
+                if ("platform_admin".equals(normalized)) {
+                    roles.add("super_admin");
+                }
             }
         }
         return Set.copyOf(roles);

@@ -87,11 +87,19 @@ public class AdminAccessService {
     }
 
     public List<Map<String, Object>> listVendorStaff(UUID vendorId, String internalAuth) {
-        return accessClient.listVendorStaff(vendorId, internalAuth);
+        return listVendorStaff(vendorId, internalAuth, null, null);
+    }
+
+    public List<Map<String, Object>> listVendorStaff(UUID vendorId, String internalAuth, String userRoles, UUID callerVendorId) {
+        return accessClient.listVendorStaff(vendorId, internalAuth, userRoles, callerVendorId);
     }
 
     public List<Map<String, Object>> listDeletedVendorStaff(String internalAuth) {
-        return accessClient.listDeletedVendorStaff(internalAuth);
+        return listDeletedVendorStaff(internalAuth, null, null);
+    }
+
+    public List<Map<String, Object>> listDeletedVendorStaff(String internalAuth, String userRoles, UUID callerVendorId) {
+        return accessClient.listDeletedVendorStaff(internalAuth, userRoles, callerVendorId);
     }
 
     public Map<String, Object> listAccessAudit(
@@ -111,7 +119,11 @@ public class AdminAccessService {
     }
 
     public Map<String, Object> getVendorStaffById(UUID id, String internalAuth) {
-        return accessClient.getVendorStaffById(id, internalAuth);
+        return getVendorStaffById(id, internalAuth, null, null);
+    }
+
+    public Map<String, Object> getVendorStaffById(UUID id, String internalAuth, String userRoles, UUID callerVendorId) {
+        return accessClient.getVendorStaffById(id, internalAuth, userRoles, callerVendorId);
     }
 
     public Map<String, Object> createVendorStaff(Map<String, Object> request, String internalAuth) {
@@ -146,8 +158,19 @@ public class AdminAccessService {
     }
 
     public void deleteVendorStaff(UUID id, String internalAuth, String userSub, String userRoles, String actionReason) {
-        Map<String, Object> existing = accessClient.getVendorStaffById(id, internalAuth);
-        accessClient.deleteVendorStaff(id, internalAuth, userSub, userRoles, actionReason);
+        deleteVendorStaff(id, internalAuth, userSub, userRoles, actionReason, null);
+    }
+
+    public void deleteVendorStaff(
+            UUID id,
+            String internalAuth,
+            String userSub,
+            String userRoles,
+            String actionReason,
+            UUID callerVendorId
+    ) {
+        Map<String, Object> existing = accessClient.getVendorStaffById(id, internalAuth, userRoles, callerVendorId);
+        accessClient.deleteVendorStaff(id, internalAuth, userSub, userRoles, actionReason, callerVendorId);
         revokeKeycloakSessions(extractString(existing.get("keycloakUserId")));
     }
 
@@ -156,7 +179,18 @@ public class AdminAccessService {
     }
 
     public Map<String, Object> restoreVendorStaff(UUID id, String internalAuth, String userSub, String userRoles, String actionReason) {
-        return accessClient.restoreVendorStaff(id, internalAuth, userSub, userRoles, actionReason);
+        return restoreVendorStaff(id, internalAuth, userSub, userRoles, actionReason, null);
+    }
+
+    public Map<String, Object> restoreVendorStaff(
+            UUID id,
+            String internalAuth,
+            String userSub,
+            String userRoles,
+            String actionReason,
+            UUID callerVendorId
+    ) {
+        return accessClient.restoreVendorStaff(id, internalAuth, userSub, userRoles, actionReason, callerVendorId);
     }
 
     private void revokeKeycloakSessions(String keycloakUserId) {

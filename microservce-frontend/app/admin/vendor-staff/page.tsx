@@ -59,7 +59,8 @@ const VENDOR_PERMISSION_OPTIONS = [
   { value: "ORDERS_READ", label: "View Orders", description: "Can read vendor orders." },
   { value: "ORDERS_MANAGE", label: "Manage Orders", description: "Can update/process vendor orders." },
   { value: "ANALYTICS_READ", label: "View Analytics", description: "Can access vendor analytics dashboards." },
-  { value: "FINANCE_READ", label: "View Finance", description: "Can access payouts and bank account views." },
+  { value: "FINANCE_READ", label: "View Finance", description: "Can view payouts and bank accounts." },
+  { value: "FINANCE_MANAGE", label: "Manage Finance", description: "Can edit bank accounts and respond to refunds." },
   { value: "SETTINGS_MANAGE", label: "Manage Settings", description: "Can update vendor portal settings." },
 ] as const;
 

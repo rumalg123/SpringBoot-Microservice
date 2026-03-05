@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import toast from "react-hot-toast";
 import { useQuery } from "@tanstack/react-query";
 import { useAuthSession } from "../../../lib/authSession";
 import { money } from "../../../lib/format";
@@ -42,7 +41,7 @@ export default function VendorPayoutsPage() {
     queryFn: async () => {
       const params = new URLSearchParams({ page: String(page), size: "20" });
       if (statusFilter !== "all") params.set("status", statusFilter);
-      const res = await apiClient!.get(`/admin/payments/payouts?${params}`);
+      const res = await apiClient!.get(`/payments/vendor/me/payouts?${params}`);
       return res.data as Paged<VendorPayout>;
     },
     enabled: ready,

@@ -6,6 +6,7 @@ import com.rumal.payment_service.dto.PaymentResponse;
 import com.rumal.payment_service.entity.PaymentStatus;
 import com.rumal.payment_service.exception.UnauthorizedException;
 import com.rumal.payment_service.security.InternalRequestVerifier;
+import com.rumal.payment_service.service.PaymentAccessScopeService;
 import com.rumal.payment_service.service.PaymentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -29,17 +30,20 @@ public class AdminPaymentController {
 
     private final PaymentService paymentService;
     private final InternalRequestVerifier internalRequestVerifier;
+    private final PaymentAccessScopeService paymentAccessScopeService;
 
     @GetMapping
     public Page<PaymentResponse> listPayments(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @RequestParam(required = false) UUID customerId,
             @RequestParam(required = false) PaymentStatus status,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         internalRequestVerifier.verify(internalAuth);
-        requireUserSub(userSub);
+        var scope = paymentAccessScopeService.resolveScope(requireUserSub(userSub), userRoles, internalAuth);
+        paymentAccessScopeService.assertCanReadAdminPayments(scope);
         return paymentService.listAllPayments(customerId, status, pageable);
     }
 
@@ -47,10 +51,12 @@ public class AdminPaymentController {
     public PaymentDetailResponse getPayment(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
-        requireUserSub(userSub);
+        var scope = paymentAccessScopeService.resolveScope(requireUserSub(userSub), userRoles, internalAuth);
+        paymentAccessScopeService.assertCanReadAdminPayments(scope);
         return paymentService.getPaymentDetail(id);
     }
 
@@ -58,11 +64,13 @@ public class AdminPaymentController {
     public Page<PaymentAuditResponse> getAuditTrail(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID id,
             @PageableDefault(size = 50, sort = "createdAt") Pageable pageable
     ) {
         internalRequestVerifier.verify(internalAuth);
-        requireUserSub(userSub);
+        var scope = paymentAccessScopeService.resolveScope(requireUserSub(userSub), userRoles, internalAuth);
+        paymentAccessScopeService.assertCanReadAdminPayments(scope);
         return paymentService.getAuditTrail(id, pageable);
     }
 
@@ -70,10 +78,12 @@ public class AdminPaymentController {
     public PaymentDetailResponse verifyPayment(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
-        requireUserSub(userSub);
+        var scope = paymentAccessScopeService.resolveScope(requireUserSub(userSub), userRoles, internalAuth);
+        paymentAccessScopeService.assertCanManageAdminPayments(scope);
         return paymentService.verifyPaymentWithPayHere(id);
     }
 

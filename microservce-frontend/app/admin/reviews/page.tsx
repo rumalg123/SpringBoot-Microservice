@@ -32,6 +32,7 @@ type Tab = "reviews" | "reports";
 export default function AdminReviewsPage() {
   const session = useAuthSession();
   const { status: sessionStatus, apiClient } = session;
+  const canManageReviews = session.isSuperAdmin || session.canManageAdminReviews;
 
   const [tab, setTab] = useState<Tab>("reviews");
 
@@ -59,7 +60,7 @@ export default function AdminReviewsPage() {
       const res = await apiClient!.get(`/admin/reviews?${params.toString()}`);
       return res.data as PagedReviews;
     },
-    enabled: sessionStatus === "ready" && !!apiClient,
+    enabled: sessionStatus === "ready" && !!apiClient && canManageReviews,
   });
 
   const reviews = reviewsData?.content ?? [];
@@ -75,7 +76,7 @@ export default function AdminReviewsPage() {
       const res = await apiClient!.get(`/admin/reviews/reports?${params.toString()}`);
       return res.data as PagedReports;
     },
-    enabled: sessionStatus === "ready" && !!apiClient,
+    enabled: sessionStatus === "ready" && !!apiClient && canManageReviews,
   });
 
   const reports = reportsData?.content ?? [];
@@ -149,6 +150,14 @@ export default function AdminReviewsPage() {
     return (
       <div className="min-h-screen bg-bg grid place-items-center">
         <p className="text-muted">Loading...</p>
+      </div>
+    );
+  }
+
+  if (!canManageReviews) {
+    return (
+      <div className="min-h-screen bg-bg grid place-items-center">
+        <p className="text-muted">Unauthorized.</p>
       </div>
     );
   }
