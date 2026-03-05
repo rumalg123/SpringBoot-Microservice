@@ -133,7 +133,9 @@ public class AccessClient {
             Integer page,
             Integer size,
             Integer limit,
-            String internalAuth
+            String internalAuth,
+            String userRoles,
+            UUID callerVendorId
     ) {
         StringBuilder path = new StringBuilder("/admin/access-audit");
         String sep = "?";
@@ -176,7 +178,7 @@ public class AccessClient {
         if (limit != null) {
             path.append(sep).append("limit=").append(limit);
         }
-        return getMap(path.toString(), internalAuth);
+        return getMap(path.toString(), internalAuth, null, userRoles, null, callerVendorId);
     }
 
     public Map<String, Object> getVendorStaffById(UUID id, String internalAuth) {

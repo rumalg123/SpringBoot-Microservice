@@ -42,7 +42,21 @@ public class AdminAccessAuditController {
         internalRequestVerifier.verify(internalAuth);
 
         if (adminActorScopeService.hasRole(userRoles, "super_admin")) {
-            return adminAccessService.listAccessAudit(targetType, targetId, vendorId, action, actorQuery, from, to, page, size, limit, internalAuth);
+            return adminAccessService.listAccessAudit(
+                    targetType,
+                    targetId,
+                    vendorId,
+                    action,
+                    actorQuery,
+                    from,
+                    to,
+                    page,
+                    size,
+                    limit,
+                    internalAuth,
+                    userRoles,
+                    null
+            );
         }
 
         if (!adminActorScopeService.hasRole(userRoles, "vendor_admin")) {
@@ -70,7 +84,21 @@ public class AdminAccessAuditController {
             throw new UnauthorizedException("vendorId is required for vendor_admin access audit queries");
         }
         adminActorScopeService.assertCanManageVendorStaffVendor(userSub, userRoles, effectiveVendorId, internalAuth);
-        return adminAccessService.listAccessAudit("VENDOR_STAFF", targetId, effectiveVendorId, action, actorQuery, from, to, page, size, limit, internalAuth);
+        return adminAccessService.listAccessAudit(
+                "VENDOR_STAFF",
+                targetId,
+                effectiveVendorId,
+                action,
+                actorQuery,
+                from,
+                to,
+                page,
+                size,
+                limit,
+                internalAuth,
+                userRoles,
+                effectiveVendorId
+        );
     }
 
     private UUID parseUuid(Object raw) {

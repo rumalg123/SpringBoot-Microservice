@@ -125,9 +125,25 @@ public class AdminAccessService {
             Integer page,
             Integer size,
             Integer limit,
-            String internalAuth
+            String internalAuth,
+            String userRoles,
+            UUID callerVendorId
     ) {
-        return accessClient.listAccessAudit(targetType, targetId, vendorId, action, actorQuery, from, to, page, size, limit, internalAuth);
+        return accessClient.listAccessAudit(
+                targetType,
+                targetId,
+                vendorId,
+                action,
+                actorQuery,
+                from,
+                to,
+                page,
+                size,
+                limit,
+                internalAuth,
+                userRoles,
+                callerVendorId
+        );
     }
 
     public Map<String, Object> getVendorStaffById(UUID id, String internalAuth) {
