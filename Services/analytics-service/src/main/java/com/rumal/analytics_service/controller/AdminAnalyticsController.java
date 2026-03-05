@@ -148,14 +148,7 @@ public class AdminAnalyticsController {
         }
         Set<String> roles = new LinkedHashSet<>();
         for (String role : userRoles.split(",")) {
-            if (!StringUtils.hasText(role)) {
-                continue;
-            }
-            String normalized = role.trim()
-                    .toLowerCase(Locale.ROOT)
-                    .replace("role_", "")
-                    .replace('-', '_')
-                    .replace(' ', '_');
+            String normalized = normalizeRole(role);
             if (!normalized.isEmpty()) {
                 roles.add(normalized);
                 if ("platform_admin".equals(normalized)) {
@@ -164,5 +157,20 @@ public class AdminAnalyticsController {
             }
         }
         return Set.copyOf(roles);
+    }
+
+    private String normalizeRole(String role) {
+        if (!StringUtils.hasText(role)) {
+            return "";
+        }
+        String normalized = role.trim().toLowerCase(Locale.ROOT);
+        if (normalized.startsWith("role_")) {
+            normalized = normalized.substring("role_".length());
+        } else if (normalized.startsWith("role-")) {
+            normalized = normalized.substring("role-".length());
+        } else if (normalized.startsWith("role:")) {
+            normalized = normalized.substring("role:".length());
+        }
+        return normalized.replace('-', '_').replace(' ', '_');
     }
 }

@@ -3,6 +3,7 @@ package com.rumal.review_service.controller;
 import com.rumal.review_service.client.CustomerClient;
 import com.rumal.review_service.dto.*;
 import com.rumal.review_service.exception.UnauthorizedException;
+import com.rumal.review_service.security.InternalRequestVerifier;
 import com.rumal.review_service.service.ReviewService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -22,14 +23,19 @@ public class MyReviewController {
 
     private final ReviewService reviewService;
     private final CustomerClient customerClient;
+    private final InternalRequestVerifier internalRequestVerifier;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ReviewResponse create(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Email-Verified", required = false) String emailVerified,
             @Valid @RequestBody CreateReviewRequest request
     ) {
+        internalRequestVerifier.verify(internalAuth);
         assertAuthenticated(userSub);
+        verifyEmailVerified(emailVerified);
         CustomerSummary customer = customerClient.getByKeycloakId(userSub);
         String displayName = buildDisplayName(customer);
         return reviewService.createReview(customer.id(), displayName, request);
@@ -37,11 +43,15 @@ public class MyReviewController {
 
     @PutMapping("/{reviewId}")
     public ReviewResponse update(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Email-Verified", required = false) String emailVerified,
             @PathVariable UUID reviewId,
             @Valid @RequestBody UpdateReviewRequest request
     ) {
+        internalRequestVerifier.verify(internalAuth);
         assertAuthenticated(userSub);
+        verifyEmailVerified(emailVerified);
         CustomerSummary customer = customerClient.getByKeycloakId(userSub);
         return reviewService.updateReview(reviewId, customer.id(), request);
     }
@@ -49,20 +59,28 @@ public class MyReviewController {
     @DeleteMapping("/{reviewId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Email-Verified", required = false) String emailVerified,
             @PathVariable UUID reviewId
     ) {
+        internalRequestVerifier.verify(internalAuth);
         assertAuthenticated(userSub);
+        verifyEmailVerified(emailVerified);
         CustomerSummary customer = customerClient.getByKeycloakId(userSub);
         reviewService.deleteReview(reviewId, customer.id());
     }
 
     @GetMapping
     public Page<ReviewResponse> listMine(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Email-Verified", required = false) String emailVerified,
             @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
+        internalRequestVerifier.verify(internalAuth);
         assertAuthenticated(userSub);
+        verifyEmailVerified(emailVerified);
         CustomerSummary customer = customerClient.getByKeycloakId(userSub);
         return reviewService.listByCustomer(customer.id(), pageable);
     }
@@ -70,11 +88,15 @@ public class MyReviewController {
     @PostMapping("/{reviewId}/vote")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void vote(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Email-Verified", required = false) String emailVerified,
             @PathVariable UUID reviewId,
             @Valid @RequestBody VoteRequest request
     ) {
+        internalRequestVerifier.verify(internalAuth);
         assertAuthenticated(userSub);
+        verifyEmailVerified(emailVerified);
         CustomerSummary customer = customerClient.getByKeycloakId(userSub);
         reviewService.vote(reviewId, customer.id(), request.helpful());
     }
@@ -82,11 +104,15 @@ public class MyReviewController {
     @PostMapping("/{reviewId}/report")
     @ResponseStatus(HttpStatus.CREATED)
     public void report(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Email-Verified", required = false) String emailVerified,
             @PathVariable UUID reviewId,
             @Valid @RequestBody CreateReportRequest request
     ) {
+        internalRequestVerifier.verify(internalAuth);
         assertAuthenticated(userSub);
+        verifyEmailVerified(emailVerified);
         CustomerSummary customer = customerClient.getByKeycloakId(userSub);
         reviewService.createReport(reviewId, customer.id(), request);
     }
@@ -94,6 +120,12 @@ public class MyReviewController {
     private void assertAuthenticated(String userSub) {
         if (userSub == null || userSub.isBlank()) {
             throw new UnauthorizedException("Authentication required");
+        }
+    }
+
+    private void verifyEmailVerified(String emailVerified) {
+        if (emailVerified == null || !"true".equalsIgnoreCase(emailVerified.trim())) {
+            throw new UnauthorizedException("Email is not verified");
         }
     }
 

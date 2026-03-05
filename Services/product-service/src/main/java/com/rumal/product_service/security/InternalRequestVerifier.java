@@ -20,9 +20,13 @@ public class InternalRequestVerifier {
     private static final long MAX_TIMESTAMP_DRIFT_MS = 60_000;
 
     private final String sharedSecret;
+    private final boolean allowUnsignedRequests;
 
-    public InternalRequestVerifier(@Value("${internal.auth.shared-secret:}") String sharedSecret) {
+    public InternalRequestVerifier(
+            @Value("${internal.auth.shared-secret:}") String sharedSecret,
+            @Value("${internal.auth.allow-unsigned-requests:false}") boolean allowUnsignedRequests) {
         this.sharedSecret = sharedSecret == null ? "" : sharedSecret.trim();
+        this.allowUnsignedRequests = allowUnsignedRequests;
     }
 
     public void verify(String headerValue) {
@@ -55,6 +59,9 @@ public class InternalRequestVerifier {
         String signature = request.getHeader("X-Internal-Signature");
         String timestampStr = request.getHeader("X-Internal-Timestamp");
         if (signature == null || timestampStr == null) {
+            if (!allowUnsignedRequests || hasForwardedUserContext(request)) {
+                throw new UnauthorizedException("HMAC signature headers are required but missing");
+            }
             return false;
         }
 
@@ -83,6 +90,18 @@ public class InternalRequestVerifier {
         }
 
         return true;
+    }
+
+
+    private boolean hasForwardedUserContext(HttpServletRequest request) {
+        return hasText(request.getHeader("X-User-Sub"))
+                || hasText(request.getHeader("X-User-Roles"))
+                || hasText(request.getHeader("X-User-Email-Verified"))
+                || hasText(request.getHeader("X-Caller-Vendor-Id"));
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     private String computeBodyHash(HttpServletRequest request) {
@@ -146,3 +165,6 @@ public class InternalRequestVerifier {
         return sign(secret, method, path, null);
     }
 }
+
+
+

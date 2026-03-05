@@ -23,6 +23,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.LinkedHashSet;
+import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 
 @RestController
@@ -130,8 +133,39 @@ public class AdminVendorStaffController {
     // ── C-08: Tenant isolation helpers ──
 
     private boolean isPlatformAdmin(String userRoles) {
-        return userRoles != null
-                && (userRoles.contains("super_admin") || userRoles.contains("platform_staff"));
+        Set<String> roles = parseRoles(userRoles);
+        return roles.contains("super_admin")
+                || roles.contains("platform_admin")
+                || roles.contains("platform_staff");
+    }
+
+    private Set<String> parseRoles(String userRoles) {
+        if (userRoles == null || userRoles.isBlank()) {
+            return Set.of();
+        }
+        Set<String> roles = new LinkedHashSet<>();
+        for (String rawRole : userRoles.split(",")) {
+            String normalized = normalizeRole(rawRole);
+            if (!normalized.isEmpty()) {
+                roles.add(normalized);
+            }
+        }
+        return Set.copyOf(roles);
+    }
+
+    private String normalizeRole(String role) {
+        if (role == null || role.isBlank()) {
+            return "";
+        }
+        String normalized = role.trim().toLowerCase(Locale.ROOT);
+        if (normalized.startsWith("role_")) {
+            normalized = normalized.substring("role_".length());
+        } else if (normalized.startsWith("role-")) {
+            normalized = normalized.substring("role-".length());
+        } else if (normalized.startsWith("role:")) {
+            normalized = normalized.substring("role:".length());
+        }
+        return normalized.replace('-', '_').replace(' ', '_');
     }
 
     /**

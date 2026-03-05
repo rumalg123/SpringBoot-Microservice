@@ -30,15 +30,27 @@ public class AdminAccessService {
     }
 
     public List<Map<String, Object>> listPlatformStaff(String internalAuth) {
-        return accessClient.listPlatformStaff(internalAuth);
+        return listPlatformStaff(internalAuth, null, null);
+    }
+
+    public List<Map<String, Object>> listPlatformStaff(String internalAuth, String userSub, String userRoles) {
+        return accessClient.listPlatformStaff(internalAuth, userSub, userRoles);
     }
 
     public List<Map<String, Object>> listDeletedPlatformStaff(String internalAuth) {
-        return accessClient.listDeletedPlatformStaff(internalAuth);
+        return listDeletedPlatformStaff(internalAuth, null, null);
+    }
+
+    public List<Map<String, Object>> listDeletedPlatformStaff(String internalAuth, String userSub, String userRoles) {
+        return accessClient.listDeletedPlatformStaff(internalAuth, userSub, userRoles);
     }
 
     public Map<String, Object> getPlatformStaffById(UUID id, String internalAuth) {
-        return accessClient.getPlatformStaffById(id, internalAuth);
+        return getPlatformStaffById(id, internalAuth, null, null);
+    }
+
+    public Map<String, Object> getPlatformStaffById(UUID id, String internalAuth, String userSub, String userRoles) {
+        return accessClient.getPlatformStaffById(id, internalAuth, userSub, userRoles);
     }
 
     public Map<String, Object> createPlatformStaff(Map<String, Object> request, String internalAuth) {
@@ -73,7 +85,7 @@ public class AdminAccessService {
     }
 
     public void deletePlatformStaff(UUID id, String internalAuth, String userSub, String userRoles, String actionReason) {
-        Map<String, Object> existing = accessClient.getPlatformStaffById(id, internalAuth);
+        Map<String, Object> existing = accessClient.getPlatformStaffById(id, internalAuth, userSub, userRoles);
         accessClient.deletePlatformStaff(id, internalAuth, userSub, userRoles, actionReason);
         revokeKeycloakSessions(extractString(existing.get("keycloakUserId")));
     }

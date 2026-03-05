@@ -1,4 +1,4 @@
-package com.rumal.vendor_service.config;
+package com.rumal.product_service.config;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;

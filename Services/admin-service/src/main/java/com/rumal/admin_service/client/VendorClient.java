@@ -43,19 +43,35 @@ public class VendorClient {
     }
 
     public List<Map<String, Object>> listAll(String internalAuth) {
-        return getPagedContentList("/admin/vendors", internalAuth);
+        return listAll(internalAuth, null, null);
+    }
+
+    public List<Map<String, Object>> listAll(String internalAuth, String userSub, String userRoles) {
+        return getPagedContentList("/admin/vendors", internalAuth, userSub, userRoles);
     }
 
     public List<Map<String, Object>> listDeleted(String internalAuth) {
-        return getPagedContentList("/admin/vendors/deleted", internalAuth);
+        return listDeleted(internalAuth, null, null);
+    }
+
+    public List<Map<String, Object>> listDeleted(String internalAuth, String userSub, String userRoles) {
+        return getPagedContentList("/admin/vendors/deleted", internalAuth, userSub, userRoles);
     }
 
     public Map<String, Object> getById(UUID id, String internalAuth) {
-        return getMap("/admin/vendors/" + id, internalAuth);
+        return getById(id, internalAuth, null, null);
+    }
+
+    public Map<String, Object> getById(UUID id, String internalAuth, String userSub, String userRoles) {
+        return getMap("/admin/vendors/" + id, internalAuth, userSub, userRoles);
     }
 
     public Map<String, Object> getDeletionEligibility(UUID id, String internalAuth) {
-        return getMap("/admin/vendors/" + id + "/deletion-eligibility", internalAuth);
+        return getDeletionEligibility(id, internalAuth, null, null);
+    }
+
+    public Map<String, Object> getDeletionEligibility(UUID id, String internalAuth, String userSub, String userRoles) {
+        return getMap("/admin/vendors/" + id + "/deletion-eligibility", internalAuth, userSub, userRoles);
     }
 
     public Map<String, Object> create(Map<String, Object> request, String internalAuth) {
@@ -179,11 +195,19 @@ public class VendorClient {
     }
 
     public List<Map<String, Object>> listVendorUsers(UUID vendorId, String internalAuth) {
-        return getList("/admin/vendors/" + vendorId + "/users", internalAuth);
+        return listVendorUsers(vendorId, internalAuth, null, null);
+    }
+
+    public List<Map<String, Object>> listVendorUsers(UUID vendorId, String internalAuth, String userSub, String userRoles) {
+        return getList("/admin/vendors/" + vendorId + "/users", internalAuth, userSub, userRoles);
     }
 
     public Map<String, Object> listLifecycleAudit(UUID vendorId, String internalAuth) {
-        return getMap("/admin/vendors/" + vendorId + "/lifecycle-audit", internalAuth);
+        return listLifecycleAudit(vendorId, internalAuth, null, null);
+    }
+
+    public Map<String, Object> listLifecycleAudit(UUID vendorId, String internalAuth, String userSub, String userRoles) {
+        return getMap("/admin/vendors/" + vendorId + "/lifecycle-audit", internalAuth, userSub, userRoles);
     }
 
     public Map<String, Object> requestDelete(UUID vendorId, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
@@ -233,20 +257,32 @@ public class VendorClient {
     }
 
     public Map<String, Object> addVendorUser(UUID vendorId, Map<String, Object> request, String internalAuth) {
-        return jsonRequest("POST", "/admin/vendors/" + vendorId + "/users", request, internalAuth);
+        return addVendorUser(vendorId, request, internalAuth, null, null);
+    }
+
+    public Map<String, Object> addVendorUser(UUID vendorId, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
+        return jsonRequest("POST", "/admin/vendors/" + vendorId + "/users", request, internalAuth, userSub, userRoles);
     }
 
     public Map<String, Object> updateVendorUser(UUID vendorId, UUID membershipId, Map<String, Object> request, String internalAuth) {
-        return jsonRequest("PUT", "/admin/vendors/" + vendorId + "/users/" + membershipId, request, internalAuth);
+        return updateVendorUser(vendorId, membershipId, request, internalAuth, null, null);
+    }
+
+    public Map<String, Object> updateVendorUser(UUID vendorId, UUID membershipId, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
+        return jsonRequest("PUT", "/admin/vendors/" + vendorId + "/users/" + membershipId, request, internalAuth, userSub, userRoles);
     }
 
     public void removeVendorUser(UUID vendorId, UUID membershipId, String internalAuth) {
+        removeVendorUser(vendorId, membershipId, internalAuth, null, null);
+    }
+
+    public void removeVendorUser(UUID vendorId, UUID membershipId, String internalAuth, String userSub, String userRoles) {
         runVendorVoid(() -> {
             RestClient rc = restClient;
             try {
-                rc.delete()
+                applyActorHeaders(rc.delete()
                         .uri(buildUri("/admin/vendors/" + vendorId + "/users/" + membershipId))
-                        .header("X-Internal-Auth", internalAuth)
+                        .header("X-Internal-Auth", internalAuth), userSub, userRoles)
                         .retrieve()
                         .toBodilessEntity();
             } catch (RestClientResponseException ex) {
@@ -261,7 +297,12 @@ public class VendorClient {
 
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> getPagedContentList(String path, String internalAuth) {
-        Map<String, Object> page = getMap(path, internalAuth);
+        return getPagedContentList(path, internalAuth, null, null);
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> getPagedContentList(String path, String internalAuth, String userSub, String userRoles) {
+        Map<String, Object> page = getMap(path, internalAuth, userSub, userRoles);
         Object content = page.get("content");
         if (content instanceof List<?> list) {
             return list.stream()
@@ -273,12 +314,16 @@ public class VendorClient {
     }
 
     private List<Map<String, Object>> getList(String path, String internalAuth) {
+        return getList(path, internalAuth, null, null);
+    }
+
+    private List<Map<String, Object>> getList(String path, String internalAuth, String userSub, String userRoles) {
         return runVendorCall(() -> {
             RestClient rc = restClient;
             try {
-                List<Map<String, Object>> response = rc.get()
+                List<Map<String, Object>> response = applyActorHeaders(rc.get()
                         .uri(buildUri(path))
-                        .header("X-Internal-Auth", internalAuth)
+                        .header("X-Internal-Auth", internalAuth), userSub, userRoles)
                         .retrieve()
                         .body(LIST_MAP_TYPE);
                 if (response == null) {
@@ -296,12 +341,16 @@ public class VendorClient {
     }
 
     private Map<String, Object> getMap(String path, String internalAuth) {
+        return getMap(path, internalAuth, null, null);
+    }
+
+    private Map<String, Object> getMap(String path, String internalAuth, String userSub, String userRoles) {
         return runVendorCall(() -> {
             RestClient rc = restClient;
             try {
-                Map<String, Object> response = rc.get()
+                Map<String, Object> response = applyActorHeaders(rc.get()
                         .uri(buildUri(path))
-                        .header("X-Internal-Auth", internalAuth)
+                        .header("X-Internal-Auth", internalAuth), userSub, userRoles)
                         .retrieve()
                         .body(MAP_TYPE);
                 if (response == null) {

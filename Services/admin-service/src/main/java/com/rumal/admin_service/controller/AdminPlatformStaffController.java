@@ -39,7 +39,7 @@ public class AdminPlatformStaffController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         adminActorScopeService.assertHasRole(userSub, userRoles, "super_admin");
-        return adminAccessService.listPlatformStaff(internalAuth);
+        return adminAccessService.listPlatformStaff(internalAuth, userSub, userRoles);
     }
 
     @GetMapping("/deleted")
@@ -50,7 +50,7 @@ public class AdminPlatformStaffController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         adminActorScopeService.assertHasRole(userSub, userRoles, "super_admin");
-        return adminAccessService.listDeletedPlatformStaff(internalAuth);
+        return adminAccessService.listDeletedPlatformStaff(internalAuth, userSub, userRoles);
     }
 
     @PostMapping

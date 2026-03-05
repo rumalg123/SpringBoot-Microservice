@@ -6,6 +6,7 @@ public enum VendorPermission {
     INVENTORY_MANAGE("vendor.inventory.manage"),
     ORDERS_READ("vendor.orders.read"),
     ORDERS_MANAGE("vendor.orders.manage"),
+    REVIEWS_MANAGE("vendor.reviews.manage"),
     REPORTS_READ("vendor.reports.read"),
     ANALYTICS_READ("vendor.analytics.read"),
     FINANCE_READ("vendor.finance.read"),

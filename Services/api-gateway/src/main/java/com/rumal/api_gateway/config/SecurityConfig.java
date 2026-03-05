@@ -61,13 +61,14 @@ public class SecurityConfig {
                         .pathMatchers(HttpMethod.GET, "/posters", "/posters/**").permitAll()
                         .pathMatchers(HttpMethod.POST, "/posters/*/click", "/posters/*/impression").permitAll()
                         .pathMatchers("/reviews/vendor/**").access(this::hasVendorAccess)
+                        .pathMatchers("/reviews/me", "/reviews/me/**").access(this::hasCustomerAccess)
                         .pathMatchers(HttpMethod.GET, "/reviews", "/reviews/**").permitAll()
                         .pathMatchers(HttpMethod.GET, "/search", "/search/**").permitAll()
                         .pathMatchers("/webhooks/**").permitAll()
                         .pathMatchers("/analytics/admin/**").access(this::hasSuperAdminOrPlatformStaffAccess)
                         .pathMatchers("/admin/dashboard/**").access(this::hasSuperAdminOrPlatformStaffAccess)
                         .pathMatchers("/analytics/vendor/**").access(this::hasAnyScopedAdminAccess)
-                        .pathMatchers("/analytics/customer/**").authenticated()
+                        .pathMatchers("/analytics/customer/**").access(this::hasCustomerAccess)
                         .pathMatchers("/orders/vendor/me", "/orders/vendor/me/**").access(this::hasVendorAccess)
                         .pathMatchers("/payments/vendor/me", "/payments/vendor/me/**").access(this::hasVendorAccess)
                         .pathMatchers("/inventory/vendor/me", "/inventory/vendor/me/**").access(this::hasVendorAccess)
@@ -179,7 +180,7 @@ public class SecurityConfig {
                 .cast(JwtAuthenticationToken.class)
                 .map(JwtAuthenticationToken::getToken)
                 .map(jwt -> (AuthorizationResult) new AuthorizationDecision(
-                        isEmailVerified(jwt)
+                        isEmailVerified(jwt) && isCustomerPrincipal(jwt)
                 ))
                 .defaultIfEmpty(new AuthorizationDecision(false));
     }
@@ -235,6 +236,21 @@ public class SecurityConfig {
 
     private boolean hasPlatformAdminLikeRole(Jwt jwt) {
         return hasRole(jwt, "super_admin") || hasRole(jwt, "platform_admin");
+    }
+
+    private boolean isCustomerPrincipal(Jwt jwt) {
+        if (hasRole(jwt, "customer")) {
+            return true;
+        }
+        return !hasAnyScopedAdminRole(jwt);
+    }
+
+    private boolean hasAnyScopedAdminRole(Jwt jwt) {
+        return hasRole(jwt, "super_admin")
+                || hasRole(jwt, "platform_admin")
+                || hasRole(jwt, "platform_staff")
+                || hasRole(jwt, "vendor_admin")
+                || hasRole(jwt, "vendor_staff");
     }
 
     private boolean containsRole(List<String> roles, String requiredRole) {

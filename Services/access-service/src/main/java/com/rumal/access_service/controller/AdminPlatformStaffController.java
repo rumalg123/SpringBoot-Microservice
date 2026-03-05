@@ -2,6 +2,7 @@ package com.rumal.access_service.controller;
 
 import com.rumal.access_service.dto.PlatformStaffAccessResponse;
 import com.rumal.access_service.dto.UpsertPlatformStaffAccessRequest;
+import com.rumal.access_service.exception.UnauthorizedException;
 import com.rumal.access_service.security.InternalRequestVerifier;
 import com.rumal.access_service.service.AccessService;
 import jakarta.validation.Valid;
@@ -21,6 +22,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.LinkedHashSet;
+import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 
 @RestController
@@ -35,27 +39,33 @@ public class AdminPlatformStaffController {
     @GetMapping
     public Page<PlatformStaffAccessResponse> listAll(
             @RequestHeader(INTERNAL_HEADER) String internalAuth,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PageableDefault(size = 20, sort = "email") Pageable pageable
     ) {
         internalRequestVerifier.verify(internalAuth);
+        requirePlatformAdmin(userRoles);
         return accessService.listPlatformStaff(pageable);
     }
 
     @GetMapping("/deleted")
     public Page<PlatformStaffAccessResponse> listDeleted(
             @RequestHeader(INTERNAL_HEADER) String internalAuth,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PageableDefault(size = 20, sort = "email") Pageable pageable
     ) {
         internalRequestVerifier.verify(internalAuth);
+        requirePlatformAdmin(userRoles);
         return accessService.listDeletedPlatformStaff(pageable);
     }
 
     @GetMapping("/{id}")
     public PlatformStaffAccessResponse getById(
             @RequestHeader(INTERNAL_HEADER) String internalAuth,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
+        requirePlatformAdmin(userRoles);
         return accessService.getPlatformStaffById(id);
     }
 
@@ -69,6 +79,7 @@ public class AdminPlatformStaffController {
             @Valid @RequestBody UpsertPlatformStaffAccessRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
+        requirePlatformAdmin(userRoles);
         return accessService.createPlatformStaff(request, userSub, userRoles, actionReason);
     }
 
@@ -82,6 +93,7 @@ public class AdminPlatformStaffController {
             @Valid @RequestBody UpsertPlatformStaffAccessRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
+        requirePlatformAdmin(userRoles);
         return accessService.updatePlatformStaff(id, request, userSub, userRoles, actionReason);
     }
 
@@ -95,6 +107,7 @@ public class AdminPlatformStaffController {
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
+        requirePlatformAdmin(userRoles);
         accessService.softDeletePlatformStaff(id, userSub, userRoles, actionReason);
     }
 
@@ -107,6 +120,44 @@ public class AdminPlatformStaffController {
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
+        requirePlatformAdmin(userRoles);
         return accessService.restorePlatformStaff(id, userSub, userRoles, actionReason);
+    }
+
+    private void requirePlatformAdmin(String userRoles) {
+        Set<String> roles = parseRoles(userRoles);
+        if (roles.contains("super_admin") || roles.contains("platform_admin")) {
+            return;
+        }
+        throw new UnauthorizedException("Caller does not have platform admin access");
+    }
+
+    private Set<String> parseRoles(String userRoles) {
+        if (userRoles == null || userRoles.isBlank()) {
+            return Set.of();
+        }
+        Set<String> roles = new LinkedHashSet<>();
+        for (String rawRole : userRoles.split(",")) {
+            String normalized = normalizeRole(rawRole);
+            if (!normalized.isEmpty()) {
+                roles.add(normalized);
+            }
+        }
+        return Set.copyOf(roles);
+    }
+
+    private String normalizeRole(String role) {
+        if (role == null || role.isBlank()) {
+            return "";
+        }
+        String normalized = role.trim().toLowerCase(Locale.ROOT);
+        if (normalized.startsWith("role_")) {
+            normalized = normalized.substring("role_".length());
+        } else if (normalized.startsWith("role-")) {
+            normalized = normalized.substring("role-".length());
+        } else if (normalized.startsWith("role:")) {
+            normalized = normalized.substring("role:".length());
+        }
+        return normalized.replace('-', '_').replace(' ', '_');
     }
 }

@@ -50,7 +50,8 @@ public class AdminKeycloakUserController {
 
         Set<String> linkedKeycloakUserIds = adminVendorService.listLinkedKeycloakUserIdsForVendorAdmin(
                 requireUserSub(userSub),
-                internalAuth
+                internalAuth,
+                userRoles
         );
         if (linkedKeycloakUserIds.isEmpty()) {
             return List.of();

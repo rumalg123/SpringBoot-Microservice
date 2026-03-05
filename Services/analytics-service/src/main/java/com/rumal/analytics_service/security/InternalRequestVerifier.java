@@ -24,12 +24,15 @@ public class InternalRequestVerifier {
 
     private final String sharedSecret;
     private final boolean hmacRequired;
+    private final boolean allowUnsignedRequests;
 
     public InternalRequestVerifier(
             @Value("${internal.auth.shared-secret:}") String sharedSecret,
-            @Value("${internal.auth.hmac-required:false}") boolean hmacRequired) {
+            @Value("${internal.auth.hmac-required:false}") boolean hmacRequired,
+            @Value("${internal.auth.allow-unsigned-requests:false}") boolean allowUnsignedRequests) {
         this.sharedSecret = sharedSecret;
         this.hmacRequired = hmacRequired;
+        this.allowUnsignedRequests = allowUnsignedRequests;
     }
 
     public void verify(String headerValue) {
@@ -51,11 +54,9 @@ public class InternalRequestVerifier {
         String signature = request.getHeader("X-Internal-Signature");
         String timestampStr = request.getHeader("X-Internal-Timestamp");
         if (signature == null || timestampStr == null) {
-            if (hmacRequired) {
+            if (hmacRequired || !allowUnsignedRequests || hasForwardedUserContext(request)) {
                 throw new UnauthorizedException("HMAC signature headers are required but missing");
             }
-            log.warn("HMAC headers missing for {} {} — falling back to shared-secret-only auth",
-                    request.getMethod(), request.getRequestURI());
             return;
         }
         long timestamp;
@@ -79,6 +80,18 @@ public class InternalRequestVerifier {
         if (!MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8), signature.getBytes(StandardCharsets.UTF_8))) {
             throw new UnauthorizedException("Invalid internal HMAC signature");
         }
+    }
+
+
+    private boolean hasForwardedUserContext(HttpServletRequest request) {
+        return hasText(request.getHeader("X-User-Sub"))
+                || hasText(request.getHeader("X-User-Roles"))
+                || hasText(request.getHeader("X-User-Email-Verified"))
+                || hasText(request.getHeader("X-Caller-Vendor-Id"));
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     private String computeBodyHash(HttpServletRequest request) {
@@ -138,3 +151,4 @@ public class InternalRequestVerifier {
         return sign(secret, method, path, null);
     }
 }
+

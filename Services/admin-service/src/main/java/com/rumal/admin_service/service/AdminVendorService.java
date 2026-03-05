@@ -29,23 +29,43 @@ public class AdminVendorService {
     private final KeycloakVendorAdminManagementService keycloakVendorAdminManagementService;
 
     public List<Map<String, Object>> listAll(String internalAuth) {
-        return vendorClient.listAll(internalAuth);
+        return listAll(internalAuth, null, null);
+    }
+
+    public List<Map<String, Object>> listAll(String internalAuth, String userSub, String userRoles) {
+        return vendorClient.listAll(internalAuth, userSub, userRoles);
     }
 
     public List<Map<String, Object>> listDeleted(String internalAuth) {
-        return vendorClient.listDeleted(internalAuth);
+        return listDeleted(internalAuth, null, null);
+    }
+
+    public List<Map<String, Object>> listDeleted(String internalAuth, String userSub, String userRoles) {
+        return vendorClient.listDeleted(internalAuth, userSub, userRoles);
     }
 
     public Map<String, Object> listLifecycleAudit(UUID id, String internalAuth) {
-        return vendorClient.listLifecycleAudit(id, internalAuth);
+        return listLifecycleAudit(id, internalAuth, null, null);
+    }
+
+    public Map<String, Object> listLifecycleAudit(UUID id, String internalAuth, String userSub, String userRoles) {
+        return vendorClient.listLifecycleAudit(id, internalAuth, userSub, userRoles);
     }
 
     public Map<String, Object> getById(UUID id, String internalAuth) {
-        return vendorClient.getById(id, internalAuth);
+        return getById(id, internalAuth, null, null);
+    }
+
+    public Map<String, Object> getById(UUID id, String internalAuth, String userSub, String userRoles) {
+        return vendorClient.getById(id, internalAuth, userSub, userRoles);
     }
 
     public Map<String, Object> getDeletionEligibility(UUID id, String internalAuth) {
-        return vendorClient.getDeletionEligibility(id, internalAuth);
+        return getDeletionEligibility(id, internalAuth, null, null);
+    }
+
+    public Map<String, Object> getDeletionEligibility(UUID id, String internalAuth, String userSub, String userRoles) {
+        return vendorClient.getDeletionEligibility(id, internalAuth, userSub, userRoles);
     }
 
     public Map<String, Object> create(Map<String, Object> request, String internalAuth) {
@@ -61,10 +81,10 @@ public class AdminVendorService {
     }
 
     public Map<String, Object> update(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
-        Map<String, Object> before = vendorClient.getById(id, internalAuth);
+        Map<String, Object> before = vendorClient.getById(id, internalAuth, userSub, userRoles);
         Map<String, Object> updated = vendorClient.update(id, request, internalAuth, userSub, userRoles);
         if (isVendorSecurityOperational(before) && !isVendorSecurityOperational(updated)) {
-            revokeSessionsForVendorPrincipals(id, internalAuth);
+            revokeSessionsForVendorPrincipals(id, internalAuth, userSub, userRoles);
         }
         return updated;
     }
@@ -75,7 +95,7 @@ public class AdminVendorService {
 
     public void delete(UUID id, String internalAuth, String userSub, String userRoles) {
         vendorClient.delete(id, internalAuth, userSub, userRoles);
-        revokeSessionsForVendorPrincipals(id, internalAuth);
+        revokeSessionsForVendorPrincipals(id, internalAuth, userSub, userRoles);
     }
 
     public Map<String, Object> requestDelete(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
@@ -92,7 +112,7 @@ public class AdminVendorService {
 
     public void confirmDelete(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles, String idempotencyKey) {
         vendorClient.confirmDelete(id, request, internalAuth, userSub, userRoles, idempotencyKey);
-        revokeSessionsForVendorPrincipals(id, internalAuth);
+        revokeSessionsForVendorPrincipals(id, internalAuth, userSub, userRoles);
     }
 
     public Map<String, Object> stopReceivingOrders(UUID id, String internalAuth) {
@@ -140,14 +160,18 @@ public class AdminVendorService {
     }
 
     public List<Map<String, Object>> listVendorUsers(UUID vendorId, String internalAuth) {
-        return vendorClient.listVendorUsers(vendorId, internalAuth);
+        return listVendorUsers(vendorId, internalAuth, null, null);
+    }
+
+    public List<Map<String, Object>> listVendorUsers(UUID vendorId, String internalAuth, String userSub, String userRoles) {
+        return vendorClient.listVendorUsers(vendorId, internalAuth, userSub, userRoles);
     }
 
     public List<Map<String, Object>> listAccessibleVendorMembershipsByKeycloakUser(String keycloakUserId, String internalAuth) {
         return vendorClient.listAccessibleVendorMembershipsByKeycloakUser(keycloakUserId, internalAuth);
     }
 
-    public Set<String> listLinkedKeycloakUserIdsForVendorAdmin(String keycloakUserId, String internalAuth) {
+    public Set<String> listLinkedKeycloakUserIdsForVendorAdmin(String keycloakUserId, String internalAuth, String userRoles) {
         String normalizedUserSub = normalizeRequired(keycloakUserId, "keycloakUserId", 120);
         Set<UUID> vendorIds = new LinkedHashSet<>();
         for (Map<String, Object> membership : vendorClient.listAccessibleVendorMembershipsByKeycloakUser(normalizedUserSub, internalAuth)) {
@@ -166,7 +190,7 @@ public class AdminVendorService {
 
         Set<String> linkedKeycloakUserIds = new LinkedHashSet<>();
         for (UUID vendorId : vendorIds) {
-            for (Map<String, Object> vendorUser : vendorClient.listVendorUsers(vendorId, internalAuth)) {
+            for (Map<String, Object> vendorUser : vendorClient.listVendorUsers(vendorId, internalAuth, normalizedUserSub, "super_admin")) {
                 if (vendorUser == null || !isTruthy(vendorUser.get("active"))) {
                     continue;
                 }
@@ -189,10 +213,10 @@ public class AdminVendorService {
         return Set.copyOf(linkedKeycloakUserIds);
     }
 
-    public int reconcileVendorStaffMemberships(UUID vendorId, String internalAuth) {
+    public int reconcileVendorStaffMemberships(UUID vendorId, String internalAuth, String userSub, String userRoles) {
         List<Map<String, Object>> rows = accessClient.listVendorStaff(vendorId, internalAuth, "super_admin", null);
         for (Map<String, Object> row : rows) {
-            syncVendorStaffMembershipTransition(null, row, internalAuth);
+            syncVendorStaffMembershipTransition(null, row, internalAuth, userSub, userRoles);
         }
         return rows.size();
     }
@@ -204,7 +228,9 @@ public class AdminVendorService {
     public void syncVendorStaffMembershipTransition(
             Map<String, Object> beforeRow,
             Map<String, Object> afterRow,
-            String internalAuth
+            String internalAuth,
+            String userSub,
+            String userRoles
     ) {
         if (beforeRow == null && afterRow == null) {
             return;
@@ -213,27 +239,27 @@ public class AdminVendorService {
         if (beforeRow != null && afterRow == null) {
             Map<String, Object> deactivate = new LinkedHashMap<>(beforeRow);
             deactivate.put("active", false);
-            syncVendorStaffMembership(deactivate, internalAuth);
+            syncVendorStaffMembership(deactivate, internalAuth, userSub, userRoles);
             return;
         }
 
         if (beforeRow != null && afterRow != null && !isSameVendorPrincipal(beforeRow, afterRow)) {
             Map<String, Object> deactivateOld = new LinkedHashMap<>(beforeRow);
             deactivateOld.put("active", false);
-            syncVendorStaffMembership(deactivateOld, internalAuth);
+            syncVendorStaffMembership(deactivateOld, internalAuth, userSub, userRoles);
         }
 
         if (afterRow != null) {
-            syncVendorStaffMembership(afterRow, internalAuth);
+            syncVendorStaffMembership(afterRow, internalAuth, userSub, userRoles);
         }
     }
 
-    public Map<String, Object> addVendorUser(UUID vendorId, Map<String, Object> request, String internalAuth) {
-        return vendorClient.addVendorUser(vendorId, request, internalAuth);
+    public Map<String, Object> addVendorUser(UUID vendorId, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
+        return vendorClient.addVendorUser(vendorId, request, internalAuth, userSub, userRoles);
     }
 
-    public Map<String, Object> updateVendorUser(UUID vendorId, UUID membershipId, Map<String, Object> request, String internalAuth) {
-        Map<String, Object> updated = vendorClient.updateVendorUser(vendorId, membershipId, request, internalAuth);
+    public Map<String, Object> updateVendorUser(UUID vendorId, UUID membershipId, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
+        Map<String, Object> updated = vendorClient.updateVendorUser(vendorId, membershipId, request, internalAuth, userSub, userRoles);
         if (!isTruthy(updated.get("active"))) {
             String keycloakUserId = stringOrNull(updated.get("keycloakUserId"));
             if (StringUtils.hasText(keycloakUserId)) {
@@ -243,24 +269,30 @@ public class AdminVendorService {
         return updated;
     }
 
-    public void removeVendorUser(UUID vendorId, UUID membershipId, String internalAuth) {
+    public void removeVendorUser(UUID vendorId, UUID membershipId, String internalAuth, String userSub, String userRoles) {
         String keycloakUserId = null;
-        for (Map<String, Object> row : vendorClient.listVendorUsers(vendorId, internalAuth)) {
+        for (Map<String, Object> row : vendorClient.listVendorUsers(vendorId, internalAuth, userSub, userRoles)) {
             UUID rowId = tryParseUuid(row.get("id"));
             if (membershipId.equals(rowId)) {
                 keycloakUserId = stringOrNull(row.get("keycloakUserId"));
                 break;
             }
         }
-        vendorClient.removeVendorUser(vendorId, membershipId, internalAuth);
+        vendorClient.removeVendorUser(vendorId, membershipId, internalAuth, userSub, userRoles);
         if (StringUtils.hasText(keycloakUserId)) {
             keycloakVendorAdminManagementService.logoutUserSessions(keycloakUserId);
         }
     }
 
-    public VendorAdminOnboardResponse onboardVendorAdmin(UUID vendorId, VendorAdminOnboardRequest request, String internalAuth) {
+    public VendorAdminOnboardResponse onboardVendorAdmin(
+            UUID vendorId,
+            VendorAdminOnboardRequest request,
+            String internalAuth,
+            String userSub,
+            String userRoles
+    ) {
         // Fail fast before touching Keycloak if vendor does not exist.
-        vendorClient.getById(vendorId, internalAuth);
+        vendorClient.getById(vendorId, internalAuth, userSub, userRoles);
 
         boolean createIfMissing = request.createIfMissing() == null || request.createIfMissing();
         var managedUser = keycloakVendorAdminManagementService.ensureVendorAdminUser(
@@ -282,7 +314,7 @@ public class AdminVendorService {
                 "active", true
         );
 
-        Map<String, Object> membership = upsertVendorMembership(vendorId, managedUser.id(), membershipRequest, internalAuth);
+        Map<String, Object> membership = upsertVendorMembership(vendorId, managedUser.id(), membershipRequest, internalAuth, userSub, userRoles);
 
         return new VendorAdminOnboardResponse(
                 vendorId,
@@ -296,8 +328,15 @@ public class AdminVendorService {
         );
     }
 
-    private Map<String, Object> upsertVendorMembership(UUID vendorId, String keycloakUserId, Map<String, Object> membershipRequest, String internalAuth) {
-        List<Map<String, Object>> memberships = vendorClient.listVendorUsers(vendorId, internalAuth);
+    private Map<String, Object> upsertVendorMembership(
+            UUID vendorId,
+            String keycloakUserId,
+            Map<String, Object> membershipRequest,
+            String internalAuth,
+            String userSub,
+            String userRoles
+    ) {
+        List<Map<String, Object>> memberships = vendorClient.listVendorUsers(vendorId, internalAuth, userSub, userRoles);
         Map<String, Object> existing = memberships.stream()
                 .filter(m -> keycloakUserId.equalsIgnoreCase(stringValue(m.get("keycloakUserId"))))
                 .findFirst()
@@ -305,17 +344,17 @@ public class AdminVendorService {
 
         if (existing == null) {
             try {
-                return vendorClient.addVendorUser(vendorId, membershipRequest, internalAuth);
+                return vendorClient.addVendorUser(vendorId, membershipRequest, internalAuth, userSub, userRoles);
             } catch (DownstreamHttpException ex) {
                 if (ex.getStatusCode().value() == 409) {
-                    memberships = vendorClient.listVendorUsers(vendorId, internalAuth);
+                    memberships = vendorClient.listVendorUsers(vendorId, internalAuth, userSub, userRoles);
                     existing = memberships.stream()
                             .filter(m -> keycloakUserId.equalsIgnoreCase(stringValue(m.get("keycloakUserId"))))
                             .findFirst()
                             .orElse(null);
                     if (existing != null) {
                         UUID membershipId = parseUuid(existing.get("id"), "vendor membership id");
-                        return vendorClient.updateVendorUser(vendorId, membershipId, membershipRequest, internalAuth);
+                        return vendorClient.updateVendorUser(vendorId, membershipId, membershipRequest, internalAuth, userSub, userRoles);
                     }
                 }
                 throw ex;
@@ -323,10 +362,15 @@ public class AdminVendorService {
         }
 
         UUID membershipId = parseUuid(existing.get("id"), "vendor membership id");
-        return vendorClient.updateVendorUser(vendorId, membershipId, membershipRequest, internalAuth);
+        return vendorClient.updateVendorUser(vendorId, membershipId, membershipRequest, internalAuth, userSub, userRoles);
     }
 
-    private void syncVendorStaffMembership(Map<String, Object> vendorStaffRow, String internalAuth) {
+    private void syncVendorStaffMembership(
+            Map<String, Object> vendorStaffRow,
+            String internalAuth,
+            String userSub,
+            String userRoles
+    ) {
         UUID vendorId = parseUuid(vendorStaffRow.get("vendorId"), "vendorId");
         String keycloakUserId = stringOrNull(vendorStaffRow.get("keycloakUserId"));
         if (!StringUtils.hasText(keycloakUserId)) {
@@ -336,7 +380,7 @@ public class AdminVendorService {
         String incomingEmail = stringOrNull(vendorStaffRow.get("email"));
         String incomingDisplayName = stringOrNull(vendorStaffRow.get("displayName"));
 
-        List<Map<String, Object>> memberships = vendorClient.listVendorUsers(vendorId, internalAuth);
+        List<Map<String, Object>> memberships = vendorClient.listVendorUsers(vendorId, internalAuth, userSub, userRoles);
         Map<String, Object> existing = findMembershipByKeycloakUserId(memberships, keycloakUserId);
 
         if (existing == null) {
@@ -353,13 +397,13 @@ public class AdminVendorService {
                     true
             );
             try {
-                vendorClient.addVendorUser(vendorId, payload, internalAuth);
+                vendorClient.addVendorUser(vendorId, payload, internalAuth, userSub, userRoles);
                 return;
             } catch (DownstreamHttpException ex) {
                 if (ex.getStatusCode().value() != 409) {
                     throw ex;
                 }
-                memberships = vendorClient.listVendorUsers(vendorId, internalAuth);
+                memberships = vendorClient.listVendorUsers(vendorId, internalAuth, userSub, userRoles);
                 existing = findMembershipByKeycloakUserId(memberships, keycloakUserId);
                 if (existing == null) {
                     throw ex;
@@ -386,7 +430,7 @@ public class AdminVendorService {
                 effectiveDisplayName,
                 desiredActive
         );
-        vendorClient.updateVendorUser(vendorId, membershipId, payload, internalAuth);
+        vendorClient.updateVendorUser(vendorId, membershipId, payload, internalAuth, userSub, userRoles);
     }
 
     private Map<String, Object> buildVendorManagerMembershipPayload(
@@ -492,9 +536,9 @@ public class AdminVendorService {
                 && equalsIgnoreCase(vendor.get("status"), "ACTIVE");
     }
 
-    private void revokeSessionsForVendorPrincipals(UUID vendorId, String internalAuth) {
+    private void revokeSessionsForVendorPrincipals(UUID vendorId, String internalAuth, String userSub, String userRoles) {
         Set<String> ids = new LinkedHashSet<>();
-        for (Map<String, Object> row : vendorClient.listVendorUsers(vendorId, internalAuth)) {
+        for (Map<String, Object> row : vendorClient.listVendorUsers(vendorId, internalAuth, userSub, userRoles)) {
             String keycloakUserId = stringOrNull(row.get("keycloakUserId"));
             if (StringUtils.hasText(keycloakUserId)) {
                 ids.add(keycloakUserId);

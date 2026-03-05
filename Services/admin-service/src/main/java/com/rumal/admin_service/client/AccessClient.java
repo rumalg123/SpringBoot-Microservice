@@ -50,15 +50,27 @@ public class AccessClient {
     }
 
     public List<Map<String, Object>> listPlatformStaff(String internalAuth) {
-        return getPagedContentList("/admin/platform-staff", internalAuth);
+        return listPlatformStaff(internalAuth, null, null);
+    }
+
+    public List<Map<String, Object>> listPlatformStaff(String internalAuth, String userSub, String userRoles) {
+        return getPagedContentList("/admin/platform-staff", internalAuth, userSub, userRoles, null, null);
     }
 
     public List<Map<String, Object>> listDeletedPlatformStaff(String internalAuth) {
-        return getPagedContentList("/admin/platform-staff/deleted", internalAuth);
+        return listDeletedPlatformStaff(internalAuth, null, null);
+    }
+
+    public List<Map<String, Object>> listDeletedPlatformStaff(String internalAuth, String userSub, String userRoles) {
+        return getPagedContentList("/admin/platform-staff/deleted", internalAuth, userSub, userRoles, null, null);
     }
 
     public Map<String, Object> getPlatformStaffById(UUID id, String internalAuth) {
-        return getMap("/admin/platform-staff/" + id, internalAuth);
+        return getPlatformStaffById(id, internalAuth, null, null);
+    }
+
+    public Map<String, Object> getPlatformStaffById(UUID id, String internalAuth, String userSub, String userRoles) {
+        return getMap("/admin/platform-staff/" + id, internalAuth, userSub, userRoles, null, null);
     }
 
     public Map<String, Object> createPlatformStaff(Map<String, Object> request, String internalAuth) {

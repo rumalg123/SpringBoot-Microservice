@@ -14,8 +14,16 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.HexFormat;
+
 @Configuration
 public class HttpClientConfig {
+
+    private static final String HMAC_ALGO = "HmacSHA256";
 
     @Value("${http.client.connect-timeout-seconds:2}")
     private int connectTimeoutSeconds;
@@ -31,6 +39,9 @@ public class HttpClientConfig {
 
     @Value("${http.client.max-connections-per-route:20}")
     private int maxConnectionsPerRoute;
+
+    @Value("${internal.auth.shared-secret:}")
+    private String internalAuthSharedSecret;
 
     @Bean
     @Primary
@@ -62,6 +73,62 @@ public class HttpClientConfig {
                         .build();
 
         var requestFactory = new HttpComponentsClientHttpRequestFactory(httpClient);
-        return RestClient.builder().requestFactory(requestFactory);
+        return RestClient.builder()
+                .requestFactory(requestFactory)
+                .requestInterceptor((request, body, execution) -> {
+                    applyInternalHmacHeaders(request, body);
+                    return execution.execute(request, body);
+                });
+    }
+
+    private void applyInternalHmacHeaders(org.springframework.http.HttpRequest request, byte[] body) {
+        String secret = internalAuthSharedSecret == null ? "" : internalAuthSharedSecret.trim();
+        if (secret.isEmpty()) {
+            return;
+        }
+
+        String internalHeader = request.getHeaders().getFirst("X-Internal-Auth");
+        if (internalHeader == null || internalHeader.isBlank()) {
+            return;
+        }
+
+        String timestamp = String.valueOf(System.currentTimeMillis());
+        String method = request.getMethod() == null ? "GET" : request.getMethod().name();
+        String path = request.getURI().getRawPath();
+        String bodyHash = computeBodyHash(method, body);
+
+        String payload = timestamp + ":" + method + ":" + path + ":" + bodyHash;
+        String signature = computeHmac(secret, payload);
+
+        request.getHeaders().set("X-Internal-Timestamp", timestamp);
+        request.getHeaders().set("X-Internal-Signature", signature);
+        request.getHeaders().set("X-Internal-Path", path);
+        request.getHeaders().set("X-Internal-Body-Hash", bodyHash);
+    }
+
+    private String computeBodyHash(String method, byte[] body) {
+        if (!"POST".equals(method) && !"PUT".equals(method) && !"PATCH".equals(method)) {
+            return "";
+        }
+        if (body == null || body.length == 0) {
+            return "";
+        }
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(body));
+        } catch (Exception ex) {
+            return "";
+        }
+    }
+
+    private String computeHmac(String secret, String payload) {
+        try {
+            Mac mac = Mac.getInstance(HMAC_ALGO);
+            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), HMAC_ALGO));
+            byte[] hash = mac.doFinal(payload.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (Exception ex) {
+            return "";
+        }
     }
 }

@@ -45,7 +45,7 @@ public class AdminVendorController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         actorScopeService.assertCanReadVendors(userSub, userRoles, internalAuth);
-        return adminVendorService.listAll(internalAuth);
+        return adminVendorService.listAll(internalAuth, userSub, userRoles);
     }
 
     @GetMapping("/deleted")
@@ -56,7 +56,7 @@ public class AdminVendorController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         actorScopeService.assertCanReadVendors(userSub, userRoles, internalAuth);
-        return adminVendorService.listDeleted(internalAuth);
+        return adminVendorService.listDeleted(internalAuth, userSub, userRoles);
     }
 
     @GetMapping("/{id}/lifecycle-audit")
@@ -68,7 +68,7 @@ public class AdminVendorController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         actorScopeService.assertCanReadVendors(userSub, userRoles, internalAuth);
-        return adminVendorService.listLifecycleAudit(id, internalAuth);
+        return adminVendorService.listLifecycleAudit(id, internalAuth, userSub, userRoles);
     }
 
     @GetMapping("/{id}")
@@ -80,7 +80,7 @@ public class AdminVendorController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         actorScopeService.assertCanReadVendors(userSub, userRoles, internalAuth);
-        return adminVendorService.getById(id, internalAuth);
+        return adminVendorService.getById(id, internalAuth, userSub, userRoles);
     }
 
     @GetMapping("/{id}/deletion-eligibility")
@@ -92,7 +92,7 @@ public class AdminVendorController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         actorScopeService.assertCanReadVendors(userSub, userRoles, internalAuth);
-        return adminVendorService.getDeletionEligibility(id, internalAuth);
+        return adminVendorService.getDeletionEligibility(id, internalAuth, userSub, userRoles);
     }
 
     @PostMapping
@@ -262,7 +262,7 @@ public class AdminVendorController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         actorScopeService.assertCanReadVendors(userSub, userRoles, internalAuth);
-        return adminVendorService.listVendorUsers(vendorId, internalAuth);
+        return adminVendorService.listVendorUsers(vendorId, internalAuth, userSub, userRoles);
     }
 
     @PostMapping("/{vendorId}/users")
@@ -276,7 +276,7 @@ public class AdminVendorController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         actorScopeService.assertCanManageVendors(userSub, userRoles, internalAuth);
-        return adminVendorService.addVendorUser(vendorId, request, internalAuth);
+        return adminVendorService.addVendorUser(vendorId, request, internalAuth, userSub, userRoles);
     }
 
     @PutMapping("/{vendorId}/users/{membershipId}")
@@ -290,7 +290,7 @@ public class AdminVendorController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         actorScopeService.assertCanManageVendors(userSub, userRoles, internalAuth);
-        return adminVendorService.updateVendorUser(vendorId, membershipId, request, internalAuth);
+        return adminVendorService.updateVendorUser(vendorId, membershipId, request, internalAuth, userSub, userRoles);
     }
 
     @DeleteMapping("/{vendorId}/users/{membershipId}")
@@ -304,7 +304,7 @@ public class AdminVendorController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         actorScopeService.assertCanManageVendors(userSub, userRoles, internalAuth);
-        adminVendorService.removeVendorUser(vendorId, membershipId, internalAuth);
+        adminVendorService.removeVendorUser(vendorId, membershipId, internalAuth, userSub, userRoles);
     }
 
     @PostMapping("/{vendorId}/users/onboard")
@@ -318,6 +318,6 @@ public class AdminVendorController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         actorScopeService.assertCanManageVendors(userSub, userRoles, internalAuth);
-        return adminVendorService.onboardVendorAdmin(vendorId, request, internalAuth);
+        return adminVendorService.onboardVendorAdmin(vendorId, request, internalAuth, userSub, userRoles);
     }
 }

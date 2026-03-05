@@ -173,11 +173,30 @@ public class AdminPromotionAccessScopeService {
         }
         Set<String> roles = new LinkedHashSet<>();
         for (String role : rolesHeader.split(",")) {
-            if (role != null && !role.isBlank()) {
-                roles.add(role.trim().toLowerCase(Locale.ROOT));
+            String normalized = normalizeRole(role);
+            if (!normalized.isEmpty()) {
+                roles.add(normalized);
+                if ("platform_admin".equals(normalized)) {
+                    roles.add("super_admin");
+                }
             }
         }
         return Set.copyOf(roles);
+    }
+
+    private String normalizeRole(String role) {
+        if (!StringUtils.hasText(role)) {
+            return "";
+        }
+        String normalized = role.trim().toLowerCase(Locale.ROOT);
+        if (normalized.startsWith("role_")) {
+            normalized = normalized.substring("role_".length());
+        } else if (normalized.startsWith("role-")) {
+            normalized = normalized.substring("role-".length());
+        } else if (normalized.startsWith("role:")) {
+            normalized = normalized.substring("role:".length());
+        }
+        return normalized.replace('-', '_').replace(' ', '_');
     }
 
     private UpsertPromotionRequest copyRequestWithVendorIdAndFunding(
