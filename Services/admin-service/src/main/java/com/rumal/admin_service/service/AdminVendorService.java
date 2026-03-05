@@ -190,7 +190,7 @@ public class AdminVendorService {
 
         Set<String> linkedKeycloakUserIds = new LinkedHashSet<>();
         for (UUID vendorId : vendorIds) {
-            for (Map<String, Object> vendorUser : vendorClient.listVendorUsers(vendorId, internalAuth, normalizedUserSub, "super_admin")) {
+            for (Map<String, Object> vendorUser : vendorClient.listVendorUsersInternal(vendorId, internalAuth)) {
                 if (vendorUser == null || !isTruthy(vendorUser.get("active"))) {
                     continue;
                 }
@@ -214,7 +214,7 @@ public class AdminVendorService {
     }
 
     public int reconcileVendorStaffMemberships(UUID vendorId, String internalAuth, String userSub, String userRoles) {
-        List<Map<String, Object>> rows = accessClient.listVendorStaff(vendorId, internalAuth, "super_admin", null);
+        List<Map<String, Object>> rows = accessClient.listVendorStaff(vendorId, internalAuth, userRoles, vendorId);
         for (Map<String, Object> row : rows) {
             syncVendorStaffMembershipTransition(null, row, internalAuth, userSub, userRoles);
         }
@@ -544,7 +544,7 @@ public class AdminVendorService {
                 ids.add(keycloakUserId);
             }
         }
-        for (Map<String, Object> row : accessClient.listVendorStaff(vendorId, internalAuth, "super_admin", null)) {
+        for (Map<String, Object> row : accessClient.listVendorStaff(vendorId, internalAuth, userRoles, vendorId)) {
             String keycloakUserId = stringOrNull(row.get("keycloakUserId"));
             if (StringUtils.hasText(keycloakUserId)) {
                 ids.add(keycloakUserId);

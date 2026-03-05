@@ -15,35 +15,35 @@ public class AdminPosterService {
 
     private final PosterClient posterClient;
 
-    public List<Map<String, Object>> listAll(String internalAuth) {
-        return posterClient.listAll(internalAuth);
+    public List<Map<String, Object>> listAll(String internalAuth, String userSub, String userRoles) {
+        return posterClient.listAll(internalAuth, userSub, userRoles);
     }
 
-    public List<Map<String, Object>> listDeleted(String internalAuth) {
-        return posterClient.listDeleted(internalAuth);
+    public List<Map<String, Object>> listDeleted(String internalAuth, String userSub, String userRoles) {
+        return posterClient.listDeleted(internalAuth, userSub, userRoles);
     }
 
-    public Map<String, Object> create(Map<String, Object> request, String internalAuth) {
-        return posterClient.create(request, internalAuth);
+    public Map<String, Object> create(Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
+        return posterClient.create(request, internalAuth, userSub, userRoles);
     }
 
-    public Map<String, Object> update(UUID id, Map<String, Object> request, String internalAuth) {
-        return posterClient.update(id, request, internalAuth);
+    public Map<String, Object> update(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
+        return posterClient.update(id, request, internalAuth, userSub, userRoles);
     }
 
-    public void delete(UUID id, String internalAuth) {
-        posterClient.delete(id, internalAuth);
+    public void delete(UUID id, String internalAuth, String userSub, String userRoles) {
+        posterClient.delete(id, internalAuth, userSub, userRoles);
     }
 
-    public Map<String, Object> restore(UUID id, String internalAuth) {
-        return posterClient.restore(id, internalAuth);
+    public Map<String, Object> restore(UUID id, String internalAuth, String userSub, String userRoles) {
+        return posterClient.restore(id, internalAuth, userSub, userRoles);
     }
 
-    public Map<String, Object> generateImageNames(Map<String, Object> request, String internalAuth) {
-        return posterClient.generateImageNames(request, internalAuth);
+    public Map<String, Object> generateImageNames(Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
+        return posterClient.generateImageNames(request, internalAuth, userSub, userRoles);
     }
 
-    public Map<String, Object> uploadImages(List<MultipartFile> files, List<String> keys, String internalAuth) {
-        return posterClient.uploadImages(files, keys, internalAuth);
+    public Map<String, Object> uploadImages(List<MultipartFile> files, List<String> keys, String internalAuth, String userSub, String userRoles) {
+        return posterClient.uploadImages(files, keys, internalAuth, userSub, userRoles);
     }
 }

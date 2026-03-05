@@ -2,6 +2,7 @@ package com.rumal.vendor_service.controller;
 
 import com.rumal.vendor_service.dto.VendorAccessMembershipResponse;
 import com.rumal.vendor_service.dto.VendorOperationalStateResponse;
+import com.rumal.vendor_service.dto.VendorUserResponse;
 import com.rumal.vendor_service.security.InternalRequestVerifier;
 import com.rumal.vendor_service.service.VendorService;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,15 @@ public class InternalVendorAccessController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         return vendorService.listAccessibleVendorMembershipsByKeycloakUser(keycloakUserId);
+    }
+
+    @GetMapping("/{vendorId}/users")
+    public List<VendorUserResponse> listVendorUsers(
+            @RequestHeader(INTERNAL_HEADER) String internalAuth,
+            @PathVariable UUID vendorId
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        return vendorService.listVendorUsers(vendorId);
     }
 
     @GetMapping("/operational-state/{vendorId}")

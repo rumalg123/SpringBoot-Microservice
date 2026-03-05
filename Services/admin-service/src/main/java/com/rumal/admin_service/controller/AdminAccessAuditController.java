@@ -11,7 +11,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -53,16 +52,18 @@ public class AdminAccessAuditController {
             throw new UnauthorizedException("vendor_admin can only view vendor staff access audit");
         }
 
-        UUID effectiveVendorId = vendorId;
-        if (effectiveVendorId == null && targetId != null) {
-            Map<String, Object> row = adminAccessService.getVendorStaffById(targetId, internalAuth);
-            Object rawVendorId = row.get("vendorId");
-            if (rawVendorId != null) {
-                try {
-                    effectiveVendorId = UUID.fromString(String.valueOf(rawVendorId));
-                } catch (IllegalArgumentException ignored) {
-                    effectiveVendorId = null;
-                }
+        UUID scopedVendorId = adminActorScopeService.resolveScopedVendorIdForVendorStaffManagement(
+                userSub, userRoles, vendorId, internalAuth
+        );
+
+        UUID effectiveVendorId = scopedVendorId;
+        if (targetId != null) {
+            Map<String, Object> row = adminAccessService.getVendorStaffById(
+                    targetId, internalAuth, userRoles, scopedVendorId
+            );
+            UUID rowVendorId = parseUuid(row.get("vendorId"));
+            if (rowVendorId != null) {
+                effectiveVendorId = rowVendorId;
             }
         }
         if (effectiveVendorId == null) {
@@ -70,5 +71,16 @@ public class AdminAccessAuditController {
         }
         adminActorScopeService.assertCanManageVendorStaffVendor(userSub, userRoles, effectiveVendorId, internalAuth);
         return adminAccessService.listAccessAudit("VENDOR_STAFF", targetId, effectiveVendorId, action, actorQuery, from, to, page, size, limit, internalAuth);
+    }
+
+    private UUID parseUuid(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(String.valueOf(raw));
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
     }
 }

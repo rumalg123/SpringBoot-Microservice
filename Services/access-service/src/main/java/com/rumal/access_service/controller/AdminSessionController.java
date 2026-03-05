@@ -2,6 +2,7 @@ package com.rumal.access_service.controller;
 
 import com.rumal.access_service.dto.ActiveSessionResponse;
 import com.rumal.access_service.dto.RegisterSessionRequest;
+import com.rumal.access_service.exception.UnauthorizedException;
 import com.rumal.access_service.security.InternalRequestVerifier;
 import com.rumal.access_service.service.AccessService;
 import jakarta.validation.Valid;
@@ -22,6 +23,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 
+import java.util.LinkedHashSet;
+import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 
 @RestController
@@ -37,19 +41,23 @@ public class AdminSessionController {
     @ResponseStatus(HttpStatus.CREATED)
     public ActiveSessionResponse register(
             @RequestHeader(INTERNAL_HEADER) String internalAuth,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @Valid @RequestBody RegisterSessionRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
+        requirePlatformAdmin(userRoles);
         return accessService.registerSession(request);
     }
 
     @GetMapping("/by-keycloak/{keycloakId}")
     public Page<ActiveSessionResponse> listByKeycloakId(
             @RequestHeader(INTERNAL_HEADER) String internalAuth,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable String keycloakId,
             @PageableDefault(size = 25, sort = "lastActivityAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         internalRequestVerifier.verify(internalAuth);
+        requirePlatformAdmin(userRoles);
         return accessService.listSessionsByKeycloakId(keycloakId, pageable);
     }
 
@@ -57,9 +65,11 @@ public class AdminSessionController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void revoke(
             @RequestHeader(INTERNAL_HEADER) String internalAuth,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID sessionId
     ) {
         internalRequestVerifier.verify(internalAuth);
+        requirePlatformAdmin(userRoles);
         accessService.revokeSession(sessionId);
     }
 
@@ -67,9 +77,48 @@ public class AdminSessionController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void revokeAll(
             @RequestHeader(INTERNAL_HEADER) String internalAuth,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable String keycloakId
     ) {
         internalRequestVerifier.verify(internalAuth);
+        requirePlatformAdmin(userRoles);
         accessService.revokeAllSessions(keycloakId);
+    }
+
+    private void requirePlatformAdmin(String userRoles) {
+        Set<String> roles = parseRoles(userRoles);
+        if (roles.contains("super_admin") || roles.contains("platform_admin")) {
+            return;
+        }
+        throw new UnauthorizedException("Caller does not have platform admin access");
+    }
+
+    private Set<String> parseRoles(String userRoles) {
+        if (userRoles == null || userRoles.isBlank()) {
+            return Set.of();
+        }
+        Set<String> roles = new LinkedHashSet<>();
+        for (String rawRole : userRoles.split(",")) {
+            String normalized = normalizeRole(rawRole);
+            if (!normalized.isEmpty()) {
+                roles.add(normalized);
+            }
+        }
+        return Set.copyOf(roles);
+    }
+
+    private String normalizeRole(String role) {
+        if (role == null || role.isBlank()) {
+            return "";
+        }
+        String normalized = role.trim().toLowerCase(Locale.ROOT);
+        if (normalized.startsWith("role_")) {
+            normalized = normalized.substring("role_".length());
+        } else if (normalized.startsWith("role-")) {
+            normalized = normalized.substring("role-".length());
+        } else if (normalized.startsWith("role:")) {
+            normalized = normalized.substring("role:".length());
+        }
+        return normalized.replace('-', '_').replace(' ', '_');
     }
 }

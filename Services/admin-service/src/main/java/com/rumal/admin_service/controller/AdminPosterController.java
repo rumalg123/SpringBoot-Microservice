@@ -44,7 +44,7 @@ public class AdminPosterController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         adminActorScopeService.assertCanManagePosters(userSub, userRoles, internalAuth);
-        return adminPosterService.listAll(internalAuth);
+        return adminPosterService.listAll(internalAuth, userSub, userRoles);
     }
 
     @GetMapping("/deleted")
@@ -55,7 +55,7 @@ public class AdminPosterController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         adminActorScopeService.assertCanManagePosters(userSub, userRoles, internalAuth);
-        return adminPosterService.listDeleted(internalAuth);
+        return adminPosterService.listDeleted(internalAuth, userSub, userRoles);
     }
 
     @PostMapping
@@ -68,7 +68,7 @@ public class AdminPosterController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         adminActorScopeService.assertCanManagePosters(userSub, userRoles, internalAuth);
-        Map<String, Object> result = adminPosterService.create(request, internalAuth);
+        Map<String, Object> result = adminPosterService.create(request, internalAuth, userSub, userRoles);
         auditService.log(userSub, userRoles, "CREATE_POSTER", "POSTER", String.valueOf(result.get("id")), null, null);
         return result;
     }
@@ -83,7 +83,7 @@ public class AdminPosterController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         adminActorScopeService.assertCanManagePosters(userSub, userRoles, internalAuth);
-        Map<String, Object> result = adminPosterService.update(id, request, internalAuth);
+        Map<String, Object> result = adminPosterService.update(id, request, internalAuth, userSub, userRoles);
         auditService.log(userSub, userRoles, "UPDATE_POSTER", "POSTER", id.toString(), null, null);
         return result;
     }
@@ -98,7 +98,7 @@ public class AdminPosterController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         adminActorScopeService.assertCanManagePosters(userSub, userRoles, internalAuth);
-        adminPosterService.delete(id, internalAuth);
+        adminPosterService.delete(id, internalAuth, userSub, userRoles);
         auditService.log(userSub, userRoles, "DELETE_POSTER", "POSTER", id.toString(), null, null);
     }
 
@@ -111,7 +111,7 @@ public class AdminPosterController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         adminActorScopeService.assertCanManagePosters(userSub, userRoles, internalAuth);
-        Map<String, Object> result = adminPosterService.restore(id, internalAuth);
+        Map<String, Object> result = adminPosterService.restore(id, internalAuth, userSub, userRoles);
         auditService.log(userSub, userRoles, "RESTORE_POSTER", "POSTER", id.toString(), null, null);
         return result;
     }
@@ -126,7 +126,7 @@ public class AdminPosterController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         adminActorScopeService.assertCanManagePosters(userSub, userRoles, internalAuth);
-        return adminPosterService.generateImageNames(request, internalAuth);
+        return adminPosterService.generateImageNames(request, internalAuth, userSub, userRoles);
     }
 
     @PostMapping(value = "/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -140,6 +140,6 @@ public class AdminPosterController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         adminActorScopeService.assertCanManagePosters(userSub, userRoles, internalAuth);
-        return adminPosterService.uploadImages(files, keys, internalAuth);
+        return adminPosterService.uploadImages(files, keys, internalAuth, userSub, userRoles);
     }
 }

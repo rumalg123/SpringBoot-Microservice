@@ -198,6 +198,10 @@ public class VendorClient {
         return listVendorUsers(vendorId, internalAuth, null, null);
     }
 
+    public List<Map<String, Object>> listVendorUsersInternal(UUID vendorId, String internalAuth) {
+        return getList("/internal/vendors/access/" + vendorId + "/users", internalAuth);
+    }
+
     public List<Map<String, Object>> listVendorUsers(UUID vendorId, String internalAuth, String userSub, String userRoles) {
         return getList("/admin/vendors/" + vendorId + "/users", internalAuth, userSub, userRoles);
     }

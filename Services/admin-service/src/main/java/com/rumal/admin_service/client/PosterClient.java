@@ -48,29 +48,29 @@ public class PosterClient {
         this.retryRegistry = retryRegistry;
     }
 
-    public List<Map<String, Object>> listAll(String internalAuth) {
-        return getPagedContentList("/admin/posters", internalAuth);
+    public List<Map<String, Object>> listAll(String internalAuth, String userSub, String userRoles) {
+        return getPagedContentList("/admin/posters", internalAuth, userSub, userRoles);
     }
 
-    public List<Map<String, Object>> listDeleted(String internalAuth) {
-        return getPagedContentList("/admin/posters/deleted", internalAuth);
+    public List<Map<String, Object>> listDeleted(String internalAuth, String userSub, String userRoles) {
+        return getPagedContentList("/admin/posters/deleted", internalAuth, userSub, userRoles);
     }
 
-    public Map<String, Object> create(Map<String, Object> request, String internalAuth) {
-        return jsonRequest("POST", "/admin/posters", request, internalAuth);
+    public Map<String, Object> create(Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
+        return jsonRequest("POST", "/admin/posters", request, internalAuth, userSub, userRoles);
     }
 
-    public Map<String, Object> update(UUID id, Map<String, Object> request, String internalAuth) {
-        return jsonRequest("PUT", "/admin/posters/" + id, request, internalAuth);
+    public Map<String, Object> update(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
+        return jsonRequest("PUT", "/admin/posters/" + id, request, internalAuth, userSub, userRoles);
     }
 
-    public void delete(UUID id, String internalAuth) {
+    public void delete(UUID id, String internalAuth, String userSub, String userRoles) {
         runPosterVoid(() -> {
             RestClient rc = restClient;
             try {
-                rc.delete()
+                applyActorHeaders(rc.delete()
                         .uri(buildUri("/admin/posters/" + id))
-                        .header("X-Internal-Auth", internalAuth)
+                        .header("X-Internal-Auth", internalAuth), userSub, userRoles)
                         .retrieve()
                         .toBodilessEntity();
             } catch (RestClientResponseException ex) {
@@ -81,13 +81,13 @@ public class PosterClient {
         });
     }
 
-    public Map<String, Object> restore(UUID id, String internalAuth) {
+    public Map<String, Object> restore(UUID id, String internalAuth, String userSub, String userRoles) {
         return runPosterCall(() -> {
             RestClient rc = restClient;
             try {
-                Map<String, Object> body = rc.post()
+                Map<String, Object> body = applyActorHeaders(rc.post()
                         .uri(buildUri("/admin/posters/" + id + "/restore"))
-                        .header("X-Internal-Auth", internalAuth)
+                        .header("X-Internal-Auth", internalAuth), userSub, userRoles)
                         .retrieve()
                         .body(MAP_TYPE);
                 if (body == null) {
@@ -102,11 +102,22 @@ public class PosterClient {
         });
     }
 
-    public Map<String, Object> generateImageNames(Map<String, Object> request, String internalAuth) {
-        return jsonRequest("POST", "/admin/posters/images/names", request, internalAuth);
+    public Map<String, Object> generateImageNames(
+            Map<String, Object> request,
+            String internalAuth,
+            String userSub,
+            String userRoles
+    ) {
+        return jsonRequest("POST", "/admin/posters/images/names", request, internalAuth, userSub, userRoles);
     }
 
-    public Map<String, Object> uploadImages(List<MultipartFile> files, List<String> keys, String internalAuth) {
+    public Map<String, Object> uploadImages(
+            List<MultipartFile> files,
+            List<String> keys,
+            String internalAuth,
+            String userSub,
+            String userRoles
+    ) {
         return runPosterCall(() -> {
             RestClient rc = restClient;
             try {
@@ -132,9 +143,11 @@ public class PosterClient {
                     }
                 }
 
-                Map<String, Object> response = rc.post()
+                RestClient.RequestBodySpec requestSpec = rc.post()
                         .uri(buildUri("/admin/posters/images"))
-                        .header("X-Internal-Auth", internalAuth)
+                        .header("X-Internal-Auth", internalAuth);
+                requestSpec = applyActorHeaders(requestSpec, userSub, userRoles);
+                Map<String, Object> response = requestSpec
                         .contentType(MediaType.MULTIPART_FORM_DATA)
                         .body(parts)
                         .retrieve()
@@ -152,8 +165,13 @@ public class PosterClient {
     }
 
     @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> getPagedContentList(String path, String internalAuth) {
-        Map<String, Object> page = getMap(path, internalAuth);
+    private List<Map<String, Object>> getPagedContentList(
+            String path,
+            String internalAuth,
+            String userSub,
+            String userRoles
+    ) {
+        Map<String, Object> page = getMap(path, internalAuth, userSub, userRoles);
         Object content = page.get("content");
         if (content instanceof List<?> list) {
             return list.stream()
@@ -164,13 +182,13 @@ public class PosterClient {
         return List.of();
     }
 
-    private Map<String, Object> getMap(String path, String internalAuth) {
+    private Map<String, Object> getMap(String path, String internalAuth, String userSub, String userRoles) {
         return runPosterCall(() -> {
             RestClient rc = restClient;
             try {
-                Map<String, Object> response = rc.get()
+                Map<String, Object> response = applyActorHeaders(rc.get()
                         .uri(buildUri(path))
-                        .header("X-Internal-Auth", internalAuth)
+                        .header("X-Internal-Auth", internalAuth), userSub, userRoles)
                         .retrieve()
                         .body(MAP_TYPE);
                 if (response == null) {
@@ -185,13 +203,13 @@ public class PosterClient {
         });
     }
 
-    private List<Map<String, Object>> getList(String path, String internalAuth) {
+    private List<Map<String, Object>> getList(String path, String internalAuth, String userSub, String userRoles) {
         return runPosterCall(() -> {
             RestClient rc = restClient;
             try {
-                List<Map<String, Object>> response = rc.get()
+                List<Map<String, Object>> response = applyActorHeaders(rc.get()
                         .uri(buildUri(path))
-                        .header("X-Internal-Auth", internalAuth)
+                        .header("X-Internal-Auth", internalAuth), userSub, userRoles)
                         .retrieve()
                         .body(LIST_MAP_TYPE);
                 if (response == null) {
@@ -206,7 +224,14 @@ public class PosterClient {
         });
     }
 
-    private Map<String, Object> jsonRequest(String method, String path, Map<String, Object> request, String internalAuth) {
+    private Map<String, Object> jsonRequest(
+            String method,
+            String path,
+            Map<String, Object> request,
+            String internalAuth,
+            String userSub,
+            String userRoles
+    ) {
         return runPosterCall(() -> {
             RestClient rc = restClient;
             try {
@@ -215,8 +240,8 @@ public class PosterClient {
                     case "PUT" -> rc.put().uri(buildUri(path));
                     default -> throw new IllegalArgumentException("Unsupported method: " + method);
                 };
+                spec = applyActorHeaders(spec.header("X-Internal-Auth", internalAuth), userSub, userRoles);
                 Map<String, Object> response = spec
-                        .header("X-Internal-Auth", internalAuth)
                         .contentType(MediaType.APPLICATION_JSON)
                         .body(request)
                         .retrieve()
@@ -250,6 +275,36 @@ public class PosterClient {
 
     private URI buildUri(String path) {
         return URI.create("http://poster-service" + path);
+    }
+
+    private RestClient.RequestBodySpec applyActorHeaders(
+            RestClient.RequestBodySpec spec,
+            String userSub,
+            String userRoles
+    ) {
+        RestClient.RequestBodySpec next = spec;
+        if (StringUtils.hasText(userSub)) {
+            next = next.header("X-User-Sub", userSub);
+        }
+        if (StringUtils.hasText(userRoles)) {
+            next = next.header("X-User-Roles", userRoles);
+        }
+        return next;
+    }
+
+    private RestClient.RequestHeadersSpec<?> applyActorHeaders(
+            RestClient.RequestHeadersSpec<?> spec,
+            String userSub,
+            String userRoles
+    ) {
+        RestClient.RequestHeadersSpec<?> next = spec;
+        if (StringUtils.hasText(userSub)) {
+            next = next.header("X-User-Sub", userSub);
+        }
+        if (StringUtils.hasText(userRoles)) {
+            next = next.header("X-User-Roles", userRoles);
+        }
+        return next;
     }
 
     private <T> T runPosterCall(Supplier<T> action) {

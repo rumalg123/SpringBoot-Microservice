@@ -7,6 +7,7 @@ import com.rumal.poster_service.dto.PosterResponse;
 import com.rumal.poster_service.dto.PosterVariantResponse;
 import com.rumal.poster_service.dto.UpsertPosterRequest;
 import com.rumal.poster_service.dto.UpsertPosterVariantRequest;
+import com.rumal.poster_service.exception.UnauthorizedException;
 import com.rumal.poster_service.security.InternalRequestVerifier;
 import com.rumal.poster_service.service.PosterService;
 import com.rumal.poster_service.storage.PosterImageStorageService;
@@ -30,7 +31,10 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 
 @RestController
@@ -45,18 +49,22 @@ public class AdminPosterController {
     @GetMapping
     public Page<PosterResponse> listAll(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PageableDefault(size = 20, sort = "name") Pageable pageable
     ) {
         internalRequestVerifier.verify(internalAuth);
+        requirePosterAdmin(userRoles);
         return posterService.listAllNonDeleted(pageable);
     }
 
     @GetMapping("/deleted")
     public Page<PosterResponse> listDeleted(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PageableDefault(size = 20, sort = "name") Pageable pageable
     ) {
         internalRequestVerifier.verify(internalAuth);
+        requirePosterAdmin(userRoles);
         return posterService.listDeleted(pageable);
     }
 
@@ -64,19 +72,23 @@ public class AdminPosterController {
     @ResponseStatus(HttpStatus.CREATED)
     public PosterResponse create(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @Valid @RequestBody UpsertPosterRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
+        requirePosterAdmin(userRoles);
         return posterService.create(request);
     }
 
     @PutMapping("/{id}")
     public PosterResponse update(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID id,
             @Valid @RequestBody UpsertPosterRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
+        requirePosterAdmin(userRoles);
         return posterService.update(id, request);
     }
 
@@ -84,35 +96,43 @@ public class AdminPosterController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
+        requirePosterAdmin(userRoles);
         posterService.softDelete(id);
     }
 
     @PostMapping("/{id}/restore")
     public PosterResponse restore(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
+        requirePosterAdmin(userRoles);
         return posterService.restore(id);
     }
 
     @GetMapping("/analytics")
     public List<PosterAnalyticsResponse> listAnalytics(
-            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles
     ) {
         internalRequestVerifier.verify(internalAuth);
+        requirePosterAdmin(userRoles);
         return posterService.listAnalytics();
     }
 
     @GetMapping("/{id}/analytics")
     public PosterAnalyticsResponse getAnalytics(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
+        requirePosterAdmin(userRoles);
         return posterService.getAnalytics(id);
     }
 
@@ -120,10 +140,12 @@ public class AdminPosterController {
     @ResponseStatus(HttpStatus.CREATED)
     public PosterImageUploadResponse uploadImages(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @RequestParam("files") List<MultipartFile> files,
             @RequestParam(value = "keys", required = false) List<String> keys
     ) {
         internalRequestVerifier.verify(internalAuth);
+        requirePosterAdmin(userRoles);
         return new PosterImageUploadResponse(posterImageStorageService.uploadImages(files, keys));
     }
 
@@ -131,9 +153,11 @@ public class AdminPosterController {
     @ResponseStatus(HttpStatus.CREATED)
     public PosterImageUploadResponse generateImageNames(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @Valid @RequestBody PosterImageNameRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
+        requirePosterAdmin(userRoles);
         return new PosterImageUploadResponse(posterImageStorageService.generateImageNames(request.fileNames()));
     }
 
@@ -142,9 +166,11 @@ public class AdminPosterController {
     @GetMapping("/{posterId}/variants")
     public List<PosterVariantResponse> listVariants(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID posterId
     ) {
         internalRequestVerifier.verify(internalAuth);
+        requirePosterAdmin(userRoles);
         return posterService.listVariants(posterId);
     }
 
@@ -152,21 +178,25 @@ public class AdminPosterController {
     @ResponseStatus(HttpStatus.CREATED)
     public PosterVariantResponse createVariant(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID posterId,
             @Valid @RequestBody UpsertPosterVariantRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
+        requirePosterAdmin(userRoles);
         return posterService.createVariant(posterId, request);
     }
 
     @PutMapping("/{posterId}/variants/{variantId}")
     public PosterVariantResponse updateVariant(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID posterId,
             @PathVariable UUID variantId,
             @Valid @RequestBody UpsertPosterVariantRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
+        requirePosterAdmin(userRoles);
         return posterService.updateVariant(posterId, variantId, request);
     }
 
@@ -174,10 +204,51 @@ public class AdminPosterController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteVariant(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @PathVariable UUID posterId,
             @PathVariable UUID variantId
     ) {
         internalRequestVerifier.verify(internalAuth);
+        requirePosterAdmin(userRoles);
         posterService.deleteVariant(posterId, variantId);
+    }
+
+    private void requirePosterAdmin(String userRoles) {
+        Set<String> roles = parseRoles(userRoles);
+        if (roles.contains("super_admin")
+                || roles.contains("platform_admin")
+                || roles.contains("platform_staff")) {
+            return;
+        }
+        throw new UnauthorizedException("Caller does not have poster admin access");
+    }
+
+    private Set<String> parseRoles(String userRoles) {
+        if (userRoles == null || userRoles.isBlank()) {
+            return Set.of();
+        }
+        Set<String> roles = new LinkedHashSet<>();
+        for (String rawRole : userRoles.split(",")) {
+            String normalized = normalizeRole(rawRole);
+            if (!normalized.isEmpty()) {
+                roles.add(normalized);
+            }
+        }
+        return Set.copyOf(roles);
+    }
+
+    private String normalizeRole(String role) {
+        if (role == null || role.isBlank()) {
+            return "";
+        }
+        String normalized = role.trim().toLowerCase(Locale.ROOT);
+        if (normalized.startsWith("role_")) {
+            normalized = normalized.substring("role_".length());
+        } else if (normalized.startsWith("role-")) {
+            normalized = normalized.substring("role-".length());
+        } else if (normalized.startsWith("role:")) {
+            normalized = normalized.substring("role:".length());
+        }
+        return normalized.replace('-', '_').replace(' ', '_');
     }
 }
