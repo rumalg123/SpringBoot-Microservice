@@ -7,6 +7,7 @@ import com.rumal.wishlist_service.exception.ValidationException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
@@ -18,9 +19,14 @@ import java.util.UUID;
 public class ProductClient {
 
     private final RestClient restClient;
+    private final String internalAuthSecret;
 
-    public ProductClient(@Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder) {
+    public ProductClient(
+            @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder,
+            @Value("${internal.auth.shared-secret:}") String internalAuthSecret
+    ) {
         this.restClient = lbRestClientBuilder.build();
+        this.internalAuthSecret = internalAuthSecret;
     }
 
     @Retry(name = "productService")
@@ -30,6 +36,7 @@ public class ProductClient {
         try {
             return client.get()
                     .uri("http://product-service/products/{id}", productId)
+                    .header("X-Internal-Auth", internalAuthSecret)
                     .retrieve()
                     .body(ProductDetails.class);
         } catch (HttpClientErrorException ex) {

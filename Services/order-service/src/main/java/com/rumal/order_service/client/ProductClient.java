@@ -38,6 +38,7 @@ public class ProductClient {
         try {
             return restClient.get()
                     .uri("http://product-service/products/{id}", productId)
+                    .header("X-Internal-Auth", internalSecret)
                     .retrieve()
                     .body(ProductSummary.class);
         } catch (HttpClientErrorException ex) {
