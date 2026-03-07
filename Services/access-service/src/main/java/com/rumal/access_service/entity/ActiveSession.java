@@ -21,6 +21,7 @@ import java.util.UUID;
         name = "active_session",
         indexes = {
                 @Index(name = "idx_active_session_keycloak", columnList = "keycloak_id"),
+                @Index(name = "idx_active_session_keycloak_session", columnList = "keycloak_session_id", unique = true),
                 @Index(name = "idx_active_session_last_activity", columnList = "last_activity_at")
         }
 )
@@ -37,6 +38,9 @@ public class ActiveSession {
 
     @Column(name = "keycloak_id", nullable = false, length = 120)
     private String keycloakId;
+
+    @Column(name = "keycloak_session_id", length = 120, unique = true)
+    private String keycloakSessionId;
 
     @Column(name = "ip_address", length = 45)
     private String ipAddress;

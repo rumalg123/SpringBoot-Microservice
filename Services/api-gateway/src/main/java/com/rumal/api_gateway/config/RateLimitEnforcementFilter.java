@@ -35,6 +35,7 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
     private final RedisRateLimiter registerRateLimiter;
     private final RedisRateLimiter authLogoutRateLimiter;
     private final RedisRateLimiter authResendVerificationRateLimiter;
+    private final RedisRateLimiter authSessionRateLimiter;
     private final RedisRateLimiter customerMeRateLimiter;
     private final RedisRateLimiter customerAddressesRateLimiter;
     private final RedisRateLimiter customerAddressesWriteRateLimiter;
@@ -74,6 +75,7 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
             @Qualifier("registerRateLimiter") RedisRateLimiter registerRateLimiter,
             @Qualifier("authLogoutRateLimiter") RedisRateLimiter authLogoutRateLimiter,
             @Qualifier("authResendVerificationRateLimiter") RedisRateLimiter authResendVerificationRateLimiter,
+            @Qualifier("authSessionRateLimiter") RedisRateLimiter authSessionRateLimiter,
             @Qualifier("customerMeRateLimiter") RedisRateLimiter customerMeRateLimiter,
             @Qualifier("customerAddressesRateLimiter") RedisRateLimiter customerAddressesRateLimiter,
             @Qualifier("customerAddressesWriteRateLimiter") RedisRateLimiter customerAddressesWriteRateLimiter,
@@ -112,6 +114,7 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
         this.registerRateLimiter = registerRateLimiter;
         this.authLogoutRateLimiter = authLogoutRateLimiter;
         this.authResendVerificationRateLimiter = authResendVerificationRateLimiter;
+        this.authSessionRateLimiter = authSessionRateLimiter;
         this.customerMeRateLimiter = customerMeRateLimiter;
         this.customerAddressesRateLimiter = customerAddressesRateLimiter;
         this.customerAddressesWriteRateLimiter = customerAddressesWriteRateLimiter;
@@ -267,6 +270,9 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
         }
         if ("/auth/resend-verification".equals(path) && method == HttpMethod.POST) {
             return new Policy("auth-resend-verification", authResendVerificationRateLimiter, userOrIpKeyResolver);
+        }
+        if ("/auth/session".equals(path) && method == HttpMethod.POST) {
+            return new Policy("auth-session", authSessionRateLimiter, userOrIpKeyResolver);
         }
         if ("/customers/me".equals(path) && (method == HttpMethod.GET || method == HttpMethod.PUT)) {
             return new Policy("customer-me", customerMeRateLimiter, userOrIpKeyResolver);

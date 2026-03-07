@@ -903,13 +903,24 @@ public class AccessServiceImpl implements AccessService {
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public ActiveSessionResponse registerSession(RegisterSessionRequest request) {
         String keycloakId = normalizeRequired(request.keycloakId(), "keycloakId", 120);
-        ActiveSession session = ActiveSession.builder()
-                .keycloakId(keycloakId)
-                .ipAddress(trimToNull(request.ipAddress()))
-                .userAgent(trimToNull(request.userAgent()))
-                .lastActivityAt(Instant.now())
-                .build();
-        return toActiveSessionResponse(activeSessionRepository.save(session));
+        String keycloakSessionId = normalizeRequired(request.keycloakSessionId(), "keycloakSessionId", 120);
+
+        ActiveSession existing = activeSessionRepository.findByKeycloakSessionIdIgnoreCase(keycloakSessionId).orElse(null);
+        if (existing != null) {
+            applySessionSnapshot(existing, keycloakId, keycloakSessionId, request);
+            return toActiveSessionResponse(activeSessionRepository.save(existing));
+        }
+
+        try {
+            ActiveSession session = ActiveSession.builder().build();
+            applySessionSnapshot(session, keycloakId, keycloakSessionId, request);
+            return toActiveSessionResponse(activeSessionRepository.save(session));
+        } catch (DataIntegrityViolationException ex) {
+            ActiveSession retry = activeSessionRepository.findByKeycloakSessionIdIgnoreCase(keycloakSessionId)
+                    .orElseThrow(() -> ex);
+            applySessionSnapshot(retry, keycloakId, keycloakSessionId, request);
+            return toActiveSessionResponse(activeSessionRepository.save(retry));
+        }
     }
 
     @Override
@@ -930,6 +941,16 @@ public class AccessServiceImpl implements AccessService {
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    public void revokeSessionByKeycloakSessionId(String keycloakSessionId) {
+        String normalized = normalizeRequired(keycloakSessionId, "keycloakSessionId", 120);
+        if (!activeSessionRepository.existsByKeycloakSessionIdIgnoreCase(normalized)) {
+            return;
+        }
+        activeSessionRepository.deleteByKeycloakSessionIdIgnoreCase(normalized);
+    }
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public void revokeAllSessions(String keycloakId) {
         String normalized = normalizeRequired(keycloakId, "keycloakId", 120);
         activeSessionRepository.deleteByKeycloakId(normalized);
@@ -944,6 +965,19 @@ public class AccessServiceImpl implements AccessService {
                 entity.getLastActivityAt(),
                 entity.getCreatedAt()
         );
+    }
+
+    private void applySessionSnapshot(
+            ActiveSession session,
+            String keycloakId,
+            String keycloakSessionId,
+            RegisterSessionRequest request
+    ) {
+        session.setKeycloakId(keycloakId);
+        session.setKeycloakSessionId(keycloakSessionId);
+        session.setIpAddress(trimToNull(request.ipAddress()));
+        session.setUserAgent(trimToNull(request.userAgent()));
+        session.setLastActivityAt(Instant.now());
     }
 
     // ── API Key Management ─────────────────────────────────────────────

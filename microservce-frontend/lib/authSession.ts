@@ -19,6 +19,7 @@ const env = {
   claimsNamespace: process.env.NEXT_PUBLIC_KEYCLOAK_CLAIMS_NAMESPACE || "",
   apiBase: API_BASE,
 };
+const SESSION_SYNC_INTERVAL_MS = 2 * 60 * 1000;
 
 function parseJwtPayload(token: string): Record<string, unknown> | null {
   const parts = token.split(".");
@@ -399,6 +400,8 @@ export function useAuthSession() {
   const [hasCustomerRole, setHasCustomerRole] = useState(false);
   const [emailVerified, setEmailVerified] = useState<boolean | null>(null);
   const customerBootstrapDoneRef = useRef(false);
+  const lastSessionSyncAtRef = useRef(0);
+  const sessionSyncInFlightRef = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     const init = async () => {
@@ -683,6 +686,31 @@ export function useAuthSession() {
     });
   }, [client]);
 
+  const syncGatewaySession = useCallback(
+    async (force = false) => {
+      if (!apiClient || !isAuthenticated) return;
+
+      const now = Date.now();
+      if (!force && now - lastSessionSyncAtRef.current < SESSION_SYNC_INTERVAL_MS) {
+        return;
+      }
+      if (sessionSyncInFlightRef.current) {
+        return sessionSyncInFlightRef.current;
+      }
+
+      const request = apiClient.post("/auth/session")
+        .then(() => {
+          lastSessionSyncAtRef.current = Date.now();
+        })
+        .finally(() => {
+          sessionSyncInFlightRef.current = null;
+        });
+      sessionSyncInFlightRef.current = request;
+      return request;
+    },
+    [apiClient, isAuthenticated]
+  );
+
   const login = useCallback(
     async (returnTo: string) => {
       if (!client) return;
@@ -730,10 +758,17 @@ export function useAuthSession() {
       localStorage.removeItem("_ps_merged");
     }
     clearIdempotencyCache();
+    if (apiClient && client.token) {
+      try {
+        await apiClient.post("/auth/logout");
+      } catch {
+        // Continue with IdP logout so browser SSO state is still cleared.
+      }
+    }
     await client.logout({
       redirectUri: typeof window === "undefined" ? undefined : window.location.origin,
     });
-  }, [client]);
+  }, [apiClient, client]);
 
   const ensureCustomer = useCallback(async () => {
     if (!apiClient || !isAuthenticated) return;
@@ -759,8 +794,35 @@ export function useAuthSession() {
   useEffect(() => {
     if (!isAuthenticated) {
       customerBootstrapDoneRef.current = false;
+      lastSessionSyncAtRef.current = 0;
+      sessionSyncInFlightRef.current = null;
     }
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (status !== "ready" || !isAuthenticated || !apiClient) return;
+
+    const syncOnResume = () => {
+      if (document.visibilityState === "visible") {
+        void syncGatewaySession(false);
+      }
+    };
+
+    void syncGatewaySession(true).catch(() => {});
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void syncGatewaySession(false);
+      }
+    }, SESSION_SYNC_INTERVAL_MS);
+
+    window.addEventListener("focus", syncOnResume);
+    document.addEventListener("visibilitychange", syncOnResume);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", syncOnResume);
+      document.removeEventListener("visibilitychange", syncOnResume);
+    };
+  }, [status, isAuthenticated, apiClient, syncGatewaySession]);
 
   useEffect(() => {
     if (status !== "ready" || customerBootstrapDoneRef.current) return;

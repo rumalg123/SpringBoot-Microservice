@@ -6,10 +6,14 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface ActiveSessionRepository extends JpaRepository<ActiveSession, UUID> {
     List<ActiveSession> findByKeycloakIdOrderByLastActivityAtDesc(String keycloakId);
     Page<ActiveSession> findByKeycloakIdOrderByLastActivityAtDesc(String keycloakId, Pageable pageable);
     void deleteByKeycloakId(String keycloakId);
+    Optional<ActiveSession> findByKeycloakSessionIdIgnoreCase(String keycloakSessionId);
+    boolean existsByKeycloakSessionIdIgnoreCase(String keycloakSessionId);
+    void deleteByKeycloakSessionIdIgnoreCase(String keycloakSessionId);
 }

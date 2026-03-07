@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Size;
 
 public record RegisterSessionRequest(
         @NotBlank @Size(max = 120) String keycloakId,
+        @NotBlank @Size(max = 120) String keycloakSessionId,
         @Size(max = 45) String ipAddress,
         @Size(max = 500) String userAgent
 ) {

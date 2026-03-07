@@ -77,6 +77,7 @@ public interface AccessService {
     ActiveSessionResponse registerSession(RegisterSessionRequest request);
     Page<ActiveSessionResponse> listSessionsByKeycloakId(String keycloakId, Pageable pageable);
     void revokeSession(UUID sessionId);
+    void revokeSessionByKeycloakSessionId(String keycloakSessionId);
     void revokeAllSessions(String keycloakId);
 
     // API key management

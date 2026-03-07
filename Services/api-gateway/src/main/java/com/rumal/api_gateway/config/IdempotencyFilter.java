@@ -432,6 +432,15 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
         HttpMethod method = exchange.getRequest().getMethod();
         String path = exchange.getRequest().getPath().value();
 
+        if ("/auth/logout".equals(path) && method == HttpMethod.POST) {
+            return true;
+        }
+        if ("/auth/session".equals(path) && method == HttpMethod.POST) {
+            return true;
+        }
+        if ("/auth/resend-verification".equals(path) && method == HttpMethod.POST) {
+            return true;
+        }
         if (path.startsWith("/admin/")) {
             return true;
         }

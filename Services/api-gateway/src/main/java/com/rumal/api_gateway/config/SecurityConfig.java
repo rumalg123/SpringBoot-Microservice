@@ -75,7 +75,7 @@ public class SecurityConfig {
                         .pathMatchers("/vendors/me", "/vendors/me/**").access(this::hasVendorAccess)
                         .pathMatchers(HttpMethod.GET, "/vendors", "/vendors/**").permitAll()
                         .pathMatchers("/actuator/health", "/actuator/info", "/customers/register", "/fallback/**").permitAll()
-                        .pathMatchers("/auth/logout", "/auth/resend-verification").authenticated()
+                        .pathMatchers("/auth/logout", "/auth/session", "/auth/resend-verification").authenticated()
                         .pathMatchers(HttpMethod.GET, "/wishlist/shared", "/wishlist/shared/**").permitAll()
                         .pathMatchers("/customers/me", "/customers/me/**", "/customers/register-identity", "/orders/me", "/orders/me/**", "/cart/me", "/cart/me/**", "/wishlist/me", "/wishlist/me/**", "/promotions/me", "/promotions/me/**", "/payments/me", "/payments/me/**")
                         .access(this::hasCustomerAccess)

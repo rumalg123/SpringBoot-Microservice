@@ -42,6 +42,14 @@ public class RateLimitConfig {
     }
 
     @Bean
+    public RedisRateLimiter authSessionRateLimiter(
+            @Value("${RATE_LIMIT_AUTH_SESSION_REPLENISH:12}") int replenishRate,
+            @Value("${RATE_LIMIT_AUTH_SESSION_BURST:24}") int burstCapacity
+    ) {
+        return redisRateLimiter(replenishRate, burstCapacity);
+    }
+
+    @Bean
     @Primary
     public RedisRateLimiter gatewayDefaultRateLimiter(
             @Value("${RATE_LIMIT_DEFAULT_REPLENISH:15}") int replenishRate,
