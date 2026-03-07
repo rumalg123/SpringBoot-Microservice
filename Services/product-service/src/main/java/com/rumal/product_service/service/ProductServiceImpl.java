@@ -78,6 +78,8 @@ public class ProductServiceImpl implements ProductService {
     private final VendorOperationalStateClient vendorOperationalStateClient;
     private final InventoryClient inventoryClient;
     private final ProductCacheVersionService productCacheVersionService;
+    private final ProductContentSanitizer productContentSanitizer;
+    private final ProductSearchSyncOutboxService productSearchSyncOutboxService;
 
     @Lazy
     @Autowired
@@ -98,6 +100,7 @@ public class ProductServiceImpl implements ProductService {
         Product saved = productRepository.save(product);
         saveSpecifications(saved, request.specifications());
         productCatalogReadModelProjector.upsert(saved);
+        queueSearchSync(saved.getId());
         productCacheVersionService.bumpAllProductReadCaches();
         return toResponse(saved);
     }
@@ -120,6 +123,7 @@ public class ProductServiceImpl implements ProductService {
         Product saved = productRepository.save(variation);
         saveSpecifications(saved, request.specifications());
         productCatalogReadModelProjector.upsert(saved);
+        queueSearchSync(saved.getId());
         productCatalogReadModelProjector.refreshParentVariationFlag(parent.getId());
         productCacheVersionService.bumpAllProductReadCaches();
         return toResponse(saved);
@@ -187,7 +191,8 @@ public class ProductServiceImpl implements ProductService {
                 cb.equal(root.get("approvalStatus"), ApprovalStatus.APPROVED),
                 cb.greaterThanOrEqualTo(root.get("updatedAt"), since)
         );
-        return productCatalogReadRepository.findAll(spec, pageable).map(this::toSummaryResponse);
+        Page<ProductSummaryResponse> page = productCatalogReadRepository.findAll(spec, pageable).map(this::toSummaryResponse);
+        return filterHiddenVendorProducts(page, pageable);
     }
 
     @Override
@@ -208,16 +213,14 @@ public class ProductServiceImpl implements ProductService {
         if (parent.getProductType() != ProductType.PARENT) {
             throw new ValidationException("Variations are available only for parent products");
         }
-        if (!parent.isActive()) {
-            throw new ResourceNotFoundException("Product not found: " + parent.getId());
-        }
-        assertVendorStorefrontVisible(parent.getVendorId(), parent.getId());
+        assertPubliclyVisible(parent, parent.getId());
         List<Product> variations = productRepository.findByParentProductIdAndDeletedFalseAndActiveTrue(parent.getId());
         Map<UUID, VendorOperationalStateResponse> states = resolveVendorStates(
                 variations.stream().map(Product::getVendorId).toList()
         );
         List<ProductSummaryResponse> result = variations.stream()
                 .filter(product -> product.getProductType() == ProductType.VARIATION)
+                .filter(product -> product.getApprovalStatus() == ApprovalStatus.APPROVED)
                 .filter(product -> isVendorVisibleForStorefront(product.getVendorId(), states))
                 .map(this::toSummaryResponse)
                 .toList();
@@ -383,6 +386,7 @@ public class ProductServiceImpl implements ProductService {
         Product saved = productRepository.save(product);
         saveSpecifications(saved, request.specifications());
         productCatalogReadModelProjector.upsert(saved);
+        queueSearchSync(saved.getId());
         if (parentId != null) {
             productCatalogReadModelProjector.refreshParentVariationFlag(parentId);
         }
@@ -400,6 +404,7 @@ public class ProductServiceImpl implements ProductService {
         product.setActive(false);
         Product saved = productRepository.save(product);
         productCatalogReadModelProjector.upsert(saved);
+        queueSearchSync(saved.getId());
         if (saved.getParentProductId() != null) {
             productCatalogReadModelProjector.refreshParentVariationFlag(saved.getParentProductId());
         }
@@ -420,6 +425,7 @@ public class ProductServiceImpl implements ProductService {
         product.setActive(true);
         Product saved = productRepository.save(product);
         productCatalogReadModelProjector.upsert(saved);
+        queueSearchSync(saved.getId());
         if (saved.getParentProductId() != null) {
             productCatalogReadModelProjector.refreshParentVariationFlag(saved.getParentProductId());
         }
@@ -465,6 +471,7 @@ public class ProductServiceImpl implements ProductService {
         product.setRejectionReason(null);
         Product saved = productRepository.save(product);
         productCatalogReadModelProjector.upsert(saved);
+        queueSearchSync(saved.getId());
         productCacheVersionService.evictProductById(saved.getId(), saved.getSlug());
         productCacheVersionService.bumpListCaches();
         return toResponse(saved);
@@ -480,6 +487,7 @@ public class ProductServiceImpl implements ProductService {
         product.setApprovalStatus(ApprovalStatus.APPROVED);
         Product saved = productRepository.save(product);
         productCatalogReadModelProjector.upsert(saved);
+        queueSearchSync(saved.getId());
         productCacheVersionService.evictProductById(saved.getId(), saved.getSlug());
         productCacheVersionService.bumpListCaches();
         return toResponse(saved);
@@ -496,6 +504,7 @@ public class ProductServiceImpl implements ProductService {
         product.setRejectionReason(reason);
         Product saved = productRepository.save(product);
         productCatalogReadModelProjector.upsert(saved);
+        queueSearchSync(saved.getId());
         productCacheVersionService.evictProductById(saved.getId(), saved.getSlug());
         productCacheVersionService.bumpListCaches();
         return toResponse(saved);
@@ -525,6 +534,7 @@ public class ProductServiceImpl implements ProductService {
                 product.setActive(false);
                 Product saved = productRepository.save(product);
                 productCatalogReadModelProjector.upsert(saved);
+                queueSearchSync(saved.getId());
                 if (saved.getParentProductId() != null) {
                     productCatalogReadModelProjector.refreshParentVariationFlag(saved.getParentProductId());
                 }
@@ -570,6 +580,7 @@ public class ProductServiceImpl implements ProductService {
                 product.setDiscountedPrice(item.discountedPrice());
                 Product saved = productRepository.save(product);
                 productCatalogReadModelProjector.upsert(saved);
+                queueSearchSync(saved.getId());
                 success++;
             } catch (Exception ex) {
                 errors.add("Failed to update price for product " + item.productId() + ": " + ex.getMessage());
@@ -613,6 +624,7 @@ public class ProductServiceImpl implements ProductService {
                 product.setCategories(updatedCategories);
                 Product saved = productRepository.save(product);
                 productCatalogReadModelProjector.upsert(saved);
+                queueSearchSync(saved.getId());
                 success++;
             } catch (Exception ex) {
                 errors.add("Failed to reassign category for product " + id + ": " + ex.getMessage());
@@ -683,11 +695,11 @@ public class ProductServiceImpl implements ProductService {
                         errors.add("Row " + totalRows + ": insufficient columns (expected at least 8, got " + fields.length + ")");
                         continue;
                     }
-                    String name = fields[0].trim();
-                    String description = fields[1].trim();
+                    String name = productContentSanitizer.sanitizePlainText(fields[0], "name");
+                    String description = productContentSanitizer.sanitizeRichText(fields[1], "description");
                     String regularPriceStr = fields[2].trim();
                     String discountedPriceStr = fields[3].trim();
-                    String sku = fields[4].trim();
+                    String sku = productContentSanitizer.sanitizePlainText(fields[4], "sku");
                     String vendorIdStr = fields[5].trim();
                     String productTypeStr = fields[6].trim();
                     String digitalStr = fields.length > 7 ? fields[7].trim() : "false";
@@ -704,7 +716,7 @@ public class ProductServiceImpl implements ProductService {
                     UUID vendorId = vendorIdStr.isEmpty() ? null : UUID.fromString(vendorIdStr);
                     ProductType productType = ProductType.valueOf(productTypeStr.toUpperCase(Locale.ROOT));
                     boolean digital = Boolean.parseBoolean(digitalStr);
-                    List<String> images = imagesStr.isEmpty() ? List.of() : List.of(imagesStr.split(";"));
+                    List<String> images = imagesStr.isEmpty() ? List.of() : normalizeImages(List.of(imagesStr.split(";")));
                     boolean active = Boolean.parseBoolean(activeStr);
 
                     if (images.isEmpty()) {
@@ -734,6 +746,7 @@ public class ProductServiceImpl implements ProductService {
 
                     Product saved = productRepository.save(product);
                     productCatalogReadModelProjector.upsert(saved);
+                    queueSearchSync(saved.getId());
                     successCount++;
                 } catch (Exception ex) {
                     errors.add("Row " + totalRows + ": " + ex.getMessage());
@@ -923,14 +936,14 @@ public class ProductServiceImpl implements ProductService {
     }
 
     private void applyUpsertRequest(Product product, UpsertProductRequest request, UUID parentProductId, Product parentProduct) {
-        String normalizedName = request.name().trim();
+        String normalizedName = productContentSanitizer.sanitizePlainText(request.name(), "name");
         String requestedSlug = normalizeRequestedSlug(request.slug());
         boolean autoSlug = requestedSlug.isEmpty();
         String baseSlug = autoSlug ? SlugUtils.toSlug(normalizedName) : requestedSlug;
         String resolvedSlug = resolveUniqueSlug(baseSlug, product.getId(), autoSlug);
-        String normalizedShortDescription = request.shortDescription().trim();
-        String normalizedDescription = request.description().trim();
-        String normalizedSku = request.sku().trim();
+        String normalizedShortDescription = productContentSanitizer.sanitizePlainText(request.shortDescription(), "shortDescription");
+        String normalizedDescription = productContentSanitizer.sanitizeRichText(request.description(), "description");
+        String normalizedSku = productContentSanitizer.sanitizePlainText(request.sku(), "sku");
 
         List<String> normalizedImages = normalizeImages(request.images());
         Set<Category> resolvedCategories = request.productType() == ProductType.VARIATION
@@ -947,7 +960,7 @@ public class ProductServiceImpl implements ProductService {
         product.setSlug(resolvedSlug);
         product.setShortDescription(normalizedShortDescription);
         product.setDescription(normalizedDescription);
-        product.setBrandName(request.brandName() != null ? request.brandName().trim() : null);
+        product.setBrandName(productContentSanitizer.sanitizeOptionalPlainText(request.brandName()));
         product.setImages(normalizedImages);
         product.setRegularPrice(request.regularPrice());
         product.setDiscountedPrice(request.discountedPrice());
@@ -962,8 +975,8 @@ public class ProductServiceImpl implements ProductService {
         product.setLengthCm(request.lengthCm());
         product.setWidthCm(request.widthCm());
         product.setHeightCm(request.heightCm());
-        product.setMetaTitle(request.metaTitle() != null ? request.metaTitle().trim() : null);
-        product.setMetaDescription(request.metaDescription() != null ? request.metaDescription().trim() : null);
+        product.setMetaTitle(productContentSanitizer.sanitizeOptionalPlainText(request.metaTitle()));
+        product.setMetaDescription(productContentSanitizer.sanitizeOptionalPlainText(request.metaDescription()));
         boolean isDigital = request.digital() != null && request.digital();
         product.setDigital(isDigital);
         if (isDigital) {
@@ -999,14 +1012,15 @@ public class ProductServiceImpl implements ProductService {
         List<ProductSpecification> entities = new ArrayList<>();
         for (int i = 0; i < specifications.size(); i++) {
             UpsertProductSpecificationRequest spec = specifications.get(i);
-            String normalizedKey = spec.key().trim().toLowerCase(Locale.ROOT);
+            String normalizedKey = productContentSanitizer.sanitizePlainText(spec.key(), "specification key")
+                    .toLowerCase(Locale.ROOT);
             if (normalizedKey.isEmpty()) {
                 throw new ValidationException("specification key is required");
             }
             if (!keys.add(normalizedKey)) {
                 throw new ValidationException("duplicate specification key: " + normalizedKey);
             }
-            String value = spec.value().trim();
+            String value = productContentSanitizer.sanitizePlainText(spec.value(), "specification value");
             if (value.isEmpty()) {
                 throw new ValidationException("specification value is required for key: " + normalizedKey);
             }
@@ -1197,7 +1211,8 @@ public class ProductServiceImpl implements ProductService {
             if (category == null) {
                 throw new ValidationException("category cannot be blank");
             }
-            String normalized = category.trim().toLowerCase();
+            String normalized = productContentSanitizer.sanitizePlainText(category, "category")
+                    .toLowerCase(Locale.ROOT);
             if (normalized.isEmpty()) {
                 throw new ValidationException("category cannot be blank");
             }
@@ -1244,14 +1259,15 @@ public class ProductServiceImpl implements ProductService {
         List<ProductVariationAttribute> normalized = new ArrayList<>();
         java.util.Set<String> names = new java.util.HashSet<>();
         for (ProductVariationAttributeRequest v : variations) {
-            String name = v.name().trim().toLowerCase();
+            String name = productContentSanitizer.sanitizePlainText(v.name(), "variation name")
+                    .toLowerCase(Locale.ROOT);
             if (name.isEmpty()) {
                 throw new ValidationException("variation name is required");
             }
             if (!names.add(name)) {
                 throw new ValidationException("duplicate variation attribute name: " + name);
             }
-            String value = v.value() == null ? "" : v.value().trim();
+            String value = v.value() == null ? "" : productContentSanitizer.sanitizePlainText(v.value(), "variation value");
             normalized.add(ProductVariationAttribute.builder()
                     .name(name)
                     .value(value)
@@ -1362,19 +1378,29 @@ public class ProductServiceImpl implements ProductService {
     }
 
     private ProductResponse toPublicResponse(Product product) {
-        if (!product.isActive()) {
-            throw new ResourceNotFoundException("Product not found: " + product.getId());
-        }
-        assertVendorStorefrontVisible(product.getVendorId(), product.getId());
+        assertPubliclyVisible(product, product.getId());
         if (product.getProductType() == ProductType.VARIATION && product.getParentProductId() != null) {
             Product parent = getActiveEntityById(product.getParentProductId());
-            if (!parent.isActive()) {
-                throw new ResourceNotFoundException("Product not found: " + product.getId());
-            }
-            assertVendorStorefrontVisible(parent.getVendorId(), product.getId());
+            assertPubliclyVisible(parent, product.getId());
         }
         ProductResponse response = toResponse(product);
         return enrichWithStock(response);
+    }
+
+    private void assertPubliclyVisible(Product product, UUID requestedProductId) {
+        if (!product.isActive() || product.isDeleted() || product.getApprovalStatus() != ApprovalStatus.APPROVED) {
+            throw new ResourceNotFoundException("Product not found: " + requestedProductId);
+        }
+        assertVendorStorefrontVisible(product.getVendorId(), requestedProductId);
+    }
+
+    private void queueSearchSync(UUID... productIds) {
+        if (productIds == null || productIds.length == 0) {
+            return;
+        }
+        for (UUID productId : productIds) {
+            productSearchSyncOutboxService.enqueue(productId);
+        }
     }
 
     private ProductResponse enrichWithStock(ProductResponse response) {

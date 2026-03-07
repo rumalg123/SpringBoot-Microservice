@@ -165,6 +165,14 @@ public class ProductIndexService {
         }
     }
 
+    public void upsertProduct(ProductIndexData data) {
+        if (data == null || data.id() == null) {
+            throw new IllegalArgumentException("Product index payload must include an id");
+        }
+        productSearchRepository.save(toDocument(data));
+        log.info("Upserted product {} in search index", data.id());
+    }
+
     public ReindexResponse triggerFullReindex() {
         return fullReindex();
     }

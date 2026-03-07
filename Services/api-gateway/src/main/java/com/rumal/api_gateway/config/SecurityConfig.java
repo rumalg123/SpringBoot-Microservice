@@ -84,6 +84,8 @@ public class SecurityConfig {
                         .pathMatchers("/admin/platform-staff/**").access(this::hasSuperAdminAccess)
                         .pathMatchers("/admin/vendor-staff/**", "/admin/keycloak/users/**", "/admin/access-audit/**").access(this::hasSuperAdminOrVendorAdminAccess)
                         .pathMatchers("/admin/posters/**", "/admin/categories/**").access(this::hasSuperAdminOrPlatformStaffAccess)
+                        .pathMatchers("/admin/products/*/approve", "/admin/products/*/reject", "/admin/products/export", "/admin/products/import")
+                        .access(this::hasSuperAdminOrPlatformStaffAccess)
                         .pathMatchers("/admin/api-keys/**", "/admin/sessions/**").access(this::hasSuperAdminAccess)
                         .pathMatchers("/admin/orders/**", "/admin/vendor-orders/**", "/admin/products/**", "/admin/promotions/**", "/admin/inventory/**").access(this::hasAnyScopedAdminAccess)
                         .pathMatchers("/admin/reviews/**").access(this::hasSuperAdminOrPlatformStaffAccess)

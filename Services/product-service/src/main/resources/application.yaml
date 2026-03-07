@@ -82,6 +82,19 @@ resilience4j:
           - com.rumal.product_service.exception.ResourceNotFoundException
           - com.rumal.product_service.exception.ValidationException
           - com.rumal.product_service.exception.UnauthorizedException
+      searchService:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 20
+        minimumNumberOfCalls: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 3
+        slowCallRateThreshold: 70
+        slowCallDurationThreshold: 3000
+        ignoreExceptions:
+          - com.rumal.product_service.exception.ResourceNotFoundException
+          - com.rumal.product_service.exception.ValidationException
+          - com.rumal.product_service.exception.UnauthorizedException
   retry:
     instances:
       vendorService:
@@ -105,6 +118,16 @@ resilience4j:
           - org.springframework.web.client.HttpServerErrorException
           - com.rumal.product_service.exception.ServiceUnavailableException
       inventoryService:
+        maxAttempts: 3
+        waitDuration: 300ms
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - java.io.IOException
+          - org.springframework.web.client.ResourceAccessException
+          - org.springframework.web.client.HttpServerErrorException
+          - com.rumal.product_service.exception.ServiceUnavailableException
+      searchService:
         maxAttempts: 3
         waitDuration: 300ms
         enableExponentialBackoff: true
@@ -139,6 +162,15 @@ object-storage:
 
 category:
   max-depth: ${CATEGORY_MAX_DEPTH:4}
+
+product:
+  search-sync:
+    enabled: ${PRODUCT_SEARCH_SYNC_ENABLED:true}
+    poll-interval-ms: ${PRODUCT_SEARCH_SYNC_POLL_INTERVAL_MS:5000}
+    initial-delay-ms: ${PRODUCT_SEARCH_SYNC_INITIAL_DELAY_MS:10000}
+    batch-size: ${PRODUCT_SEARCH_SYNC_BATCH_SIZE:50}
+    retry-base-delay-seconds: ${PRODUCT_SEARCH_SYNC_RETRY_BASE_DELAY_SECONDS:15}
+    retry-max-delay-seconds: ${PRODUCT_SEARCH_SYNC_RETRY_MAX_DELAY_SECONDS:900}
 
 catalog:
   rebuild:

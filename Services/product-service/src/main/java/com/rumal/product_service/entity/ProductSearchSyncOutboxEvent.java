@@ -1,0 +1,62 @@
+package com.rumal.product_service.entity;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import java.time.Instant;
+import java.util.UUID;
+
+@Entity
+@Table(
+        name = "product_search_sync_outbox",
+        indexes = {
+                @Index(name = "idx_product_search_sync_outbox_pending", columnList = "processed_at, available_at"),
+                @Index(name = "idx_product_search_sync_outbox_product", columnList = "product_id")
+        }
+)
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class ProductSearchSyncOutboxEvent {
+
+    @Id
+    @GeneratedValue
+    private UUID id;
+
+    @Column(name = "product_id", nullable = false)
+    private UUID productId;
+
+    @Column(name = "attempt_count", nullable = false)
+    @Builder.Default
+    private int attemptCount = 0;
+
+    @Column(name = "available_at", nullable = false)
+    private Instant availableAt;
+
+    @Column(name = "processed_at")
+    private Instant processedAt;
+
+    @Column(name = "last_error", length = 1000)
+    private String lastError;
+
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
+}
