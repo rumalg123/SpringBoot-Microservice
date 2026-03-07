@@ -109,13 +109,15 @@ public class CustomerServiceImpl implements CustomerService {
         }
 
         String keycloakId;
+        boolean keycloakUserCreated = false;
         try {
             keycloakId = keycloakManagementService.createUser(email, request.password(), request.name().trim());
+            keycloakUserCreated = true;
         } catch (KeycloakUserExistsException ex) {
             keycloakId = keycloakManagementService.getUserIdByEmail(email);
         }
         final String resolvedKeycloakId = keycloakId;
-        final boolean keycloakUserWasCreated = !resolvedKeycloakId.equals(keycloakId) || keycloakId != null;
+        final boolean createdKeycloakUser = keycloakUserCreated;
 
         try {
             return transactionTemplate.execute(status -> {
@@ -129,16 +131,30 @@ public class CustomerServiceImpl implements CustomerService {
                     );
                     return toResponse(saved);
                 } catch (DataIntegrityViolationException ex) {
+                    Customer existing = customerRepository.findByKeycloakId(resolvedKeycloakId)
+                            .or(() -> customerRepository.findByEmail(email))
+                            .orElse(null);
+                    if (existing != null) {
+                        return toResponse(existing);
+                    }
                     throw new DuplicateResourceException("Customer already exists with email: " + email);
                 }
             });
         } catch (Exception e) {
-            // Compensating action: clean up orphaned Keycloak user if DB save failed
-            try {
-                keycloakManagementService.deleteUser(resolvedKeycloakId);
-            } catch (Exception cleanupEx) {
-                log.error("Failed to cleanup orphaned Keycloak user {} after DB failure: {}",
-                        resolvedKeycloakId, cleanupEx.getMessage());
+            Customer existing = customerRepository.findByKeycloakId(resolvedKeycloakId)
+                    .or(() -> customerRepository.findByEmail(email))
+                    .orElse(null);
+            if (existing != null) {
+                return toResponse(existing);
+            }
+
+            if (createdKeycloakUser) {
+                try {
+                    keycloakManagementService.deleteUser(resolvedKeycloakId);
+                } catch (Exception cleanupEx) {
+                    log.error("Failed to cleanup orphaned Keycloak user {} after DB failure: {}",
+                            resolvedKeycloakId, cleanupEx.getMessage());
+                }
             }
             throw e;
         }

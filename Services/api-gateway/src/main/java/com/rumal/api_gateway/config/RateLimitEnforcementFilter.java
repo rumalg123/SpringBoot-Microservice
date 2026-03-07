@@ -33,6 +33,7 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
     private static final Logger log = LoggerFactory.getLogger(RateLimitEnforcementFilter.class);
 
     private final RedisRateLimiter registerRateLimiter;
+    private final RedisRateLimiter registerIdentityRateLimiter;
     private final RedisRateLimiter authLogoutRateLimiter;
     private final RedisRateLimiter authResendVerificationRateLimiter;
     private final RedisRateLimiter authSessionRateLimiter;
@@ -73,6 +74,7 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
 
     public RateLimitEnforcementFilter(
             @Qualifier("registerRateLimiter") RedisRateLimiter registerRateLimiter,
+            @Qualifier("registerIdentityRateLimiter") RedisRateLimiter registerIdentityRateLimiter,
             @Qualifier("authLogoutRateLimiter") RedisRateLimiter authLogoutRateLimiter,
             @Qualifier("authResendVerificationRateLimiter") RedisRateLimiter authResendVerificationRateLimiter,
             @Qualifier("authSessionRateLimiter") RedisRateLimiter authSessionRateLimiter,
@@ -112,6 +114,7 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
             @Value("${rate-limit.fail-open-on-error:true}") boolean failOpenOnRateLimiterError
     ) {
         this.registerRateLimiter = registerRateLimiter;
+        this.registerIdentityRateLimiter = registerIdentityRateLimiter;
         this.authLogoutRateLimiter = authLogoutRateLimiter;
         this.authResendVerificationRateLimiter = authResendVerificationRateLimiter;
         this.authSessionRateLimiter = authSessionRateLimiter;
@@ -261,9 +264,11 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
     }
 
     private Policy resolvePolicy(String path, @Nullable HttpMethod method) {
-        if (("/customers/register".equals(path) || "/customers/register-identity".equals(path))
-                && method == HttpMethod.POST) {
+        if ("/customers/register".equals(path) && method == HttpMethod.POST) {
             return new Policy("register", registerRateLimiter, ipKeyResolver);
+        }
+        if ("/customers/register-identity".equals(path) && method == HttpMethod.POST) {
+            return new Policy("register-identity", registerIdentityRateLimiter, userOrIpKeyResolver);
         }
         if ("/auth/logout".equals(path) && method == HttpMethod.POST) {
             return new Policy("auth-logout", authLogoutRateLimiter, userOrIpKeyResolver);

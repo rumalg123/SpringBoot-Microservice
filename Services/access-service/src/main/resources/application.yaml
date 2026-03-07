@@ -39,4 +39,10 @@ cache:
 access:
   expiry:
     check-interval-ms: ${ACCESS_EXPIRY_CHECK_INTERVAL_MS:60000}
+  idempotency:
+    enabled: ${ACCESS_IDEMPOTENCY_ENABLED:true}
+    key-header-name: ${ACCESS_IDEMPOTENCY_KEY_HEADER_NAME:Idempotency-Key}
+    key-prefix: ${ACCESS_IDEMPOTENCY_KEY_PREFIX:access:idem:v1::}
+    pending-ttl: ${ACCESS_IDEMPOTENCY_PENDING_TTL:30s}
+    response-ttl: ${ACCESS_IDEMPOTENCY_RESPONSE_TTL:6h}
 

@@ -7,6 +7,7 @@ import com.rumal.admin_service.dto.VendorAdminOnboardRequest;
 import com.rumal.admin_service.dto.VendorAdminOnboardResponse;
 import com.rumal.admin_service.exception.DownstreamHttpException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
@@ -21,6 +22,7 @@ import java.util.Set;
 import java.util.UUID;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class AdminVendorService {
 
@@ -314,7 +316,19 @@ public class AdminVendorService {
                 "active", true
         );
 
-        Map<String, Object> membership = upsertVendorMembership(vendorId, managedUser.id(), membershipRequest, internalAuth, userSub, userRoles);
+        Map<String, Object> membership;
+        try {
+            membership = upsertVendorMembership(vendorId, managedUser.id(), membershipRequest, internalAuth, userSub, userRoles);
+        } catch (RuntimeException ex) {
+            Map<String, Object> recoveredMembership = tryFindVendorMembership(vendorId, managedUser.id(), internalAuth, userSub, userRoles);
+            if (recoveredMembership != null) {
+                log.warn("Recovered vendor onboarding for user {} after downstream failure: {}", managedUser.id(), ex.getMessage());
+                membership = recoveredMembership;
+            } else {
+                compensateVendorAdminOnboarding(managedUser, ex);
+                throw ex;
+            }
+        }
 
         return new VendorAdminOnboardResponse(
                 vendorId,
@@ -326,6 +340,42 @@ public class AdminVendorService {
                 managedUser.lastName(),
                 membership
         );
+    }
+
+    private void compensateVendorAdminOnboarding(
+            KeycloakVendorAdminManagementService.KeycloakManagedUser managedUser,
+            RuntimeException failure
+    ) {
+        if (!managedUser.created()) {
+            return;
+        }
+        try {
+            keycloakVendorAdminManagementService.deleteUser(managedUser.id());
+        } catch (RuntimeException cleanupEx) {
+            log.error(
+                    "Failed to cleanup orphaned Keycloak vendor admin {} after downstream failure: {}",
+                    managedUser.id(),
+                    cleanupEx.getMessage()
+            );
+            return;
+        }
+        log.warn("Compensated orphaned Keycloak vendor admin {} after downstream failure: {}", managedUser.id(), failure.getMessage());
+    }
+
+    private Map<String, Object> tryFindVendorMembership(
+            UUID vendorId,
+            String keycloakUserId,
+            String internalAuth,
+            String userSub,
+            String userRoles
+    ) {
+        try {
+            List<Map<String, Object>> memberships = vendorClient.listVendorUsers(vendorId, internalAuth, userSub, userRoles);
+            return findMembershipByKeycloakUserId(memberships, keycloakUserId);
+        } catch (RuntimeException ex) {
+            log.warn("Failed to verify vendor membership recovery for user {}: {}", keycloakUserId, ex.getMessage());
+            return null;
+        }
     }
 
     private Map<String, Object> upsertVendorMembership(

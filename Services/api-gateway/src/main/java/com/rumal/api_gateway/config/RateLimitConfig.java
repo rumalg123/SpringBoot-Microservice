@@ -19,8 +19,16 @@ public class RateLimitConfig {
 
     @Bean
     public RedisRateLimiter registerRateLimiter(
-            @Value("${RATE_LIMIT_REGISTER_REPLENISH:5}") int replenishRate,
-            @Value("${RATE_LIMIT_REGISTER_BURST:10}") int burstCapacity
+            @Value("${RATE_LIMIT_REGISTER_REPLENISH:2}") int replenishRate,
+            @Value("${RATE_LIMIT_REGISTER_BURST:4}") int burstCapacity
+    ) {
+        return redisRateLimiter(replenishRate, burstCapacity);
+    }
+
+    @Bean
+    public RedisRateLimiter registerIdentityRateLimiter(
+            @Value("${RATE_LIMIT_REGISTER_IDENTITY_REPLENISH:4}") int replenishRate,
+            @Value("${RATE_LIMIT_REGISTER_IDENTITY_BURST:8}") int burstCapacity
     ) {
         return redisRateLimiter(replenishRate, burstCapacity);
     }

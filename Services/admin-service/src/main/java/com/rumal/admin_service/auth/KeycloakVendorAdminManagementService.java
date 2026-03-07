@@ -3,6 +3,7 @@ package com.rumal.admin_service.auth;
 import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
+import lombok.extern.slf4j.Slf4j;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.KeycloakBuilder;
@@ -26,6 +27,7 @@ import java.util.Set;
 import java.util.function.Supplier;
 
 @Service
+@Slf4j
 public class KeycloakVendorAdminManagementService {
 
     private final String serverUrl;
@@ -103,8 +105,7 @@ public class KeycloakVendorAdminManagementService {
                 assignRealmRoleIfMissing(realmResource, user.getId(), vendorAdminRoleName);
                 boolean actionEmailSent = false;
                 if (created) {
-                    sendRequiredActionsEmail(realmResource, user.getId());
-                    actionEmailSent = true;
+                    actionEmailSent = sendRequiredActionsEmail(realmResource, user.getId());
                 }
 
                 UserRepresentation refreshed = realmResource.users().get(user.getId()).toRepresentation();
@@ -122,6 +123,23 @@ public class KeycloakVendorAdminManagementService {
                 throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak admin request failed: " + ex.getMessage(), ex);
             } catch (Exception ex) {
                 throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak admin operation failed", ex);
+            }
+        });
+    }
+
+    public void deleteUser(String keycloakUserId) {
+        if (!StringUtils.hasText(keycloakUserId)) {
+            return;
+        }
+        runKeycloakVoid(() -> {
+            try {
+                getOrCreateAdminClient().realm(realm).users().delete(keycloakUserId.trim());
+            } catch (NotFoundException ignored) {
+                // Already removed or never committed in Keycloak.
+            } catch (WebApplicationException ex) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak user deletion failed", ex);
+            } catch (Exception ex) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak user deletion failed", ex);
             }
         });
     }
@@ -374,17 +392,15 @@ public class KeycloakVendorAdminManagementService {
         }
     }
 
-    private void sendRequiredActionsEmail(org.keycloak.admin.client.resource.RealmResource realmResource, String userId) {
+    private boolean sendRequiredActionsEmail(org.keycloak.admin.client.resource.RealmResource realmResource, String userId) {
         try {
             realmResource.users()
                     .get(userId)
                     .executeActionsEmail(List.of("VERIFY_EMAIL", "UPDATE_PASSWORD"));
-        } catch (WebApplicationException ex) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_GATEWAY,
-                    "Keycloak action email failed. Check Keycloak SMTP/email settings.",
-                    ex
-            );
+            return true;
+        } catch (Exception ex) {
+            log.warn("Keycloak action email failed for user {}. Check Keycloak SMTP/email settings.", userId, ex);
+            return false;
         }
     }
 

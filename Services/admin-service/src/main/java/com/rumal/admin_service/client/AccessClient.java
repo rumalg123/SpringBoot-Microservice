@@ -328,7 +328,9 @@ public class AccessClient {
                     case "PUT" -> rc.put().uri(buildUri(path));
                     default -> throw new IllegalArgumentException("Unsupported method: " + method);
                 };
-                Map<String, Object> response = ((RestClient.RequestBodySpec) applyActorHeaders(spec.header("X-Internal-Auth", internalAuth), userSub, userRoles, actionReason, callerVendorId))
+                Map<String, Object> response = ((RestClient.RequestBodySpec) applyIdempotencyHeader(
+                                applyActorHeaders(spec.header("X-Internal-Auth", internalAuth), userSub, userRoles, actionReason, callerVendorId)
+                        ))
                         .contentType(MediaType.APPLICATION_JSON)
                         .body(request)
                         .retrieve()
@@ -364,7 +366,9 @@ public class AccessClient {
         runAccessVoid(() -> {
             RestClient rc = restClient;
             try {
-                applyActorHeaders(rc.delete().uri(buildUri(path)).header("X-Internal-Auth", internalAuth), userSub, userRoles, actionReason, callerVendorId)
+                applyIdempotencyHeader(
+                        applyActorHeaders(rc.delete().uri(buildUri(path)).header("X-Internal-Auth", internalAuth), userSub, userRoles, actionReason, callerVendorId)
+                )
                         .retrieve().toBodilessEntity();
             } catch (RestClientResponseException ex) {
                 throw toDownstream(ex);
@@ -393,8 +397,10 @@ public class AccessClient {
         return runAccessCall(() -> {
             RestClient rc = restClient;
             try {
-                Map<String, Object> response = applyActorHeaders(rc.post().uri(buildUri(path))
-                        .header("X-Internal-Auth", internalAuth), userSub, userRoles, actionReason, callerVendorId)
+                Map<String, Object> response = applyIdempotencyHeader(
+                        applyActorHeaders(rc.post().uri(buildUri(path))
+                                .header("X-Internal-Auth", internalAuth), userSub, userRoles, actionReason, callerVendorId)
+                )
                         .retrieve().body(MAP_TYPE);
                 if (response == null) {
                     throw new ServiceUnavailableException("Access service returned an empty response", null);
@@ -425,6 +431,10 @@ public class AccessClient {
 
     private URI buildUri(String path) {
         return URI.create("http://access-service" + path);
+    }
+
+    private RestClient.RequestHeadersSpec<?> applyIdempotencyHeader(RestClient.RequestHeadersSpec<?> spec) {
+        return ClientRequestUtils.applyIdempotencyHeader(spec, null);
     }
 
     private RestClient.RequestHeadersSpec<?> applyActorHeaders(

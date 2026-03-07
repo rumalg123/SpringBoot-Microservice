@@ -42,6 +42,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -402,7 +403,11 @@ public class VendorServiceImpl implements VendorService {
         VendorUser user = new VendorUser();
         user.setVendor(vendor);
         applyVendorUserRequest(user, request);
-        return toVendorUserResponse(vendorUserRepository.save(user));
+        try {
+            return toVendorUserResponse(vendorUserRepository.save(user));
+        } catch (DataIntegrityViolationException ex) {
+            throw new ValidationException("Vendor user already exists for vendor and keycloakUserId");
+        }
     }
 
     @Override
@@ -417,7 +422,11 @@ public class VendorServiceImpl implements VendorService {
             throw new ValidationException("Another vendor user already exists with this keycloakUserId");
         }
         applyVendorUserRequest(user, request);
-        return toVendorUserResponse(vendorUserRepository.save(user));
+        try {
+            return toVendorUserResponse(vendorUserRepository.save(user));
+        } catch (DataIntegrityViolationException ex) {
+            throw new ValidationException("Another vendor user already exists with this keycloakUserId");
+        }
     }
 
     @Override
