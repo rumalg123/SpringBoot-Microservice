@@ -16,6 +16,7 @@ const env = {
   realm: process.env.NEXT_PUBLIC_KEYCLOAK_REALM || "",
   clientId: process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID || "",
   audience: process.env.NEXT_PUBLIC_KEYCLOAK_AUDIENCE || "",
+  scope: process.env.NEXT_PUBLIC_KEYCLOAK_SCOPE || "",
   claimsNamespace: process.env.NEXT_PUBLIC_KEYCLOAK_CLAIMS_NAMESPACE || "",
   apiBase: API_BASE,
 };
@@ -204,8 +205,7 @@ function isSuperAdminByClaims(
   claims: Record<string, unknown> | null,
   namespace: string
 ): boolean {
-  return hasRoleByClaims(claims, namespace, "super_admin")
-    || hasRoleByClaims(claims, namespace, "platform_admin");
+  return hasRoleByClaims(claims, namespace, "super_admin");
 }
 
 function isVendorAdminByClaims(
@@ -320,6 +320,15 @@ function resolveSilentCheckSsoUri(): string | undefined {
   return `${window.location.origin}/silent-check-sso.html`;
 }
 
+function resolveRequestedScope(): string | undefined {
+  const normalized = env.scope
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(" ");
+  return normalized || undefined;
+}
+
 function buildResetCredentialsUrl(returnTo: string, loginHint?: string): string {
   const base = resolveKeycloakBaseUrl(env.url);
   const params = new URLSearchParams({
@@ -360,6 +369,7 @@ function initKeycloakOnce(client: KeycloakInstance): Promise<boolean> {
     .init({
       onLoad: "check-sso",
       pkceMethod: "S256",
+      scope: resolveRequestedScope(),
       checkLoginIframe: false,
       silentCheckSsoRedirectUri: resolveSilentCheckSsoUri(),
       silentCheckSsoFallback: true,
@@ -716,6 +726,7 @@ export function useAuthSession() {
       if (!client) return;
       await client.login({
         redirectUri: resolveReturnTo(returnTo),
+        scope: resolveRequestedScope(),
       });
     },
     [client]
@@ -726,6 +737,7 @@ export function useAuthSession() {
       if (!client) return;
       await client.register({
         redirectUri: resolveReturnTo(returnTo),
+        scope: resolveRequestedScope(),
       });
     },
     [client]
@@ -736,6 +748,7 @@ export function useAuthSession() {
       if (!client) return;
       await client.login({
         redirectUri: resolveReturnTo(returnTo),
+        scope: resolveRequestedScope(),
         action: "UPDATE_PASSWORD",
       });
     },

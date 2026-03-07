@@ -316,11 +316,11 @@ sequenceDiagram
     participant CART as cart-service
     participant ADS as admin-service
 
-    UI->>KC: Login/Signup redirect
-    KC-->>UI: Access token (JWT)
+    UI->>KC: Login/Signup redirect (Auth Code + PKCE)
+    KC-->>UI: Access token (JWT) for frontend client
     UI->>GW: API call + Bearer token
-    GW->>GW: Validate issuer + audience
-    GW->>GW: Strip client-forged internal headers
+    GW->>GW: Validate JWKS signature + issuer + aud
+    GW->>GW: Strip forged internal headers and normalize roles
     GW->>CS: Forward + X-User-Sub/X-User-Email/X-Internal-Auth
     GW->>CS: Forward + X-User-Email-Verified
     GW->>OS: Forward + X-User-Sub/X-User-Email-Verified/X-Internal-Auth
@@ -335,6 +335,7 @@ sequenceDiagram
 Key points:
 - Backend services do **not** trust incoming internal headers from clients.
 - Gateway sanitizes and rewrites trusted headers.
+- Gateway only forwards the target Keycloak roles: `super_admin`, `platform_staff`, `customer`, `vendor_admin`, `vendor_staff`.
 - `INTERNAL_AUTH_SHARED_SECRET` must be identical across gateway/customer/order/cart/admin services.
 
 ## Data and Caching Design
@@ -415,7 +416,9 @@ Copy-Item env/frontend-sample.env env/frontend.env
 Fill required values:
 - Keycloak:
   - `KEYCLOAK_ISSUER_URI`
+  - `KEYCLOAK_JWK_SET_URI` (optional override; default derives from the realm issuer)
   - `KEYCLOAK_AUDIENCE`
+  - `KEYCLOAK_ACCEPT_AZP_AS_AUDIENCE` (keep `false` unless you are in a temporary migration window)
   - `KEYCLOAK_REALM`
   - `KEYCLOAK_ADMIN_CLIENT_ID`
   - `KEYCLOAK_ADMIN_CLIENT_SECRET`
@@ -425,6 +428,7 @@ Fill required values:
   - `NEXT_PUBLIC_KEYCLOAK_REALM`
   - `NEXT_PUBLIC_KEYCLOAK_CLIENT_ID`
   - `NEXT_PUBLIC_KEYCLOAK_AUDIENCE`
+  - `NEXT_PUBLIC_KEYCLOAK_SCOPE` (optional; use when the audience mapper lives in an optional client scope)
 - Internal trust:
   - `INTERNAL_AUTH_SHARED_SECRET` (same value across gateway and all internal services that verify it)
 - Elasticsearch:

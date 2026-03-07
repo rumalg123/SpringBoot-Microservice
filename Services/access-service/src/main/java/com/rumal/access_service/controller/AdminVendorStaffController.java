@@ -134,8 +134,7 @@ public class AdminVendorStaffController {
 
     private boolean isPlatformAdmin(String userRoles) {
         Set<String> roles = parseRoles(userRoles);
-        return roles.contains("super_admin")
-                || roles.contains("platform_admin");
+        return roles.contains("super_admin");
     }
 
     private Set<String> parseRoles(String userRoles) {

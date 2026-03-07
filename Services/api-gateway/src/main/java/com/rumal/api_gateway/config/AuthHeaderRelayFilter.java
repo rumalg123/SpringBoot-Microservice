@@ -20,10 +20,6 @@ import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 @NullMarked
 @Component
@@ -31,10 +27,12 @@ public class AuthHeaderRelayFilter implements GlobalFilter, Ordered {
 
     private final String internalSharedSecret;
     private final String claimsNamespace;
+    private final KeycloakRoleClaims keycloakRoleClaims;
 
     public AuthHeaderRelayFilter(
             @Value("${internal.auth.shared-secret:}") String internalSharedSecret,
-            @Value("${keycloak.claims-namespace:}") String claimsNamespace
+            @Value("${keycloak.claims-namespace:}") String claimsNamespace,
+            KeycloakRoleClaims keycloakRoleClaims
     ) {
         this.internalSharedSecret = internalSharedSecret == null ? "" : internalSharedSecret.trim();
         if (claimsNamespace == null || claimsNamespace.isBlank()) {
@@ -42,6 +40,7 @@ public class AuthHeaderRelayFilter implements GlobalFilter, Ordered {
         } else {
             this.claimsNamespace = claimsNamespace.endsWith("/") ? claimsNamespace : claimsNamespace + "/";
         }
+        this.keycloakRoleClaims = keycloakRoleClaims;
     }
 
     @Override
@@ -200,52 +199,6 @@ public class AuthHeaderRelayFilter implements GlobalFilter, Ordered {
     }
 
     private String serializeRoles(JwtAuthenticationToken auth) {
-        Set<String> roles = new LinkedHashSet<>();
-
-        List<String> directRoles = auth.getToken().getClaimAsStringList("roles");
-        if (directRoles != null) {
-            directRoles.stream()
-                    .filter(value -> value != null && !value.isBlank())
-                    .map(String::trim)
-                    .forEach(roles::add);
-        }
-
-        if (!claimsNamespace.isBlank()) {
-            List<String> namespacedRoles = auth.getToken().getClaimAsStringList(claimsNamespace + "roles");
-            if (namespacedRoles != null) {
-                namespacedRoles.stream()
-                        .filter(value -> value != null && !value.isBlank())
-                        .map(String::trim)
-                        .forEach(roles::add);
-            }
-        }
-
-        roles.addAll(extractRoles(auth.getToken().getClaim("realm_access")));
-
-        Map<String, Object> resourceAccess = auth.getToken().getClaim("resource_access");
-        if (resourceAccess != null && !resourceAccess.isEmpty()) {
-            for (Object clientAccess : resourceAccess.values()) {
-                roles.addAll(extractRoles(clientAccess));
-            }
-        }
-
-        return String.join(",", roles);
-    }
-
-    private Set<String> extractRoles(Object claimValue) {
-        if (!(claimValue instanceof Map<?, ?> map)) {
-            return Set.of();
-        }
-        Object rolesValue = map.get("roles");
-        if (!(rolesValue instanceof List<?> rawRoles)) {
-            return Set.of();
-        }
-        Set<String> roles = new LinkedHashSet<>();
-        for (Object rawRole : rawRoles) {
-            if (rawRole instanceof String role && !role.isBlank()) {
-                roles.add(role.trim());
-            }
-        }
-        return roles;
+        return String.join(",", keycloakRoleClaims.extractForwardedRoles(auth.getToken()));
     }
 }

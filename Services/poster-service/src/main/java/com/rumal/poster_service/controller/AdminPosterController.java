@@ -216,7 +216,6 @@ public class AdminPosterController {
     private void requirePosterAdmin(String userRoles) {
         Set<String> roles = parseRoles(userRoles);
         if (roles.contains("super_admin")
-                || roles.contains("platform_admin")
                 || roles.contains("platform_staff")) {
             return;
         }

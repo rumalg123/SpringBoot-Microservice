@@ -49,7 +49,7 @@ public class AdminAccessAuditController {
 
     private UUID resolveEffectiveVendorId(String userRoles, UUID callerVendorId, UUID requestedVendorId) {
         Set<String> roles = parseRoles(userRoles);
-        if (roles.contains("super_admin") || roles.contains("platform_admin")) {
+        if (roles.contains("super_admin")) {
             return requestedVendorId;
         }
         if (!roles.contains("vendor_admin")) {

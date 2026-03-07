@@ -6,6 +6,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
+import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -21,32 +22,28 @@ import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.util.StringUtils;
 import reactor.core.publisher.Mono;
 
-import java.util.List;
-import java.util.Map;
-
 @Configuration
 @EnableWebFluxSecurity
 public class SecurityConfig {
 
     private final String issuerUri;
+    private final String jwkSetUri;
     private final String audienceConfig;
     private final boolean acceptAzpAsAudience;
-    private final String claimsNamespace;
+    private final KeycloakRoleClaims keycloakRoleClaims;
 
     public SecurityConfig(
             @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}") String issuerUri,
+            @Value("${keycloak.jwk-set-uri:}") String jwkSetUri,
             @Value("${keycloak.audience}") String audience,
             @Value("${keycloak.accept-azp-as-audience:false}") boolean acceptAzpAsAudience,
-            @Value("${keycloak.claims-namespace:}") String claimsNamespace
+            KeycloakRoleClaims keycloakRoleClaims
     ) {
         this.issuerUri = issuerUri;
+        this.jwkSetUri = jwkSetUri;
         this.audienceConfig = audience;
         this.acceptAzpAsAudience = acceptAzpAsAudience;
-        if (claimsNamespace.isBlank()) {
-            this.claimsNamespace = "";
-        } else {
-            this.claimsNamespace = claimsNamespace.endsWith("/") ? claimsNamespace : claimsNamespace + "/";
-        }
+        this.keycloakRoleClaims = keycloakRoleClaims;
     }
 
     @Bean
@@ -103,11 +100,28 @@ public class SecurityConfig {
 
     @Bean
     public ReactiveJwtDecoder jwtDecoder() {
-        NimbusReactiveJwtDecoder jwtDecoder = NimbusReactiveJwtDecoder.withIssuerLocation(issuerUri).build();
+        NimbusReactiveJwtDecoder jwtDecoder = NimbusReactiveJwtDecoder.withJwkSetUri(resolveJwkSetUri())
+                .jwsAlgorithm(SignatureAlgorithm.RS256)
+                .build();
         OAuth2TokenValidator<Jwt> withIssuer = JwtValidators.createDefaultWithIssuer(issuerUri);
         OAuth2TokenValidator<Jwt> withAudience = new AudienceValidator(audienceConfig, acceptAzpAsAudience);
         jwtDecoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(withIssuer, withAudience));
         return jwtDecoder;
+    }
+
+    private String resolveJwkSetUri() {
+        if (StringUtils.hasText(jwkSetUri)) {
+            return jwkSetUri.trim();
+        }
+
+        String normalizedIssuer = issuerUri == null ? "" : issuerUri.trim();
+        if (!StringUtils.hasText(normalizedIssuer)) {
+            throw new IllegalArgumentException("spring.security.oauth2.resourceserver.jwt.issuer-uri is required");
+        }
+        if (normalizedIssuer.endsWith("/")) {
+            normalizedIssuer = normalizedIssuer.substring(0, normalizedIssuer.length() - 1);
+        }
+        return normalizedIssuer + "/protocol/openid-connect/certs";
     }
 
     private Mono<AuthorizationResult> hasSuperAdminAccess(Mono<Authentication> authentication, AuthorizationContext context) {
@@ -117,7 +131,7 @@ public class SecurityConfig {
                 .cast(JwtAuthenticationToken.class)
                 .map(JwtAuthenticationToken::getToken)
                 .map(jwt -> (AuthorizationResult) new AuthorizationDecision(
-                        isEmailVerified(jwt) && hasPlatformAdminLikeRole(jwt)
+                        keycloakRoleClaims.isEmailVerified(jwt) && keycloakRoleClaims.hasRole(jwt, "super_admin")
                 ))
                 .defaultIfEmpty(new AuthorizationDecision(false));
     }
@@ -129,7 +143,9 @@ public class SecurityConfig {
                 .cast(JwtAuthenticationToken.class)
                 .map(JwtAuthenticationToken::getToken)
                 .map(jwt -> (AuthorizationResult) new AuthorizationDecision(
-                        isEmailVerified(jwt) && (hasPlatformAdminLikeRole(jwt) || hasRole(jwt, "vendor_admin"))
+                        keycloakRoleClaims.isEmailVerified(jwt)
+                                && (keycloakRoleClaims.hasRole(jwt, "super_admin")
+                                || keycloakRoleClaims.hasRole(jwt, "vendor_admin"))
                 ))
                 .defaultIfEmpty(new AuthorizationDecision(false));
     }
@@ -141,7 +157,9 @@ public class SecurityConfig {
                 .cast(JwtAuthenticationToken.class)
                 .map(JwtAuthenticationToken::getToken)
                 .map(jwt -> (AuthorizationResult) new AuthorizationDecision(
-                        isEmailVerified(jwt) && (hasPlatformAdminLikeRole(jwt) || hasRole(jwt, "platform_staff"))
+                        keycloakRoleClaims.isEmailVerified(jwt)
+                                && (keycloakRoleClaims.hasRole(jwt, "super_admin")
+                                || keycloakRoleClaims.hasRole(jwt, "platform_staff"))
                 ))
                 .defaultIfEmpty(new AuthorizationDecision(false));
     }
@@ -153,10 +171,11 @@ public class SecurityConfig {
                 .cast(JwtAuthenticationToken.class)
                 .map(JwtAuthenticationToken::getToken)
                 .map(jwt -> (AuthorizationResult) new AuthorizationDecision(
-                        isEmailVerified(jwt) && (hasPlatformAdminLikeRole(jwt)
-                                || hasRole(jwt, "platform_staff")
-                                || hasRole(jwt, "vendor_admin")
-                                || hasRole(jwt, "vendor_staff"))
+                        keycloakRoleClaims.isEmailVerified(jwt)
+                                && (keycloakRoleClaims.hasRole(jwt, "super_admin")
+                                || keycloakRoleClaims.hasRole(jwt, "platform_staff")
+                                || keycloakRoleClaims.hasRole(jwt, "vendor_admin")
+                                || keycloakRoleClaims.hasRole(jwt, "vendor_staff"))
                 ))
                 .defaultIfEmpty(new AuthorizationDecision(false));
     }
@@ -168,7 +187,9 @@ public class SecurityConfig {
                 .cast(JwtAuthenticationToken.class)
                 .map(JwtAuthenticationToken::getToken)
                 .map(jwt -> (AuthorizationResult) new AuthorizationDecision(
-                        isEmailVerified(jwt) && (hasRole(jwt, "vendor_admin") || hasRole(jwt, "vendor_staff"))
+                        keycloakRoleClaims.isEmailVerified(jwt)
+                                && (keycloakRoleClaims.hasRole(jwt, "vendor_admin")
+                                || keycloakRoleClaims.hasRole(jwt, "vendor_staff"))
                 ))
                 .defaultIfEmpty(new AuthorizationDecision(false));
     }
@@ -180,111 +201,8 @@ public class SecurityConfig {
                 .cast(JwtAuthenticationToken.class)
                 .map(JwtAuthenticationToken::getToken)
                 .map(jwt -> (AuthorizationResult) new AuthorizationDecision(
-                        isEmailVerified(jwt) && isCustomerPrincipal(jwt)
+                        keycloakRoleClaims.isEmailVerified(jwt) && keycloakRoleClaims.hasRole(jwt, "customer")
                 ))
                 .defaultIfEmpty(new AuthorizationDecision(false));
-    }
-
-    private boolean isEmailVerified(Jwt jwt) {
-        Boolean standard = jwt.getClaimAsBoolean("email_verified");
-        if (standard != null) {
-            return standard;
-        }
-
-        if (!claimsNamespace.isBlank()) {
-            Boolean namespaced = jwt.getClaimAsBoolean(claimsNamespace + "email_verified");
-            if (namespaced != null) {
-                return namespaced;
-            }
-        }
-
-        return false;
-    }
-
-    private boolean hasRole(Jwt jwt, String requiredRole) {
-        if (!StringUtils.hasText(requiredRole)) {
-            return false;
-        }
-        String normalizedRole = normalizeRole(requiredRole);
-
-        if (containsRole(jwt.getClaimAsStringList("roles"), normalizedRole)) {
-            return true;
-        }
-
-        if (!claimsNamespace.isBlank()
-                && containsRole(jwt.getClaimAsStringList(claimsNamespace + "roles"), normalizedRole)) {
-            return true;
-        }
-
-        if (containsRole(extractRoles(jwt.getClaim("realm_access")), normalizedRole)) {
-            return true;
-        }
-
-        Map<String, Object> resourceAccess = jwt.getClaim("resource_access");
-        if (resourceAccess == null || resourceAccess.isEmpty()) {
-            return false;
-        }
-
-        for (Object clientAccess : resourceAccess.values()) {
-            if (containsRole(extractRoles(clientAccess), normalizedRole)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private boolean hasPlatformAdminLikeRole(Jwt jwt) {
-        return hasRole(jwt, "super_admin") || hasRole(jwt, "platform_admin");
-    }
-
-    private boolean isCustomerPrincipal(Jwt jwt) {
-        if (hasRole(jwt, "customer")) {
-            return true;
-        }
-        return !hasAnyScopedAdminRole(jwt);
-    }
-
-    private boolean hasAnyScopedAdminRole(Jwt jwt) {
-        return hasRole(jwt, "super_admin")
-                || hasRole(jwt, "platform_admin")
-                || hasRole(jwt, "platform_staff")
-                || hasRole(jwt, "vendor_admin")
-                || hasRole(jwt, "vendor_staff");
-    }
-
-    private boolean containsRole(List<String> roles, String requiredRole) {
-        return roles != null && roles.stream()
-                .map(this::normalizeRole)
-                .anyMatch(requiredRole::equalsIgnoreCase);
-    }
-
-    private String normalizeRole(String role) {
-        if (!StringUtils.hasText(role)) {
-            return "";
-        }
-        String normalized = role.trim().toLowerCase();
-        if (normalized.startsWith("role_")) {
-            normalized = normalized.substring("role_".length());
-        } else if (normalized.startsWith("role-")) {
-            normalized = normalized.substring("role-".length());
-        } else if (normalized.startsWith("role:")) {
-            normalized = normalized.substring("role:".length());
-        }
-        return normalized.replace('-', '_').replace(' ', '_');
-    }
-
-    private List<String> extractRoles(Object claimValue) {
-        if (!(claimValue instanceof Map<?, ?> map)) {
-            return List.of();
-        }
-        Object rolesValue = map.get("roles");
-        if (!(rolesValue instanceof List<?> rawRoles)) {
-            return List.of();
-        }
-        return rawRoles.stream()
-                .filter(String.class::isInstance)
-                .map(String.class::cast)
-                .toList();
     }
 }

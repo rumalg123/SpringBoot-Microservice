@@ -8,7 +8,6 @@ import org.springframework.util.StringUtils;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 
 public class AudienceValidator implements OAuth2TokenValidator<Jwt> {
     private final List<String> requiredAudiences;
@@ -35,17 +34,10 @@ public class AudienceValidator implements OAuth2TokenValidator<Jwt> {
 
     @Override
     public OAuth2TokenValidatorResult validate(Jwt jwt) {
+        List<String> tokenAudiences = jwt.getAudience() == null ? List.of() : jwt.getAudience();
 
-        if (jwt.getAudience().stream().anyMatch(requiredAudiences::contains)) {
+        if (tokenAudiences.stream().anyMatch(requiredAudiences::contains)) {
             return OAuth2TokenValidatorResult.success();
-        }
-
-        Object resourceAccessClaim = jwt.getClaim("resource_access");
-        if (resourceAccessClaim instanceof Map<?, ?> resourceAccess) {
-            boolean audiencePresentInResourceAccess = requiredAudiences.stream().anyMatch(resourceAccess::containsKey);
-            if (audiencePresentInResourceAccess) {
-                return OAuth2TokenValidatorResult.success();
-            }
         }
 
         if (acceptAzpAsAudience) {
@@ -57,7 +49,9 @@ public class AudienceValidator implements OAuth2TokenValidator<Jwt> {
 
         OAuth2Error error = new OAuth2Error(
                 "invalid_token",
-                "Required audience is missing. Expected one of: " + String.join(", ", requiredAudiences),
+                "Required aud claim is missing. Expected one of: "
+                        + String.join(", ", requiredAudiences)
+                        + ". Configure a Keycloak Audience mapper or default client scope for this API.",
                 null
         );
         return OAuth2TokenValidatorResult.failure(error);

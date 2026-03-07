@@ -63,9 +63,6 @@ public class LegacyDashboardController {
             String normalized = normalizeRole(role);
             if (!normalized.isEmpty()) {
                 roles.add(normalized);
-                if ("platform_admin".equals(normalized)) {
-                    roles.add("super_admin");
-                }
             }
         }
         return Set.copyOf(roles);

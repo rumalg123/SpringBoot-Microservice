@@ -535,9 +535,6 @@ public class AdminActorScopeService {
             String normalized = normalizeRole(part);
             if (!normalized.isEmpty()) {
                 roles.add(normalized);
-                if ("platform_admin".equals(normalized)) {
-                    roles.add("super_admin");
-                }
             }
         }
         return roles;

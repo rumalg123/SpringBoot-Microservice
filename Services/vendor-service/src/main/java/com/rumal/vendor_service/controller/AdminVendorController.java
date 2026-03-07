@@ -298,7 +298,6 @@ public class AdminVendorController {
     private void requirePlatformVendorAdmin(String userRoles) {
         Set<String> roles = parseRoles(userRoles);
         if (roles.contains("super_admin")
-                || roles.contains("platform_admin")
                 || roles.contains("platform_staff")) {
             return;
         }

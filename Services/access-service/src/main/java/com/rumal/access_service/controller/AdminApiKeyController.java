@@ -75,7 +75,7 @@ public class AdminApiKeyController {
 
     private void requirePlatformAdmin(String userRoles) {
         Set<String> roles = parseRoles(userRoles);
-        if (roles.contains("super_admin") || roles.contains("platform_admin")) {
+        if (roles.contains("super_admin")) {
             return;
         }
         throw new UnauthorizedException("Caller does not have platform admin access");
