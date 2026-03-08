@@ -13,6 +13,7 @@ import com.rumal.product_service.repo.ProductCatalogReadRepository;
 import com.rumal.product_service.repo.ProductRepository;
 import com.rumal.product_service.service.CategoryService;
 import com.rumal.product_service.service.ProductService;
+import com.rumal.product_service.service.ProductWorkflowActor;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -361,7 +362,7 @@ public class SampleCatalogDataSeeder implements ApplicationRunner {
                 null, null,
                 null,
                 null, null
-        ));
+        ), ProductWorkflowActor.PLATFORM);
     }
 
     private ProductResponse createParent(
@@ -398,7 +399,7 @@ public class SampleCatalogDataSeeder implements ApplicationRunner {
                 null, null,
                 null,
                 null, null
-        ));
+        ), ProductWorkflowActor.PLATFORM);
     }
 
     private ProductResponse createVariation(
@@ -432,7 +433,7 @@ public class SampleCatalogDataSeeder implements ApplicationRunner {
                 null, null,
                 null,
                 null, null
-        ));
+        ), ProductWorkflowActor.PLATFORM);
     }
 
     private void approveAllDraftProducts() {

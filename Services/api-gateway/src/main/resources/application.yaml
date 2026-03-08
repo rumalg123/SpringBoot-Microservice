@@ -198,6 +198,21 @@ spring:
                   args:
                     name: adminService
                     fallbackUri: forward:/fallback/unavailable
+            - id: admin-products-write-rate-limited
+              uri: lb://product-service
+              predicates:
+                - Path=/admin/products,/admin/products/**
+                - Method=POST,PUT,DELETE
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    rate-limiter: "#{@adminProductsWriteRateLimiter}"
+                    key-resolver: "#{@userOrIpKeyResolver}"
+                    deny-empty-key: false
+                - name: CircuitBreaker
+                  args:
+                    name: productService
+                    fallbackUri: forward:/fallback/unavailable
             - id: admin-products
               uri: lb://product-service
               predicates:

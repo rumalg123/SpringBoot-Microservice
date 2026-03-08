@@ -33,109 +33,236 @@ public class AdminProductAccessScopeService {
     private final VendorAccessClient vendorAccessClient;
     private final ProductRepository productRepository;
 
+    public ProductMutationAuthority resolveAuthority(String userSub, String userRolesHeader, String internalAuth) {
+        Set<String> roles = parseRoles(userRolesHeader);
+        if (roles.contains("super_admin")) {
+            return new ProductMutationAuthority(true, true, true, Set.of(), Set.of(), Set.of());
+        }
+
+        boolean platformProductsManage = false;
+        boolean platformCategoriesManage = false;
+        if (roles.contains("platform_staff")) {
+            PlatformAccessLookupResponse platformAccess = accessClient.getPlatformAccessByKeycloakUser(requireUserSub(userSub), internalAuth);
+            Set<String> permissions = platformAccess.permissions() == null ? Set.of() : platformAccess.permissions();
+            platformProductsManage = platformAccess.active() && permissions.contains(PLATFORM_PRODUCTS_MANAGE);
+            platformCategoriesManage = platformAccess.active() && permissions.contains(PLATFORM_CATEGORIES_MANAGE);
+            if (platformProductsManage || platformCategoriesManage) {
+                return new ProductMutationAuthority(
+                        false,
+                        platformProductsManage,
+                        platformCategoriesManage,
+                        Set.of(),
+                        Set.of(),
+                        Set.of()
+                );
+            }
+        }
+
+        Set<UUID> vendorAdminVendorIds = new LinkedHashSet<>();
+        if (roles.contains("vendor_admin")) {
+            List<VendorAccessMembershipResponse> memberships = vendorAccessClient.listAccessibleVendorsByKeycloakUser(requireUserSub(userSub), internalAuth);
+            for (VendorAccessMembershipResponse membership : memberships) {
+                if (membership != null && membership.vendorId() != null) {
+                    vendorAdminVendorIds.add(membership.vendorId());
+                }
+            }
+        }
+
+        Set<UUID> vendorStaffVendorIds = new LinkedHashSet<>();
+        if (roles.contains("vendor_staff")) {
+            List<VendorStaffAccessLookupResponse> vendorAccessRows = accessClient.listVendorStaffAccessByKeycloakUser(requireUserSub(userSub), internalAuth);
+            for (VendorStaffAccessLookupResponse row : vendorAccessRows) {
+                if (row == null || row.vendorId() == null || !row.active()) {
+                    continue;
+                }
+                Set<String> permissions = row.permissions() == null ? Set.of() : row.permissions();
+                if (permissions.contains(VENDOR_PRODUCTS_MANAGE)) {
+                    vendorStaffVendorIds.add(row.vendorId());
+                }
+            }
+        }
+
+        Set<UUID> manageableVendorIds = new LinkedHashSet<>(vendorAdminVendorIds);
+        manageableVendorIds.addAll(vendorStaffVendorIds);
+        if (!manageableVendorIds.isEmpty()) {
+            return new ProductMutationAuthority(
+                    false,
+                    false,
+                    false,
+                    Set.copyOf(vendorAdminVendorIds),
+                    Set.copyOf(vendorStaffVendorIds),
+                    Set.copyOf(manageableVendorIds)
+            );
+        }
+
+        throw new UnauthorizedException("Caller does not have product admin access");
+    }
+
     public UUID resolveScopedVendorFilter(String userSub, String userRolesHeader, UUID requestedVendorId, String internalAuth) {
-        ActorScope scope = resolveScope(userSub, userRolesHeader, internalAuth);
-        if (scope.superAdmin() || scope.platformProductsManage()) {
+        return resolveScopedVendorFilter(resolveAuthority(userSub, userRolesHeader, internalAuth), requestedVendorId);
+    }
+
+    public UUID resolveScopedVendorFilter(ProductMutationAuthority authority, UUID requestedVendorId) {
+        if (authority.isPlatformPrivileged()) {
             return requestedVendorId;
         }
-        return resolveVendorIdForVendorScopedActor(scope.vendorProductVendorIds(), requestedVendorId);
+        return resolveVendorIdForVendorScopedActor(authority.manageableVendorIds(), requestedVendorId);
     }
 
     public UpsertProductRequest scopeCreateRequest(String userSub, String userRolesHeader, UpsertProductRequest request, String internalAuth) {
-        ActorScope scope = resolveScope(userSub, userRolesHeader, internalAuth);
-        if (scope.superAdmin() || scope.platformProductsManage()) {
+        return scopeCreateRequest(resolveAuthority(userSub, userRolesHeader, internalAuth), request);
+    }
+
+    public UpsertProductRequest scopeCreateRequest(ProductMutationAuthority authority, UpsertProductRequest request) {
+        if (authority.isPlatformPrivileged()) {
             return request;
         }
-        UUID resolvedVendorId;
-        if (request.productType() == com.rumal.product_service.entity.ProductType.VARIATION) {
-            // Variations inherit vendorId from the parent, but still validate against the actor's scope
-            // when a vendorId is explicitly provided in the request
-            if (request.vendorId() != null && !scope.vendorProductVendorIds().contains(request.vendorId())) {
-                throw new UnauthorizedException("Vendor-scoped user cannot create a variation for another vendor");
-            }
-            resolvedVendorId = request.vendorId();
-        } else {
-            resolvedVendorId = resolveVendorIdForVendorScopedActor(scope.vendorProductVendorIds(), request.vendorId());
-        }
+        UUID resolvedVendorId = resolveVendorIdForVendorScopedActor(authority.manageableVendorIds(), request.vendorId());
         return copyRequestWithVendorId(request, resolvedVendorId);
     }
 
-    public UpsertProductRequest scopeUpdateRequest(UUID productId, String userSub, String userRolesHeader, UpsertProductRequest request, String internalAuth) {
-        ActorScope scope = resolveScope(userSub, userRolesHeader, internalAuth);
-        if (scope.superAdmin() || scope.platformProductsManage()) {
-            return request;
+    public UpsertProductRequest scopeVariationCreateRequest(
+            String userSub,
+            String userRolesHeader,
+            UUID parentId,
+            UpsertProductRequest request,
+            String internalAuth
+    ) {
+        return scopeVariationCreateRequest(resolveAuthority(userSub, userRolesHeader, internalAuth), parentId, request);
+    }
+
+    public UpsertProductRequest scopeVariationCreateRequest(ProductMutationAuthority authority, UUID parentId, UpsertProductRequest request) {
+        Product parent = productRepository.findById(parentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + parentId));
+        assertCanManageProduct(authority, parent);
+        UUID parentVendorId = requireProductVendorId(parent);
+        if (request.vendorId() != null && !parentVendorId.equals(request.vendorId())) {
+            throw new UnauthorizedException("Variation vendorId must match parent product vendorId");
         }
+        return copyRequestWithVendorId(request, parentVendorId);
+    }
+
+    public UpsertProductRequest scopeUpdateRequest(UUID productId, String userSub, String userRolesHeader, UpsertProductRequest request, String internalAuth) {
+        return scopeUpdateRequest(resolveAuthority(userSub, userRolesHeader, internalAuth), productId, request);
+    }
+
+    public UpsertProductRequest scopeUpdateRequest(ProductMutationAuthority authority, UUID productId, UpsertProductRequest request) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + productId));
-        assertVendorScopedActorCanManageProduct(scope.vendorProductVendorIds(), product);
-
-        UUID vendorId = request.vendorId();
-        if (product.getProductType() != com.rumal.product_service.entity.ProductType.VARIATION) {
-            UUID existingVendorId = product.getVendorId();
-            if (existingVendorId == null) {
-                throw new ValidationException("Existing product vendorId is missing");
-            }
-            if (vendorId != null && !existingVendorId.equals(vendorId)) {
-                throw new UnauthorizedException("Vendor-scoped user cannot reassign product to another vendor");
-            }
-            vendorId = existingVendorId;
+        assertCanManageProduct(authority, product);
+        UUID existingVendorId = requireProductVendorId(product);
+        if (request.vendorId() != null && !existingVendorId.equals(request.vendorId())) {
+            throw new UnauthorizedException("Product vendorId is immutable after creation");
         }
-
-        return copyRequestWithVendorId(request, vendorId);
+        return copyRequestWithVendorId(request, existingVendorId);
     }
 
     public void assertCanManageProduct(UUID productId, String userSub, String userRolesHeader, String internalAuth) {
-        assertCanManageProductOperations(userSub, userRolesHeader, internalAuth);
-        ActorScope scope = resolveScope(userSub, userRolesHeader, internalAuth);
-        if (scope.superAdmin() || scope.platformProductsManage()) {
+        assertCanManageProduct(resolveAuthority(userSub, userRolesHeader, internalAuth), productId);
+    }
+
+    public void assertCanManageProduct(ProductMutationAuthority authority, UUID productId) {
+        assertCanManageProductOperations(authority);
+        if (authority.isPlatformPrivileged()) {
             return;
         }
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + productId));
-        assertVendorScopedActorCanManageProduct(scope.vendorProductVendorIds(), product);
+        assertCanManageProduct(authority, product);
     }
 
     public void assertCanManageProductOperations(String userSub, String userRolesHeader, String internalAuth) {
-        ActorScope scope = resolveScope(userSub, userRolesHeader, internalAuth);
-        if (scope.superAdmin() || scope.platformProductsManage()) {
+        assertCanManageProductOperations(resolveAuthority(userSub, userRolesHeader, internalAuth));
+    }
+
+    public void assertCanManageProductOperations(ProductMutationAuthority authority) {
+        if (authority.isPlatformPrivileged()) {
             return;
         }
-        if (scope.vendorProductVendorIds().isEmpty()) {
+        if (authority.manageableVendorIds().isEmpty()) {
             throw new UnauthorizedException("Caller does not have product management access");
         }
     }
 
     public Set<UUID> resolveAllowedVendorIds(String userSub, String userRolesHeader, String internalAuth) {
-        ActorScope scope = resolveScope(userSub, userRolesHeader, internalAuth);
-        if (scope.superAdmin() || scope.platformProductsManage()) {
-            return null; // null = all vendors allowed
+        return resolveAllowedVendorIds(resolveAuthority(userSub, userRolesHeader, internalAuth));
+    }
+
+    public Set<UUID> resolveAllowedVendorIds(ProductMutationAuthority authority) {
+        if (authority.isPlatformPrivileged()) {
+            return null;
         }
-        if (scope.vendorProductVendorIds().isEmpty()) {
+        if (authority.manageableVendorIds().isEmpty()) {
             throw new UnauthorizedException("Caller does not have product management access");
         }
-        return scope.vendorProductVendorIds();
+        return authority.manageableVendorIds();
     }
 
     public void assertPlatformLevelProductManagement(String userSub, String userRolesHeader, String internalAuth) {
-        ActorScope scope = resolveScope(userSub, userRolesHeader, internalAuth);
-        if (scope.superAdmin() || scope.platformProductsManage()) {
+        assertPlatformLevelProductManagement(resolveAuthority(userSub, userRolesHeader, internalAuth));
+    }
+
+    public void assertPlatformLevelProductManagement(ProductMutationAuthority authority) {
+        if (authority.isPlatformPrivileged()) {
             return;
         }
         throw new UnauthorizedException("Only platform-level admins can perform this operation");
     }
 
     public void assertCanManageCategories(String userSub, String userRolesHeader, String internalAuth) {
-        ActorScope scope = resolveScope(userSub, userRolesHeader, internalAuth);
-        if (scope.superAdmin() || scope.platformCategoriesManage()) {
+        assertCanManageCategories(resolveAuthority(userSub, userRolesHeader, internalAuth));
+    }
+
+    public void assertCanManageCategories(ProductMutationAuthority authority) {
+        if (authority.superAdmin() || authority.platformCategoriesManage()) {
             return;
         }
         throw new UnauthorizedException("Caller does not have category management access");
     }
 
-    private void assertVendorScopedActorCanManageProduct(Set<UUID> vendorIds, Product product) {
-        if (product.getVendorId() == null || !vendorIds.contains(product.getVendorId())) {
+    public void assertCanSubmitProductForReview(String userSub, String userRolesHeader, String internalAuth, UUID productId) {
+        assertCanSubmitProductForReview(resolveAuthority(userSub, userRolesHeader, internalAuth), productId);
+    }
+
+    public void assertCanSubmitProductForReview(ProductMutationAuthority authority, UUID productId) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + productId));
+        if (authority.isPlatformPrivileged()) {
+            return;
+        }
+        UUID vendorId = requireProductVendorId(product);
+        if (authority.hasVendorAdminAccess(vendorId)) {
+            return;
+        }
+        throw new UnauthorizedException("Only vendor_admin or platform staff can submit a product for review");
+    }
+
+    public ProductWorkflowActor resolveWorkflowActorForVendor(ProductMutationAuthority authority, UUID vendorId) {
+        return authority.workflowActorForVendor(vendorId);
+    }
+
+    public ProductWorkflowActor resolveWorkflowActorForProduct(ProductMutationAuthority authority, UUID productId) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + productId));
+        return authority.workflowActorForVendor(requireProductVendorId(product));
+    }
+
+    private void assertCanManageProduct(ProductMutationAuthority authority, Product product) {
+        if (authority.isPlatformPrivileged()) {
+            return;
+        }
+        UUID vendorId = requireProductVendorId(product);
+        if (!authority.canManageVendor(vendorId)) {
             throw new UnauthorizedException("Vendor-scoped user cannot manage products of another vendor");
         }
+    }
+
+    private UUID requireProductVendorId(Product product) {
+        UUID vendorId = product.getVendorId();
+        if (vendorId == null) {
+            throw new ValidationException("Existing product vendorId is missing");
+        }
+        return vendorId;
     }
 
     private UUID resolveVendorIdForVendorScopedActor(Set<UUID> vendorIds, UUID requestedVendorId) {
@@ -152,51 +279,6 @@ public class AdminProductAccessScopeService {
             return vendorIds.iterator().next();
         }
         throw new ValidationException("vendorId is required when user has access to multiple vendors");
-    }
-
-    private ActorScope resolveScope(String userSub, String userRolesHeader, String internalAuth) {
-        Set<String> roles = parseRoles(userRolesHeader);
-        if (roles.contains("super_admin")) {
-            return new ActorScope(true, true, true, Set.of());
-        }
-
-        boolean platformProductsManage = false;
-        boolean platformCategoriesManage = false;
-        if (roles.contains("platform_staff")) {
-            PlatformAccessLookupResponse platformAccess = accessClient.getPlatformAccessByKeycloakUser(requireUserSub(userSub), internalAuth);
-            Set<String> permissions = platformAccess.permissions() == null ? Set.of() : platformAccess.permissions();
-            platformProductsManage = platformAccess.active() && permissions.contains(PLATFORM_PRODUCTS_MANAGE);
-            platformCategoriesManage = platformAccess.active() && permissions.contains(PLATFORM_CATEGORIES_MANAGE);
-            if (platformProductsManage || platformCategoriesManage) {
-                return new ActorScope(false, platformProductsManage, platformCategoriesManage, Set.of());
-            }
-        }
-
-        Set<UUID> vendorIds = new LinkedHashSet<>();
-        if (roles.contains("vendor_admin")) {
-            List<VendorAccessMembershipResponse> memberships = vendorAccessClient.listAccessibleVendorsByKeycloakUser(requireUserSub(userSub), internalAuth);
-            for (VendorAccessMembershipResponse membership : memberships) {
-                if (membership != null && membership.vendorId() != null) {
-                    vendorIds.add(membership.vendorId());
-                }
-            }
-        }
-        if (roles.contains("vendor_staff")) {
-            List<VendorStaffAccessLookupResponse> vendorAccessRows = accessClient.listVendorStaffAccessByKeycloakUser(requireUserSub(userSub), internalAuth);
-            for (VendorStaffAccessLookupResponse row : vendorAccessRows) {
-                if (row == null || row.vendorId() == null || !row.active()) {
-                    continue;
-                }
-                Set<String> perms = row.permissions() == null ? Set.of() : row.permissions();
-                if (perms.contains(VENDOR_PRODUCTS_MANAGE)) {
-                    vendorIds.add(row.vendorId());
-                }
-            }
-        }
-        if (!vendorIds.isEmpty()) {
-            return new ActorScope(false, false, false, Set.copyOf(vendorIds));
-        }
-        throw new UnauthorizedException("Caller does not have product admin access");
     }
 
     private String requireUserSub(String userSub) {
@@ -263,11 +345,37 @@ public class AdminProductAccessScopeService {
         );
     }
 
-    private record ActorScope(
+    public record ProductMutationAuthority(
             boolean superAdmin,
             boolean platformProductsManage,
             boolean platformCategoriesManage,
-            Set<UUID> vendorProductVendorIds
+            Set<UUID> vendorAdminVendorIds,
+            Set<UUID> vendorStaffVendorIds,
+            Set<UUID> manageableVendorIds
     ) {
+        public boolean isPlatformPrivileged() {
+            return superAdmin || platformProductsManage;
+        }
+
+        public boolean canManageVendor(UUID vendorId) {
+            return vendorId != null && manageableVendorIds.contains(vendorId);
+        }
+
+        public boolean hasVendorAdminAccess(UUID vendorId) {
+            return vendorId != null && vendorAdminVendorIds.contains(vendorId);
+        }
+
+        public ProductWorkflowActor workflowActorForVendor(UUID vendorId) {
+            if (isPlatformPrivileged()) {
+                return ProductWorkflowActor.PLATFORM;
+            }
+            if (hasVendorAdminAccess(vendorId)) {
+                return ProductWorkflowActor.VENDOR_ADMIN;
+            }
+            if (vendorId != null && vendorStaffVendorIds.contains(vendorId)) {
+                return ProductWorkflowActor.VENDOR_STAFF;
+            }
+            throw new UnauthorizedException("Caller does not have authority over vendor " + vendorId);
+        }
     }
 }

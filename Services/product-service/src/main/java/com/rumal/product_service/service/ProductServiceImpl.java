@@ -25,6 +25,7 @@ import com.rumal.product_service.entity.ProductType;
 import com.rumal.product_service.entity.ProductVariationAttribute;
 import com.rumal.product_service.exception.ResourceNotFoundException;
 import com.rumal.product_service.exception.ServiceUnavailableException;
+import com.rumal.product_service.exception.UnauthorizedException;
 import com.rumal.product_service.exception.ValidationException;
 import com.rumal.product_service.repo.ProductCatalogReadRepository;
 import com.rumal.product_service.repo.CategoryRepository;
@@ -80,6 +81,7 @@ public class ProductServiceImpl implements ProductService {
     private final ProductCacheVersionService productCacheVersionService;
     private final ProductContentSanitizer productContentSanitizer;
     private final ProductSearchSyncOutboxService productSearchSyncOutboxService;
+    private final ProductInventorySyncOutboxService productInventorySyncOutboxService;
 
     @Lazy
     @Autowired
@@ -90,24 +92,27 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
-    public ProductResponse create(UpsertProductRequest request) {
+    public ProductResponse create(UpsertProductRequest request, ProductWorkflowActor actor) {
+        requireWorkflowActor(actor);
         if (request.productType() == ProductType.VARIATION) {
             throw new ValidationException("Use /admin/products/{parentId}/variations to create variation products");
         }
         assertVendorVerified(request.vendorId());
         Product product = new Product();
         applyUpsertRequest(product, request, null, null);
+        applyCreateWorkflow(product);
         Product saved = productRepository.save(product);
         saveSpecifications(saved, request.specifications());
         productCatalogReadModelProjector.upsert(saved);
-        queueSearchSync(saved.getId());
+        queueProjectionSync(saved.getId());
         productCacheVersionService.bumpAllProductReadCaches();
         return toResponse(saved);
     }
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
-    public ProductResponse createVariation(UUID parentId, UpsertProductRequest request) {
+    public ProductResponse createVariation(UUID parentId, UpsertProductRequest request, ProductWorkflowActor actor) {
+        requireWorkflowActor(actor);
         Product parent = getActiveEntityById(parentId);
         if (parent.getProductType() != ProductType.PARENT) {
             throw new ValidationException("Variations can be added only to parent products");
@@ -119,11 +124,12 @@ public class ProductServiceImpl implements ProductService {
 
         Product variation = new Product();
         applyUpsertRequest(variation, request, parent.getId(), parent);
+        applyCreateWorkflow(variation);
         validateVariationAgainstParent(parent, variation);
         Product saved = productRepository.save(variation);
         saveSpecifications(saved, request.specifications());
         productCatalogReadModelProjector.upsert(saved);
-        queueSearchSync(saved.getId());
+        queueProjectionSync(saved.getId());
         productCatalogReadModelProjector.refreshParentVariationFlag(parent.getId());
         productCacheVersionService.bumpAllProductReadCaches();
         return toResponse(saved);
@@ -365,9 +371,10 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
-    public ProductResponse update(UUID id, UpsertProductRequest request) {
+    public ProductResponse update(UUID id, UpsertProductRequest request, ProductWorkflowActor actor) {
         Product product = getActiveEntityById(id);
         assertVendorVerified(product.getVendorId());
+        ApprovalStatus originalApprovalStatus = product.getApprovalStatus();
         UUID parentId = product.getParentProductId();
         Product parent = null;
         if (parentId != null && request.productType() != ProductType.VARIATION) {
@@ -380,13 +387,14 @@ public class ProductServiceImpl implements ProductService {
             parent = getActiveEntityById(parentId);
         }
         applyUpsertRequest(product, request, parentId, parent);
+        applyUpdateWorkflow(product, requireWorkflowActor(actor), originalApprovalStatus);
         if (parentId != null) {
             validateVariationAgainstParent(parent, product);
         }
         Product saved = productRepository.save(product);
         saveSpecifications(saved, request.specifications());
         productCatalogReadModelProjector.upsert(saved);
-        queueSearchSync(saved.getId());
+        queueProjectionSync(saved.getId());
         if (parentId != null) {
             productCatalogReadModelProjector.refreshParentVariationFlag(parentId);
         }
@@ -404,7 +412,7 @@ public class ProductServiceImpl implements ProductService {
         product.setActive(false);
         Product saved = productRepository.save(product);
         productCatalogReadModelProjector.upsert(saved);
-        queueSearchSync(saved.getId());
+        queueProjectionSync(saved.getId());
         if (saved.getParentProductId() != null) {
             productCatalogReadModelProjector.refreshParentVariationFlag(saved.getParentProductId());
         }
@@ -425,7 +433,7 @@ public class ProductServiceImpl implements ProductService {
         product.setActive(true);
         Product saved = productRepository.save(product);
         productCatalogReadModelProjector.upsert(saved);
-        queueSearchSync(saved.getId());
+        queueProjectionSync(saved.getId());
         if (saved.getParentProductId() != null) {
             productCatalogReadModelProjector.refreshParentVariationFlag(saved.getParentProductId());
         }
@@ -461,7 +469,11 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
-    public ProductResponse submitForReview(UUID productId) {
+    public ProductResponse submitForReview(UUID productId, ProductWorkflowActor actor) {
+        ProductWorkflowActor workflowActor = requireWorkflowActor(actor);
+        if (!workflowActor.canSubmitForReview()) {
+            throw new UnauthorizedException("vendor_staff cannot submit products for review");
+        }
         Product product = getActiveEntityById(productId);
         ApprovalStatus current = product.getApprovalStatus();
         if (current != ApprovalStatus.DRAFT && current != ApprovalStatus.REJECTED) {
@@ -471,7 +483,7 @@ public class ProductServiceImpl implements ProductService {
         product.setRejectionReason(null);
         Product saved = productRepository.save(product);
         productCatalogReadModelProjector.upsert(saved);
-        queueSearchSync(saved.getId());
+        queueProjectionSync(saved.getId());
         productCacheVersionService.evictProductById(saved.getId(), saved.getSlug());
         productCacheVersionService.bumpListCaches();
         return toResponse(saved);
@@ -487,7 +499,7 @@ public class ProductServiceImpl implements ProductService {
         product.setApprovalStatus(ApprovalStatus.APPROVED);
         Product saved = productRepository.save(product);
         productCatalogReadModelProjector.upsert(saved);
-        queueSearchSync(saved.getId());
+        queueProjectionSync(saved.getId());
         productCacheVersionService.evictProductById(saved.getId(), saved.getSlug());
         productCacheVersionService.bumpListCaches();
         return toResponse(saved);
@@ -504,7 +516,7 @@ public class ProductServiceImpl implements ProductService {
         product.setRejectionReason(reason);
         Product saved = productRepository.save(product);
         productCatalogReadModelProjector.upsert(saved);
-        queueSearchSync(saved.getId());
+        queueProjectionSync(saved.getId());
         productCacheVersionService.evictProductById(saved.getId(), saved.getSlug());
         productCacheVersionService.bumpListCaches();
         return toResponse(saved);
@@ -530,14 +542,14 @@ public class ProductServiceImpl implements ProductService {
                     continue;
                 }
                 product.setDeleted(true);
-                product.setDeletedAt(Instant.now());
-                product.setActive(false);
-                Product saved = productRepository.save(product);
-                productCatalogReadModelProjector.upsert(saved);
-                queueSearchSync(saved.getId());
-                if (saved.getParentProductId() != null) {
-                    productCatalogReadModelProjector.refreshParentVariationFlag(saved.getParentProductId());
-                }
+                  product.setDeletedAt(Instant.now());
+                  product.setActive(false);
+                  Product saved = productRepository.save(product);
+                  productCatalogReadModelProjector.upsert(saved);
+                  queueProjectionSync(saved.getId());
+                  if (saved.getParentProductId() != null) {
+                      productCatalogReadModelProjector.refreshParentVariationFlag(saved.getParentProductId());
+                  }
                 success++;
             } catch (Exception ex) {
                 errors.add("Failed to delete product " + id + ": " + ex.getMessage());
@@ -577,13 +589,13 @@ public class ProductServiceImpl implements ProductService {
                     continue;
                 }
                 product.setRegularPrice(item.regularPrice());
-                product.setDiscountedPrice(item.discountedPrice());
-                Product saved = productRepository.save(product);
-                productCatalogReadModelProjector.upsert(saved);
-                queueSearchSync(saved.getId());
-                success++;
-            } catch (Exception ex) {
-                errors.add("Failed to update price for product " + item.productId() + ": " + ex.getMessage());
+                  product.setDiscountedPrice(item.discountedPrice());
+                  Product saved = productRepository.save(product);
+                  productCatalogReadModelProjector.upsert(saved);
+                  queueProjectionSync(saved.getId());
+                  success++;
+              } catch (Exception ex) {
+                  errors.add("Failed to update price for product " + item.productId() + ": " + ex.getMessage());
             }
         }
         if (success > 0) {
@@ -619,15 +631,15 @@ public class ProductServiceImpl implements ProductService {
                     errors.add("Access denied for product: " + id);
                     continue;
                 }
-                Set<Category> updatedCategories = new java.util.LinkedHashSet<>(product.getCategories());
-                updatedCategories.add(targetCategory);
-                product.setCategories(updatedCategories);
-                Product saved = productRepository.save(product);
-                productCatalogReadModelProjector.upsert(saved);
-                queueSearchSync(saved.getId());
-                success++;
-            } catch (Exception ex) {
-                errors.add("Failed to reassign category for product " + id + ": " + ex.getMessage());
+                  Set<Category> updatedCategories = new java.util.LinkedHashSet<>(product.getCategories());
+                  updatedCategories.add(targetCategory);
+                  product.setCategories(updatedCategories);
+                  Product saved = productRepository.save(product);
+                  productCatalogReadModelProjector.upsert(saved);
+                  queueProjectionSync(saved.getId());
+                  success++;
+              } catch (Exception ex) {
+                  errors.add("Failed to reassign category for product " + id + ": " + ex.getMessage());
             }
         }
         if (success > 0) {
@@ -742,14 +754,14 @@ public class ProductServiceImpl implements ProductService {
                     product.setImages(new ArrayList<>(images));
                     product.setThumbnailUrl(generateThumbnailUrl(images));
                     product.setActive(active);
-                    product.setApprovalStatus(ApprovalStatus.DRAFT);
+                      product.setApprovalStatus(ApprovalStatus.DRAFT);
 
-                    Product saved = productRepository.save(product);
-                    productCatalogReadModelProjector.upsert(saved);
-                    queueSearchSync(saved.getId());
-                    successCount++;
-                } catch (Exception ex) {
-                    errors.add("Row " + totalRows + ": " + ex.getMessage());
+                      Product saved = productRepository.save(product);
+                      productCatalogReadModelProjector.upsert(saved);
+                      queueProjectionSync(saved.getId());
+                      successCount++;
+                  } catch (Exception ex) {
+                      errors.add("Row " + totalRows + ": " + ex.getMessage());
                 }
             }
         } catch (IOException ex) {
@@ -1394,12 +1406,35 @@ public class ProductServiceImpl implements ProductService {
         assertVendorStorefrontVisible(product.getVendorId(), requestedProductId);
     }
 
-    private void queueSearchSync(UUID... productIds) {
+    private void applyCreateWorkflow(Product product) {
+        product.setApprovalStatus(ApprovalStatus.DRAFT);
+        product.setRejectionReason(null);
+    }
+
+    private void applyUpdateWorkflow(Product product, ProductWorkflowActor actor, ApprovalStatus originalApprovalStatus) {
+        if (actor.isPlatformPrivileged()) {
+            return;
+        }
+        if (originalApprovalStatus == ApprovalStatus.APPROVED || originalApprovalStatus == ApprovalStatus.PENDING_REVIEW) {
+            product.setApprovalStatus(ApprovalStatus.DRAFT);
+            product.setRejectionReason(null);
+        }
+    }
+
+    private ProductWorkflowActor requireWorkflowActor(ProductWorkflowActor actor) {
+        if (actor == null) {
+            throw new ValidationException("Workflow actor is required for product mutations");
+        }
+        return actor;
+    }
+
+    private void queueProjectionSync(UUID... productIds) {
         if (productIds == null || productIds.length == 0) {
             return;
         }
         for (UUID productId : productIds) {
             productSearchSyncOutboxService.enqueue(productId);
+            productInventorySyncOutboxService.enqueue(productId);
         }
     }
 

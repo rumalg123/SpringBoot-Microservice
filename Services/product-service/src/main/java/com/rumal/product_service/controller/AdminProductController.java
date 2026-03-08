@@ -15,6 +15,7 @@ import com.rumal.product_service.dto.ProductImageUploadResponse;
 import com.rumal.product_service.dto.UpsertProductRequest;
 import com.rumal.product_service.security.InternalRequestVerifier;
 import com.rumal.product_service.service.AdminProductAccessScopeService;
+import com.rumal.product_service.service.AdminProductAccessScopeService.ProductMutationAuthority;
 import com.rumal.product_service.service.ProductService;
 import com.rumal.product_service.storage.ImageUploadRateLimiter;
 import com.rumal.product_service.storage.ProductImageStorageService;
@@ -115,9 +116,13 @@ public class AdminProductController {
             @Valid @RequestBody UpsertProductRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
-        adminProductAccessScopeService.assertCanManageProductOperations(userSub, userRoles, internalAuth);
-        UpsertProductRequest scopedRequest = adminProductAccessScopeService.scopeCreateRequest(userSub, userRoles, request, internalAuth);
-        return productService.create(scopedRequest);
+        ProductMutationAuthority authority = adminProductAccessScopeService.resolveAuthority(userSub, userRoles, internalAuth);
+        adminProductAccessScopeService.assertCanManageProductOperations(authority);
+        UpsertProductRequest scopedRequest = adminProductAccessScopeService.scopeCreateRequest(authority, request);
+        return productService.create(
+                scopedRequest,
+                adminProductAccessScopeService.resolveWorkflowActorForVendor(authority, scopedRequest.vendorId())
+        );
     }
 
     @PostMapping(value = "/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -158,10 +163,14 @@ public class AdminProductController {
             @Valid @RequestBody UpsertProductRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
-        adminProductAccessScopeService.assertCanManageProductOperations(userSub, userRoles, internalAuth);
-        adminProductAccessScopeService.assertCanManageProduct(parentId, userSub, userRoles, internalAuth);
-        UpsertProductRequest scopedRequest = adminProductAccessScopeService.scopeCreateRequest(userSub, userRoles, request, internalAuth);
-        return productService.createVariation(parentId, scopedRequest);
+        ProductMutationAuthority authority = adminProductAccessScopeService.resolveAuthority(userSub, userRoles, internalAuth);
+        adminProductAccessScopeService.assertCanManageProductOperations(authority);
+        UpsertProductRequest scopedRequest = adminProductAccessScopeService.scopeVariationCreateRequest(authority, parentId, request);
+        return productService.createVariation(
+                parentId,
+                scopedRequest,
+                adminProductAccessScopeService.resolveWorkflowActorForProduct(authority, parentId)
+        );
     }
 
     @PutMapping("/{id}")
@@ -173,9 +182,14 @@ public class AdminProductController {
             @Valid @RequestBody UpsertProductRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
-        adminProductAccessScopeService.assertCanManageProductOperations(userSub, userRoles, internalAuth);
-        UpsertProductRequest scopedRequest = adminProductAccessScopeService.scopeUpdateRequest(id, userSub, userRoles, request, internalAuth);
-        return productService.update(id, scopedRequest);
+        ProductMutationAuthority authority = adminProductAccessScopeService.resolveAuthority(userSub, userRoles, internalAuth);
+        adminProductAccessScopeService.assertCanManageProductOperations(authority);
+        UpsertProductRequest scopedRequest = adminProductAccessScopeService.scopeUpdateRequest(authority, id, request);
+        return productService.update(
+                id,
+                scopedRequest,
+                adminProductAccessScopeService.resolveWorkflowActorForProduct(authority, id)
+        );
     }
 
     @DeleteMapping("/{id}")
@@ -211,8 +225,12 @@ public class AdminProductController {
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
-        adminProductAccessScopeService.assertCanManageProduct(id, userSub, userRoles, internalAuth);
-        return productService.submitForReview(id);
+        ProductMutationAuthority authority = adminProductAccessScopeService.resolveAuthority(userSub, userRoles, internalAuth);
+        adminProductAccessScopeService.assertCanSubmitProductForReview(authority, id);
+        return productService.submitForReview(
+                id,
+                adminProductAccessScopeService.resolveWorkflowActorForProduct(authority, id)
+        );
     }
 
     @PostMapping("/{id}/approve")

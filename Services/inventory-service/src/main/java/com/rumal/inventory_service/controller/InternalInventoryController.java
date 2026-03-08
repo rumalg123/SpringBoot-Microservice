@@ -2,6 +2,7 @@ package com.rumal.inventory_service.controller;
 
 import com.rumal.inventory_service.dto.*;
 import com.rumal.inventory_service.security.InternalRequestVerifier;
+import com.rumal.inventory_service.service.CatalogProductService;
 import com.rumal.inventory_service.service.StockService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,7 @@ import java.util.UUID;
 public class InternalInventoryController {
 
     private final StockService stockService;
+    private final CatalogProductService catalogProductService;
     private final InternalRequestVerifier internalRequestVerifier;
 
     @PostMapping("/check")
@@ -95,6 +97,35 @@ public class InternalInventoryController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         return stockService.getBatchStockSummary(request.productIds());
+    }
+
+    @PutMapping("/catalog/products/{productId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void upsertCatalogProduct(
+            @RequestHeader("X-Internal-Auth") String internalAuth,
+            @PathVariable UUID productId,
+            @RequestBody InventoryCatalogSyncRequest request
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        InventoryCatalogSyncRequest normalized = new InventoryCatalogSyncRequest(
+                productId,
+                request.vendorId(),
+                request.name(),
+                request.sku(),
+                request.active(),
+                request.deleted()
+        );
+        catalogProductService.upsert(normalized);
+    }
+
+    @DeleteMapping("/catalog/products/{productId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteCatalogProduct(
+            @RequestHeader("X-Internal-Auth") String internalAuth,
+            @PathVariable UUID productId
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        catalogProductService.delete(productId);
     }
 
     public record ReleaseRequest(String reason) {}

@@ -22,8 +22,8 @@ import java.util.Set;
 import java.util.UUID;
 
 public interface ProductService {
-    ProductResponse create(UpsertProductRequest request);
-    ProductResponse createVariation(UUID parentId, UpsertProductRequest request);
+    ProductResponse create(UpsertProductRequest request, ProductWorkflowActor actor);
+    ProductResponse createVariation(UUID parentId, UpsertProductRequest request, ProductWorkflowActor actor);
     ProductResponse getById(UUID id);
     ProductResponse getBySlug(String slug);
     ProductResponse getByIdOrSlug(String idOrSlug);
@@ -34,12 +34,12 @@ public interface ProductService {
     Page<ProductSummaryResponse> adminList(Pageable pageable, String q, String sku, String category, String mainCategory, String subCategory, UUID vendorId, ProductType type, BigDecimal minSellingPrice, BigDecimal maxSellingPrice, boolean includeOrphanParents, String brand, ApprovalStatus approvalStatus, Boolean active);
     Page<ProductSummaryResponse> listDeleted(Pageable pageable, String q, String sku, String category, String mainCategory, String subCategory, UUID vendorId, ProductType type, BigDecimal minSellingPrice, BigDecimal maxSellingPrice, String brand);
     void incrementViewCount(UUID productId);
-    ProductResponse update(UUID id, UpsertProductRequest request);
+    ProductResponse update(UUID id, UpsertProductRequest request, ProductWorkflowActor actor);
     void softDelete(UUID id);
     ProductResponse restore(UUID id);
     void evictPublicCachesForVendorVisibilityChange(UUID vendorId);
     int deactivateAllByVendor(UUID vendorId);
-    ProductResponse submitForReview(UUID productId);
+    ProductResponse submitForReview(UUID productId, ProductWorkflowActor actor);
     ProductResponse approveProduct(UUID productId);
     ProductResponse rejectProduct(UUID productId, String reason);
     BulkOperationResult bulkDelete(BulkDeleteRequest request, Set<UUID> allowedVendorIds);

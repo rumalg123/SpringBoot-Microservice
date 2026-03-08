@@ -171,6 +171,13 @@ product:
     batch-size: ${PRODUCT_SEARCH_SYNC_BATCH_SIZE:50}
     retry-base-delay-seconds: ${PRODUCT_SEARCH_SYNC_RETRY_BASE_DELAY_SECONDS:15}
     retry-max-delay-seconds: ${PRODUCT_SEARCH_SYNC_RETRY_MAX_DELAY_SECONDS:900}
+  inventory-sync:
+    enabled: ${PRODUCT_INVENTORY_SYNC_ENABLED:true}
+    poll-interval-ms: ${PRODUCT_INVENTORY_SYNC_POLL_INTERVAL_MS:5000}
+    initial-delay-ms: ${PRODUCT_INVENTORY_SYNC_INITIAL_DELAY_MS:10000}
+    batch-size: ${PRODUCT_INVENTORY_SYNC_BATCH_SIZE:50}
+    retry-base-delay-seconds: ${PRODUCT_INVENTORY_SYNC_RETRY_BASE_DELAY_SECONDS:15}
+    retry-max-delay-seconds: ${PRODUCT_INVENTORY_SYNC_RETRY_MAX_DELAY_SECONDS:900}
 
 catalog:
   rebuild:
