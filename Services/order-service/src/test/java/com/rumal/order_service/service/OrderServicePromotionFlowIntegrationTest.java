@@ -1,5 +1,6 @@
 package com.rumal.order_service.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rumal.order_service.client.CustomerClient;
 import com.rumal.order_service.client.InventoryClient;
 import com.rumal.order_service.client.ProductClient;
@@ -23,6 +24,7 @@ import com.rumal.order_service.entity.Order;
 import com.rumal.order_service.entity.OrderStatus;
 import com.rumal.order_service.repo.OrderRepository;
 import com.rumal.order_service.repo.OrderStatusAuditRepository;
+import com.rumal.order_service.repo.OrderStatusAuditOutboxRepository;
 import com.rumal.order_service.repo.VendorOrderRepository;
 import com.rumal.order_service.repo.VendorOrderStatusAuditRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -83,6 +85,7 @@ class OrderServicePromotionFlowIntegrationTest {
     private InventoryClient inventoryClient;
     private VendorClient vendorClient;
     private VendorOperationalStateClient vendorOperationalStateClient;
+    private OrderStatusAuditOutboxRepository orderStatusAuditOutboxRepository;
     private OutboxService outboxService;
 
     @BeforeEach
@@ -93,15 +96,20 @@ class OrderServicePromotionFlowIntegrationTest {
         inventoryClient = Mockito.mock(InventoryClient.class);
         vendorClient = Mockito.mock(VendorClient.class);
         vendorOperationalStateClient = Mockito.mock(VendorOperationalStateClient.class);
+        orderStatusAuditOutboxRepository = Mockito.mock(OrderStatusAuditOutboxRepository.class);
         OrderCacheVersionService orderCacheVersionService = Mockito.mock(OrderCacheVersionService.class);
         outboxService = Mockito.mock(OutboxService.class);
         OrderAnalyticsLiveUpdateService orderAnalyticsLiveUpdateService = Mockito.mock(OrderAnalyticsLiveUpdateService.class);
+        when(orderStatusAuditOutboxRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         orderService = new OrderService(
                 orderRepository,
                 orderStatusAuditRepository,
+                orderStatusAuditOutboxRepository,
                 vendorOrderRepository,
                 vendorOrderStatusAuditRepository,
+                new OrderAuditRequestContextResolver(),
+                new OrderAuditPayloadSanitizer(new ObjectMapper()),
                 customerClient,
                 productClient,
                 promotionClient,
