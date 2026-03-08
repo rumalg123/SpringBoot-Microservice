@@ -2,6 +2,7 @@ package com.rumal.inventory_service.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.Check;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -9,6 +10,10 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
+@Check(
+        name = "chk_warehouses_type_vendor_scope",
+        constraints = "((warehouse_type = 'VENDOR_OWNED' and vendor_id is not null) or (warehouse_type = 'PLATFORM_MANAGED' and vendor_id is null))"
+)
 @Table(
         name = "warehouses",
         indexes = {

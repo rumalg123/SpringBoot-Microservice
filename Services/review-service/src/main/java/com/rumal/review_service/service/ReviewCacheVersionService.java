@@ -28,8 +28,16 @@ public class ReviewCacheVersionService {
     public String reviewSummaryVersion() { return getVersion("reviewSummary"); }
 
     public void bumpAllReviewCaches() {
+        bumpReviewContentCaches();
+        bumpReviewSummaryCache();
+    }
+
+    public void bumpReviewContentCaches() {
         bump("reviewById");
         bump("reviewsByProduct");
+    }
+
+    public void bumpReviewSummaryCache() {
         bump("reviewSummary");
     }
 

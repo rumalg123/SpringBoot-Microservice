@@ -2,15 +2,13 @@ package com.rumal.order_service.scheduler;
 
 import com.rumal.order_service.entity.Order;
 import com.rumal.order_service.entity.OrderStatus;
-import com.rumal.order_service.entity.OrderStatusAudit;
 import com.rumal.order_service.entity.OutboxEvent;
 import com.rumal.order_service.entity.VendorOrder;
-import com.rumal.order_service.entity.VendorOrderStatusAudit;
 import com.rumal.order_service.repo.OrderRepository;
-import com.rumal.order_service.repo.OrderStatusAuditRepository;
 import com.rumal.order_service.repo.OutboxEventRepository;
 import com.rumal.order_service.repo.VendorOrderRepository;
-import com.rumal.order_service.repo.VendorOrderStatusAuditRepository;
+import com.rumal.order_service.service.OrderAnalyticsLiveUpdateService;
+import com.rumal.order_service.service.OrderService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,10 +36,10 @@ public class OrderExpiryScheduler {
 
     private final OrderRepository orderRepository;
     private final VendorOrderRepository vendorOrderRepository;
-    private final OrderStatusAuditRepository orderStatusAuditRepository;
-    private final VendorOrderStatusAuditRepository vendorOrderStatusAuditRepository;
     private final OutboxEventRepository outboxEventRepository;
     private final TransactionTemplate transactionTemplate;
+    private final OrderAnalyticsLiveUpdateService orderAnalyticsLiveUpdateService;
+    private final OrderService orderService;
 
     @Scheduled(fixedDelayString = "${order.expiry.check-interval:PT5M}")
     public void cancelExpiredOrders() {
@@ -76,14 +74,16 @@ public class OrderExpiryScheduler {
         order.setStatus(OrderStatus.CANCELLED);
         orderRepository.save(order);
 
-        orderStatusAuditRepository.save(OrderStatusAudit.builder()
-                .order(order)
-                .fromStatus(previousStatus)
-                .toStatus(OrderStatus.CANCELLED)
-                .actorType("system")
-                .changeSource("order_expired")
-                .note("Order expired and auto-cancelled")
-                .build());
+        orderService.recordStatusAudit(
+                order,
+                previousStatus,
+                OrderStatus.CANCELLED,
+                null,
+                null,
+                "SYSTEM",
+                "order_expired",
+                "Order expired and auto-cancelled"
+        );
 
         // Fix A: vendorOrders are now accessible — loaded within the same session
         if (order.getVendorOrders() != null) {
@@ -92,20 +92,23 @@ public class OrderExpiryScheduler {
                     OrderStatus voPrevious = vo.getStatus();
                     vo.setStatus(OrderStatus.CANCELLED);
                     vendorOrderRepository.save(vo);
-                    vendorOrderStatusAuditRepository.save(VendorOrderStatusAudit.builder()
-                            .vendorOrder(vo)
-                            .fromStatus(voPrevious)
-                            .toStatus(OrderStatus.CANCELLED)
-                            .actorType("system")
-                            .changeSource("order_expired")
-                            .note("Vendor order cancelled due to parent order expiry")
-                            .build());
+                    orderService.recordVendorOrderStatusAudit(
+                            vo,
+                            voPrevious,
+                            OrderStatus.CANCELLED,
+                            null,
+                            null,
+                            "SYSTEM",
+                            "order_expired",
+                            "Vendor order cancelled due to parent order expiry"
+                    );
                 }
             }
         }
 
         // Fix B: Enqueue compensation events to release inventory and coupon reservations
         enqueueCompensationEvents(order);
+        orderAnalyticsLiveUpdateService.notifyOrderChangedAfterCommit(order, "order_expired");
 
         log.info("Expired order {} cancelled (was {})", order.getId(), previousStatus);
     }

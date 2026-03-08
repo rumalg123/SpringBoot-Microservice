@@ -5,6 +5,7 @@ import com.rumal.product_service.dto.BulkDeleteRequest;
 import com.rumal.product_service.dto.BulkOperationResult;
 import com.rumal.product_service.dto.BulkPriceUpdateRequest;
 import com.rumal.product_service.dto.CsvImportResult;
+import com.rumal.product_service.dto.ProductMutationAuditResponse;
 import com.rumal.product_service.dto.ProductResponse;
 import com.rumal.product_service.dto.ProductSummaryResponse;
 import com.rumal.product_service.dto.RejectProductRequest;
@@ -105,6 +106,19 @@ public class AdminProductController {
         adminProductAccessScopeService.assertCanManageProductOperations(userSub, userRoles, internalAuth);
         UUID scopedVendorId = adminProductAccessScopeService.resolveScopedVendorFilter(userSub, userRoles, vendorId, internalAuth);
         return productService.listDeleted(pageable, q, sku, category, mainCategory, subCategory, scopedVendorId, type, minSellingPrice, maxSellingPrice, brand);
+    }
+
+    @GetMapping("/{id}/audit")
+    public Page<ProductMutationAuditResponse> listMutationAudit(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
+            @PathVariable UUID id,
+            @PageableDefault(size = 50, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        adminProductAccessScopeService.assertCanManageProduct(id, userSub, userRoles, internalAuth);
+        return productService.listMutationAudit(id, pageable);
     }
 
     @PostMapping

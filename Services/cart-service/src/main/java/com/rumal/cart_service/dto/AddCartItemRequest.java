@@ -8,6 +8,6 @@ import java.util.UUID;
 
 public record AddCartItemRequest(
         @NotNull UUID productId,
-        @Min(1) @Max(1000) int quantity
+        @Min(1) @Max(100) int quantity
 ) {
 }

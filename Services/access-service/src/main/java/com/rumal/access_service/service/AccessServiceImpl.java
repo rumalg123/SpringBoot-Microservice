@@ -1,5 +1,6 @@
 package com.rumal.access_service.service;
 
+import com.rumal.access_service.client.GatewaySessionClient;
 import com.rumal.access_service.dto.AccessChangeAuditPageResponse;
 import com.rumal.access_service.dto.AccessChangeAuditResponse;
 import com.rumal.access_service.dto.ActiveSessionResponse;
@@ -17,6 +18,7 @@ import com.rumal.access_service.dto.VendorStaffAccessLookupResponse;
 import com.rumal.access_service.dto.VendorStaffAccessResponse;
 import com.rumal.access_service.entity.AccessChangeAction;
 import com.rumal.access_service.entity.AccessChangeAudit;
+import com.rumal.access_service.entity.AccessAuditOutboxEvent;
 import com.rumal.access_service.entity.ActiveSession;
 import com.rumal.access_service.entity.ApiKey;
 import com.rumal.access_service.entity.PermissionGroup;
@@ -33,9 +35,11 @@ import com.rumal.access_service.repo.PermissionGroupRepository;
 import com.rumal.access_service.repo.PlatformStaffAccessRepository;
 import com.rumal.access_service.repo.VendorStaffAccessRepository;
 import com.rumal.access_service.repo.AccessChangeAuditRepository;
+import com.rumal.access_service.repo.AccessAuditOutboxRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
@@ -78,10 +82,17 @@ public class AccessServiceImpl implements AccessService {
     private final PlatformStaffAccessRepository platformStaffAccessRepository;
     private final VendorStaffAccessRepository vendorStaffAccessRepository;
     private final AccessChangeAuditRepository accessChangeAuditRepository;
+    private final AccessAuditOutboxRepository accessAuditOutboxRepository;
     private final PermissionGroupRepository permissionGroupRepository;
     private final ActiveSessionRepository activeSessionRepository;
     private final ApiKeyRepository apiKeyRepository;
+    private final GatewaySessionClient gatewaySessionClient;
     private final CacheManager cacheManager;
+    private final AccessAuditRequestContextResolver accessAuditRequestContextResolver;
+    private final AccessAuditPayloadSanitizer accessAuditPayloadSanitizer;
+
+    @Value("${access.audit.outbox.retry-base-delay-seconds:15}")
+    private long accessAuditRetryBaseDelaySeconds;
 
     @Override
     public AccessChangeAuditPageResponse listAccessAudit(
@@ -188,7 +199,7 @@ public class AccessServiceImpl implements AccessService {
         } catch (DataIntegrityViolationException ex) {
             throw new ValidationException("Platform staff already exists for this keycloakUserId (concurrent insert detected)");
         }
-        recordPlatformAudit(saved, AccessChangeAction.CREATED, actorSub, actorRoles, reason);
+        recordPlatformAudit(saved, null, toPlatformStaffResponse(saved), AccessChangeAction.CREATED, actorSub, actorRoles, reason, "ADMIN_API");
         String keycloakUserId = saved.getKeycloakUserId();
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
@@ -210,10 +221,11 @@ public class AccessServiceImpl implements AccessService {
     public PlatformStaffAccessResponse updatePlatformStaff(UUID id, UpsertPlatformStaffAccessRequest request, String actorSub, String actorRoles, String reason) {
         PlatformStaffAccess entity = platformStaffAccessRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Platform staff not found: " + id));
+        PlatformStaffAccessResponse beforeState = toPlatformStaffResponse(entity);
         String previousKeycloakUserId = entity.getKeycloakUserId();
         applyPlatformStaff(entity, request);
         PlatformStaffAccess saved = platformStaffAccessRepository.save(entity);
-        recordPlatformAudit(saved, AccessChangeAction.UPDATED, actorSub, actorRoles, reason);
+        recordPlatformAudit(saved, beforeState, toPlatformStaffResponse(saved), AccessChangeAction.UPDATED, actorSub, actorRoles, reason, "ADMIN_API");
         String newKeycloakUserId = saved.getKeycloakUserId();
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
@@ -236,11 +248,12 @@ public class AccessServiceImpl implements AccessService {
     public void softDeletePlatformStaff(UUID id, String actorSub, String actorRoles, String reason) {
         PlatformStaffAccess entity = platformStaffAccessRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Platform staff not found: " + id));
+        PlatformStaffAccessResponse beforeState = toPlatformStaffResponse(entity);
         entity.setDeleted(true);
         entity.setDeletedAt(Instant.now());
         entity.setActive(false);
         PlatformStaffAccess saved = platformStaffAccessRepository.save(entity);
-        recordPlatformAudit(saved, AccessChangeAction.SOFT_DELETED, actorSub, actorRoles, reason);
+        recordPlatformAudit(saved, beforeState, toPlatformStaffResponse(saved), AccessChangeAction.SOFT_DELETED, actorSub, actorRoles, reason, "ADMIN_API");
         String keycloakUserId = saved.getKeycloakUserId();
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
@@ -264,12 +277,13 @@ public class AccessServiceImpl implements AccessService {
         if (!entity.isDeleted()) {
             throw new ValidationException("Platform staff is not soft deleted: " + id);
         }
+        PlatformStaffAccessResponse beforeState = toPlatformStaffResponse(entity);
         entity.setDeleted(false);
         entity.setDeletedAt(null);
         boolean shouldBeActive = !isExpired(entity.getAccessExpiresAt());
         entity.setActive(shouldBeActive);
         PlatformStaffAccess saved = platformStaffAccessRepository.save(entity);
-        recordPlatformAudit(saved, AccessChangeAction.RESTORED, actorSub, actorRoles, reason);
+        recordPlatformAudit(saved, beforeState, toPlatformStaffResponse(saved), AccessChangeAction.RESTORED, actorSub, actorRoles, reason, "ADMIN_API");
         String keycloakUserId = saved.getKeycloakUserId();
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
@@ -357,7 +371,7 @@ public class AccessServiceImpl implements AccessService {
         } catch (DataIntegrityViolationException ex) {
             throw new ValidationException("Vendor staff already exists for this vendor and keycloakUserId (concurrent insert detected)");
         }
-        recordVendorAudit(saved, AccessChangeAction.CREATED, actorSub, actorRoles, reason);
+        recordVendorAudit(saved, null, toVendorStaffResponse(saved), AccessChangeAction.CREATED, actorSub, actorRoles, reason, "ADMIN_API");
         String keycloakUserId = saved.getKeycloakUserId();
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
@@ -382,10 +396,11 @@ public class AccessServiceImpl implements AccessService {
         if (!entity.getVendorId().equals(request.vendorId())) {
             throw new ValidationException("Vendor staff does not belong to the specified vendor");
         }
+        VendorStaffAccessResponse beforeState = toVendorStaffResponse(entity);
         String previousKeycloakUserId = entity.getKeycloakUserId();
         applyVendorStaff(entity, request);
         VendorStaffAccess saved = vendorStaffAccessRepository.save(entity);
-        recordVendorAudit(saved, AccessChangeAction.UPDATED, actorSub, actorRoles, reason);
+        recordVendorAudit(saved, beforeState, toVendorStaffResponse(saved), AccessChangeAction.UPDATED, actorSub, actorRoles, reason, "ADMIN_API");
         String newKeycloakUserId = saved.getKeycloakUserId();
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
@@ -415,11 +430,12 @@ public class AccessServiceImpl implements AccessService {
         VendorStaffAccess entity = vendorStaffAccessRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Vendor staff not found: " + id));
         verifyVendorTenancy(entity, callerVendorId);
+        VendorStaffAccessResponse beforeState = toVendorStaffResponse(entity);
         entity.setDeleted(true);
         entity.setDeletedAt(Instant.now());
         entity.setActive(false);
         VendorStaffAccess saved = vendorStaffAccessRepository.save(entity);
-        recordVendorAudit(saved, AccessChangeAction.SOFT_DELETED, actorSub, actorRoles, reason);
+        recordVendorAudit(saved, beforeState, toVendorStaffResponse(saved), AccessChangeAction.SOFT_DELETED, actorSub, actorRoles, reason, "ADMIN_API");
         String keycloakUserId = saved.getKeycloakUserId();
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
@@ -450,12 +466,13 @@ public class AccessServiceImpl implements AccessService {
         if (!entity.isDeleted()) {
             throw new ValidationException("Vendor staff is not soft deleted: " + id);
         }
+        VendorStaffAccessResponse beforeState = toVendorStaffResponse(entity);
         entity.setDeleted(false);
         entity.setDeletedAt(null);
         boolean shouldBeActive = !isExpired(entity.getAccessExpiresAt());
         entity.setActive(shouldBeActive);
         VendorStaffAccess saved = vendorStaffAccessRepository.save(entity);
-        recordVendorAudit(saved, AccessChangeAction.RESTORED, actorSub, actorRoles, reason);
+        recordVendorAudit(saved, beforeState, toVendorStaffResponse(saved), AccessChangeAction.RESTORED, actorSub, actorRoles, reason, "ADMIN_API");
         String keycloakUserId = saved.getKeycloakUserId();
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
@@ -588,6 +605,21 @@ public class AccessServiceImpl implements AccessService {
         return value.trim();
     }
 
+    private String defaultValue(String value, String fallback) {
+        return StringUtils.hasText(value) ? value.trim() : fallback;
+    }
+
+    private String truncate(String value, int maxLen) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String normalized = value.trim();
+        if (normalized.length() <= maxLen) {
+            return normalized;
+        }
+        return normalized.substring(0, maxLen);
+    }
+
     private PlatformStaffAccessResponse toPlatformStaffResponse(PlatformStaffAccess entity) {
         return new PlatformStaffAccessResponse(
                 entity.getId(),
@@ -627,48 +659,197 @@ public class AccessServiceImpl implements AccessService {
         );
     }
 
-    private void recordPlatformAudit(PlatformStaffAccess entity, AccessChangeAction action, String actorSub, String actorRoles, String reason) {
+    @Transactional(readOnly = false, propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public void processAuditOutboxBatch(int batchSize) {
+        List<AccessAuditOutboxEvent> events = accessAuditOutboxRepository
+                .findByProcessedAtIsNullAndAvailableAtLessThanEqualOrderByAvailableAtAscCreatedAtAsc(
+                        Instant.now(),
+                        PageRequest.of(0, Math.max(1, batchSize))
+                );
+        for (AccessAuditOutboxEvent event : events) {
+            processAuditOutboxEvent(event.getId());
+        }
+    }
+
+    @Transactional(readOnly = false, propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public void processAuditOutboxEvent(UUID eventId) {
+        AccessAuditOutboxEvent event = accessAuditOutboxRepository.findById(eventId).orElse(null);
+        if (event == null || event.getProcessedAt() != null) {
+            return;
+        }
+
+        try {
+            if (!accessChangeAuditRepository.existsBySourceEventId(event.getId())) {
+                accessChangeAuditRepository.save(AccessChangeAudit.builder()
+                        .sourceEventId(event.getId())
+                        .targetType(event.getTargetType())
+                        .targetId(event.getTargetId())
+                        .vendorId(event.getVendorId())
+                        .keycloakUserId(trimToNull(event.getKeycloakUserId()))
+                        .email(trimToNull(event.getEmail()))
+                        .action(event.getAction())
+                        .activeAfter(event.isActiveAfter())
+                        .deletedAfter(event.isDeletedAfter())
+                        .permissionsSnapshot(trimToNull(event.getPermissionsSnapshot()))
+                        .actorSub(trimToNull(event.getActorSub()))
+                        .actorTenantId(trimToNull(event.getActorTenantId()))
+                        .actorRoles(trimToNull(event.getActorRoles()))
+                        .actorType(defaultValue(event.getActorType(), "SYSTEM"))
+                        .changeSource(defaultValue(event.getChangeSource(), "SYSTEM"))
+                        .reason(trimToNull(event.getReason()))
+                        .changeSet(trimToNull(event.getChangeSet()))
+                        .clientIp(trimToNull(event.getClientIp()))
+                        .userAgent(trimToNull(event.getUserAgent()))
+                        .requestId(trimToNull(event.getRequestId()))
+                        .build());
+            }
+            markAuditOutboxProcessed(event);
+        } catch (DataIntegrityViolationException duplicate) {
+            markAuditOutboxProcessed(event);
+        } catch (Exception ex) {
+            event.setAttemptCount(event.getAttemptCount() + 1);
+            event.setLastError(truncate(ex.getMessage(), 500));
+            event.setAvailableAt(Instant.now().plusSeconds(resolveAuditRetryDelaySeconds(event.getAttemptCount())));
+            accessAuditOutboxRepository.save(event);
+            log.warn("Access audit outbox event {} failed on attempt {}", event.getId(), event.getAttemptCount(), ex);
+        }
+    }
+
+    private void recordPlatformAudit(
+            PlatformStaffAccess entity,
+            Object beforeState,
+            Object afterState,
+            AccessChangeAction action,
+            String actorSub,
+            String actorRoles,
+            String reason,
+            String changeSource
+    ) {
         if (entity == null || action == null) {
             return;
         }
-        accessChangeAuditRepository.save(AccessChangeAudit.builder()
-                .targetType("PLATFORM_STAFF")
-                .targetId(entity.getId())
-                .vendorId(null)
-                .keycloakUserId(trimToNull(entity.getKeycloakUserId()))
-                .email(trimToNull(entity.getEmail()))
+        AccessAuditRequestContext context = accessAuditRequestContextResolver.resolve(actorSub, actorRoles, changeSource);
+        enqueueAuditEvent(
+                "PLATFORM_STAFF",
+                entity.getId(),
+                null,
+                trimToNull(entity.getKeycloakUserId()),
+                accessAuditPayloadSanitizer.sanitizeEmail(entity.getEmail()),
+                action,
+                entity.isActive(),
+                entity.isDeleted(),
+                joinPlatformPermissions(entity.getPermissions()),
+                context,
+                trimToNull(reason),
+                accessAuditPayloadSanitizer.buildChangeSet(beforeState, afterState)
+        );
+    }
+
+    private void recordVendorAudit(
+            VendorStaffAccess entity,
+            Object beforeState,
+            Object afterState,
+            AccessChangeAction action,
+            String actorSub,
+            String actorRoles,
+            String reason,
+            String changeSource
+    ) {
+        if (entity == null || action == null) {
+            return;
+        }
+        AccessAuditRequestContext context = accessAuditRequestContextResolver.resolve(actorSub, actorRoles, changeSource);
+        enqueueAuditEvent(
+                "VENDOR_STAFF",
+                entity.getId(),
+                entity.getVendorId(),
+                trimToNull(entity.getKeycloakUserId()),
+                accessAuditPayloadSanitizer.sanitizeEmail(entity.getEmail()),
+                action,
+                entity.isActive(),
+                entity.isDeleted(),
+                joinVendorPermissions(entity.getPermissions()),
+                context,
+                trimToNull(reason),
+                accessAuditPayloadSanitizer.buildChangeSet(beforeState, afterState)
+        );
+    }
+
+    private void recordPermissionGroupAudit(
+            PermissionGroup entity,
+            Object beforeState,
+            Object afterState,
+            AccessChangeAction action,
+            String changeSource
+    ) {
+        if (entity == null || action == null) {
+            return;
+        }
+        AccessAuditRequestContext context = accessAuditRequestContextResolver.resolve(null, null, changeSource);
+        enqueueAuditEvent(
+                "PERMISSION_GROUP",
+                entity.getId(),
+                null,
+                null,
+                null,
+                action,
+                action != AccessChangeAction.DELETED,
+                action == AccessChangeAction.DELETED,
+                trimToNull(entity.getPermissions()),
+                context,
+                null,
+                accessAuditPayloadSanitizer.buildChangeSet(beforeState, afterState)
+        );
+    }
+
+    private void enqueueAuditEvent(
+            String targetType,
+            UUID targetId,
+            UUID vendorId,
+            String keycloakUserId,
+            String email,
+            AccessChangeAction action,
+            boolean activeAfter,
+            boolean deletedAfter,
+            String permissionsSnapshot,
+            AccessAuditRequestContext context,
+            String reason,
+            String changeSet
+    ) {
+        accessAuditOutboxRepository.save(AccessAuditOutboxEvent.builder()
+                .targetType(targetType)
+                .targetId(targetId)
+                .vendorId(vendorId)
+                .keycloakUserId(keycloakUserId)
+                .email(email)
                 .action(action)
-                .activeAfter(entity.isActive())
-                .deletedAfter(entity.isDeleted())
-                .permissionsSnapshot(joinPlatformPermissions(entity.getPermissions()))
-                .actorSub(trimToNull(actorSub))
-                .actorRoles(trimToNull(actorRoles))
-                .actorType(StringUtils.hasText(actorSub) ? "USER" : "SYSTEM")
-                .changeSource("ADMIN_API")
-                .reason(trimToNull(reason))
+                .activeAfter(activeAfter)
+                .deletedAfter(deletedAfter)
+                .permissionsSnapshot(permissionsSnapshot)
+                .actorSub(trimToNull(context.actorSub()))
+                .actorTenantId(trimToNull(context.actorTenantId()))
+                .actorRoles(trimToNull(context.actorRoles()))
+                .actorType(defaultValue(context.actorType(), "SYSTEM"))
+                .changeSource(defaultValue(context.changeSource(), "SYSTEM"))
+                .reason(reason)
+                .changeSet(changeSet)
+                .clientIp(trimToNull(context.clientIp()))
+                .userAgent(trimToNull(context.userAgent()))
+                .requestId(trimToNull(context.requestId()))
+                .availableAt(Instant.now())
                 .build());
     }
 
-    private void recordVendorAudit(VendorStaffAccess entity, AccessChangeAction action, String actorSub, String actorRoles, String reason) {
-        if (entity == null || action == null) {
-            return;
-        }
-        accessChangeAuditRepository.save(AccessChangeAudit.builder()
-                .targetType("VENDOR_STAFF")
-                .targetId(entity.getId())
-                .vendorId(entity.getVendorId())
-                .keycloakUserId(trimToNull(entity.getKeycloakUserId()))
-                .email(trimToNull(entity.getEmail()))
-                .action(action)
-                .activeAfter(entity.isActive())
-                .deletedAfter(entity.isDeleted())
-                .permissionsSnapshot(joinVendorPermissions(entity.getPermissions()))
-                .actorSub(trimToNull(actorSub))
-                .actorRoles(trimToNull(actorRoles))
-                .actorType(StringUtils.hasText(actorSub) ? "USER" : "SYSTEM")
-                .changeSource("ADMIN_API")
-                .reason(trimToNull(reason))
-                .build());
+    private void markAuditOutboxProcessed(AccessAuditOutboxEvent event) {
+        event.setProcessedAt(Instant.now());
+        event.setLastError(null);
+        accessAuditOutboxRepository.save(event);
+    }
+
+    private long resolveAuditRetryDelaySeconds(int attemptCount) {
+        long base = Math.max(5L, accessAuditRetryBaseDelaySeconds);
+        long multiplier = Math.max(1L, attemptCount);
+        return Math.min(900L, base * multiplier * multiplier);
     }
 
     private String joinPlatformPermissions(Set<PlatformPermission> permissions) {
@@ -743,10 +924,15 @@ public class AccessServiceImpl implements AccessService {
                 entity.isDeletedAfter(),
                 splitPermissions(entity.getPermissionsSnapshot()),
                 entity.getActorSub(),
+                entity.getActorTenantId(),
                 entity.getActorRoles(),
                 entity.getActorType(),
                 entity.getChangeSource(),
                 entity.getReason(),
+                entity.getChangeSet(),
+                entity.getClientIp(),
+                entity.getUserAgent(),
+                entity.getRequestId(),
                 entity.getCreatedAt()
         );
     }
@@ -831,7 +1017,9 @@ public class AccessServiceImpl implements AccessService {
                 .permissions(joinStringSet(request.permissions()))
                 .scope(request.scope())
                 .build();
-        return toPermissionGroupResponse(permissionGroupRepository.save(entity));
+        PermissionGroup saved = permissionGroupRepository.save(entity);
+        recordPermissionGroupAudit(saved, null, toPermissionGroupResponse(saved), AccessChangeAction.CREATED, "ADMIN_API");
+        return toPermissionGroupResponse(saved);
     }
 
     @Override
@@ -839,6 +1027,7 @@ public class AccessServiceImpl implements AccessService {
     public PermissionGroupResponse updatePermissionGroup(UUID id, UpsertPermissionGroupRequest request) {
         PermissionGroup entity = permissionGroupRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Permission group not found: " + id));
+        PermissionGroupResponse beforeState = toPermissionGroupResponse(entity);
         String name = normalizeRequired(request.name(), "name", 120);
         if (permissionGroupRepository.existsByNameIgnoreCaseAndScopeAndIdNot(name, request.scope(), id)) {
             throw new ValidationException("Another permission group with this name and scope already exists");
@@ -856,15 +1045,16 @@ public class AccessServiceImpl implements AccessService {
         entity.setDescription(trimToNull(request.description()));
         entity.setPermissions(joinStringSet(request.permissions()));
         entity.setScope(request.scope());
-        return toPermissionGroupResponse(permissionGroupRepository.save(entity));
+        PermissionGroup saved = permissionGroupRepository.save(entity);
+        recordPermissionGroupAudit(saved, beforeState, toPermissionGroupResponse(saved), AccessChangeAction.UPDATED, "ADMIN_API");
+        return toPermissionGroupResponse(saved);
     }
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public void deletePermissionGroup(UUID id) {
-        if (!permissionGroupRepository.existsById(id)) {
-            throw new ResourceNotFoundException("Permission group not found: " + id);
-        }
+        PermissionGroup entity = permissionGroupRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Permission group not found: " + id));
         boolean hasPlatformAssignments = platformStaffAccessRepository.existsByPermissionGroupIdAndDeletedFalse(id);
         boolean hasVendorAssignments = vendorStaffAccessRepository.existsByPermissionGroupIdAndDeletedFalse(id);
         if (hasPlatformAssignments || hasVendorAssignments) {
@@ -872,7 +1062,9 @@ public class AccessServiceImpl implements AccessService {
                     "Cannot delete permission group with active staff assignments. "
                             + "Reassign or remove staff from this group first.");
         }
+        PermissionGroupResponse beforeState = toPermissionGroupResponse(entity);
         permissionGroupRepository.deleteById(id);
+        recordPermissionGroupAudit(entity, beforeState, null, AccessChangeAction.DELETED, "ADMIN_API");
     }
 
     private PermissionGroupResponse toPermissionGroupResponse(PermissionGroup entity) {
@@ -933,27 +1125,35 @@ public class AccessServiceImpl implements AccessService {
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public void revokeSession(UUID sessionId) {
-        if (!activeSessionRepository.existsById(sessionId)) {
-            throw new ResourceNotFoundException("Session not found: " + sessionId);
-        }
-        activeSessionRepository.deleteById(sessionId);
+        ActiveSession session = activeSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Session not found: " + sessionId));
+        String keycloakSessionId = normalizeRequired(session.getKeycloakSessionId(), "keycloakSessionId", 120);
+        activeSessionRepository.delete(session);
+        gatewaySessionClient.revokeSessionByKeycloakSessionId(keycloakSessionId);
     }
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public void revokeSessionByKeycloakSessionId(String keycloakSessionId) {
-        String normalized = normalizeRequired(keycloakSessionId, "keycloakSessionId", 120);
-        if (!activeSessionRepository.existsByKeycloakSessionIdIgnoreCase(normalized)) {
-            return;
-        }
-        activeSessionRepository.deleteByKeycloakSessionIdIgnoreCase(normalized);
+        revokeSessionByKeycloakSessionIdInternal(keycloakSessionId, true);
+    }
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    public void revokeSessionByKeycloakSessionIdFromGateway(String keycloakSessionId) {
+        revokeSessionByKeycloakSessionIdInternal(keycloakSessionId, false);
     }
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public void revokeAllSessions(String keycloakId) {
-        String normalized = normalizeRequired(keycloakId, "keycloakId", 120);
-        activeSessionRepository.deleteByKeycloakId(normalized);
+        revokeAllSessionsInternal(keycloakId, true);
+    }
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    public void revokeAllSessionsFromGateway(String keycloakId) {
+        revokeAllSessionsInternal(keycloakId, false);
     }
 
     private ActiveSessionResponse toActiveSessionResponse(ActiveSession entity) {
@@ -978,6 +1178,28 @@ public class AccessServiceImpl implements AccessService {
         session.setIpAddress(trimToNull(request.ipAddress()));
         session.setUserAgent(trimToNull(request.userAgent()));
         session.setLastActivityAt(Instant.now());
+    }
+
+    private void revokeSessionByKeycloakSessionIdInternal(String keycloakSessionId, boolean propagateToGateway) {
+        String normalized = normalizeRequired(keycloakSessionId, "keycloakSessionId", 120);
+        ActiveSession existing = activeSessionRepository.findByKeycloakSessionIdIgnoreCase(normalized).orElse(null);
+        if (existing != null) {
+            activeSessionRepository.delete(existing);
+        }
+        if (propagateToGateway) {
+            gatewaySessionClient.revokeSessionByKeycloakSessionId(normalized);
+        }
+    }
+
+    private void revokeAllSessionsInternal(String keycloakId, boolean propagateToGateway) {
+        String normalized = normalizeRequired(keycloakId, "keycloakId", 120);
+        List<ActiveSession> activeSessions = activeSessionRepository.findByKeycloakIdOrderByLastActivityAtDesc(normalized);
+        if (!activeSessions.isEmpty()) {
+            activeSessionRepository.deleteAllInBatch(activeSessions);
+        }
+        if (propagateToGateway) {
+            gatewaySessionClient.revokeAllSessionsForKeycloakUser(normalized);
+        }
     }
 
     // ── API Key Management ─────────────────────────────────────────────

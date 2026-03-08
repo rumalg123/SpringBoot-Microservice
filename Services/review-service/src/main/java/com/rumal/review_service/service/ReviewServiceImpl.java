@@ -7,9 +7,8 @@ import com.rumal.review_service.exception.ResourceNotFoundException;
 import com.rumal.review_service.exception.ValidationException;
 import com.rumal.review_service.repository.*;
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -21,14 +20,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
 public class ReviewServiceImpl implements ReviewService {
-
-    private static final Logger log = LoggerFactory.getLogger(ReviewServiceImpl.class);
 
     private final ReviewRepository reviewRepository;
     private final VendorReplyRepository vendorReplyRepository;
@@ -36,8 +32,7 @@ public class ReviewServiceImpl implements ReviewService {
     private final ReviewReportRepository reviewReportRepository;
     private final OrderPurchaseVerificationClient orderPurchaseVerificationClient;
     private final ReviewCacheVersionService reviewCacheVersionService;
-
-    // self-invocation field removed (unused)
+    private final ReviewSummaryRefreshService reviewSummaryRefreshService;
 
     // ─── Create ─────────────────────────────────────────────
     @Override
@@ -72,8 +67,13 @@ public class ReviewServiceImpl implements ReviewService {
                 .verifiedPurchase(true)
                 .build();
 
-        review = reviewRepository.save(review);
-        reviewCacheVersionService.bumpAllReviewCaches();
+        try {
+            review = reviewRepository.save(review);
+        } catch (DataIntegrityViolationException ex) {
+            throw new ValidationException("You have already reviewed this product");
+        }
+        reviewCacheVersionService.bumpReviewContentCaches();
+        reviewSummaryRefreshService.requestRefresh(review.getProductId());
         return toResponse(review);
     }
 
@@ -81,14 +81,8 @@ public class ReviewServiceImpl implements ReviewService {
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public ReviewResponse updateReview(UUID reviewId, UUID customerId, UpdateReviewRequest request) {
-        Review review = reviewRepository.findById(reviewId)
+        Review review = reviewRepository.findByIdAndCustomerIdAndDeletedFalse(reviewId, customerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Review not found"));
-        if (!review.getCustomerId().equals(customerId)) {
-            throw new ValidationException("You can only edit your own reviews");
-        }
-        if (review.isDeleted()) {
-            throw new ResourceNotFoundException("Review not found");
-        }
 
         review.setRating(request.rating());
         review.setTitle(request.title());
@@ -97,7 +91,8 @@ public class ReviewServiceImpl implements ReviewService {
             review.setImages(new ArrayList<>(request.images()));
         }
         review = reviewRepository.save(review);
-        reviewCacheVersionService.bumpAllReviewCaches();
+        reviewCacheVersionService.bumpReviewContentCaches();
+        reviewSummaryRefreshService.requestRefresh(review.getProductId());
         return toResponse(review);
     }
 
@@ -105,15 +100,13 @@ public class ReviewServiceImpl implements ReviewService {
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public void deleteReview(UUID reviewId, UUID customerId) {
-        Review review = reviewRepository.findById(reviewId)
+        Review review = reviewRepository.findByIdAndCustomerIdAndDeletedFalse(reviewId, customerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Review not found"));
-        if (!review.getCustomerId().equals(customerId)) {
-            throw new ValidationException("You can only delete your own reviews");
-        }
         review.setDeleted(true);
         review.setDeletedAt(Instant.now());
         reviewRepository.save(review);
-        reviewCacheVersionService.bumpAllReviewCaches();
+        reviewCacheVersionService.bumpReviewContentCaches();
+        reviewSummaryRefreshService.requestRefresh(review.getProductId());
     }
 
     // ─── Get by ID ──────────────────────────────────────────
@@ -202,7 +195,8 @@ public class ReviewServiceImpl implements ReviewService {
         Review review = findActiveReview(reviewId);
         review.setActive(false);
         reviewRepository.save(review);
-        reviewCacheVersionService.bumpAllReviewCaches();
+        reviewCacheVersionService.bumpReviewContentCaches();
+        reviewSummaryRefreshService.requestRefresh(review.getProductId());
     }
 
     @Override
@@ -214,7 +208,8 @@ public class ReviewServiceImpl implements ReviewService {
         if (review.isActive()) throw new ValidationException("Review is already active");
         review.setActive(true);
         reviewRepository.save(review);
-        reviewCacheVersionService.bumpAllReviewCaches();
+        reviewCacheVersionService.bumpReviewContentCaches();
+        reviewSummaryRefreshService.requestRefresh(review.getProductId());
     }
 
     @Override
@@ -225,7 +220,8 @@ public class ReviewServiceImpl implements ReviewService {
         review.setDeleted(true);
         review.setDeletedAt(Instant.now());
         reviewRepository.save(review);
-        reviewCacheVersionService.bumpAllReviewCaches();
+        reviewCacheVersionService.bumpReviewContentCaches();
+        reviewSummaryRefreshService.requestRefresh(review.getProductId());
     }
 
     // ─── Summary ────────────────────────────────────────────
@@ -233,19 +229,20 @@ public class ReviewServiceImpl implements ReviewService {
     @Cacheable(cacheNames = "reviewSummary",
             key = "@reviewCacheVersionService.reviewSummaryVersion() + '::product::' + #productId")
     public ReviewSummaryResponse getProductReviewSummary(UUID productId) {
-        double avg = reviewRepository.averageRatingByProductId(productId);
-        long total = reviewRepository.countActiveByProductId(productId);
-        List<Object[]> distribution = reviewRepository.countByProductIdGroupByRating(productId);
-
-        Map<Integer, Long> ratingMap = new LinkedHashMap<>();
-        for (int i = 5; i >= 1; i--) ratingMap.put(i, 0L);
-        for (Object[] row : distribution) {
-            int rating = (Integer) row[0];
-            long count = (Long) row[1];
-            ratingMap.put(rating, count);
+        Optional<ReviewProductSummary> summary = reviewSummaryRefreshService.getSummary(productId);
+        if (summary.isEmpty()) {
+            reviewSummaryRefreshService.requestRefresh(productId);
+            return new ReviewSummaryResponse(productId, 0.0, 0L, emptyDistribution());
         }
-
-        return new ReviewSummaryResponse(productId, Math.round(avg * 10.0) / 10.0, total, ratingMap);
+        ReviewProductSummary value = summary.get();
+        Map<Integer, Long> ratingMap = new LinkedHashMap<>();
+        ratingMap.put(5, value.getRating5Count());
+        ratingMap.put(4, value.getRating4Count());
+        ratingMap.put(3, value.getRating3Count());
+        ratingMap.put(2, value.getRating2Count());
+        ratingMap.put(1, value.getRating1Count());
+        double avg = value.getAverageRating() == null ? 0.0 : value.getAverageRating().doubleValue();
+        return new ReviewSummaryResponse(productId, Math.round(avg * 10.0) / 10.0, value.getTotalReviews(), ratingMap);
     }
 
     // ─── Voting ─────────────────────────────────────────────
@@ -276,7 +273,7 @@ public class ReviewServiceImpl implements ReviewService {
 
         // Recalculate denormalized counts atomically
         reviewRepository.recalculateVoteCounts(reviewId);
-        reviewCacheVersionService.bumpAllReviewCaches();
+        reviewCacheVersionService.bumpReviewContentCaches();
     }
 
     // ─── Reporting ──────────────────────────────────────────
@@ -299,7 +296,7 @@ public class ReviewServiceImpl implements ReviewService {
 
         // Increment denormalized report count atomically
         reviewRepository.incrementReportCount(reviewId);
-        reviewCacheVersionService.bumpAllReviewCaches();
+        reviewCacheVersionService.bumpReviewContentCaches();
     }
 
     @Override
@@ -325,11 +322,8 @@ public class ReviewServiceImpl implements ReviewService {
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public VendorReplyResponse createVendorReply(UUID reviewId, UUID vendorId, CreateVendorReplyRequest request) {
-        Review review = findActiveReview(reviewId);
-
-        if (!review.getVendorId().equals(vendorId)) {
-            throw new ValidationException("You can only reply to reviews on your own products");
-        }
+        Review review = reviewRepository.findByIdAndVendorIdAndDeletedFalseAndActiveTrue(reviewId, vendorId)
+                .orElseThrow(() -> new ResourceNotFoundException("Review not found"));
         if (vendorReplyRepository.existsByReview_Id(reviewId)) {
             throw new ValidationException("A reply already exists for this review");
         }
@@ -340,34 +334,28 @@ public class ReviewServiceImpl implements ReviewService {
                 .comment(request.comment())
                 .build();
         reply = vendorReplyRepository.save(reply);
-        reviewCacheVersionService.bumpAllReviewCaches();
+        reviewCacheVersionService.bumpReviewContentCaches();
         return toReplyResponse(reply);
     }
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public VendorReplyResponse updateVendorReply(UUID replyId, UUID vendorId, UpdateVendorReplyRequest request) {
-        VendorReply reply = vendorReplyRepository.findById(replyId)
+        VendorReply reply = vendorReplyRepository.findByIdAndVendorId(replyId, vendorId)
                 .orElseThrow(() -> new ResourceNotFoundException("Reply not found"));
-        if (!reply.getVendorId().equals(vendorId)) {
-            throw new ValidationException("You can only edit your own replies");
-        }
         reply.setComment(request.comment());
         reply = vendorReplyRepository.save(reply);
-        reviewCacheVersionService.bumpAllReviewCaches();
+        reviewCacheVersionService.bumpReviewContentCaches();
         return toReplyResponse(reply);
     }
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public void deleteVendorReply(UUID replyId, UUID vendorId) {
-        VendorReply reply = vendorReplyRepository.findById(replyId)
+        VendorReply reply = vendorReplyRepository.findByIdAndVendorId(replyId, vendorId)
                 .orElseThrow(() -> new ResourceNotFoundException("Reply not found"));
-        if (!reply.getVendorId().equals(vendorId)) {
-            throw new ValidationException("You can only delete your own replies");
-        }
         vendorReplyRepository.delete(reply);
-        reviewCacheVersionService.bumpAllReviewCaches();
+        reviewCacheVersionService.bumpReviewContentCaches();
     }
 
     // ─── Helpers ────────────────────────────────────────────
@@ -435,5 +423,13 @@ public class ReviewServiceImpl implements ReviewService {
             return spec.toPredicate(root, query, cb);
         };
         return reviewRepository.findAll(withFetch, pageable).map(this::toResponse);
+    }
+
+    private Map<Integer, Long> emptyDistribution() {
+        Map<Integer, Long> ratingMap = new LinkedHashMap<>();
+        for (int i = 5; i >= 1; i--) {
+            ratingMap.put(i, 0L);
+        }
+        return ratingMap;
     }
 }

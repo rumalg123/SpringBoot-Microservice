@@ -28,14 +28,17 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.cache.CacheManager;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -57,14 +60,13 @@ class CartServicePromotionFlowIntegrationTest {
     @Autowired
     private CartRepository cartRepository;
 
-    @Autowired
-    private TransactionTemplate transactionTemplate;
-
     private ProductClient productClient;
     private VendorOperationalStateClient vendorOperationalStateClient;
     private OrderClient orderClient;
     private PromotionClient promotionClient;
     private CustomerClient customerClient;
+    private ActiveCartStoreService activeCartStoreService;
+    private Map<String, ActiveCartState> customerCartStore;
 
     private CartService cartService;
 
@@ -75,9 +77,30 @@ class CartServicePromotionFlowIntegrationTest {
         orderClient = Mockito.mock(OrderClient.class);
         promotionClient = Mockito.mock(PromotionClient.class);
         customerClient = Mockito.mock(CustomerClient.class);
+        activeCartStoreService = Mockito.mock(ActiveCartStoreService.class);
+        customerCartStore = new HashMap<>();
+
+        Mockito.lenient().when(activeCartStoreService.loadCustomerCart(any(String.class)))
+                .thenAnswer(invocation -> Optional.ofNullable(customerCartStore.get(invocation.getArgument(0))));
+        Mockito.lenient().doAnswer(invocation -> {
+            customerCartStore.put(invocation.getArgument(0), invocation.getArgument(1));
+            return null;
+        }).when(activeCartStoreService).saveCustomerCart(any(String.class), any(ActiveCartState.class));
+        Mockito.lenient().doAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            Supplier<Object> supplier = (Supplier<Object>) invocation.getArgument(1);
+            return supplier.get();
+        }).when(activeCartStoreService).withCustomerCartLock(any(String.class), any());
+        Mockito.lenient().when(activeCartStoreService.loadGuestCart(any(String.class))).thenReturn(Optional.empty());
+        Mockito.lenient().doAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            Supplier<Object> supplier = (Supplier<Object>) invocation.getArgument(1);
+            return supplier.get();
+        }).when(activeCartStoreService).withGuestCartLock(any(String.class), any());
 
         cartService = new CartService(
                 cartRepository,
+                activeCartStoreService,
                 productClient,
                 vendorOperationalStateClient,
                 orderClient,
@@ -88,8 +111,7 @@ class CartServicePromotionFlowIntegrationTest {
                         new BigDecimal("0.80"),
                         new BigDecimal("3.50"),
                         "US"
-                ),
-                transactionTemplate
+                )
         );
     }
 
@@ -216,8 +238,8 @@ class CartServicePromotionFlowIntegrationTest {
         assertEquals(new BigDecimal("3.00"), pricingRequest.totalDiscount());
         assertEquals(new BigDecimal("23.59"), pricingRequest.grandTotal());
 
-        Cart cartAfterCheckout = cartRepository.findWithItemsByKeycloakId(keycloakId).orElseThrow();
-        assertTrue(cartAfterCheckout.getItems().isEmpty());
+        ActiveCartState cartAfterCheckout = customerCartStore.get(keycloakId);
+        assertTrue(cartAfterCheckout != null && cartAfterCheckout.items().isEmpty());
 
         verify(promotionClient, never()).releaseCouponReservation(any(UUID.class), any(String.class));
     }

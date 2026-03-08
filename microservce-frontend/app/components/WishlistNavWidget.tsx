@@ -8,7 +8,7 @@ import { money } from "../../lib/format";
 import type { WishlistItem, WishlistResponse } from "../../lib/types/wishlist";
 import { emptyWishlist } from "../../lib/types/wishlist";
 
-type Props = { apiClient?: AxiosInstance | null };
+type Props = { apiClient?: AxiosInstance | null; isAuthenticated?: boolean };
 
 const popupStyle: React.CSSProperties = {
   position: "absolute",
@@ -20,7 +20,7 @@ const popupStyle: React.CSSProperties = {
   "--popup-accent": "rgba(124,58,237,0.2)",
 } as React.CSSProperties;
 
-export default function WishlistNavWidget({ apiClient }: Props) {
+export default function WishlistNavWidget({ apiClient, isAuthenticated = false }: Props) {
   const pathname = usePathname();
   const [wishlist, setWishlist] = useState<WishlistResponse>(emptyWishlist);
   const [open, setOpen] = useState(false);
@@ -28,7 +28,10 @@ export default function WishlistNavWidget({ apiClient }: Props) {
   const [loading, setLoading] = useState(false);
 
   const loadWishlist = useCallback(async () => {
-    if (!apiClient) return;
+    if (!apiClient || !isAuthenticated) {
+      setWishlist(emptyWishlist);
+      return;
+    }
     setLoading(true);
     try {
       const res = await apiClient.get("/wishlist/me");
@@ -38,7 +41,7 @@ export default function WishlistNavWidget({ apiClient }: Props) {
       setWishlist({ keycloakId: (raw.keycloakId as string) || "", items, itemCount });
     } catch { setWishlist(emptyWishlist); }
     finally { setLoading(false); }
-  }, [apiClient]);
+  }, [apiClient, isAuthenticated]);
 
   useEffect(() => {
     const media = window.matchMedia("(min-width: 768px)");

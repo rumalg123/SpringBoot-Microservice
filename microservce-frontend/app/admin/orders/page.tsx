@@ -1,7 +1,7 @@
 "use client";
 
 import Pagination from "../../components/Pagination";
-import ExportButton from "../../components/ui/ExportButton";
+import AsyncExportButton from "../../components/ui/AsyncExportButton";
 import AdminPageShell from "../../components/ui/AdminPageShell";
 import OrderBulkActionsBar from "../../components/admin/orders/OrderBulkActionsBar";
 import OrderFiltersBar from "../../components/admin/orders/OrderFiltersBar";
@@ -101,12 +101,12 @@ export default function AdminOrdersPage() {
       breadcrumbs={[{ label: "Admin", href: "/admin/dashboard" }, { label: "Orders" }]}
       actions={
         <div className="flex items-center gap-2.5 flex-wrap">
-          <ExportButton
+          <AsyncExportButton
             apiClient={session.apiClient}
-            endpoint="/admin/orders/export"
-            filename={`orders-export-${new Date().toISOString().slice(0, 10)}.csv`}
+            createEndpoint="/admin/orders/exports"
+            fallbackFilename={`orders-export-${new Date().toISOString().slice(0, 10)}.csv`}
             label="Export CSV"
-            params={{
+            payload={{
               format: "csv",
               ...(customerEmailFilter ? { customerEmail: customerEmailFilter } : {}),
             }}

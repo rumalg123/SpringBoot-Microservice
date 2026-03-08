@@ -132,6 +132,7 @@ export default function AppNav({
   const showVendorFinance = canAccessVendorPortal && (canViewVendorFinance ?? isVendorAdmin);
   const showVendorSettings = canAccessVendorPortal && (canManageVendorSettings ?? isVendorAdmin);
   const showVendorReviews = canAccessVendorPortal && showAdminProducts;
+  const isAuthenticated = emailVerified !== null;
 
   const navItems: NavItem[] = useMemo(() => [
     // User links
@@ -218,8 +219,8 @@ export default function AppNav({
 
         {/* Right Actions */}
         <div className="flex items-center gap-2 sm:gap-3">
-          <WishlistNavWidget apiClient={apiClient} />
-          <CartNavWidget apiClient={apiClient} emailVerified={emailVerified} />
+          <WishlistNavWidget apiClient={apiClient} isAuthenticated={isAuthenticated} />
+          <CartNavWidget apiClient={apiClient} emailVerified={emailVerified} isAuthenticated={isAuthenticated} />
           <Link
             href="/profile"
             className="hidden rounded-full border border-line-bright bg-brand-soft px-3 py-1.5 text-xs font-medium text-[rgba(0,212,255,0.8)] no-underline transition hover:border-[var(--line-bright)] hover:text-brand md:inline-block"

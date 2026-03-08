@@ -5,13 +5,17 @@ import com.rumal.analytics_service.dto.*;
 import com.rumal.analytics_service.exception.UnauthorizedException;
 import com.rumal.analytics_service.security.InternalRequestVerifier;
 import com.rumal.analytics_service.service.AdminAnalyticsService;
+import com.rumal.analytics_service.service.AnalyticsLiveStreamService;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.LinkedHashSet;
 import java.util.Locale;
@@ -31,6 +35,7 @@ public class AdminAnalyticsController {
     private final InternalRequestVerifier internalRequestVerifier;
     private final AdminAnalyticsService adminAnalyticsService;
     private final AccessScopeClient accessScopeClient;
+    private final AnalyticsLiveStreamService analyticsLiveStreamService;
 
     @GetMapping("/dashboard")
     public AdminDashboardAnalytics dashboard(
@@ -40,6 +45,19 @@ public class AdminAnalyticsController {
             @RequestParam(defaultValue = "30") @Min(1) @Max(365) int periodDays) {
         verifyAdminAccess(internalAuth, userSub, userRoles);
         return adminAnalyticsService.getDashboardSummary(periodDays);
+    }
+
+    @GetMapping(path = "/live/dashboard", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public ResponseEntity<SseEmitter> liveDashboard(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles) {
+        verifyAdminAccess(internalAuth, userSub, userRoles);
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .header("X-Accel-Buffering", "no")
+                .contentType(MediaType.TEXT_EVENT_STREAM)
+                .body(analyticsLiveStreamService.registerAdminStream());
     }
 
     @GetMapping("/revenue-trend")

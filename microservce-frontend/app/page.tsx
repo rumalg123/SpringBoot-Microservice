@@ -52,12 +52,11 @@ export default function LandingPage() {
 
   useEffect(() => {
     if (session.status !== "ready" && session.status !== "error") return;
-    const token = session.isAuthenticated ? session.token : null;
     getOrCreateSessionId();
     fetchTrending(8).then(setTrending).catch((e) => console.error("Failed to load trending:", e));
-    fetchRecommended(8, token).then(setRecommended).catch((e) => console.error("Failed to load recommended:", e));
-    fetchRecentlyViewed(8, token).then(setRecentlyViewed).catch((e) => console.error("Failed to load recently viewed:", e));
-  }, [session.status, session.isAuthenticated, session.token]);
+    fetchRecommended(8).then(setRecommended).catch((e) => console.error("Failed to load recommended:", e));
+    fetchRecentlyViewed(8).then(setRecentlyViewed).catch((e) => console.error("Failed to load recently viewed:", e));
+  }, [session.status, session.isAuthenticated]);
 
   useEffect(() => {
     const resetAuthPending = () => setAuthActionPending(null);
@@ -94,7 +93,7 @@ export default function LandingPage() {
   const startLogout = async () => {
     if (logoutPending) return;
     setLogoutPending(true);
-    try { await session.logout(); } finally { setLogoutPending(false); }
+    try { await session.logout(); } catch {} finally { setLogoutPending(false); }
   };
 
   return (

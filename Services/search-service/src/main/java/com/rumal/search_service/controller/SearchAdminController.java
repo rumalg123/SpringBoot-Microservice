@@ -57,6 +57,9 @@ public class SearchAdminController {
                 request.viewCount(),
                 request.soldCount(),
                 request.active(),
+                request.stockAvailable(),
+                request.stockStatus(),
+                request.backorderable(),
                 request.variations(),
                 request.createdAt(),
                 request.updatedAt()

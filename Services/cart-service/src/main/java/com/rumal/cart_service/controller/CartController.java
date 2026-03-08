@@ -14,6 +14,8 @@ import com.rumal.cart_service.service.CartService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -32,6 +34,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class CartController {
 
+    private static final String CART_SESSION_CLEARED_HEADER = "X-Cart-Session-Cleared";
+
     private final CartService cartService;
     private final InternalRequestVerifier internalRequestVerifier;
 
@@ -39,12 +43,15 @@ public class CartController {
     public CartResponse getMyCart(
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Email-Verified", required = false) String userEmailVerified,
+            @RequestHeader(value = "X-Guest-Cart-Id", required = false) String guestCartId,
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth
     ) {
         internalRequestVerifier.verify(internalAuth);
-        verifyEmailVerified(userEmailVerified);
-        String validatedSub = requireUserSub(userSub);
-        return cartService.getByKeycloakId(validatedSub);
+        if (StringUtils.hasText(userSub)) {
+            verifyEmailVerified(userEmailVerified);
+            return cartService.getByKeycloakId(requireUserSub(userSub));
+        }
+        return cartService.getBySessionId(requireGuestCartId(guestCartId));
     }
 
     @PostMapping("/me/items")
@@ -52,27 +59,33 @@ public class CartController {
     public CartResponse addItem(
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Email-Verified", required = false) String userEmailVerified,
+            @RequestHeader(value = "X-Guest-Cart-Id", required = false) String guestCartId,
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @Valid @RequestBody AddCartItemRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
-        verifyEmailVerified(userEmailVerified);
-        String validatedSub = requireUserSub(userSub);
-        return cartService.addItem(validatedSub, request);
+        if (StringUtils.hasText(userSub)) {
+            verifyEmailVerified(userEmailVerified);
+            return cartService.addItem(requireUserSub(userSub), request);
+        }
+        return cartService.addItemToSession(requireGuestCartId(guestCartId), request);
     }
 
     @PutMapping("/me/items/{itemId}")
     public CartResponse updateItem(
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Email-Verified", required = false) String userEmailVerified,
+            @RequestHeader(value = "X-Guest-Cart-Id", required = false) String guestCartId,
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @PathVariable UUID itemId,
             @Valid @RequestBody UpdateCartItemRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
-        verifyEmailVerified(userEmailVerified);
-        String validatedSub = requireUserSub(userSub);
-        return cartService.updateItem(validatedSub, itemId, request);
+        if (StringUtils.hasText(userSub)) {
+            verifyEmailVerified(userEmailVerified);
+            return cartService.updateItem(requireUserSub(userSub), itemId, request);
+        }
+        return cartService.updateSessionItem(requireGuestCartId(guestCartId), itemId, request);
     }
 
     @DeleteMapping("/me/items/{itemId}")
@@ -80,13 +93,17 @@ public class CartController {
     public void deleteItem(
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Email-Verified", required = false) String userEmailVerified,
+            @RequestHeader(value = "X-Guest-Cart-Id", required = false) String guestCartId,
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @PathVariable UUID itemId
     ) {
         internalRequestVerifier.verify(internalAuth);
-        verifyEmailVerified(userEmailVerified);
-        String validatedSub = requireUserSub(userSub);
-        cartService.removeItem(validatedSub, itemId);
+        if (StringUtils.hasText(userSub)) {
+            verifyEmailVerified(userEmailVerified);
+            cartService.removeItem(requireUserSub(userSub), itemId);
+            return;
+        }
+        cartService.removeSessionItem(requireGuestCartId(guestCartId), itemId);
     }
 
     @DeleteMapping("/me")
@@ -94,51 +111,83 @@ public class CartController {
     public void clearCart(
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Email-Verified", required = false) String userEmailVerified,
+            @RequestHeader(value = "X-Guest-Cart-Id", required = false) String guestCartId,
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth
     ) {
         internalRequestVerifier.verify(internalAuth);
-        verifyEmailVerified(userEmailVerified);
-        String validatedSub = requireUserSub(userSub);
-        cartService.clear(validatedSub);
+        if (StringUtils.hasText(userSub)) {
+            verifyEmailVerified(userEmailVerified);
+            cartService.clear(requireUserSub(userSub));
+            return;
+        }
+        cartService.clearSession(requireGuestCartId(guestCartId));
     }
 
     @PostMapping("/me/items/{itemId}/save-for-later")
     public CartResponse saveForLater(
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Email-Verified", required = false) String userEmailVerified,
+            @RequestHeader(value = "X-Guest-Cart-Id", required = false) String guestCartId,
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @PathVariable UUID itemId
     ) {
         internalRequestVerifier.verify(internalAuth);
-        verifyEmailVerified(userEmailVerified);
-        String validatedSub = requireUserSub(userSub);
-        return cartService.saveForLater(validatedSub, itemId);
+        if (StringUtils.hasText(userSub)) {
+            verifyEmailVerified(userEmailVerified);
+            return cartService.saveForLater(requireUserSub(userSub), itemId);
+        }
+        return cartService.saveSessionItemForLater(requireGuestCartId(guestCartId), itemId);
     }
 
     @PostMapping("/me/items/{itemId}/move-to-cart")
     public CartResponse moveToCart(
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Email-Verified", required = false) String userEmailVerified,
+            @RequestHeader(value = "X-Guest-Cart-Id", required = false) String guestCartId,
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @PathVariable UUID itemId
     ) {
         internalRequestVerifier.verify(internalAuth);
-        verifyEmailVerified(userEmailVerified);
-        String validatedSub = requireUserSub(userSub);
-        return cartService.moveToCart(validatedSub, itemId);
+        if (StringUtils.hasText(userSub)) {
+            verifyEmailVerified(userEmailVerified);
+            return cartService.moveToCart(requireUserSub(userSub), itemId);
+        }
+        return cartService.moveSessionItemToCart(requireGuestCartId(guestCartId), itemId);
     }
 
     @PutMapping("/me/note")
     public CartResponse updateNote(
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Email-Verified", required = false) String userEmailVerified,
+            @RequestHeader(value = "X-Guest-Cart-Id", required = false) String guestCartId,
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @Valid @RequestBody UpdateCartNoteRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
+        if (StringUtils.hasText(userSub)) {
+            verifyEmailVerified(userEmailVerified);
+            return cartService.updateNote(requireUserSub(userSub), request);
+        }
+        return cartService.updateSessionNote(requireGuestCartId(guestCartId), request);
+    }
+
+    @PostMapping("/me/merge-session")
+    public ResponseEntity<CartResponse> mergeSessionIntoMyCart(
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Email-Verified", required = false) String userEmailVerified,
+            @RequestHeader(value = "X-Guest-Cart-Id", required = false) String guestCartId,
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth
+    ) {
+        internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(userEmailVerified);
         String validatedSub = requireUserSub(userSub);
-        return cartService.updateNote(validatedSub, request);
+        if (!StringUtils.hasText(guestCartId)) {
+            return ResponseEntity.ok(cartService.getByKeycloakId(validatedSub));
+        }
+        CartResponse merged = cartService.mergeSessionIntoCustomerCart(validatedSub, requireGuestCartId(guestCartId));
+        return ResponseEntity.ok()
+                .header(CART_SESSION_CLEARED_HEADER, "true")
+                .body(merged);
     }
 
     @PostMapping("/me/checkout")
@@ -170,10 +219,17 @@ public class CartController {
     }
 
     private String requireUserSub(String userSub) {
-        if (userSub == null || userSub.isBlank()) {
+        if (!StringUtils.hasText(userSub)) {
             throw new UnauthorizedException("Missing authentication header");
         }
         return userSub.trim();
+    }
+
+    private String requireGuestCartId(String guestCartId) {
+        if (!StringUtils.hasText(guestCartId)) {
+            throw new UnauthorizedException("Missing guest cart header");
+        }
+        return guestCartId.trim();
     }
 
     private void verifyEmailVerified(String emailVerified) {

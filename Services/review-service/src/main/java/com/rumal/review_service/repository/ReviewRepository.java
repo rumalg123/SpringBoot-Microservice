@@ -14,6 +14,8 @@ import java.util.UUID;
 public interface ReviewRepository extends JpaRepository<Review, UUID>, JpaSpecificationExecutor<Review> {
 
     Optional<Review> findByCustomerIdAndProductIdAndDeletedFalse(UUID customerId, UUID productId);
+    Optional<Review> findByIdAndCustomerIdAndDeletedFalse(UUID id, UUID customerId);
+    Optional<Review> findByIdAndVendorIdAndDeletedFalseAndActiveTrue(UUID id, UUID vendorId);
 
     boolean existsByCustomerIdAndProductIdAndDeletedFalse(UUID customerId, UUID productId);
 
@@ -29,6 +31,9 @@ public interface ReviewRepository extends JpaRepository<Review, UUID>, JpaSpecif
 
     @Query("SELECT COUNT(r) FROM Review r WHERE r.productId = :productId AND r.deleted = false AND r.active = true")
     long countActiveByProductId(@Param("productId") UUID productId);
+
+    @Query("SELECT DISTINCT r.productId FROM Review r")
+    List<UUID> findDistinctProductIds();
 
     // --- Analytics queries ---
 

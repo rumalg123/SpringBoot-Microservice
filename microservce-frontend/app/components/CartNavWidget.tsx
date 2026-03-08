@@ -15,7 +15,7 @@ type CartItem = {
 };
 type CartResponse = { items: CartItem[]; itemCount: number; subtotal: number };
 type CustomerAddress = { id: string };
-type Props = { apiClient?: AxiosInstance | null; emailVerified?: boolean | null };
+type Props = { apiClient?: AxiosInstance | null; emailVerified?: boolean | null; isAuthenticated?: boolean };
 
 const emptyCart: CartResponse = { items: [], itemCount: 0, subtotal: 0 };
 
@@ -29,7 +29,7 @@ const popupStyle: React.CSSProperties = {
   "--popup-accent": "rgba(0,212,255,0.15)",
 } as React.CSSProperties;
 
-export default function CartNavWidget({ apiClient, emailVerified }: Props) {
+export default function CartNavWidget({ apiClient, emailVerified, isAuthenticated = false }: Props) {
   const pathname = usePathname();
   const router = useRouter();
   const [cart, setCart] = useState<CartResponse>(emptyCart);
@@ -90,19 +90,20 @@ export default function CartNavWidget({ apiClient, emailVerified }: Props) {
   }, [loadAddressPresence]);
 
   useEffect(() => {
-    if (!open || !apiClient || cart.itemCount <= 0 || emailVerified === false) return;
+    if (!open || !apiClient || !isAuthenticated || cart.itemCount <= 0 || emailVerified === false) return;
     const stale = Date.now() - addressesFetchedAt > 30_000;
     if (hasAddresses === null || stale) void loadAddressPresence();
-  }, [open, apiClient, cart.itemCount, emailVerified, hasAddresses, addressesFetchedAt, loadAddressPresence]);
+  }, [open, apiClient, isAuthenticated, cart.itemCount, emailVerified, hasAddresses, addressesFetchedAt, loadAddressPresence]);
 
-  const canCheckout = useMemo(() => cart.itemCount > 0 && emailVerified !== false && hasAddresses === true, [cart.itemCount, emailVerified, hasAddresses]);
+  const canCheckout = useMemo(() => isAuthenticated && cart.itemCount > 0 && emailVerified !== false && hasAddresses === true, [isAuthenticated, cart.itemCount, emailVerified, hasAddresses]);
   const checkoutHint = useMemo(() => {
     if (cart.itemCount <= 0) return "Cart is empty";
+    if (!isAuthenticated) return "Sign in to checkout";
     if (emailVerified === false) return "Verify email before checkout";
     if (loadingAddresses) return "Checking addresses...";
     if (hasAddresses === false) return "Add an address in profile";
     return "";
-  }, [cart.itemCount, emailVerified, loadingAddresses, hasAddresses]);
+  }, [isAuthenticated, cart.itemCount, emailVerified, loadingAddresses, hasAddresses]);
 
   const previewItems = cart.items.slice(0, 3);
 

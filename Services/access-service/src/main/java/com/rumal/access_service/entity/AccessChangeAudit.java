@@ -14,18 +14,21 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.Immutable;
 
 import java.time.Instant;
 import java.util.UUID;
 
 @Entity
+@Immutable
 @Table(
         name = "access_change_audit",
         indexes = {
                 @Index(name = "idx_access_audit_target", columnList = "target_type,target_id"),
                 @Index(name = "idx_access_audit_vendor", columnList = "vendor_id"),
                 @Index(name = "idx_access_audit_keycloak", columnList = "keycloak_user_id"),
-                @Index(name = "idx_access_audit_created_at", columnList = "created_at")
+                @Index(name = "idx_access_audit_created_at", columnList = "created_at"),
+                @Index(name = "idx_access_audit_source_event", columnList = "source_event_id", unique = true)
         }
 )
 @Getter
@@ -38,6 +41,9 @@ public class AccessChangeAudit {
     @Id
     @GeneratedValue
     private UUID id;
+
+    @Column(name = "source_event_id", nullable = false, updatable = false, unique = true)
+    private UUID sourceEventId;
 
     @Column(name = "target_type", nullable = false, length = 40)
     private String targetType;
@@ -70,6 +76,9 @@ public class AccessChangeAudit {
     @Column(name = "actor_sub", length = 120)
     private String actorSub;
 
+    @Column(name = "actor_tenant_id", length = 120)
+    private String actorTenantId;
+
     @Column(name = "actor_roles", length = 500)
     private String actorRoles;
 
@@ -82,8 +91,19 @@ public class AccessChangeAudit {
     @Column(name = "reason", length = 500)
     private String reason;
 
+    @Column(name = "change_set", columnDefinition = "TEXT")
+    private String changeSet;
+
+    @Column(name = "client_ip", length = 45)
+    private String clientIp;
+
+    @Column(name = "user_agent", length = 512)
+    private String userAgent;
+
+    @Column(name = "request_id", length = 100)
+    private String requestId;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 }
-

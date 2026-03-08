@@ -12,6 +12,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
+import java.util.UUID;
+
 @Component
 public class CustomerClient {
 
@@ -48,6 +50,29 @@ public class CustomerClient {
 
     @SuppressWarnings("unused")
     public CustomerSummary fallbackGetCustomerByKeycloakId(String keycloakId, Throwable ex) {
+        throw new ServiceUnavailableException("Customer service unavailable. Try again later.", ex);
+    }
+
+    @Retry(name = "customerService")
+    @CircuitBreaker(name = "customerService", fallbackMethod = "fallbackGetCustomer")
+    public CustomerSummary getCustomer(UUID customerId) {
+        try {
+            return restClient
+                    .get()
+                    .uri("http://customer-service/customers/{id}", customerId)
+                    .header("X-Internal-Auth", internalSharedSecret)
+                    .retrieve()
+                    .body(CustomerSummary.class);
+        } catch (HttpClientErrorException ex) {
+            if (ex.getStatusCode() == HttpStatus.NOT_FOUND) {
+                throw new ResourceNotFoundException("Customer not found: " + customerId);
+            }
+            throw ex;
+        }
+    }
+
+    @SuppressWarnings("unused")
+    public CustomerSummary fallbackGetCustomer(UUID customerId, Throwable ex) {
         throw new ServiceUnavailableException("Customer service unavailable. Try again later.", ex);
     }
 }

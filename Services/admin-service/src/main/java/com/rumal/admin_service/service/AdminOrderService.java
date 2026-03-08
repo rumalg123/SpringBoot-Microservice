@@ -2,7 +2,9 @@ package com.rumal.admin_service.service;
 
 import com.rumal.admin_service.client.OrderClient;
 import com.rumal.admin_service.dto.BulkOperationResult;
+import com.rumal.admin_service.dto.CreateOrderExportRequest;
 import com.rumal.admin_service.dto.OrderResponse;
+import com.rumal.admin_service.dto.OrderExportJobResponse;
 import com.rumal.admin_service.dto.OrderStatusAuditResponse;
 import com.rumal.admin_service.dto.PageResponse;
 import com.rumal.admin_service.dto.UpdateOrderNoteRequest;
@@ -12,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -113,8 +116,21 @@ public class AdminOrderService {
         return orderClient.getVendorOrderStatusHistory(vendorOrderId, internalAuth);
     }
 
-    public String exportOrdersCsv(String status, String createdAfter, String createdBefore, String internalAuth) {
-        return orderClient.exportOrdersCsv(status, createdAfter, createdBefore, internalAuth);
+    public OrderExportJobResponse createOrderExport(
+            CreateOrderExportRequest request,
+            String internalAuth,
+            String userSub,
+            String userRoles
+    ) {
+        return orderClient.createOrderExport(request, internalAuth, userSub, userRoles);
+    }
+
+    public OrderExportJobResponse getOrderExportJob(UUID jobId, String internalAuth) {
+        return orderClient.getOrderExportJob(jobId, internalAuth);
+    }
+
+    public ResponseEntity<byte[]> downloadOrderExport(UUID jobId, String internalAuth) {
+        return orderClient.downloadOrderExport(jobId, internalAuth);
     }
 
     public BulkOperationResult bulkUpdateOrderStatus(

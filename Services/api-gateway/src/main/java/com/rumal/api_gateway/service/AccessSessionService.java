@@ -55,11 +55,7 @@ public class AccessSessionService {
         if (!StringUtils.hasText(keycloakId) || !StringUtils.hasText(keycloakSessionId)) {
             return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "Active session id is unavailable"));
         }
-        if (!StringUtils.hasText(internalSharedSecret)) {
-            return Mono.error(new ResponseStatusException(
-                    HttpStatus.SERVICE_UNAVAILABLE,
-                    "Internal auth shared secret is not configured"));
-        }
+        requireInternalSecret();
 
         String path = "/internal/access/sessions";
         SessionRegistrationRequest request = new SessionRegistrationRequest(
@@ -89,16 +85,24 @@ public class AccessSessionService {
         if (!StringUtils.hasText(keycloakSessionId)) {
             return Mono.empty();
         }
-        if (!StringUtils.hasText(internalSharedSecret)) {
-            return Mono.error(new ResponseStatusException(
-                    HttpStatus.SERVICE_UNAVAILABLE,
-                    "Internal auth shared secret is not configured"));
-        }
-
+        requireInternalSecret();
         String encodedSessionId = UriUtils.encodePathSegment(keycloakSessionId.trim(), StandardCharsets.UTF_8);
         String path = "/internal/access/sessions/by-keycloak-session/" + encodedSessionId;
-        byte[] body = new byte[0];
+        return delete(path, "Unable to revoke active session");
+    }
 
+    public Mono<Void> revokeAllSessions(String keycloakId) {
+        if (!StringUtils.hasText(keycloakId)) {
+            return Mono.empty();
+        }
+        requireInternalSecret();
+        String encodedKeycloakId = UriUtils.encodePathSegment(keycloakId.trim(), StandardCharsets.UTF_8);
+        String path = "/internal/access/sessions/by-keycloak-user/" + encodedKeycloakId;
+        return delete(path, "Unable to revoke active sessions");
+    }
+
+    private Mono<Void> delete(String path, String failureMessage) {
+        byte[] body = new byte[0];
         return accessServiceClient.delete()
                 .uri(path)
                 .headers(headers -> applyInternalHeaders(headers, HttpMethod.DELETE, path, body))
@@ -107,9 +111,18 @@ public class AccessSessionService {
                         .defaultIfEmpty("")
                         .flatMap(bodyText -> Mono.error(new ResponseStatusException(
                                 HttpStatus.BAD_GATEWAY,
-                                "Unable to revoke active session"))))
+                                failureMessage))))
                 .toBodilessEntity()
                 .then();
+    }
+
+    private void requireInternalSecret() {
+        if (!StringUtils.hasText(internalSharedSecret)) {
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Internal auth shared secret is not configured"
+            );
+        }
     }
 
     private byte[] serializeRequest(SessionRegistrationRequest request) {

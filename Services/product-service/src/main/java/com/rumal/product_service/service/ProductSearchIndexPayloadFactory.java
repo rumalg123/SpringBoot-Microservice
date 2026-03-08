@@ -1,7 +1,9 @@
 package com.rumal.product_service.service;
 
+import com.rumal.product_service.client.InventoryClient;
 import com.rumal.product_service.client.VendorOperationalStateClient;
 import com.rumal.product_service.dto.SearchProductIndexRequest;
+import com.rumal.product_service.dto.StockAvailabilitySummary;
 import com.rumal.product_service.dto.VendorOperationalStateResponse;
 import com.rumal.product_service.entity.ApprovalStatus;
 import com.rumal.product_service.entity.ProductCatalogRead;
@@ -24,9 +26,13 @@ public class ProductSearchIndexPayloadFactory {
 
     private final ProductCatalogReadRepository productCatalogReadRepository;
     private final VendorOperationalStateClient vendorOperationalStateClient;
+    private final InventoryClient inventoryClient;
 
     @Value("${internal.auth.shared-secret:}")
     private String internalAuthSharedSecret;
+
+    @Value("${product.search.hide-out-of-stock:true}")
+    private boolean hideOutOfStock;
 
     public Optional<SearchProductIndexRequest> build(UUID productId) {
         if (productId == null) {
@@ -48,6 +54,9 @@ public class ProductSearchIndexPayloadFactory {
             }
         }
 
+        StockAvailabilitySummary stockSummary = requireStockSummary(productId);
+        boolean searchable = isSearchVisible(stockSummary);
+
         return Optional.of(new SearchProductIndexRequest(
                 row.getId(),
                 row.getSlug(),
@@ -66,11 +75,37 @@ public class ProductSearchIndexPayloadFactory {
                 row.getVendorId(),
                 row.getViewCount(),
                 row.getSoldCount(),
-                row.isActive(),
+                row.isActive() && (!hideOutOfStock || searchable),
+                stockSummary.totalAvailable(),
+                stockSummary.stockStatus(),
+                stockSummary.backorderable(),
                 List.of(),
                 row.getCreatedAt(),
                 row.getUpdatedAt()
         ));
+    }
+
+    private StockAvailabilitySummary requireStockSummary(UUID productId) {
+        StockAvailabilitySummary summary = inventoryClient.getStockSummary(productId);
+        if (summary == null) {
+            throw new ServiceUnavailableException("Inventory stock summary is unavailable for product " + productId);
+        }
+        return summary;
+    }
+
+    private boolean isSearchVisible(StockAvailabilitySummary stockSummary) {
+        if (stockSummary == null) {
+            return true;
+        }
+        if (Boolean.TRUE.equals(stockSummary.backorderable())) {
+            return true;
+        }
+        Integer totalAvailable = stockSummary.totalAvailable();
+        if (totalAvailable != null) {
+            return totalAvailable > 0;
+        }
+        String stockStatus = stockSummary.stockStatus();
+        return stockStatus == null || !"OUT_OF_STOCK".equalsIgnoreCase(stockStatus);
     }
 
     private Set<String> decodeTokenSet(String encodedTokens) {

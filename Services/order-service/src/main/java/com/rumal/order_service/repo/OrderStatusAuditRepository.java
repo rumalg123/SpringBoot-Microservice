@@ -8,4 +8,6 @@ import java.util.UUID;
 
 public interface OrderStatusAuditRepository extends JpaRepository<OrderStatusAudit, UUID> {
     List<OrderStatusAudit> findByOrderIdOrderByCreatedAtDesc(UUID orderId);
+
+    boolean existsBySourceEventId(UUID sourceEventId);
 }

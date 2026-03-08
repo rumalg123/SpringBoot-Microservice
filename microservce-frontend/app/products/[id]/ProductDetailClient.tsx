@@ -13,7 +13,7 @@ import { money, calcDiscount } from "../../../lib/format";
 import { resolveImageUrl } from "../../../lib/image";
 import ReviewSection from "../../components/reviews/ReviewSection";
 import { trackProductView, trackAddToCart, trackWishlistAdd, fetchSimilarProducts, fetchBoughtTogether, type PersonalizationProduct } from "../../../lib/personalization";
-import type { Variation, ProductDetail, VariationSummary } from "../../../lib/types/product";
+import type { ProductDetail, VariationSummary } from "../../../lib/types/product";
 import type { WishlistItem, WishlistResponse } from "../../../lib/types/wishlist";
 import ProductCard from "../../components/catalog/ProductCard";
 import ProductImageGallery from "../../components/catalog/ProductImageGallery";
@@ -26,6 +26,12 @@ function slugify(v: string) {
   return v.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").replace(/-+/g, "-");
 }
 
+type ReviewSummary = {
+  productId: string;
+  averageRating: number;
+  totalReviews: number;
+  ratingDistribution: Record<number, number>;
+};
 
 export default function ProductDetailClient() {
   const params = useParams<{ id: string }>();
@@ -51,7 +57,6 @@ export default function ProductDetailClient() {
     login,
     apiClient,
     emailVerified,
-    token,
   } = useAuthSession();
   const [product, setProduct] = useState<ProductDetail | null>(null);
   const [variations, setVariations] = useState<VariationSummary[]>([]);
@@ -68,6 +73,7 @@ export default function ProductDetailClient() {
   const [wishlistPending, setWishlistPending] = useState(false);
   const [similarProducts, setSimilarProducts] = useState<PersonalizationProduct[]>([]);
   const [boughtTogether, setBoughtTogether] = useState<PersonalizationProduct[]>([]);
+  const [reviewSummary, setReviewSummary] = useState<ReviewSummary | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -86,7 +92,7 @@ export default function ProductDetailClient() {
           if (signal.aborted) return;
           setVariations(vRes.ok ? ((await vRes.json()) as VariationSummary[] || []) : []);
         } else { setVariations([]); }
-      } catch (err) {
+      } catch {
         if (signal.aborted) return;
         setStatus("Product not found."); toast.error("Failed to load product");
       }
@@ -104,10 +110,31 @@ export default function ProductDetailClient() {
       vendorId: product.vendorId,
       brandName: null,
       sellingPrice: product.sellingPrice,
-    }, token);
+    });
     fetchBoughtTogether(product.id, 4).then(setBoughtTogether).catch((e) => console.error("Failed to load bought together:", e));
     fetchSimilarProducts(product.id, 8).then(setSimilarProducts).catch((e) => console.error("Failed to load similar products:", e));
-  }, [product?.id, token]);
+  }, [product]);
+
+  useEffect(() => {
+    if (!product) {
+      setReviewSummary(null);
+      return;
+    }
+    const controller = new AbortController();
+    const { signal } = controller;
+    const run = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/reviews/products/${product.id}/summary`, { cache: "no-store", signal });
+        if (!res.ok) throw new Error("Failed to load review summary");
+        if (signal.aborted) return;
+        setReviewSummary((await res.json()) as ReviewSummary);
+      } catch {
+        if (!signal.aborted) setReviewSummary(null);
+      }
+    };
+    void run();
+    return () => controller.abort();
+  }, [product]);
 
   const parentAttributeNames = useMemo(() => {
     if (!product || product.productType !== "PARENT") return [];
@@ -171,7 +198,7 @@ export default function ProductDetailClient() {
         if (signal.aborted) return;
         setSelectedVariation((await res.json()) as ProductDetail);
         setSelectedImageIndex(0);
-      } catch (err) {
+      } catch {
         if (signal.aborted) return;
         toast.error("Failed to load selected variation details");
       }
@@ -213,7 +240,7 @@ export default function ProductDetailClient() {
       await apiClient.post("/cart/me/items", { productId: targetProductId, quantity });
       toast.success("Added to cart");
       emitCartUpdate();
-      if (product) trackAddToCart({ id: targetProductId, categories: product.categories, vendorId: product.vendorId, sellingPrice: displayProduct?.sellingPrice }, token);
+      if (product) trackAddToCart({ id: targetProductId, categories: product.categories, vendorId: product.vendorId, sellingPrice: displayProduct?.sellingPrice });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to add product to cart");
     } finally { setAddingToCart(false); }
@@ -258,7 +285,7 @@ export default function ProductDetailClient() {
         setWishlistItemId(matched?.id || "");
         toast.success("Added to wishlist");
         emitWishlistUpdate();
-        if (product) trackWishlistAdd({ id: targetProductId, categories: product.categories, vendorId: product.vendorId, sellingPrice: displayProduct?.sellingPrice }, token);
+        if (product) trackWishlistAdd({ id: targetProductId, categories: product.categories, vendorId: product.vendorId, sellingPrice: displayProduct?.sellingPrice });
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Wishlist update failed");
@@ -272,6 +299,8 @@ export default function ProductDetailClient() {
   const productReady = quantity > 0 && (!requiresVariationSelection || (allAttributesSelected && hasMatchingVariation));
   const canAddToCart = !addingToCart && !buyingNow && productReady;
   const canBuyNow = !buyingNow && !addingToCart && productReady;
+  const hasReviews = (reviewSummary?.totalReviews || 0) > 0;
+  const reviewCountLabel = new Intl.NumberFormat("en-US").format(reviewSummary?.totalReviews || 0);
 
   /* Loading / not found */
   if (!displayProduct) {
@@ -384,8 +413,18 @@ export default function ProductDetailClient() {
                   {displayProduct.name}
                 </h1>
                 <div className="flex flex-wrap items-center gap-2.5">
-                  <span className="star-rating text-[0.95rem]">★★★★☆</span>
-                  <span className="text-sm text-muted">4.5 · 1,200+ ratings</span>
+                  {hasReviews ? (
+                    <>
+                      <span className="text-sm font-bold text-ink-light">
+                        {reviewSummary?.averageRating.toFixed(1)} / 5
+                      </span>
+                      <span className="text-sm text-muted">
+                        {reviewCountLabel} rating{reviewSummary?.totalReviews === 1 ? "" : "s"}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-sm text-muted">No ratings yet</span>
+                  )}
                   <span className="text-sm text-muted">·</span>
                   <span className="text-sm font-bold text-success">In Stock</span>
                 </div>
@@ -544,7 +583,6 @@ export default function ProductDetailClient() {
         {product && (
           <ReviewSection
             productId={product.id}
-            vendorId={product.vendorId}
             isAuthenticated={isAuthenticated}
             apiClient={apiClient}
           />

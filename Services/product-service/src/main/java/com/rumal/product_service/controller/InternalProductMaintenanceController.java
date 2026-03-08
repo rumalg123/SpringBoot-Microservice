@@ -4,6 +4,7 @@ import com.rumal.product_service.dto.BatchProductRequest;
 import com.rumal.product_service.dto.ProductResponse;
 import com.rumal.product_service.security.InternalRequestVerifier;
 import com.rumal.product_service.service.ProductService;
+import com.rumal.product_service.service.ProductSearchSyncOutboxService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -26,6 +27,7 @@ public class InternalProductMaintenanceController {
     private static final String INTERNAL_HEADER = "X-Internal-Auth";
 
     private final ProductService productService;
+    private final ProductSearchSyncOutboxService productSearchSyncOutboxService;
     private final InternalRequestVerifier internalRequestVerifier;
 
     @PostMapping("/cache/vendors/{vendorId}/evict")
@@ -55,5 +57,15 @@ public class InternalProductMaintenanceController {
         internalRequestVerifier.verify(internalAuth);
         int count = productService.deactivateAllByVendor(vendorId);
         return java.util.Map.of("vendorId", vendorId, "deactivatedCount", count);
+    }
+
+    @PostMapping("/search-sync/{productId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void requestSearchSync(
+            @RequestHeader(INTERNAL_HEADER) String internalAuth,
+            @PathVariable UUID productId
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        productSearchSyncOutboxService.enqueue(productId);
     }
 }

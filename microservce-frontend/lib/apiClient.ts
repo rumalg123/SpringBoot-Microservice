@@ -1,9 +1,9 @@
 import axios, { AxiosError, AxiosHeaders, AxiosInstance, AxiosRequestConfig } from "axios";
 import { IDEMPOTENCY_WINDOW_MS, IDEMPOTENCY_MAX_CACHE_SIZE } from "./constants";
+import { CSRF_COOKIE_NAME, CSRF_HEADER_NAME } from "./csrf";
 
 type CreateApiClientOptions = {
   baseURL: string;
-  getToken: () => Promise<string>;
   onError?: (message: string) => void;
 };
 
@@ -87,6 +87,9 @@ export function createApiClient(options: CreateApiClientOptions): AxiosInstance 
   const client = axios.create({
     baseURL: options.baseURL,
     timeout: 30_000,
+    withCredentials: true,
+    xsrfCookieName: CSRF_COOKIE_NAME,
+    xsrfHeaderName: CSRF_HEADER_NAME,
   });
 
   client.interceptors.request.use(async (config) => {
@@ -95,9 +98,7 @@ export function createApiClient(options: CreateApiClientOptions): AxiosInstance 
       return config;
     }
 
-    const token = await options.getToken();
     const headers = new AxiosHeaders(config.headers);
-    headers.set("Authorization", `Bearer ${token}`);
     const isFormData = typeof FormData !== "undefined" && config.data instanceof FormData;
     const method = (config.method || "get").toLowerCase();
     const isMutating = method === "post" || method === "put" || method === "patch" || method === "delete";

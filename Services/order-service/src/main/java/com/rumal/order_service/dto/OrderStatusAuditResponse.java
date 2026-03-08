@@ -8,10 +8,15 @@ public record OrderStatusAuditResponse(
         String fromStatus,
         String toStatus,
         String actorSub,
+        String actorTenantId,
         String actorRoles,
         String actorType,
         String changeSource,
         String note,
+        String changeSet,
+        String clientIp,
+        String userAgent,
+        String requestId,
         Instant createdAt
 ) {
 }

@@ -30,6 +30,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -44,6 +45,7 @@ public class PromotionQuoteService {
 
     private final PromotionCampaignRepository promotionCampaignRepository;
     private final CouponValidationService couponValidationService;
+    private final CustomerPromotionEligibilityService customerPromotionEligibilityService;
 
     @Transactional(readOnly = true)
     public PromotionQuoteResponse quote(PromotionQuoteRequest request) {
@@ -85,7 +87,9 @@ public class PromotionQuoteService {
             }
         }
 
-        String customerSegment = request.customerSegment() == null ? null : request.customerSegment().trim();
+        String requestedCustomerSegment = normalizeSegment(request.customerSegment());
+        CustomerSegmentResolutionState customerSegmentResolutionState =
+                new CustomerSegmentResolutionState(request.customerId(), pricedAt);
 
         // Extract vendor IDs from cart lines for scope-based pre-filtering
         Set<UUID> cartVendorIds = request.lines().stream()
@@ -105,7 +109,6 @@ public class PromotionQuoteService {
                     PromotionLifecycleStatus.ACTIVE, eligibleStatuses, cartVendorIds, PageRequest.of(pageNum, 200));
             promoPage.getContent().stream()
                     .filter(p -> withinWindow(p, pricedAt))
-                    .filter(p -> matchesSegment(p, customerSegment))
                     .filter(p -> withinFlashSaleWindow(p, pricedAt))
                     .forEach(p -> candidatesById.put(p.getId(), new PromotionCandidate(p, false, null)));
             pageNum++;
@@ -142,19 +145,48 @@ public class PromotionQuoteService {
         for (PromotionCandidate candidate : candidates) {
             PromotionCampaign promotion = candidate.promotion();
             if (!candidate.explicitCoupon() && !promotion.isAutoApply()) {
-                rejected.add(new RejectedPromotionQuoteEntry(promotion.getId(), promotion.getName(), "Promotion requires explicit coupon/manual trigger"));
+                rejected.add(new RejectedPromotionQuoteEntry(
+                        promotion.getId(),
+                        candidateDisplayName(candidate),
+                        "Promotion requires explicit coupon/manual trigger"
+                ));
+                continue;
+            }
+            SegmentEligibilityResult segmentEligibility = evaluateSegmentEligibility(
+                    candidate,
+                    requestedCustomerSegment,
+                    customerSegmentResolutionState
+            );
+            if (!segmentEligibility.eligible()) {
+                rejected.add(new RejectedPromotionQuoteEntry(
+                        promotion.getId(),
+                        candidateDisplayName(candidate),
+                        segmentEligibility.reason()
+                ));
                 continue;
             }
             if (exclusiveApplied) {
-                rejected.add(new RejectedPromotionQuoteEntry(promotion.getId(), promotion.getName(), "Skipped because an exclusive promotion already applied"));
+                rejected.add(new RejectedPromotionQuoteEntry(
+                        promotion.getId(),
+                        candidateDisplayName(candidate),
+                        "Skipped because an exclusive promotion already applied"
+                ));
                 continue;
             }
             if (nonStackableApplied) {
-                rejected.add(new RejectedPromotionQuoteEntry(promotion.getId(), promotion.getName(), "Skipped because a non-stackable promotion already applied"));
+                rejected.add(new RejectedPromotionQuoteEntry(
+                        promotion.getId(),
+                        candidateDisplayName(candidate),
+                        "Skipped because a non-stackable promotion already applied"
+                ));
                 continue;
             }
             if (!promotion.isStackable() && !applied.isEmpty()) {
-                rejected.add(new RejectedPromotionQuoteEntry(promotion.getId(), promotion.getName(), "Promotion is not stackable with previously applied promotions"));
+                rejected.add(new RejectedPromotionQuoteEntry(
+                        promotion.getId(),
+                        candidateDisplayName(candidate),
+                        "Promotion is not stackable with previously applied promotions"
+                ));
                 continue;
             }
             // Stacking group check: promotions in the same group cannot stack
@@ -162,37 +194,61 @@ public class PromotionQuoteService {
             if (stackingGroup != null && !stackingGroup.isBlank()) {
                 String normalizedGroup = stackingGroup.trim().toLowerCase(Locale.ROOT);
                 if (appliedStackingGroups.contains(normalizedGroup)) {
-                    rejected.add(new RejectedPromotionQuoteEntry(promotion.getId(), promotion.getName(), "Promotion conflicts with stacking group: " + stackingGroup.trim()));
+                    rejected.add(new RejectedPromotionQuoteEntry(
+                            promotion.getId(),
+                            candidateDisplayName(candidate),
+                            "Promotion conflicts with stacking group: " + stackingGroup.trim()
+                    ));
                     continue;
                 }
             }
             // Max stack count check
             if (globalMaxStack != null && appliedCount >= globalMaxStack) {
-                rejected.add(new RejectedPromotionQuoteEntry(promotion.getId(), promotion.getName(), "Maximum number of stacked promotions reached (" + globalMaxStack + ")"));
+                rejected.add(new RejectedPromotionQuoteEntry(
+                        promotion.getId(),
+                        candidateDisplayName(candidate),
+                        "Maximum number of stacked promotions reached (" + globalMaxStack + ")"
+                ));
                 continue;
             }
             // Flash sale redemption limit check
             if (promotion.isFlashSale() && promotion.getFlashSaleMaxRedemptions() != null
                     && promotion.getFlashSaleRedemptionCount() >= promotion.getFlashSaleMaxRedemptions()) {
-                rejected.add(new RejectedPromotionQuoteEntry(promotion.getId(), promotion.getName(), "Flash sale redemption limit reached"));
+                rejected.add(new RejectedPromotionQuoteEntry(
+                        promotion.getId(),
+                        candidateDisplayName(candidate),
+                        "Flash sale redemption limit reached"
+                ));
                 continue;
             }
 
             BigDecimal budgetRemaining = remainingBudgetForQuote(promotion);
             if (budgetRemaining != null && budgetRemaining.compareTo(BigDecimal.ZERO) <= 0) {
-                rejected.add(new RejectedPromotionQuoteEntry(promotion.getId(), promotion.getName(), "Campaign budget exhausted"));
+                rejected.add(new RejectedPromotionQuoteEntry(
+                        promotion.getId(),
+                        candidateDisplayName(candidate),
+                        "Campaign budget exhausted"
+                ));
                 continue;
             }
             List<BigDecimal> lineDiscountSnapshot = budgetRemaining == null ? List.of() : snapshotLineDiscounts(lineStates);
 
             PromotionApplicationResult result = applyPromotion(promotion, lineStates, subtotal, shippingAmount, shippingDiscountTotal);
             if (!result.applied()) {
-                rejected.add(new RejectedPromotionQuoteEntry(promotion.getId(), promotion.getName(), result.reason()));
+                rejected.add(new RejectedPromotionQuoteEntry(
+                        promotion.getId(),
+                        candidateDisplayName(candidate),
+                        result.reason()
+                ));
                 continue;
             }
             if (budgetRemaining != null && result.discountAmount().compareTo(budgetRemaining) > 0) {
                 restoreLineDiscounts(lineStates, lineDiscountSnapshot);
-                rejected.add(new RejectedPromotionQuoteEntry(promotion.getId(), promotion.getName(), "Campaign budget remaining is insufficient"));
+                rejected.add(new RejectedPromotionQuoteEntry(
+                        promotion.getId(),
+                        candidateDisplayName(candidate),
+                        "Campaign budget remaining is insufficient"
+                ));
                 continue;
             }
 
@@ -685,20 +741,36 @@ public class PromotionQuoteService {
         return promotion.getEndsAt() == null || !promotion.getEndsAt().isBefore(now);
     }
 
-    private boolean matchesSegment(PromotionCampaign promotion, String customerSegment) {
-        String segments = promotion.getTargetSegments();
-        if (segments == null || segments.isBlank()) {
-            return true; // no segment restriction
+    private SegmentEligibilityResult evaluateSegmentEligibility(
+            PromotionCandidate candidate,
+            String requestedCustomerSegment,
+            CustomerSegmentResolutionState customerSegmentResolutionState
+    ) {
+        Set<String> requiredSegments = parseSegmentTokens(candidate.promotion().getTargetSegments());
+        if (requiredSegments.isEmpty()) {
+            return SegmentEligibilityResult.allowed();
         }
-        if (customerSegment == null || customerSegment.isBlank()) {
-            return false; // promotion requires a segment but none provided
+
+        Set<String> effectiveSegments = new LinkedHashSet<>();
+        if (requestedCustomerSegment != null && !isDerivedOnlySegment(requestedCustomerSegment)) {
+            effectiveSegments.add(requestedCustomerSegment);
         }
-        String normalizedCustomerSegment = customerSegment.trim().toUpperCase(Locale.ROOT);
-        return Arrays.stream(segments.split(","))
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .map(s -> s.toUpperCase(Locale.ROOT))
-                .anyMatch(s -> s.equals(normalizedCustomerSegment));
+        if (requiredSegments.stream().anyMatch(effectiveSegments::contains)) {
+            return SegmentEligibilityResult.allowed();
+        }
+
+        if (customerSegmentResolutionState.customerId() != null && requiresDerivedCustomerSegments(requiredSegments)) {
+            effectiveSegments.addAll(
+                    customerSegmentResolutionState
+                            .resolve(customerPromotionEligibilityService)
+                            .derivedSegments()
+            );
+        }
+        if (requiredSegments.stream().anyMatch(effectiveSegments::contains)) {
+            return SegmentEligibilityResult.allowed();
+        }
+
+        return SegmentEligibilityResult.denied(requiredSegmentFailureReason(requiredSegments));
     }
 
     private boolean withinFlashSaleWindow(PromotionCampaign promotion, Instant now) {
@@ -713,6 +785,16 @@ public class PromotionQuoteService {
 
     private BigDecimal normalizeMoney(BigDecimal value) {
         return (value == null ? BigDecimal.ZERO : value).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private String normalizeSegment(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim()
+                .toUpperCase(Locale.ROOT)
+                .replace('-', '_')
+                .replace(' ', '_');
     }
 
     private BigDecimal minMoney(BigDecimal a, BigDecimal b) {
@@ -750,6 +832,49 @@ public class PromotionQuoteService {
         for (int i = 0; i < lineStates.size(); i++) {
             lineStates.get(i).lineDiscount = normalizeMoney(snapshot.get(i));
         }
+    }
+
+    private Set<String> parseSegmentTokens(String rawSegments) {
+        if (rawSegments == null || rawSegments.isBlank()) {
+            return Set.of();
+        }
+        return Arrays.stream(rawSegments.split(","))
+                .map(this::normalizeSegment)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private boolean requiresDerivedCustomerSegments(Set<String> requiredSegments) {
+        return requiredSegments.stream().anyMatch(this::isDerivedOnlySegment);
+    }
+
+    private boolean isDerivedOnlySegment(String segment) {
+        if (segment == null) {
+            return false;
+        }
+        return "NEW_USER".equals(segment)
+                || "EXISTING_CUSTOMER".equals(segment)
+                || segment.startsWith("LOYALTY_");
+    }
+
+    private String requiredSegmentFailureReason(Set<String> requiredSegments) {
+        if (requiredSegments.contains("NEW_USER")) {
+            return "Coupon is limited to new customers";
+        }
+        if (requiredSegments.contains("EXISTING_CUSTOMER")) {
+            return "Coupon is limited to existing customers";
+        }
+        if (requiredSegments.stream().anyMatch(segment -> segment.startsWith("LOYALTY_"))) {
+            return "Customer does not match the required loyalty segment";
+        }
+        return "Customer does not match the required promotion segment";
+    }
+
+    private String candidateDisplayName(PromotionCandidate candidate) {
+        if (candidate.explicitCoupon() && candidate.couponCode() != null && !candidate.couponCode().isBlank()) {
+            return candidate.couponCode().trim();
+        }
+        return candidate.promotion().getName();
     }
 
     private static final class LineState {
@@ -814,5 +939,41 @@ public class PromotionQuoteService {
             boolean explicitCoupon,
             String couponCode
     ) {
+    }
+
+    private record SegmentEligibilityResult(boolean eligible, String reason) {
+        private static SegmentEligibilityResult allowed() {
+            return new SegmentEligibilityResult(true, null);
+        }
+
+        private static SegmentEligibilityResult denied(String reason) {
+            return new SegmentEligibilityResult(false, reason);
+        }
+    }
+
+    private static final class CustomerSegmentResolutionState {
+        private final UUID customerId;
+        private final Instant pricedAt;
+        private CustomerPromotionEligibilityService.CustomerPromotionEligibilityProfile resolvedProfile;
+        private boolean resolved;
+
+        private CustomerSegmentResolutionState(UUID customerId, Instant pricedAt) {
+            this.customerId = customerId;
+            this.pricedAt = pricedAt;
+        }
+
+        private UUID customerId() {
+            return customerId;
+        }
+
+        private CustomerPromotionEligibilityService.CustomerPromotionEligibilityProfile resolve(
+                CustomerPromotionEligibilityService customerPromotionEligibilityService
+        ) {
+            if (!resolved) {
+                resolvedProfile = customerPromotionEligibilityService.resolveProfile(customerId, pricedAt);
+                resolved = true;
+            }
+            return resolvedProfile;
+        }
     }
 }

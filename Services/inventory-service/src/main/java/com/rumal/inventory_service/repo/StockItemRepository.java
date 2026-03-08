@@ -18,13 +18,20 @@ public interface StockItemRepository extends JpaRepository<StockItem, UUID> {
 
     Optional<StockItem> findByProductIdAndWarehouseId(UUID productId, UUID warehouseId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select s from StockItem s where s.productId = :productId and s.warehouse.id = :warehouseId")
+    Optional<StockItem> findByProductIdAndWarehouseIdForUpdate(
+            @Param("productId") UUID productId,
+            @Param("warehouseId") UUID warehouseId
+    );
+
     List<StockItem> findByProductId(UUID productId);
 
     @Query("select s from StockItem s join fetch s.warehouse w where s.productId = :productId and w.active = true")
     List<StockItem> findByProductIdWithActiveWarehouse(@Param("productId") UUID productId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select s from StockItem s join fetch s.warehouse w where s.productId = :productId and w.active = true order by s.quantityAvailable desc")
+    @Query("select s from StockItem s join fetch s.warehouse w where s.productId = :productId and w.active = true order by s.quantityAvailable desc, s.id asc")
     List<StockItem> findByProductIdForUpdateOrderByAvailableDesc(@Param("productId") UUID productId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -33,6 +40,9 @@ public interface StockItemRepository extends JpaRepository<StockItem, UUID> {
 
     @Query("select s from StockItem s join fetch s.warehouse w where s.productId in :productIds and w.active = true")
     List<StockItem> findByProductIdIn(@Param("productIds") List<UUID> productIds);
+
+    @Query("select distinct s.productId from StockItem s where s.warehouse.id = :warehouseId")
+    List<UUID> findDistinctProductIdsByWarehouseId(@Param("warehouseId") UUID warehouseId);
 
     Page<StockItem> findByVendorId(UUID vendorId, Pageable pageable);
 

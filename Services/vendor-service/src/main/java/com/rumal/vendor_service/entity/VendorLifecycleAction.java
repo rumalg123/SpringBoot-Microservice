@@ -3,6 +3,10 @@ package com.rumal.vendor_service.entity;
 public enum VendorLifecycleAction {
     CREATED,
     UPDATED,
+    PAYOUT_CONFIG_UPDATED,
+    USER_ADDED,
+    USER_UPDATED,
+    USER_REMOVED,
     STOP_ORDERS,
     RESUME_ORDERS,
     DELETE_REQUESTED,
@@ -13,4 +17,3 @@ public enum VendorLifecycleAction {
     VERIFICATION_APPROVED,
     VERIFICATION_REJECTED
 }
-

@@ -36,6 +36,7 @@ import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -66,13 +67,14 @@ public class WishlistService {
     public WishlistResponse getByKeycloakId(String keycloakId) {
         String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
         List<WishlistItem> items = wishlistItemRepository.findByKeycloakIdOrderByCreatedAtDesc(normalizedKeycloakId);
-        return toResponse(normalizedKeycloakId, items);
+        return toResponse(normalizedKeycloakId, items, resolveProductMap(items));
     }
 
     @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
     public Page<WishlistItemResponse> getByKeycloakId(String keycloakId, Pageable pageable) {
         String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
-        return wishlistItemRepository.findByKeycloakId(normalizedKeycloakId, pageable).map(this::toItemResponse);
+        return wishlistItemRepository.findByKeycloakId(normalizedKeycloakId, pageable)
+                .map(item -> toItemResponse(item, resolveProduct(item)));
     }
 
     @Caching(evict = {
@@ -109,7 +111,7 @@ public class WishlistService {
             wishlistItemRepository.save(item);
 
             List<WishlistItem> items = wishlistItemRepository.findByKeycloakIdOrderByCreatedAtDesc(normalizedKeycloakId);
-            return toResponse(normalizedKeycloakId, items);
+            return toResponse(normalizedKeycloakId, items, resolveProductMap(items));
         });
     }
 
@@ -160,7 +162,10 @@ public class WishlistService {
                 .stream()
                 .collect(Collectors.groupingBy(item -> item.getCollection().getId()));
         return collections.stream()
-                .map(c -> toCollectionResponse(c, itemsByCollection.getOrDefault(c.getId(), List.of())))
+                .map(c -> {
+                    List<WishlistItem> items = itemsByCollection.getOrDefault(c.getId(), List.of());
+                    return toCollectionResponse(c, items, resolveProductMap(items));
+                })
                 .toList();
     }
 
@@ -286,8 +291,9 @@ public class WishlistService {
         }
 
         List<WishlistItem> items = wishlistItemRepository.findByCollectionOrderByCreatedAtDesc(collection);
+        Map<UUID, ProductDetails> productMap = resolveProductMap(items);
         List<SharedWishlistItemResponse> itemResponses = items.stream()
-                .map(this::toSharedItemResponse)
+                .map(item -> toSharedItemResponse(item, productMap.get(item.getProductId())))
                 .toList();
 
         return new SharedWishlistResponse(
@@ -336,7 +342,7 @@ public class WishlistService {
         String note = request.note() != null ? request.note().trim() : null;
         item.setNote(note != null && note.isEmpty() ? null : note);
         wishlistItemRepository.save(item);
-        return toItemResponse(item);
+        return toItemResponse(item, resolveProduct(item));
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -391,9 +397,9 @@ public class WishlistService {
         return normalized;
     }
 
-    private WishlistResponse toResponse(String keycloakId, List<WishlistItem> items) {
+    private WishlistResponse toResponse(String keycloakId, List<WishlistItem> items, Map<UUID, ProductDetails> productMap) {
         List<WishlistItemResponse> responseItems = items.stream()
-                .map(this::toItemResponse)
+                .map(item -> toItemResponse(item, productMap.get(item.getProductId())))
                 .toList();
         return new WishlistResponse(
                 keycloakId,
@@ -403,12 +409,13 @@ public class WishlistService {
     }
 
     private WishlistCollectionResponse toCollectionResponse(WishlistCollection collection) {
-        return toCollectionResponse(collection, wishlistItemRepository.findByCollectionOrderByCreatedAtDesc(collection));
+        List<WishlistItem> items = wishlistItemRepository.findByCollectionOrderByCreatedAtDesc(collection);
+        return toCollectionResponse(collection, items, resolveProductMap(items));
     }
 
-    private WishlistCollectionResponse toCollectionResponse(WishlistCollection collection, List<WishlistItem> items) {
+    private WishlistCollectionResponse toCollectionResponse(WishlistCollection collection, List<WishlistItem> items, Map<UUID, ProductDetails> productMap) {
         List<WishlistItemResponse> itemResponses = items.stream()
-                .map(this::toItemResponse)
+                .map(item -> toItemResponse(item, productMap.get(item.getProductId())))
                 .toList();
 
         return new WishlistCollectionResponse(
@@ -425,32 +432,55 @@ public class WishlistService {
         );
     }
 
-    private WishlistItemResponse toItemResponse(WishlistItem item) {
+    private WishlistItemResponse toItemResponse(WishlistItem item, ProductDetails product) {
         return new WishlistItemResponse(
                 item.getId(),
                 item.getCollection() != null ? item.getCollection().getId() : null,
                 item.getProductId(),
-                item.getProductSlug(),
-                item.getProductName(),
-                item.getProductType(),
-                item.getMainImage(),
-                normalizeMoney(item.getSellingPriceSnapshot()),
+                resolveSlug(product, item),
+                resolveName(product, item),
+                resolveProductType(product, item),
+                resolveMainImage(product, item),
+                resolveSellingPrice(product, item),
                 item.getNote(),
                 item.getCreatedAt(),
                 item.getUpdatedAt()
         );
     }
 
-    private SharedWishlistItemResponse toSharedItemResponse(WishlistItem item) {
+    private SharedWishlistItemResponse toSharedItemResponse(WishlistItem item, ProductDetails product) {
         return new SharedWishlistItemResponse(
                 item.getProductId(),
-                item.getProductSlug(),
-                item.getProductName(),
-                item.getProductType(),
-                item.getMainImage(),
-                normalizeMoney(item.getSellingPriceSnapshot()),
+                resolveSlug(product, item),
+                resolveName(product, item),
+                resolveProductType(product, item),
+                resolveMainImage(product, item),
+                resolveSellingPrice(product, item),
                 item.getCreatedAt()
         );
+    }
+
+    private Map<UUID, ProductDetails> resolveProductMap(List<WishlistItem> items) {
+        Map<UUID, ProductDetails> productMap = new HashMap<>();
+        for (WishlistItem item : items) {
+            UUID productId = item.getProductId();
+            if (productId == null || productMap.containsKey(productId)) {
+                continue;
+            }
+            productMap.put(productId, resolveProduct(item));
+        }
+        return productMap;
+    }
+
+    private ProductDetails resolveProduct(WishlistItem item) {
+        if (item == null || item.getProductId() == null) {
+            return null;
+        }
+        try {
+            return productClient.getById(item.getProductId());
+        } catch (RuntimeException ex) {
+            return null;
+        }
     }
 
     private String resolveSlug(ProductDetails product) {
@@ -461,6 +491,13 @@ public class WishlistService {
         return slug;
     }
 
+    private String resolveSlug(ProductDetails product, WishlistItem item) {
+        if (product != null && StringUtils.hasText(product.slug())) {
+            return resolveSlug(product);
+        }
+        return item.getProductSlug();
+    }
+
     private String resolveName(ProductDetails product) {
         String name = product.name() == null ? "" : product.name().trim();
         if (name.isEmpty()) {
@@ -469,12 +506,26 @@ public class WishlistService {
         return name;
     }
 
+    private String resolveName(ProductDetails product, WishlistItem item) {
+        if (product != null && StringUtils.hasText(product.name())) {
+            return resolveName(product);
+        }
+        return item.getProductName();
+    }
+
     private String resolveProductType(ProductDetails product) {
         String productType = product.productType() == null ? "" : product.productType().trim();
         if (productType.isEmpty()) {
             throw new ValidationException("Product type is missing: " + product.id());
         }
         return productType;
+    }
+
+    private String resolveProductType(ProductDetails product, WishlistItem item) {
+        if (product != null && StringUtils.hasText(product.productType())) {
+            return resolveProductType(product);
+        }
+        return item.getProductType();
     }
 
     private String resolveMainImage(ProductDetails product) {
@@ -488,6 +539,20 @@ public class WishlistService {
         }
         String trimmed = first.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String resolveMainImage(ProductDetails product, WishlistItem item) {
+        if (product != null) {
+            return resolveMainImage(product);
+        }
+        return item.getMainImage();
+    }
+
+    private BigDecimal resolveSellingPrice(ProductDetails product, WishlistItem item) {
+        if (product != null) {
+            return normalizeMoney(product.sellingPrice());
+        }
+        return normalizeMoney(item.getSellingPriceSnapshot());
     }
 
     private BigDecimal normalizeMoney(BigDecimal value) {

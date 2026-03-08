@@ -201,7 +201,10 @@ public class ProductIndexService {
                 .productType(data.productType())
                 .viewCount(data.viewCount())
                 .soldCount(data.soldCount())
-                .active(data.active())
+                .active(resolveSearchActive(data))
+                .stockAvailable(data.stockAvailable())
+                .stockStatus(data.stockStatus())
+                .backorderable(data.backorderable())
                 .variations(data.variations() != null
                         ? data.variations().stream()
                                 .map(v -> ProductDocument.VariationEntry.builder()
@@ -213,6 +216,22 @@ public class ProductIndexService {
                 .updatedAt(data.updatedAt())
                 .indexedAt(Instant.now())
                 .build();
+    }
+
+    private boolean resolveSearchActive(ProductIndexData data) {
+        if (!data.active()) {
+            return false;
+        }
+        if (Boolean.TRUE.equals(data.backorderable())) {
+            return true;
+        }
+        if (data.stockAvailable() != null) {
+            return data.stockAvailable() > 0;
+        }
+        if (data.stockStatus() != null) {
+            return !"OUT_OF_STOCK".equalsIgnoreCase(data.stockStatus());
+        }
+        return true;
     }
 
     private Instant getLastSyncTime() {

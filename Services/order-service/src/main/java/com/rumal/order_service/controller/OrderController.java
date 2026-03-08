@@ -5,6 +5,8 @@ import com.rumal.order_service.dto.CreateOrderRequest;
 import com.rumal.order_service.dto.CreateMyOrderRequest;
 import com.rumal.order_service.dto.InvoiceResponse;
 import com.rumal.order_service.dto.OrderDetailsResponse;
+import com.rumal.order_service.dto.OrderExportJobRequest;
+import com.rumal.order_service.dto.OrderExportJobResponse;
 import com.rumal.order_service.dto.OrderResponse;
 import com.rumal.order_service.dto.OrderStatusAuditResponse;
 import com.rumal.order_service.dto.SetPaymentInfoRequest;
@@ -17,14 +19,17 @@ import com.rumal.order_service.dto.VendorOrderStatusAuditResponse;
 import com.rumal.order_service.entity.OrderStatus;
 import com.rumal.order_service.exception.UnauthorizedException;
 import com.rumal.order_service.security.InternalRequestVerifier;
+import com.rumal.order_service.service.OrderExportService;
+import com.rumal.order_service.service.OrderExportStorageService;
 import com.rumal.order_service.service.OrderService;
-import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
@@ -38,6 +43,7 @@ import java.util.UUID;
 public class OrderController {
 
     private final OrderService orderService;
+    private final OrderExportService orderExportService;
     private final InternalRequestVerifier internalRequestVerifier;
 
     @PostMapping
@@ -265,23 +271,56 @@ public class OrderController {
     }
 
     @GetMapping("/export")
-    public void exportOrders(
+    public ResponseEntity<OrderExportJobResponse> exportOrders(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
-            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @RequestParam(required = false) OrderStatus status,
+            @RequestParam(required = false) String customerEmail,
+            @RequestParam(required = false) UUID vendorId,
             @RequestParam(required = false) Instant createdAfter,
-            @RequestParam(required = false) Instant createdBefore,
-            HttpServletResponse response
+            @RequestParam(required = false) Instant createdBefore
     ) {
         internalRequestVerifier.verify(internalAuth);
-        requireAdminRole(userRoles);
-        response.setContentType("text/csv");
-        response.setHeader("Content-Disposition", "attachment; filename=orders-export.csv");
-        try {
-            orderService.exportOrdersCsv(status, createdAfter, createdBefore, response.getWriter());
-        } catch (java.io.IOException e) {
-            throw new com.rumal.order_service.exception.CsvExportException("Failed to write CSV export", e);
-        }
+        OrderExportJobResponse response = orderExportService.createJob(new OrderExportJobRequest(
+                "csv",
+                status == null ? null : status.name(),
+                customerEmail,
+                createdAfter,
+                createdBefore,
+                vendorId,
+                null,
+                null
+        ));
+        return ResponseEntity.accepted().body(response);
+    }
+
+    @PostMapping("/exports")
+    public ResponseEntity<OrderExportJobResponse> createOrderExport(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestBody(required = false) OrderExportJobRequest request
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        OrderExportJobRequest safeRequest = request == null
+                ? new OrderExportJobRequest("csv", null, null, null, null, null, null, null)
+                : request;
+        return ResponseEntity.accepted().body(orderExportService.createJob(safeRequest));
+    }
+
+    @GetMapping("/exports/{jobId}")
+    public OrderExportJobResponse getOrderExportJob(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @PathVariable UUID jobId
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        return orderExportService.getJob(jobId);
+    }
+
+    @GetMapping("/exports/{jobId}/download")
+    public ResponseEntity<byte[]> downloadOrderExport(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @PathVariable UUID jobId
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        return buildDownloadResponse(orderExportService.download(jobId));
     }
 
     @PatchMapping("/{id}/shipping-address")
@@ -307,16 +346,17 @@ public class OrderController {
         }
     }
 
-    private void requireAdminRole(String userRoles) {
-        if (userRoles == null || userRoles.isBlank()) {
-            throw new UnauthorizedException("Missing required admin role for CSV export");
-        }
-        boolean hasAdminRole = java.util.Arrays.stream(userRoles.split(","))
-                .map(String::trim)
-                .anyMatch(role -> "super_admin".equals(role) || "platform_staff".equals(role));
-        if (!hasAdminRole) {
-            throw new UnauthorizedException("Missing required admin role for CSV export");
-        }
+    private ResponseEntity<byte[]> buildDownloadResponse(OrderExportStorageService.StoredOrderExportFile storedFile) {
+        MediaType mediaType = MediaType.parseMediaType(
+                storedFile.contentType() == null || storedFile.contentType().isBlank()
+                        ? "text/csv"
+                        : storedFile.contentType()
+        );
+        return ResponseEntity.ok()
+                .contentType(mediaType)
+                .header("Content-Disposition", "attachment; filename=\"" + storedFile.fileName() + "\"")
+                .contentLength(storedFile.contentLength())
+                .body(storedFile.content());
     }
 
 }

@@ -38,6 +38,9 @@ class PromotionQuoteServiceTest {
     @Mock
     private CouponValidationService couponValidationService;
 
+    @Mock
+    private CustomerPromotionEligibilityService customerPromotionEligibilityService;
+
     private PromotionQuoteService service;
 
     private final Instant pricingAt = Instant.parse("2026-02-23T10:00:00Z");
@@ -49,7 +52,11 @@ class PromotionQuoteServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new PromotionQuoteService(promotionCampaignRepository, couponValidationService);
+        service = new PromotionQuoteService(
+                promotionCampaignRepository,
+                couponValidationService,
+                customerPromotionEligibilityService
+        );
     }
 
     @Test

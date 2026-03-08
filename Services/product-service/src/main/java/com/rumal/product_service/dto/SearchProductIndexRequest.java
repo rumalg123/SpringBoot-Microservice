@@ -25,6 +25,9 @@ public record SearchProductIndexRequest(
         long viewCount,
         long soldCount,
         boolean active,
+        Integer stockAvailable,
+        String stockStatus,
+        Boolean backorderable,
         List<VariationAttribute> variations,
         Instant createdAt,
         Instant updatedAt

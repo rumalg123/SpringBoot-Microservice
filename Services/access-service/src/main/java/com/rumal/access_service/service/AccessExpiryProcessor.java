@@ -1,13 +1,13 @@
 package com.rumal.access_service.service;
 
 import com.rumal.access_service.entity.AccessChangeAction;
-import com.rumal.access_service.entity.AccessChangeAudit;
+import com.rumal.access_service.entity.AccessAuditOutboxEvent;
 import com.rumal.access_service.entity.ApiKey;
 import com.rumal.access_service.entity.PlatformPermission;
 import com.rumal.access_service.entity.PlatformStaffAccess;
 import com.rumal.access_service.entity.VendorPermission;
 import com.rumal.access_service.entity.VendorStaffAccess;
-import com.rumal.access_service.repo.AccessChangeAuditRepository;
+import com.rumal.access_service.repo.AccessAuditOutboxRepository;
 import com.rumal.access_service.repo.ApiKeyRepository;
 import com.rumal.access_service.repo.PlatformStaffAccessRepository;
 import com.rumal.access_service.repo.VendorStaffAccessRepository;
@@ -30,6 +30,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -43,8 +44,10 @@ public class AccessExpiryProcessor {
     private final PlatformStaffAccessRepository platformStaffAccessRepository;
     private final VendorStaffAccessRepository vendorStaffAccessRepository;
     private final ApiKeyRepository apiKeyRepository;
-    private final AccessChangeAuditRepository accessChangeAuditRepository;
+    private final AccessAuditOutboxRepository accessAuditOutboxRepository;
     private final CacheManager cacheManager;
+    private final AccessAuditRequestContextResolver accessAuditRequestContextResolver;
+    private final AccessAuditPayloadSanitizer accessAuditPayloadSanitizer;
 
     @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 30)
     public int deactivateExpiredPlatformStaff() {
@@ -136,40 +139,62 @@ public class AccessExpiryProcessor {
     }
 
     private void recordPlatformExpiryAudit(PlatformStaffAccess staff) {
-        accessChangeAuditRepository.save(AccessChangeAudit.builder()
+        AccessAuditRequestContext context = accessAuditRequestContextResolver.resolve(null, null, "SCHEDULED_EXPIRY");
+        accessAuditOutboxRepository.save(AccessAuditOutboxEvent.builder()
                 .targetType("PLATFORM_STAFF")
                 .targetId(staff.getId())
                 .vendorId(null)
                 .keycloakUserId(staff.getKeycloakUserId())
-                .email(staff.getEmail())
+                .email(accessAuditPayloadSanitizer.sanitizeEmail(staff.getEmail()))
                 .action(AccessChangeAction.EXPIRED)
                 .activeAfter(false)
                 .deletedAfter(staff.isDeleted())
                 .permissionsSnapshot(joinPlatformPermissions(staff.getPermissions()))
                 .actorSub(null)
+                .actorTenantId(context.actorTenantId())
                 .actorRoles(null)
                 .actorType("SYSTEM")
                 .changeSource("SCHEDULED_EXPIRY")
                 .reason("Automated expiry")
+                .changeSet(accessAuditPayloadSanitizer.buildChangeSet(null, Map.of(
+                        "active", false,
+                        "deleted", staff.isDeleted(),
+                        "accessExpiresAt", staff.getAccessExpiresAt()
+                )))
+                .clientIp(context.clientIp())
+                .userAgent(context.userAgent())
+                .requestId(context.requestId())
+                .availableAt(Instant.now())
                 .build());
     }
 
     private void recordVendorExpiryAudit(VendorStaffAccess staff) {
-        accessChangeAuditRepository.save(AccessChangeAudit.builder()
+        AccessAuditRequestContext context = accessAuditRequestContextResolver.resolve(null, null, "SCHEDULED_EXPIRY");
+        accessAuditOutboxRepository.save(AccessAuditOutboxEvent.builder()
                 .targetType("VENDOR_STAFF")
                 .targetId(staff.getId())
                 .vendorId(staff.getVendorId())
                 .keycloakUserId(staff.getKeycloakUserId())
-                .email(staff.getEmail())
+                .email(accessAuditPayloadSanitizer.sanitizeEmail(staff.getEmail()))
                 .action(AccessChangeAction.EXPIRED)
                 .activeAfter(false)
                 .deletedAfter(staff.isDeleted())
                 .permissionsSnapshot(joinVendorPermissions(staff.getPermissions()))
                 .actorSub(null)
+                .actorTenantId(context.actorTenantId())
                 .actorRoles(null)
                 .actorType("SYSTEM")
                 .changeSource("SCHEDULED_EXPIRY")
                 .reason("Automated expiry")
+                .changeSet(accessAuditPayloadSanitizer.buildChangeSet(null, Map.of(
+                        "active", false,
+                        "deleted", staff.isDeleted(),
+                        "accessExpiresAt", staff.getAccessExpiresAt()
+                )))
+                .clientIp(context.clientIp())
+                .userAgent(context.userAgent())
+                .requestId(context.requestId())
+                .availableAt(Instant.now())
                 .build());
     }
 

@@ -48,6 +48,10 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
     private final RedisRateLimiter wishlistMeRateLimiter;
     private final RedisRateLimiter wishlistMeWriteRateLimiter;
     private final RedisRateLimiter adminOrdersRateLimiter;
+    private final RedisRateLimiter analyticsAdminRateLimiter;
+    private final RedisRateLimiter analyticsVendorRateLimiter;
+    private final RedisRateLimiter reportExportsCreateRateLimiter;
+    private final RedisRateLimiter reportExportsReadRateLimiter;
     private final RedisRateLimiter productsRateLimiter;
     private final RedisRateLimiter adminProductsRateLimiter;
     private final RedisRateLimiter adminProductsWriteRateLimiter;
@@ -91,6 +95,10 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
             @Qualifier("wishlistMeRateLimiter") RedisRateLimiter wishlistMeRateLimiter,
             @Qualifier("wishlistMeWriteRateLimiter") RedisRateLimiter wishlistMeWriteRateLimiter,
             @Qualifier("adminOrdersRateLimiter") RedisRateLimiter adminOrdersRateLimiter,
+            @Qualifier("analyticsAdminRateLimiter") RedisRateLimiter analyticsAdminRateLimiter,
+            @Qualifier("analyticsVendorRateLimiter") RedisRateLimiter analyticsVendorRateLimiter,
+            @Qualifier("reportExportsCreateRateLimiter") RedisRateLimiter reportExportsCreateRateLimiter,
+            @Qualifier("reportExportsReadRateLimiter") RedisRateLimiter reportExportsReadRateLimiter,
             @Qualifier("productsRateLimiter") RedisRateLimiter productsRateLimiter,
             @Qualifier("adminProductsRateLimiter") RedisRateLimiter adminProductsRateLimiter,
             @Qualifier("adminProductsWriteRateLimiter") RedisRateLimiter adminProductsWriteRateLimiter,
@@ -133,6 +141,10 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
         this.wishlistMeRateLimiter = wishlistMeRateLimiter;
         this.wishlistMeWriteRateLimiter = wishlistMeWriteRateLimiter;
         this.adminOrdersRateLimiter = adminOrdersRateLimiter;
+        this.analyticsAdminRateLimiter = analyticsAdminRateLimiter;
+        this.analyticsVendorRateLimiter = analyticsVendorRateLimiter;
+        this.reportExportsCreateRateLimiter = reportExportsCreateRateLimiter;
+        this.reportExportsReadRateLimiter = reportExportsReadRateLimiter;
         this.productsRateLimiter = productsRateLimiter;
         this.adminProductsRateLimiter = adminProductsRateLimiter;
         this.adminProductsWriteRateLimiter = adminProductsWriteRateLimiter;
@@ -245,7 +257,8 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
         if (path.startsWith("/orders") || path.startsWith("/cart/me/checkout")
                 || path.startsWith("/payments") || path.startsWith("/webhooks")
                 || "/customers/register".equals(path) || "/customers/register-identity".equals(path)
-                || path.startsWith("/auth") || path.startsWith("/personalization/events")) {
+                || path.startsWith("/auth") || path.startsWith("/personalization/events")
+                || path.startsWith("/analytics/") || path.startsWith("/admin/orders/export")) {
             return false;
         }
         return true;
@@ -323,6 +336,21 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
         if (("/wishlist/me".equals(path) || "/wishlist/me/items".equals(path) || path.startsWith("/wishlist/me/items/"))
                 && method == HttpMethod.GET) {
             return new Policy("wishlist-me-read", wishlistMeRateLimiter, userOrIpKeyResolver);
+        }
+        if (path.startsWith("/analytics/admin/")) {
+            return new Policy("analytics-admin", analyticsAdminRateLimiter, userOrIpKeyResolver);
+        }
+        if (path.startsWith("/analytics/vendor/")) {
+            return new Policy("analytics-vendor", analyticsVendorRateLimiter, userOrIpKeyResolver);
+        }
+        if ("/admin/orders/export".equals(path) && method == HttpMethod.GET) {
+            return new Policy("report-exports-create", reportExportsCreateRateLimiter, userOrIpKeyResolver);
+        }
+        if ("/admin/orders/exports".equals(path) && method == HttpMethod.POST) {
+            return new Policy("report-exports-create", reportExportsCreateRateLimiter, userOrIpKeyResolver);
+        }
+        if (path.startsWith("/admin/orders/exports/") && (method == HttpMethod.GET || method == HttpMethod.HEAD)) {
+            return new Policy("report-exports-read", reportExportsReadRateLimiter, userOrIpKeyResolver);
         }
         if ("/admin/orders".equals(path) || path.startsWith("/admin/orders/")) {
             return new Policy("admin-orders", adminOrdersRateLimiter, userOrIpKeyResolver);

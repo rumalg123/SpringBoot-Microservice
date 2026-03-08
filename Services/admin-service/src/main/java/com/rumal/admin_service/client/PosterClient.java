@@ -6,19 +6,12 @@ import io.github.resilience4j.retry.RetryRegistry;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.cloud.client.circuitbreaker.CircuitBreakerFactory;
 import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.core.io.ByteArrayResource;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
+import org.springframework.http.MediaType;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
-import org.springframework.web.multipart.MultipartFile;
-import java.io.IOException;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
@@ -102,66 +95,13 @@ public class PosterClient {
         });
     }
 
-    public Map<String, Object> generateImageNames(
+    public Map<String, Object> prepareImageUploads(
             Map<String, Object> request,
             String internalAuth,
             String userSub,
             String userRoles
     ) {
-        return jsonRequest("POST", "/admin/posters/images/names", request, internalAuth, userSub, userRoles);
-    }
-
-    public Map<String, Object> uploadImages(
-            List<MultipartFile> files,
-            List<String> keys,
-            String internalAuth,
-            String userSub,
-            String userRoles
-    ) {
-        return runPosterCall(() -> {
-            RestClient rc = restClient;
-            try {
-                MultiValueMap<String, Object> parts = new LinkedMultiValueMap<>();
-                for (MultipartFile file : files) {
-                    HttpHeaders partHeaders = new HttpHeaders();
-                    partHeaders.setContentType(MediaType.parseMediaType(
-                            file.getContentType() != null ? file.getContentType() : MediaType.APPLICATION_OCTET_STREAM_VALUE
-                    ));
-                    ByteArrayResource resource = new ByteArrayResource(file.getBytes()) {
-                        @Override
-                        public String getFilename() {
-                            return file.getOriginalFilename();
-                        }
-                    };
-                    parts.add("files", new HttpEntity<>(resource, partHeaders));
-                }
-                if (keys != null) {
-                    for (String key : keys) {
-                        if (key != null) {
-                            parts.add("keys", key);
-                        }
-                    }
-                }
-
-                RestClient.RequestBodySpec requestSpec = rc.post()
-                        .uri(buildUri("/admin/posters/images"))
-                        .header("X-Internal-Auth", internalAuth);
-                requestSpec = applyActorHeaders(requestSpec, userSub, userRoles);
-                Map<String, Object> response = requestSpec
-                        .contentType(MediaType.MULTIPART_FORM_DATA)
-                        .body(parts)
-                        .retrieve()
-                        .body(MAP_TYPE);
-                if (response == null) {
-                    throw new ServiceUnavailableException("Poster service returned an empty response", null);
-                }
-                return response;
-            } catch (RestClientResponseException ex) {
-                throw toDownstreamHttpException(ex);
-            } catch (IOException | RestClientException ex) {
-                throw new ServiceUnavailableException("Poster service unavailable. Try again later.", ex);
-            }
-        });
+        return jsonRequest("POST", "/admin/posters/images/presign", request, internalAuth, userSub, userRoles);
     }
 
     @SuppressWarnings("unchecked")

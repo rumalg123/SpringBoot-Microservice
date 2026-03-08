@@ -8,4 +8,6 @@ import java.util.UUID;
 
 public interface VendorOrderStatusAuditRepository extends JpaRepository<VendorOrderStatusAudit, UUID> {
     List<VendorOrderStatusAudit> findByVendorOrderIdOrderByCreatedAtDesc(UUID vendorOrderId);
+
+    boolean existsBySourceEventId(UUID sourceEventId);
 }

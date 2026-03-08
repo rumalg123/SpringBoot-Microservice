@@ -7,6 +7,7 @@ import com.rumal.inventory_service.entity.Warehouse;
 import com.rumal.inventory_service.entity.WarehouseType;
 import com.rumal.inventory_service.exception.ResourceNotFoundException;
 import com.rumal.inventory_service.exception.ValidationException;
+import com.rumal.inventory_service.repo.StockItemRepository;
 import com.rumal.inventory_service.repo.WarehouseRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -21,6 +22,8 @@ import java.util.UUID;
 public class WarehouseService {
 
     private final WarehouseRepository warehouseRepository;
+    private final StockItemRepository stockItemRepository;
+    private final InventoryProductSearchSyncOutboxService inventoryProductSearchSyncOutboxService;
 
     @Transactional(readOnly = true)
     public Page<WarehouseResponse> list(Pageable pageable, UUID vendorId, WarehouseType warehouseType, Boolean active) {
@@ -80,8 +83,15 @@ public class WarehouseService {
     @Transactional
     public WarehouseResponse updateStatus(UUID id, boolean active) {
         Warehouse warehouse = findById(id);
+        boolean statusChanged = warehouse.isActive() != active;
         warehouse.setActive(active);
-        return toResponse(warehouseRepository.save(warehouse));
+        Warehouse saved = warehouseRepository.save(warehouse);
+        if (statusChanged) {
+            inventoryProductSearchSyncOutboxService.enqueueAll(
+                    stockItemRepository.findDistinctProductIdsByWarehouseId(saved.getId())
+            );
+        }
+        return toResponse(saved);
     }
 
     @Transactional(readOnly = true)

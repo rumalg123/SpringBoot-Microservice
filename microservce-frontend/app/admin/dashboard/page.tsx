@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { useAuthSession } from "../../../lib/authSession";
 import { getErrorMessage } from "../../../lib/error";
+import { useAnalyticsLiveStream } from "../../../lib/hooks/useAnalyticsLiveStream";
 import AdminPageShell from "../../components/ui/AdminPageShell";
 
 import type {
@@ -43,6 +44,14 @@ export default function AdminDashboardPage() {
   const [periodDays, setPeriodDays] = useState(30);
 
   const api = session.apiClient;
+
+  useAnalyticsLiveStream({
+    enabled: session.status === "ready" && !!api && !!session.canViewAdmin,
+    url: `/api/gateway/analytics/admin/live/dashboard`,
+    onRefresh: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-dashboard"] });
+    },
+  });
 
   // Main dashboard query
   const { data: dash, isLoading: loading } = useQuery<DashboardData>({

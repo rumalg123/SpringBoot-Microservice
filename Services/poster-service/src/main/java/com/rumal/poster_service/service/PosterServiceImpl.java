@@ -13,6 +13,7 @@ import com.rumal.poster_service.exception.ResourceNotFoundException;
 import com.rumal.poster_service.exception.ValidationException;
 import com.rumal.poster_service.repo.PosterRepository;
 import com.rumal.poster_service.repo.PosterVariantRepository;
+import com.rumal.poster_service.storage.PosterImageStorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
@@ -42,6 +43,7 @@ public class PosterServiceImpl implements PosterService {
     private final PosterRepository posterRepository;
     private final PosterVariantRepository posterVariantRepository;
     private final CacheManager cacheManager;
+    private final PosterImageStorageService posterImageStorageService;
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
@@ -261,9 +263,9 @@ public class PosterServiceImpl implements PosterService {
         poster.setSlug(resolvedSlug);
         poster.setPlacement(request.placement());
         poster.setSize(request.size());
-        poster.setDesktopImage(normalizeImageKey(request.desktopImage(), "desktopImage"));
-        poster.setMobileImage(StringUtils.hasText(request.mobileImage()) ? normalizeImageKey(request.mobileImage(), "mobileImage") : null);
-        poster.setTabletImage(StringUtils.hasText(request.tabletImage()) ? normalizeImageKey(request.tabletImage(), "tabletImage") : null);
+        poster.setDesktopImage(requireValidatedImageKey(request.desktopImage(), "desktopImage"));
+        poster.setMobileImage(optionalValidatedImageKey(request.mobileImage(), "mobileImage"));
+        poster.setTabletImage(optionalValidatedImageKey(request.tabletImage(), "tabletImage"));
         poster.setSrcsetDesktop(trimToNull(request.srcsetDesktop()));
         poster.setSrcsetMobile(trimToNull(request.srcsetMobile()));
         poster.setSrcsetTablet(trimToNull(request.srcsetTablet()));
@@ -363,6 +365,18 @@ public class PosterServiceImpl implements PosterService {
             throw new ValidationException("Invalid image key format for " + fieldName);
         }
         return normalized;
+    }
+
+    private String requireValidatedImageKey(String value, String fieldName) {
+        String normalized = normalizeImageKey(value, fieldName);
+        return posterImageStorageService.assertImageReady(normalized);
+    }
+
+    private String optionalValidatedImageKey(String value, String fieldName) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        return requireValidatedImageKey(value, fieldName);
     }
 
     private String trimToNull(String value) {
@@ -638,9 +652,9 @@ public class PosterServiceImpl implements PosterService {
     private void applyVariantRequest(PosterVariant variant, UpsertPosterVariantRequest request) {
         variant.setVariantName(request.variantName().trim());
         variant.setWeight(request.weight() == null ? 50 : request.weight());
-        variant.setDesktopImage(trimToNull(request.desktopImage()));
-        variant.setMobileImage(trimToNull(request.mobileImage()));
-        variant.setTabletImage(trimToNull(request.tabletImage()));
+        variant.setDesktopImage(optionalValidatedImageKey(request.desktopImage(), "variant.desktopImage"));
+        variant.setMobileImage(optionalValidatedImageKey(request.mobileImage(), "variant.mobileImage"));
+        variant.setTabletImage(optionalValidatedImageKey(request.tabletImage(), "variant.tabletImage"));
         variant.setSrcsetDesktop(trimToNull(request.srcsetDesktop()));
         variant.setSrcsetMobile(trimToNull(request.srcsetMobile()));
         variant.setSrcsetTablet(trimToNull(request.srcsetTablet()));

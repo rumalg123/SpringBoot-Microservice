@@ -98,6 +98,15 @@ public class ProductDocument {
     @Field(type = FieldType.Boolean)
     private boolean active;
 
+    @Field(type = FieldType.Integer)
+    private Integer stockAvailable;
+
+    @Field(type = FieldType.Keyword)
+    private String stockStatus;
+
+    @Field(type = FieldType.Boolean)
+    private Boolean backorderable;
+
     @Field(type = FieldType.Nested)
     private List<SpecificationEntry> specifications;
 

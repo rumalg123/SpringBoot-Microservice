@@ -3,10 +3,13 @@ package com.rumal.vendor_service.controller;
 import com.rumal.vendor_service.dto.RequestVerificationRequest;
 import com.rumal.vendor_service.dto.UpdateVendorSelfServiceRequest;
 import com.rumal.vendor_service.dto.UpsertVendorPayoutConfigRequest;
+import com.rumal.vendor_service.dto.VendorMediaPrepareUploadRequest;
+import com.rumal.vendor_service.dto.VendorMediaPrepareUploadResponse;
 import com.rumal.vendor_service.dto.VendorPayoutConfigResponse;
 import com.rumal.vendor_service.dto.VendorResponse;
 import com.rumal.vendor_service.exception.UnauthorizedException;
 import com.rumal.vendor_service.security.InternalRequestVerifier;
+import com.rumal.vendor_service.service.VendorMediaStorageService;
 import com.rumal.vendor_service.service.VendorService;
 import com.rumal.vendor_service.service.VendorSelfAccessScopeService;
 import jakarta.validation.Valid;
@@ -30,6 +33,7 @@ public class VendorSelfServiceController {
     private final VendorService vendorService;
     private final InternalRequestVerifier internalRequestVerifier;
     private final VendorSelfAccessScopeService vendorSelfAccessScopeService;
+    private final VendorMediaStorageService vendorMediaStorageService;
 
     @GetMapping
     public VendorResponse getMyVendor(
@@ -39,8 +43,8 @@ public class VendorSelfServiceController {
             @RequestParam(required = false) UUID vendorId
     ) {
         verifyAuth(internalAuth, userSub);
-        vendorSelfAccessScopeService.assertCanViewVendor(userSub, userRoles, internalAuth, vendorId);
-        return vendorService.getVendorForKeycloakUser(userSub, vendorId);
+        UUID resolvedVendorId = vendorSelfAccessScopeService.resolveVendorIdForView(userSub, userRoles, internalAuth, vendorId);
+        return vendorService.getVendorForKeycloakUser(userSub, resolvedVendorId);
     }
 
     @PutMapping
@@ -52,8 +56,21 @@ public class VendorSelfServiceController {
             @Valid @RequestBody UpdateVendorSelfServiceRequest request
     ) {
         verifyAuth(internalAuth, userSub);
-        vendorSelfAccessScopeService.assertCanManageVendorSettings(userSub, userRoles, internalAuth, vendorId);
-        return vendorService.updateVendorSelfService(userSub, vendorId, request);
+        UUID resolvedVendorId = vendorSelfAccessScopeService.resolveVendorIdForSettingsManage(userSub, userRoles, internalAuth, vendorId);
+        return vendorService.updateVendorSelfService(userSub, resolvedVendorId, request);
+    }
+
+    @PostMapping("/media/presign")
+    public VendorMediaPrepareUploadResponse prepareVendorMediaUploads(
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestParam(required = false) UUID vendorId,
+            @Valid @RequestBody VendorMediaPrepareUploadRequest request
+    ) {
+        verifyAuth(internalAuth, userSub);
+        UUID resolvedVendorId = vendorSelfAccessScopeService.resolveVendorIdForSettingsManage(userSub, userRoles, internalAuth, vendorId);
+        return vendorMediaStorageService.prepareUploads(resolvedVendorId, request);
     }
 
     @GetMapping("/payout-config")
@@ -64,8 +81,8 @@ public class VendorSelfServiceController {
             @RequestParam(required = false) UUID vendorId
     ) {
         verifyAuth(internalAuth, userSub);
-        vendorSelfAccessScopeService.assertCanViewVendor(userSub, userRoles, internalAuth, vendorId);
-        return vendorService.getPayoutConfig(userSub, vendorId);
+        UUID resolvedVendorId = vendorSelfAccessScopeService.resolveVendorIdForOwner(userSub, userRoles, vendorId);
+        return vendorService.getPayoutConfig(userSub, resolvedVendorId);
     }
 
     @PutMapping("/payout-config")
@@ -77,8 +94,8 @@ public class VendorSelfServiceController {
             @Valid @RequestBody UpsertVendorPayoutConfigRequest request
     ) {
         verifyAuth(internalAuth, userSub);
-        vendorSelfAccessScopeService.assertCanManageVendorSettings(userSub, userRoles, internalAuth, vendorId);
-        return vendorService.upsertPayoutConfig(userSub, vendorId, request);
+        UUID resolvedVendorId = vendorSelfAccessScopeService.resolveVendorIdForOwner(userSub, userRoles, vendorId);
+        return vendorService.upsertPayoutConfig(userSub, resolvedVendorId, request);
     }
 
     @PostMapping("/request-verification")
@@ -90,8 +107,8 @@ public class VendorSelfServiceController {
             @Valid @RequestBody(required = false) RequestVerificationRequest request
     ) {
         verifyAuth(internalAuth, userSub);
-        vendorSelfAccessScopeService.assertCanManageVendorSettings(userSub, userRoles, internalAuth, vendorId);
-        return vendorService.requestVerification(userSub, vendorId, request);
+        UUID resolvedVendorId = vendorSelfAccessScopeService.resolveVendorIdForSettingsManage(userSub, userRoles, internalAuth, vendorId);
+        return vendorService.requestVerification(userSub, resolvedVendorId, request);
     }
 
     @PostMapping("/stop-orders")
@@ -102,8 +119,8 @@ public class VendorSelfServiceController {
             @RequestParam(required = false) UUID vendorId
     ) {
         verifyAuth(internalAuth, userSub);
-        vendorSelfAccessScopeService.assertCanManageVendorOrders(userSub, userRoles, internalAuth, vendorId);
-        return vendorService.selfServiceStopOrders(userSub, vendorId);
+        UUID resolvedVendorId = vendorSelfAccessScopeService.resolveVendorIdForOrderManage(userSub, userRoles, internalAuth, vendorId);
+        return vendorService.selfServiceStopOrders(userSub, resolvedVendorId);
     }
 
     @PostMapping("/resume-orders")
@@ -114,8 +131,8 @@ public class VendorSelfServiceController {
             @RequestParam(required = false) UUID vendorId
     ) {
         verifyAuth(internalAuth, userSub);
-        vendorSelfAccessScopeService.assertCanManageVendorOrders(userSub, userRoles, internalAuth, vendorId);
-        return vendorService.selfServiceResumeOrders(userSub, vendorId);
+        UUID resolvedVendorId = vendorSelfAccessScopeService.resolveVendorIdForOrderManage(userSub, userRoles, internalAuth, vendorId);
+        return vendorService.selfServiceResumeOrders(userSub, resolvedVendorId);
     }
 
     private void verifyAuth(String internalAuth, String userSub) {

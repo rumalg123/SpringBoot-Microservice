@@ -18,10 +18,15 @@ public record AccessChangeAuditResponse(
         boolean deletedAfter,
         List<String> permissions,
         String actorSub,
+        String actorTenantId,
         String actorRoles,
         String actorType,
         String changeSource,
         String reason,
+        String changeSet,
+        String clientIp,
+        String userAgent,
+        String requestId,
         Instant createdAt
 ) {
 }

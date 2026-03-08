@@ -1,6 +1,7 @@
 package com.rumal.order_service.controller;
 
 import com.rumal.order_service.dto.CustomerProductPurchaseCheckResponse;
+import com.rumal.order_service.dto.CustomerPromotionEligibilityResponse;
 import com.rumal.order_service.dto.VendorOrderDeletionCheckResponse;
 import com.rumal.order_service.security.InternalRequestVerifier;
 import com.rumal.order_service.service.OrderService;
@@ -40,5 +41,14 @@ public class InternalOrderController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         return orderService.checkCustomerPurchasedProduct(customerId, productId);
+    }
+
+    @GetMapping("/customers/{customerId}/promotion-eligibility")
+    public CustomerPromotionEligibilityResponse getCustomerPromotionEligibility(
+            @RequestHeader(INTERNAL_HEADER) String internalAuth,
+            @PathVariable UUID customerId
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        return orderService.getCustomerPromotionEligibility(customerId);
     }
 }

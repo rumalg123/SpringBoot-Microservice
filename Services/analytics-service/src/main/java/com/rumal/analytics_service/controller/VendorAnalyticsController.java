@@ -4,10 +4,15 @@ import com.rumal.analytics_service.client.AccessScopeClient;
 import com.rumal.analytics_service.dto.VendorDashboardAnalytics;
 import com.rumal.analytics_service.exception.UnauthorizedException;
 import com.rumal.analytics_service.security.InternalRequestVerifier;
+import com.rumal.analytics_service.service.AnalyticsLiveStreamService;
 import com.rumal.analytics_service.service.VendorAnalyticsService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.LinkedHashSet;
 import java.util.Locale;
@@ -25,6 +30,7 @@ public class VendorAnalyticsController {
     private final InternalRequestVerifier internalRequestVerifier;
     private final VendorAnalyticsService vendorAnalyticsService;
     private final AccessScopeClient accessScopeClient;
+    private final AnalyticsLiveStreamService analyticsLiveStreamService;
 
     @GetMapping("/{vendorId}/dashboard")
     public VendorDashboardAnalytics vendorDashboard(
@@ -34,6 +40,20 @@ public class VendorAnalyticsController {
             @PathVariable UUID vendorId) {
         verifyVendorAccess(internalAuth, userSub, userRoles, vendorId);
         return vendorAnalyticsService.getVendorDashboard(vendorId);
+    }
+
+    @GetMapping(path = "/{vendorId}/live/dashboard", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public ResponseEntity<SseEmitter> liveVendorDashboard(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
+            @PathVariable UUID vendorId) {
+        verifyVendorAccess(internalAuth, userSub, userRoles, vendorId);
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .header("X-Accel-Buffering", "no")
+                .contentType(MediaType.TEXT_EVENT_STREAM)
+                .body(analyticsLiveStreamService.registerVendorStream(vendorId));
     }
 
     private void verifyVendorAccess(String internalAuth, String userSub, String userRoles, UUID requestedVendorId) {

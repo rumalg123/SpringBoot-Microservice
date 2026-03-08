@@ -78,6 +78,19 @@ resilience4j:
           - com.rumal.promotion_service.exception.ResourceNotFoundException
           - com.rumal.promotion_service.exception.ValidationException
           - com.rumal.promotion_service.exception.UnauthorizedException
+      orderService:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 20
+        minimumNumberOfCalls: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 3
+        slowCallRateThreshold: 70
+        slowCallDurationThreshold: 3000
+        ignoreExceptions:
+          - com.rumal.promotion_service.exception.ResourceNotFoundException
+          - com.rumal.promotion_service.exception.ValidationException
+          - com.rumal.promotion_service.exception.UnauthorizedException
   retry:
     instances:
       vendorService:
@@ -109,6 +122,16 @@ resilience4j:
           - java.io.IOException
           - org.springframework.web.client.ResourceAccessException
           - org.springframework.web.client.HttpServerErrorException
+      orderService:
+        maxAttempts: 3
+        waitDuration: 300ms
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - java.io.IOException
+          - org.springframework.web.client.ResourceAccessException
+          - org.springframework.web.client.HttpServerErrorException
+          - com.rumal.promotion_service.exception.ServiceUnavailableException
 
 management:
   endpoints:
@@ -134,6 +157,8 @@ coupon:
     max-ttl-seconds: ${COUPON_RESERVATION_MAX_TTL_SECONDS:1800}
 
 promotion:
+  customer:
+    new-user-max-account-age-days: ${PROMOTION_CUSTOMER_NEW_USER_MAX_ACCOUNT_AGE_DAYS:30}
   sample-data:
     enabled: ${PROMOTION_SAMPLE_DATA_ENABLED:false}
     vendor-id: ${PROMOTION_SAMPLE_VENDOR_ID:}

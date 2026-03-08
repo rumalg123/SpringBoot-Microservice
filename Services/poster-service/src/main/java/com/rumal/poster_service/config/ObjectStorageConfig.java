@@ -10,6 +10,7 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import java.net.URI;
 import java.util.Locale;
@@ -27,6 +28,20 @@ public class ObjectStorageConfig {
                         AwsBasicCredentials.create(properties.accessKey(), properties.secretKey())
                 ))
                 .httpClientBuilder(UrlConnectionHttpClient.builder())
+                .region(Region.of(properties.region()))
+                .endpointOverride(URI.create(endpoint))
+                .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
+                .build();
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "object-storage", name = "enabled", havingValue = "true")
+    public S3Presigner objectStorageS3Presigner(ObjectStorageProperties properties) {
+        String endpoint = normalizeEndpoint(properties.endpoint());
+        return S3Presigner.builder()
+                .credentialsProvider(StaticCredentialsProvider.create(
+                        AwsBasicCredentials.create(properties.accessKey(), properties.secretKey())
+                ))
                 .region(Region.of(properties.region()))
                 .endpointOverride(URI.create(endpoint))
                 .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())

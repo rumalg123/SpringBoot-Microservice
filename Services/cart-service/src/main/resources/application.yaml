@@ -171,6 +171,8 @@ cart:
     key-prefix: ${CART_IDEMPOTENCY_KEY_PREFIX:cs:idem:v1::}
     pending-ttl: ${CART_IDEMPOTENCY_PENDING_TTL:30s}
     response-ttl: ${CART_IDEMPOTENCY_RESPONSE_TTL:12h}
+  lock:
+    ttl: ${CART_LOCK_TTL:5s}
 
   expiry:
     ttl: ${CART_EXPIRY_TTL:30d}

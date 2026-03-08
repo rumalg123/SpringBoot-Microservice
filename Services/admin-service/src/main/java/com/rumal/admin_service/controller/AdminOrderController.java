@@ -2,7 +2,9 @@ package com.rumal.admin_service.controller;
 
 import com.rumal.admin_service.dto.BulkOperationResult;
 import com.rumal.admin_service.dto.BulkUpdateOrderStatusRequest;
+import com.rumal.admin_service.dto.CreateOrderExportRequest;
 import com.rumal.admin_service.dto.OrderResponse;
+import com.rumal.admin_service.dto.OrderExportJobResponse;
 import com.rumal.admin_service.dto.OrderStatusAuditResponse;
 import com.rumal.admin_service.dto.PageResponse;
 import com.rumal.admin_service.dto.UpdateOrderNoteRequest;
@@ -14,8 +16,9 @@ import com.rumal.admin_service.service.AdminActorScopeService;
 import com.rumal.admin_service.service.AdminAuditService;
 import com.rumal.admin_service.service.AdminOrderService;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -163,27 +166,94 @@ public class AdminOrderController {
     }
 
     @GetMapping("/export")
-    public void exportOrders(
+    public ResponseEntity<OrderExportJobResponse> exportOrders(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @RequestParam(defaultValue = "csv") String format,
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) String customerEmail,
             @RequestParam(required = false) String createdAfter,
-            @RequestParam(required = false) String createdBefore,
-            HttpServletResponse response
+            @RequestParam(required = false) String createdBefore
     ) {
         internalRequestVerifier.verify(internalAuth);
-        adminActorScopeService.assertCanReadOrders(userSub, userRoles, internalAuth);
-        String csv = adminOrderService.exportOrdersCsv(status, createdAfter, createdBefore, internalAuth);
-        response.setContentType("text/csv");
-        response.setHeader("Content-Disposition", "attachment; filename=orders-export.csv");
-        try {
-            response.getWriter().write(csv != null ? csv : "");
-            response.getWriter().flush();
-        } catch (java.io.IOException e) {
-            throw new RuntimeException("Failed to write CSV export", e);
-        }
+        UUID scopedVendorId = adminActorScopeService.resolveScopedVendorIdForOrderAccess(userSub, userRoles, null, internalAuth);
+        OrderExportJobResponse exportJob = adminOrderService.createOrderExport(
+                new CreateOrderExportRequest(
+                        format,
+                        status,
+                        customerEmail,
+                        parseInstant(createdAfter),
+                        parseInstant(createdBefore),
+                        scopedVendorId
+                ),
+                internalAuth,
+                userSub,
+                userRoles
+        );
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(exportJob);
+    }
+
+    @PostMapping("/exports")
+    public ResponseEntity<OrderExportJobResponse> createOrderExport(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
+            @RequestBody(required = false) CreateOrderExportRequest request
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        CreateOrderExportRequest safeRequest = request == null
+                ? new CreateOrderExportRequest("csv", null, null, null, null, null)
+                : request;
+        UUID scopedVendorId = adminActorScopeService.resolveScopedVendorIdForOrderAccess(
+                userSub,
+                userRoles,
+                safeRequest.vendorId(),
+                internalAuth
+        );
+        OrderExportJobResponse exportJob = adminOrderService.createOrderExport(
+                new CreateOrderExportRequest(
+                        safeRequest.format(),
+                        safeRequest.status(),
+                        safeRequest.customerEmail(),
+                        safeRequest.createdAfter(),
+                        safeRequest.createdBefore(),
+                        scopedVendorId
+                ),
+                internalAuth,
+                userSub,
+                userRoles
+        );
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(exportJob);
+    }
+
+    @GetMapping("/exports/{jobId}")
+    public OrderExportJobResponse getOrderExportJob(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
+            @PathVariable UUID jobId
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        OrderExportJobResponse exportJob = adminOrderService.getOrderExportJob(jobId, internalAuth);
+        adminActorScopeService.assertCanAccessOrderExport(userSub, userRoles, exportJob.vendorId(), internalAuth);
+        return exportJob;
+    }
+
+    @GetMapping("/exports/{jobId}/download")
+    public ResponseEntity<byte[]> downloadOrderExport(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
+            @PathVariable UUID jobId
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        OrderExportJobResponse exportJob = adminOrderService.getOrderExportJob(jobId, internalAuth);
+        adminActorScopeService.assertCanAccessOrderExport(userSub, userRoles, exportJob.vendorId(), internalAuth);
+        ResponseEntity<byte[]> response = adminOrderService.downloadOrderExport(jobId, internalAuth);
+        return ResponseEntity.status(response.getStatusCode())
+                .headers(response.getHeaders())
+                .body(response.getBody());
     }
 
     private String extractClientIp(HttpServletRequest request) {
@@ -192,5 +262,12 @@ public class AdminOrderController {
             return xff.split(",")[0].trim();
         }
         return request.getRemoteAddr();
+    }
+
+    private Instant parseInstant(String rawValue) {
+        if (rawValue == null || rawValue.isBlank()) {
+            return null;
+        }
+        return Instant.parse(rawValue.trim());
     }
 }

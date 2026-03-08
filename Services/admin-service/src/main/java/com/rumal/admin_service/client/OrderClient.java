@@ -1,6 +1,8 @@
 package com.rumal.admin_service.client;
 
+import com.rumal.admin_service.dto.CreateOrderExportRequest;
 import com.rumal.admin_service.dto.OrderResponse;
+import com.rumal.admin_service.dto.OrderExportJobResponse;
 import com.rumal.admin_service.dto.OrderStatusAuditResponse;
 import com.rumal.admin_service.dto.PageResponse;
 import com.rumal.admin_service.dto.UpdateOrderNoteRequest;
@@ -15,6 +17,7 @@ import io.github.resilience4j.retry.RetryRegistry;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.cloud.client.circuitbreaker.CircuitBreakerFactory;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
@@ -239,31 +242,74 @@ public class OrderClient {
         });
     }
 
-    public String exportOrdersCsv(String status, String createdAfter, String createdBefore, String internalAuth) {
+    public OrderExportJobResponse createOrderExport(
+            CreateOrderExportRequest request,
+            String internalAuth,
+            String userSub,
+            String userRoles
+    ) {
+        return runOrderCall(() -> {
+            RestClient rc = restClient;
+            try {
+                Map<String, Object> payload = new java.util.LinkedHashMap<>();
+                payload.put("format", request.format());
+                if (request.status() != null) {
+                    payload.put("status", request.status());
+                }
+                if (request.customerEmail() != null) {
+                    payload.put("customerEmail", request.customerEmail());
+                }
+                if (request.createdAfter() != null) {
+                    payload.put("createdAfter", request.createdAfter());
+                }
+                if (request.createdBefore() != null) {
+                    payload.put("createdBefore", request.createdBefore());
+                }
+                if (request.vendorId() != null) {
+                    payload.put("vendorId", request.vendorId());
+                }
+                if (userSub != null && !userSub.isBlank()) {
+                    payload.put("requestedBy", userSub);
+                }
+                if (userRoles != null && !userRoles.isBlank()) {
+                    payload.put("requestedRoles", userRoles);
+                }
+                return rc.post()
+                        .uri("http://order-service/orders/exports")
+                        .header("X-Internal-Auth", internalAuth)
+                        .body(payload)
+                        .retrieve()
+                        .body(OrderExportJobResponse.class);
+            } catch (RestClientException ex) {
+                throw new ServiceUnavailableException("Order service unavailable. Try again later.", ex);
+            }
+        });
+    }
+
+    public OrderExportJobResponse getOrderExportJob(UUID jobId, String internalAuth) {
         return runOrderCall(() -> {
             RestClient rc = restClient;
             try {
                 return rc.get()
-                        .uri(uriBuilder -> {
-                            UriBuilder builder = uriBuilder
-                                    .scheme("http")
-                                    .host("order-service")
-                                    .path("/orders/export")
-                                    .queryParam("format", "csv");
-                            if (status != null && !status.isBlank()) {
-                                builder = builder.queryParam("status", status);
-                            }
-                            if (createdAfter != null && !createdAfter.isBlank()) {
-                                builder = builder.queryParam("createdAfter", createdAfter);
-                            }
-                            if (createdBefore != null && !createdBefore.isBlank()) {
-                                builder = builder.queryParam("createdBefore", createdBefore);
-                            }
-                            return builder.build();
-                        })
+                        .uri("http://order-service/orders/exports/{id}", jobId)
                         .header("X-Internal-Auth", internalAuth)
                         .retrieve()
-                        .body(String.class);
+                        .body(OrderExportJobResponse.class);
+            } catch (RestClientException ex) {
+                throw new ServiceUnavailableException("Order service unavailable. Try again later.", ex);
+            }
+        });
+    }
+
+    public ResponseEntity<byte[]> downloadOrderExport(UUID jobId, String internalAuth) {
+        return runOrderCall(() -> {
+            RestClient rc = restClient;
+            try {
+                return rc.get()
+                        .uri("http://order-service/orders/exports/{id}/download", jobId)
+                        .header("X-Internal-Auth", internalAuth)
+                        .retrieve()
+                        .toEntity(byte[].class);
             } catch (RestClientException ex) {
                 throw new ServiceUnavailableException("Order service unavailable. Try again later.", ex);
             }

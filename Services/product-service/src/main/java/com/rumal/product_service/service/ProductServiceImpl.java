@@ -8,6 +8,7 @@ import com.rumal.product_service.dto.BulkDeleteRequest;
 import com.rumal.product_service.dto.BulkOperationResult;
 import com.rumal.product_service.dto.BulkPriceUpdateRequest;
 import com.rumal.product_service.dto.CsvImportResult;
+import com.rumal.product_service.dto.ProductMutationAuditResponse;
 import com.rumal.product_service.dto.ProductResponse;
 import com.rumal.product_service.dto.ProductSpecificationResponse;
 import com.rumal.product_service.dto.ProductSummaryResponse;
@@ -18,6 +19,8 @@ import com.rumal.product_service.dto.UpsertProductRequest;
 import com.rumal.product_service.dto.UpsertProductSpecificationRequest;
 import com.rumal.product_service.entity.ApprovalStatus;
 import com.rumal.product_service.entity.Category;
+import com.rumal.product_service.entity.ProductMutationAudit;
+import com.rumal.product_service.entity.ProductMutationAuditOutboxEvent;
 import com.rumal.product_service.entity.ProductCatalogRead;
 import com.rumal.product_service.entity.Product;
 import com.rumal.product_service.entity.ProductSpecification;
@@ -29,6 +32,8 @@ import com.rumal.product_service.exception.UnauthorizedException;
 import com.rumal.product_service.exception.ValidationException;
 import com.rumal.product_service.repo.ProductCatalogReadRepository;
 import com.rumal.product_service.repo.CategoryRepository;
+import com.rumal.product_service.repo.ProductMutationAuditOutboxRepository;
+import com.rumal.product_service.repo.ProductMutationAuditRepository;
 import com.rumal.product_service.repo.ProductRepository;
 import com.rumal.product_service.repo.ProductSpecificationRepository;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +41,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -43,6 +49,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
@@ -82,6 +89,10 @@ public class ProductServiceImpl implements ProductService {
     private final ProductContentSanitizer productContentSanitizer;
     private final ProductSearchSyncOutboxService productSearchSyncOutboxService;
     private final ProductInventorySyncOutboxService productInventorySyncOutboxService;
+    private final ProductMutationAuditRepository productMutationAuditRepository;
+    private final ProductMutationAuditOutboxRepository productMutationAuditOutboxRepository;
+    private final ProductAuditRequestContextResolver productAuditRequestContextResolver;
+    private final ProductAuditPayloadSanitizer productAuditPayloadSanitizer;
 
     @Lazy
     @Autowired
@@ -89,6 +100,9 @@ public class ProductServiceImpl implements ProductService {
 
     @Value("${internal.auth.shared-secret:}")
     private String internalAuthSharedSecret;
+
+    @Value("${product.audit.outbox.retry-base-delay-seconds:15}")
+    private long productAuditRetryBaseDelaySeconds;
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
@@ -103,10 +117,13 @@ public class ProductServiceImpl implements ProductService {
         applyCreateWorkflow(product);
         Product saved = productRepository.save(product);
         saveSpecifications(saved, request.specifications());
+        Map<String, Object> afterState = buildProductAuditState(saved);
         productCatalogReadModelProjector.upsert(saved);
         queueProjectionSync(saved.getId());
         productCacheVersionService.bumpAllProductReadCaches();
-        return toResponse(saved);
+        ProductResponse response = toResponse(saved);
+        recordProductMutation(saved, "CREATE", "Product created", null, null, "ADMIN_API", null, afterState);
+        return response;
     }
 
     @Override
@@ -128,11 +145,14 @@ public class ProductServiceImpl implements ProductService {
         validateVariationAgainstParent(parent, variation);
         Product saved = productRepository.save(variation);
         saveSpecifications(saved, request.specifications());
+        Map<String, Object> afterState = buildProductAuditState(saved);
         productCatalogReadModelProjector.upsert(saved);
         queueProjectionSync(saved.getId());
         productCatalogReadModelProjector.refreshParentVariationFlag(parent.getId());
         productCacheVersionService.bumpAllProductReadCaches();
-        return toResponse(saved);
+        ProductResponse response = toResponse(saved);
+        recordProductMutation(saved, "CREATE_VARIATION", "Variation product created", null, null, "ADMIN_API", null, afterState);
+        return response;
     }
 
     @Override
@@ -370,10 +390,19 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    public Page<ProductMutationAuditResponse> listMutationAudit(UUID productId, Pageable pageable) {
+        productRepository.findById(productId)
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + productId));
+        return productMutationAuditRepository.findByProductIdOrderByCreatedAtDesc(productId, pageable)
+                .map(this::toProductMutationAuditResponse);
+    }
+
+    @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public ProductResponse update(UUID id, UpsertProductRequest request, ProductWorkflowActor actor) {
         Product product = getActiveEntityById(id);
         assertVendorVerified(product.getVendorId());
+        Map<String, Object> beforeState = buildProductAuditState(product);
         ApprovalStatus originalApprovalStatus = product.getApprovalStatus();
         UUID parentId = product.getParentProductId();
         Product parent = null;
@@ -393,6 +422,7 @@ public class ProductServiceImpl implements ProductService {
         }
         Product saved = productRepository.save(product);
         saveSpecifications(saved, request.specifications());
+        Map<String, Object> afterState = buildProductAuditState(saved);
         productCatalogReadModelProjector.upsert(saved);
         queueProjectionSync(saved.getId());
         if (parentId != null) {
@@ -400,17 +430,21 @@ public class ProductServiceImpl implements ProductService {
         }
         productCacheVersionService.evictProductById(saved.getId(), saved.getSlug());
         productCacheVersionService.bumpListCaches();
-        return toResponse(saved);
+        ProductResponse response = toResponse(saved);
+        recordProductMutation(saved, "UPDATE", "Product updated", null, null, "ADMIN_API", beforeState, afterState);
+        return response;
     }
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public void softDelete(UUID id) {
         Product product = getActiveEntityById(id);
+        Map<String, Object> beforeState = buildProductAuditState(product);
         product.setDeleted(true);
         product.setDeletedAt(Instant.now());
         product.setActive(false);
         Product saved = productRepository.save(product);
+        Map<String, Object> afterState = buildProductAuditState(saved);
         productCatalogReadModelProjector.upsert(saved);
         queueProjectionSync(saved.getId());
         if (saved.getParentProductId() != null) {
@@ -418,6 +452,7 @@ public class ProductServiceImpl implements ProductService {
         }
         productCacheVersionService.evictProductById(saved.getId(), saved.getSlug());
         productCacheVersionService.bumpListCaches();
+        recordProductMutation(saved, "SOFT_DELETE", "Product soft deleted", null, null, "ADMIN_API", beforeState, afterState);
     }
 
     @Override
@@ -428,10 +463,12 @@ public class ProductServiceImpl implements ProductService {
         if (!product.isDeleted()) {
             throw new ValidationException("Product is not soft deleted: " + id);
         }
+        Map<String, Object> beforeState = buildProductAuditState(product);
         product.setDeleted(false);
         product.setDeletedAt(null);
         product.setActive(true);
         Product saved = productRepository.save(product);
+        Map<String, Object> afterState = buildProductAuditState(saved);
         productCatalogReadModelProjector.upsert(saved);
         queueProjectionSync(saved.getId());
         if (saved.getParentProductId() != null) {
@@ -439,7 +476,9 @@ public class ProductServiceImpl implements ProductService {
         }
         productCacheVersionService.evictProductById(saved.getId(), saved.getSlug());
         productCacheVersionService.bumpListCaches();
-        return toResponse(saved);
+        ProductResponse response = toResponse(saved);
+        recordProductMutation(saved, "RESTORE", "Product restored", null, null, "ADMIN_API", beforeState, afterState);
+        return response;
     }
 
     @Override
@@ -475,6 +514,7 @@ public class ProductServiceImpl implements ProductService {
             throw new UnauthorizedException("vendor_staff cannot submit products for review");
         }
         Product product = getActiveEntityById(productId);
+        Map<String, Object> beforeState = buildProductAuditState(product);
         ApprovalStatus current = product.getApprovalStatus();
         if (current != ApprovalStatus.DRAFT && current != ApprovalStatus.REJECTED) {
             throw new ValidationException("Only DRAFT or REJECTED products can be submitted for review");
@@ -482,44 +522,55 @@ public class ProductServiceImpl implements ProductService {
         product.setApprovalStatus(ApprovalStatus.PENDING_REVIEW);
         product.setRejectionReason(null);
         Product saved = productRepository.save(product);
+        Map<String, Object> afterState = buildProductAuditState(saved);
         productCatalogReadModelProjector.upsert(saved);
         queueProjectionSync(saved.getId());
         productCacheVersionService.evictProductById(saved.getId(), saved.getSlug());
         productCacheVersionService.bumpListCaches();
-        return toResponse(saved);
+        ProductResponse response = toResponse(saved);
+        recordProductMutation(saved, "SUBMIT_FOR_REVIEW", "Product submitted for review", null, null, "ADMIN_API", beforeState, afterState);
+        return response;
     }
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public ProductResponse approveProduct(UUID productId) {
         Product product = getActiveEntityById(productId);
+        Map<String, Object> beforeState = buildProductAuditState(product);
         if (product.getApprovalStatus() != ApprovalStatus.PENDING_REVIEW) {
             throw new ValidationException("Only PENDING_REVIEW products can be approved");
         }
         product.setApprovalStatus(ApprovalStatus.APPROVED);
         Product saved = productRepository.save(product);
+        Map<String, Object> afterState = buildProductAuditState(saved);
         productCatalogReadModelProjector.upsert(saved);
         queueProjectionSync(saved.getId());
         productCacheVersionService.evictProductById(saved.getId(), saved.getSlug());
         productCacheVersionService.bumpListCaches();
-        return toResponse(saved);
+        ProductResponse response = toResponse(saved);
+        recordProductMutation(saved, "APPROVE", "Product approved", null, null, "ADMIN_API", beforeState, afterState);
+        return response;
     }
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public ProductResponse rejectProduct(UUID productId, String reason) {
         Product product = getActiveEntityById(productId);
+        Map<String, Object> beforeState = buildProductAuditState(product);
         if (product.getApprovalStatus() != ApprovalStatus.PENDING_REVIEW) {
             throw new ValidationException("Only PENDING_REVIEW products can be rejected");
         }
         product.setApprovalStatus(ApprovalStatus.REJECTED);
         product.setRejectionReason(reason);
         Product saved = productRepository.save(product);
+        Map<String, Object> afterState = buildProductAuditState(saved);
         productCatalogReadModelProjector.upsert(saved);
         queueProjectionSync(saved.getId());
         productCacheVersionService.evictProductById(saved.getId(), saved.getSlug());
         productCacheVersionService.bumpListCaches();
-        return toResponse(saved);
+        ProductResponse response = toResponse(saved);
+        recordProductMutation(saved, "REJECT", reason, null, null, "ADMIN_API", beforeState, afterState);
+        return response;
     }
 
     @Override
@@ -541,15 +592,18 @@ public class ProductServiceImpl implements ProductService {
                     errors.add("Access denied for product: " + id);
                     continue;
                 }
+                Map<String, Object> beforeState = buildProductAuditState(product);
                 product.setDeleted(true);
                   product.setDeletedAt(Instant.now());
                   product.setActive(false);
                   Product saved = productRepository.save(product);
+                  Map<String, Object> afterState = buildProductAuditState(saved);
                   productCatalogReadModelProjector.upsert(saved);
                   queueProjectionSync(saved.getId());
                   if (saved.getParentProductId() != null) {
                       productCatalogReadModelProjector.refreshParentVariationFlag(saved.getParentProductId());
                   }
+                  recordProductMutation(saved, "BULK_DELETE", "Product deleted via bulk operation", null, null, "ADMIN_API", beforeState, afterState);
                 success++;
             } catch (Exception ex) {
                 errors.add("Failed to delete product " + id + ": " + ex.getMessage());
@@ -588,11 +642,14 @@ public class ProductServiceImpl implements ProductService {
                     errors.add("discountedPrice cannot be greater than regularPrice for product " + item.productId());
                     continue;
                 }
+                Map<String, Object> beforeState = buildProductAuditState(product);
                 product.setRegularPrice(item.regularPrice());
                   product.setDiscountedPrice(item.discountedPrice());
                   Product saved = productRepository.save(product);
+                  Map<String, Object> afterState = buildProductAuditState(saved);
                   productCatalogReadModelProjector.upsert(saved);
                   queueProjectionSync(saved.getId());
+                  recordProductMutation(saved, "BULK_PRICE_UPDATE", "Product pricing updated via bulk operation", null, null, "ADMIN_API", beforeState, afterState);
                   success++;
               } catch (Exception ex) {
                   errors.add("Failed to update price for product " + item.productId() + ": " + ex.getMessage());
@@ -631,12 +688,15 @@ public class ProductServiceImpl implements ProductService {
                     errors.add("Access denied for product: " + id);
                     continue;
                 }
+                  Map<String, Object> beforeState = buildProductAuditState(product);
                   Set<Category> updatedCategories = new java.util.LinkedHashSet<>(product.getCategories());
                   updatedCategories.add(targetCategory);
                   product.setCategories(updatedCategories);
                   Product saved = productRepository.save(product);
+                  Map<String, Object> afterState = buildProductAuditState(saved);
                   productCatalogReadModelProjector.upsert(saved);
                   queueProjectionSync(saved.getId());
+                  recordProductMutation(saved, "BULK_CATEGORY_REASSIGN", "Product categories updated via bulk operation", null, null, "ADMIN_API", beforeState, afterState);
                   success++;
               } catch (Exception ex) {
                   errors.add("Failed to reassign category for product " + id + ": " + ex.getMessage());
@@ -1583,6 +1643,195 @@ public class ProductServiceImpl implements ProductService {
         int allowedBaseLength = Math.max(1, maxLen - suffixPart.length());
         String base = slug.length() > allowedBaseLength ? slug.substring(0, allowedBaseLength) : slug;
         return base + suffixPart;
+    }
+
+    @Transactional(readOnly = false, propagation = Propagation.REQUIRES_NEW)
+    public void processMutationAuditOutboxBatch(int batchSize) {
+        List<ProductMutationAuditOutboxEvent> events = productMutationAuditOutboxRepository
+                .findByProcessedAtIsNullAndAvailableAtLessThanEqualOrderByAvailableAtAscCreatedAtAsc(
+                        Instant.now(),
+                        PageRequest.of(0, Math.max(1, batchSize))
+                );
+        for (ProductMutationAuditOutboxEvent event : events) {
+            processMutationAuditOutboxEvent(event.getId());
+        }
+    }
+
+    @Transactional(readOnly = false, propagation = Propagation.REQUIRES_NEW)
+    public void processMutationAuditOutboxEvent(UUID eventId) {
+        ProductMutationAuditOutboxEvent event = productMutationAuditOutboxRepository.findById(eventId).orElse(null);
+        if (event == null || event.getProcessedAt() != null) {
+            return;
+        }
+        try {
+            if (!productMutationAuditRepository.existsBySourceEventId(event.getId())) {
+                productMutationAuditRepository.save(ProductMutationAudit.builder()
+                        .sourceEventId(event.getId())
+                        .productId(event.getProductId())
+                        .vendorId(event.getVendorId())
+                        .action(defaultValue(event.getAction(), "UNKNOWN"))
+                        .actorSub(defaultValue(event.getActorSub(), "system"))
+                        .actorTenantId(trimToNull(event.getActorTenantId()))
+                        .actorRoles(trimToNull(event.getActorRoles()))
+                        .actorType(defaultValue(event.getActorType(), "SYSTEM"))
+                        .changeSource(defaultValue(event.getChangeSource(), "SYSTEM"))
+                        .details(trimToNull(event.getDetails()))
+                        .changeSet(trimToNull(event.getChangeSet()))
+                        .clientIp(trimToNull(event.getClientIp()))
+                        .userAgent(trimToNull(event.getUserAgent()))
+                        .requestId(trimToNull(event.getRequestId()))
+                        .build());
+            }
+            markProductMutationAuditOutboxProcessed(event);
+        } catch (DataIntegrityViolationException duplicate) {
+            markProductMutationAuditOutboxProcessed(event);
+        } catch (Exception ex) {
+            event.setAttemptCount(event.getAttemptCount() + 1);
+            event.setLastError(truncate(ex.getMessage(), 500));
+            event.setAvailableAt(Instant.now().plusSeconds(resolveProductAuditRetryDelaySeconds(event.getAttemptCount())));
+            productMutationAuditOutboxRepository.save(event);
+        }
+    }
+
+    private void recordProductMutation(
+            Product product,
+            String action,
+            String details,
+            String actorSub,
+            String actorRoles,
+            String changeSource,
+            Object beforeState,
+            Object afterState
+    ) {
+        if (product == null || product.getId() == null) {
+            return;
+        }
+        ProductAuditRequestContext context = productAuditRequestContextResolver.resolve(actorSub, actorRoles, changeSource);
+        productMutationAuditOutboxRepository.save(ProductMutationAuditOutboxEvent.builder()
+                .productId(product.getId())
+                .vendorId(product.getVendorId())
+                .action(defaultValue(action, "UNKNOWN"))
+                .actorSub(defaultValue(context.actorSub(), "system"))
+                .actorTenantId(trimToNull(context.actorTenantId()))
+                .actorRoles(trimToNull(context.actorRoles()))
+                .actorType(defaultValue(context.actorType(), "SYSTEM"))
+                .changeSource(defaultValue(context.changeSource(), "SYSTEM"))
+                .details(productAuditPayloadSanitizer.sanitizeDetails(details))
+                .changeSet(productAuditPayloadSanitizer.buildChangeSet(beforeState, afterState))
+                .clientIp(trimToNull(context.clientIp()))
+                .userAgent(trimToNull(context.userAgent()))
+                .requestId(trimToNull(context.requestId()))
+                .availableAt(Instant.now())
+                .build());
+    }
+
+    private void markProductMutationAuditOutboxProcessed(ProductMutationAuditOutboxEvent event) {
+        event.setProcessedAt(Instant.now());
+        event.setLastError(null);
+        productMutationAuditOutboxRepository.save(event);
+    }
+
+    private long resolveProductAuditRetryDelaySeconds(int attemptCount) {
+        long base = Math.max(5L, productAuditRetryBaseDelaySeconds);
+        long multiplier = Math.max(1L, attemptCount);
+        return Math.min(900L, base * multiplier * multiplier);
+    }
+
+    private ProductMutationAuditResponse toProductMutationAuditResponse(ProductMutationAudit audit) {
+        return new ProductMutationAuditResponse(
+                audit.getId(),
+                audit.getProductId(),
+                audit.getVendorId(),
+                audit.getAction(),
+                audit.getActorSub(),
+                audit.getActorTenantId(),
+                audit.getActorRoles(),
+                audit.getActorType(),
+                audit.getChangeSource(),
+                audit.getDetails(),
+                audit.getChangeSet(),
+                audit.getClientIp(),
+                audit.getUserAgent(),
+                audit.getRequestId(),
+                audit.getCreatedAt()
+        );
+    }
+
+    private Map<String, Object> buildProductAuditState(Product product) {
+        if (product == null) {
+            return null;
+        }
+        List<Map<String, Object>> specifications = productSpecificationRepository
+                .findByProductIdOrderByDisplayOrderAsc(product.getId())
+                .stream()
+                .map(spec -> Map.<String, Object>of(
+                        "attributeKey", spec.getAttributeKey(),
+                        "attributeValue", spec.getAttributeValue(),
+                        "displayOrder", spec.getDisplayOrder()
+                ))
+                .toList();
+        Map<String, Object> state = new java.util.LinkedHashMap<>();
+        state.put("id", product.getId());
+        state.put("parentProductId", product.getParentProductId());
+        state.put("vendorId", product.getVendorId());
+        state.put("name", product.getName());
+        state.put("slug", product.getSlug());
+        state.put("shortDescription", product.getShortDescription());
+        state.put("description", product.getDescription());
+        state.put("brandName", product.getBrandName());
+        state.put("images", List.copyOf(product.getImages()));
+        state.put("thumbnailUrl", product.getThumbnailUrl());
+        state.put("regularPrice", product.getRegularPrice());
+        state.put("discountedPrice", product.getDiscountedPrice());
+        state.put("sellingPrice", resolveSellingPrice(product));
+        state.put("categoryIds", product.getCategories().stream().map(Category::getId).toList());
+        state.put("categoryNames", product.getCategories().stream().map(Category::getName).toList());
+        state.put("productType", product.getProductType() == null ? null : product.getProductType().name());
+        state.put("digital", product.isDigital());
+        state.put("variations", product.getVariations().stream()
+                .map(variation -> Map.<String, Object>of("name", variation.getName(), "value", variation.getValue()))
+                .toList());
+        state.put("sku", product.getSku());
+        state.put("weightGrams", product.getWeightGrams());
+        state.put("lengthCm", product.getLengthCm());
+        state.put("widthCm", product.getWidthCm());
+        state.put("heightCm", product.getHeightCm());
+        state.put("metaTitle", product.getMetaTitle());
+        state.put("metaDescription", product.getMetaDescription());
+        state.put("approvalStatus", product.getApprovalStatus() == null ? null : product.getApprovalStatus().name());
+        state.put("rejectionReason", product.getRejectionReason());
+        state.put("specifications", specifications);
+        state.put("bundledProductIds", product.getBundledProductIds() == null ? List.of() : List.copyOf(product.getBundledProductIds()));
+        state.put("viewCount", product.getViewCount());
+        state.put("soldCount", product.getSoldCount());
+        state.put("active", product.isActive());
+        state.put("deleted", product.isDeleted());
+        state.put("deletedAt", product.getDeletedAt());
+        state.put("createdAt", product.getCreatedAt());
+        state.put("updatedAt", product.getUpdatedAt());
+        return state;
+    }
+
+    private String defaultValue(String value, String fallback) {
+        return StringUtils.hasText(value) ? value.trim() : fallback;
+    }
+
+    private String trimToNull(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        return value.trim();
+    }
+
+    private String truncate(String value, int maxLength) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String normalized = value.trim();
+        if (normalized.length() <= maxLength) {
+            return normalized;
+        }
+        return normalized.substring(0, maxLength);
     }
 
     private ProductResponse toResponse(Product p) {

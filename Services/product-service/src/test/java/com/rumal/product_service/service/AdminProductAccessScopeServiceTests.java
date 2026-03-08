@@ -65,7 +65,7 @@ class AdminProductAccessScopeServiceTests {
         UUID productId = UUID.randomUUID();
         UUID vendorId = UUID.randomUUID();
 
-        when(productRepository.findById(productId)).thenReturn(Optional.of(Product.builder()
+        when(productRepository.findByIdAndVendorIdIn(productId, Set.of(vendorId))).thenReturn(Optional.of(Product.builder()
                 .id(productId)
                 .vendorId(vendorId)
                 .productType(ProductType.SINGLE)
@@ -89,7 +89,7 @@ class AdminProductAccessScopeServiceTests {
         UUID parentId = UUID.randomUUID();
         UUID vendorId = UUID.randomUUID();
 
-        when(productRepository.findById(parentId)).thenReturn(Optional.of(Product.builder()
+        when(productRepository.findByIdAndVendorIdIn(parentId, Set.of(vendorId))).thenReturn(Optional.of(Product.builder()
                 .id(parentId)
                 .vendorId(vendorId)
                 .productType(ProductType.PARENT)
@@ -112,6 +112,27 @@ class AdminProductAccessScopeServiceTests {
         );
 
         assertEquals(vendorId, scoped.vendorId());
+    }
+
+    @Test
+    void assertCanManageProductRejectsVendorScopedLookupOutsideAllowedVendorSet() {
+        UUID productId = UUID.randomUUID();
+        UUID allowedVendorId = UUID.randomUUID();
+
+        when(productRepository.findByIdAndVendorIdIn(productId, Set.of(allowedVendorId))).thenReturn(Optional.empty());
+
+        AdminProductAccessScopeService.ProductMutationAuthority authority =
+                new AdminProductAccessScopeService.ProductMutationAuthority(
+                        false,
+                        false,
+                        false,
+                        Set.of(allowedVendorId),
+                        Set.of(),
+                        Set.of(allowedVendorId)
+                );
+
+        assertThrows(com.rumal.product_service.exception.ResourceNotFoundException.class,
+                () -> service.assertCanManageProduct(authority, productId));
     }
 
     private UpsertProductRequest request(ProductType productType, UUID vendorId) {

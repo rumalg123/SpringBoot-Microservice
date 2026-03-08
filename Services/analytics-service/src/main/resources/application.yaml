@@ -24,7 +24,7 @@ logging:
     level: "%5p [${spring.application.name},traceId=%X{traceId},spanId=%X{spanId}]"
 
 cache:
-  clear-on-startup: ${CACHE_CLEAR_ON_STARTUP:true}
+  clear-on-startup: ${CACHE_CLEAR_ON_STARTUP:false}
   key-prefix: ${CACHE_KEY_PREFIX:analytics:v1::}
   dashboard-summary-ttl: ${CACHE_DASHBOARD_SUMMARY_TTL:5m}
   revenue-summary-ttl: ${CACHE_REVENUE_SUMMARY_TTL:5m}
@@ -36,6 +36,15 @@ cache:
   review-analytics-ttl: ${CACHE_REVIEW_ANALYTICS_TTL:10m}
   vendor-analytics-ttl: ${CACHE_VENDOR_ANALYTICS_TTL:5m}
   customer-insights-ttl: ${CACHE_CUSTOMER_INSIGHTS_TTL:5m}
+
+analytics:
+  cache-warmup:
+    initial-delay-ms: ${ANALYTICS_CACHE_WARMUP_INITIAL_DELAY_MS:5000}
+    interval-ms: ${ANALYTICS_CACHE_WARMUP_INTERVAL_MS:300000}
+  live:
+    redis-channel: ${ANALYTICS_LIVE_REDIS_CHANNEL:analytics:live:dashboard:v1}
+    emitter-timeout-ms: ${ANALYTICS_LIVE_EMITTER_TIMEOUT_MS:0}
+    heartbeat-interval-ms: ${ANALYTICS_LIVE_HEARTBEAT_INTERVAL_MS:25000}
 
 http:
   client:

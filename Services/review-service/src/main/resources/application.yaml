@@ -163,3 +163,13 @@ review.idempotency:
   key-header-name: Idempotency-Key
   key-prefix: rs:idem:v1
 
+review:
+  summary:
+    refresh:
+      initial-delay: ${REVIEW_SUMMARY_REFRESH_INITIAL_DELAY:PT20S}
+      fixed-delay: ${REVIEW_SUMMARY_REFRESH_FIXED_DELAY:PT5S}
+      backfill-initial-delay: ${REVIEW_SUMMARY_BACKFILL_INITIAL_DELAY:PT30S}
+      backfill-interval: ${REVIEW_SUMMARY_BACKFILL_INTERVAL:PT6H}
+      failure-backoff: ${REVIEW_SUMMARY_FAILURE_BACKOFF:PT30S}
+      batch-size: ${REVIEW_SUMMARY_REFRESH_BATCH_SIZE:50}
+

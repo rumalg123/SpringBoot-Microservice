@@ -62,7 +62,7 @@ export default function CartPage() {
   const session = useAuthSession();
   const {
     status: sessionStatus, isAuthenticated, canViewAdmin,
-    ensureCustomer, apiClient, profile, logout, emailVerified, resendVerificationEmail,
+    ensureCustomer, apiClient, profile, logout, emailVerified, resendVerificationEmail, login,
   } = session;
 
   // --- UI form state ---
@@ -85,7 +85,7 @@ export default function CartPage() {
 
   // --- React Query: data fetching ---
   const { data: cart = emptyCart, isLoading: cartLoading } = useCart(apiClient);
-  const { data: addresses = [], isLoading: addressLoading } = useAddresses(apiClient);
+  const { data: addresses = [], isLoading: addressLoading } = useAddresses(isAuthenticated ? apiClient : null);
 
   // --- React Query: mutations ---
   const updateCartItemMut = useUpdateCartItem(apiClient);
@@ -99,9 +99,9 @@ export default function CartPage() {
   // --- Auth guard & customer bootstrap ---
   useEffect(() => {
     if (sessionStatus !== "ready") return;
-    if (!isAuthenticated) { router.replace("/"); return; }
+    if (!isAuthenticated) return;
     void ensureCustomer();
-  }, [sessionStatus, isAuthenticated, router, ensureCustomer]);
+  }, [sessionStatus, isAuthenticated, ensureCustomer]);
 
   // --- Restore checkout preferences on load ---
   useEffect(() => {
@@ -333,6 +333,10 @@ export default function CartPage() {
 
   const checkout = () => {
     if (!apiClient || busy || cart.items.length === 0 || checkoutInFlightRef.current) return;
+    if (!isAuthenticated) {
+      void login("/cart");
+      return;
+    }
     const resolvedShipping = shippingAddressId.trim();
     const resolvedBilling = (billingSameAsShipping ? shippingAddressId : billingAddressId).trim();
     if (!resolvedShipping || !resolvedBilling) { toast.error("Select shipping and billing addresses"); return; }
@@ -348,9 +352,16 @@ export default function CartPage() {
       {
         onSuccess: async (data) => {
           setPreview(null);
+          trackPurchase(cart.items.map((item) => ({ id: item.productId, price: item.unitPrice })));
+          if (Number(data.grandTotal ?? 0) <= 0) {
+            const message = "Order placed. No payment required.";
+            setStatus(message);
+            toast.success(message);
+            router.push("/orders");
+            return;
+          }
           setStatus("Order placed. Redirecting to payment...");
           toast.success(`Order placed! Total: ${money(data.grandTotal)}`);
-          trackPurchase(cart.items.map((item) => ({ id: item.productId, price: item.unitPrice })), session.token);
           try {
             let lastError: unknown = null;
             for (let attempt = 1; attempt <= 4; attempt += 1) {
@@ -417,8 +428,6 @@ export default function CartPage() {
       </div>
     );
   }
-
-  if (!isAuthenticated) return null;
 
   return (
     <div className="min-h-screen bg-bg">
@@ -534,6 +543,7 @@ export default function CartPage() {
           <div ref={checkoutRef}>
           <CheckoutSidebar
             cart={cart}
+            isAuthenticated={isAuthenticated}
             preview={preview}
             couponCode={couponCode}
             onCouponChange={(code) => { setCouponCode(code); setCouponError(""); }}

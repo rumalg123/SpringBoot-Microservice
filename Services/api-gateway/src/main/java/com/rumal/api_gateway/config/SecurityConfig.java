@@ -57,6 +57,8 @@ public class SecurityConfig {
                         .pathMatchers(HttpMethod.GET, "/categories", "/categories/**").permitAll()
                         .pathMatchers(HttpMethod.GET, "/posters", "/posters/**").permitAll()
                         .pathMatchers(HttpMethod.POST, "/posters/*/click", "/posters/*/impression").permitAll()
+                        .pathMatchers(HttpMethod.POST, "/auth/backchannel-logout").permitAll()
+                        .pathMatchers("/internal/auth/**").permitAll()
                         .pathMatchers("/reviews/vendor/**").access(this::hasVendorAccess)
                         .pathMatchers("/reviews/me", "/reviews/me/**").access(this::hasCustomerAccess)
                         .pathMatchers(HttpMethod.GET, "/reviews", "/reviews/**").permitAll()
@@ -69,12 +71,15 @@ public class SecurityConfig {
                         .pathMatchers("/orders/vendor/me", "/orders/vendor/me/**").access(this::hasVendorAccess)
                         .pathMatchers("/payments/vendor/me", "/payments/vendor/me/**").access(this::hasVendorAccess)
                         .pathMatchers("/inventory/vendor/me", "/inventory/vendor/me/**").access(this::hasVendorAccess)
+                        .pathMatchers("/vendors/me/payout-config", "/vendors/me/payout-config/**").access(this::hasVendorAdminAccess)
                         .pathMatchers("/vendors/me", "/vendors/me/**").access(this::hasVendorAccess)
                         .pathMatchers(HttpMethod.GET, "/vendors", "/vendors/**").permitAll()
                         .pathMatchers("/actuator/health", "/actuator/info", "/customers/register", "/fallback/**").permitAll()
                         .pathMatchers("/auth/logout", "/auth/session", "/auth/resend-verification").authenticated()
                         .pathMatchers(HttpMethod.GET, "/wishlist/shared", "/wishlist/shared/**").permitAll()
-                        .pathMatchers("/customers/me", "/customers/me/**", "/customers/register-identity", "/orders/me", "/orders/me/**", "/cart/me", "/cart/me/**", "/wishlist/me", "/wishlist/me/**", "/promotions/me", "/promotions/me/**", "/payments/me", "/payments/me/**")
+                        .pathMatchers("/cart/me/checkout", "/cart/me/checkout/**").access(this::hasCustomerAccess)
+                        .pathMatchers("/cart/me", "/cart/me/**").access(this::hasCustomerOrAnonymousAccess)
+                        .pathMatchers("/customers/me", "/customers/me/**", "/customers/register-identity", "/orders/me", "/orders/me/**", "/wishlist/me", "/wishlist/me/**", "/promotions/me", "/promotions/me/**", "/payments/me", "/payments/me/**")
                         .access(this::hasCustomerAccess)
                         .pathMatchers(HttpMethod.GET, "/promotions", "/promotions/**").permitAll()
                         .pathMatchers(HttpMethod.POST, "/personalization/sessions/merge").access(this::hasCustomerAccess)
@@ -195,6 +200,19 @@ public class SecurityConfig {
                         keycloakRoleClaims.isEmailVerified(jwt)
                                 && (keycloakRoleClaims.hasRole(jwt, "vendor_admin")
                                 || keycloakRoleClaims.hasRole(jwt, "vendor_staff"))
+                ))
+                .defaultIfEmpty(new AuthorizationDecision(false));
+    }
+
+    private Mono<AuthorizationResult> hasVendorAdminAccess(Mono<Authentication> authentication, AuthorizationContext context) {
+        return authentication
+                .filter(Authentication::isAuthenticated)
+                .filter(auth -> auth instanceof JwtAuthenticationToken)
+                .cast(JwtAuthenticationToken.class)
+                .map(JwtAuthenticationToken::getToken)
+                .map(jwt -> (AuthorizationResult) new AuthorizationDecision(
+                        keycloakRoleClaims.isEmailVerified(jwt)
+                                && keycloakRoleClaims.hasRole(jwt, "vendor_admin")
                 ))
                 .defaultIfEmpty(new AuthorizationDecision(false));
     }

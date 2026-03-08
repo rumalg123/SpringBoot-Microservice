@@ -12,8 +12,13 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
+import org.springframework.util.StringUtils;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.client.RestClient;
 
+import jakarta.servlet.http.HttpServletRequest;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
@@ -24,6 +29,12 @@ import java.util.HexFormat;
 public class HttpClientConfig {
 
     private static final String HMAC_ALGO = "HmacSHA256";
+    private static final String[] FORWARDED_AUDIT_HEADERS = {
+            "X-Request-Id",
+            "X-Audit-Client-Ip",
+            "X-Audit-User-Agent",
+            "X-Actor-Tenant-Id"
+    };
 
     @Value("${http.client.connect-timeout-seconds:2}")
     private int connectTimeoutSeconds;
@@ -76,9 +87,29 @@ public class HttpClientConfig {
         return RestClient.builder()
                 .requestFactory(requestFactory)
                 .requestInterceptor((request, body, execution) -> {
+                    propagateAuditHeaders(request);
                     applyInternalHmacHeaders(request, body);
                     return execution.execute(request, body);
                 });
+    }
+
+    private void propagateAuditHeaders(org.springframework.http.HttpRequest request) {
+        RequestAttributes requestAttributes = RequestContextHolder.getRequestAttributes();
+        if (!(requestAttributes instanceof ServletRequestAttributes servletRequestAttributes)) {
+            return;
+        }
+
+        HttpServletRequest currentRequest = servletRequestAttributes.getRequest();
+        if (currentRequest == null) {
+            return;
+        }
+
+        for (String headerName : FORWARDED_AUDIT_HEADERS) {
+            String value = currentRequest.getHeader(headerName);
+            if (StringUtils.hasText(value) && !StringUtils.hasText(request.getHeaders().getFirst(headerName))) {
+                request.getHeaders().set(headerName, value.trim());
+            }
+        }
     }
 
     private void applyInternalHmacHeaders(org.springframework.http.HttpRequest request, byte[] body) {

@@ -46,7 +46,17 @@ public class InternalAccessController {
             @PathVariable String keycloakSessionId
     ) {
         internalRequestVerifier.verify(internalAuth);
-        accessService.revokeSessionByKeycloakSessionId(keycloakSessionId);
+        accessService.revokeSessionByKeycloakSessionIdFromGateway(keycloakSessionId);
+    }
+
+    @DeleteMapping("/sessions/by-keycloak-user/{keycloakUserId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void revokeAllSessionsByKeycloakUserId(
+            @RequestHeader(INTERNAL_HEADER) String internalAuth,
+            @PathVariable String keycloakUserId
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        accessService.revokeAllSessionsFromGateway(keycloakUserId);
     }
 
     @GetMapping("/platform/by-keycloak/{keycloakUserId}")

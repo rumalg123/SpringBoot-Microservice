@@ -81,7 +81,8 @@ public class InternalRequestVerifier {
         return hasText(request.getHeader("X-User-Sub"))
                 || hasText(request.getHeader("X-User-Roles"))
                 || hasText(request.getHeader("X-User-Email-Verified"))
-                || hasText(request.getHeader("X-Caller-Vendor-Id"));
+                || hasText(request.getHeader("X-Caller-Vendor-Id"))
+                || hasText(request.getHeader("X-Guest-Cart-Id"));
     }
 
     private boolean hasText(String value) {

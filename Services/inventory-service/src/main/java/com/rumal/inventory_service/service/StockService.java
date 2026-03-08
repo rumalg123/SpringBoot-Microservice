@@ -37,6 +37,7 @@ public class StockService {
     private final CatalogProductService catalogProductService;
     private final WarehouseService warehouseService;
     private final OrderClient orderClient;
+    private final InventoryProductSearchSyncOutboxService inventoryProductSearchSyncOutboxService;
     private final org.springframework.transaction.PlatformTransactionManager txManager;
 
     @Transactional(readOnly = true)
@@ -68,6 +69,8 @@ public class StockService {
 
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public StockReservationResponse reserveForOrder(UUID orderId, List<StockCheckRequest> items, Instant expiresAt) {
+        assertReservationRequest(orderId, items, expiresAt);
+
         List<StockReservation> existing = stockReservationRepository
                 .findByOrderIdAndStatusWithStockItem(orderId, ReservationStatus.RESERVED);
         if (!existing.isEmpty()) {
@@ -81,8 +84,9 @@ public class StockService {
 
         List<ReservationItemResponse> reservationItems = new ArrayList<>();
         Instant now = Instant.now();
+        Set<UUID> touchedProductIds = new LinkedHashSet<>();
 
-        for (StockCheckRequest req : items) {
+        for (StockCheckRequest req : sortRequestsForLocking(items)) {
             List<StockItem> stockItems = stockItemRepository.findByProductIdForUpdateOrderByAvailableDesc(req.productId());
             if (stockItems.isEmpty()) {
                 throw new InsufficientStockException("No stock records found for product: " + req.productId());
@@ -111,15 +115,8 @@ public class StockService {
 
                 int quantityBefore = stockItem.getQuantityAvailable();
                 stockItem.setQuantityReserved(stockItem.getQuantityReserved() + allocate);
-                stockItem.recalculateAvailable();
-
-                if (stockItem.getQuantityAvailable() < 0 && !stockItem.isBackorderable()) {
-                    throw new InsufficientStockException(
-                            "Reservation would result in negative available stock for product "
-                            + req.productId() + " in warehouse " + stockItem.getWarehouse().getId());
-                }
-
-                stockItem.recalculateStatus();
+                recalculateAndValidateStockState(stockItem, "Reservation would result in an invalid stock state for product "
+                        + req.productId() + " in warehouse " + stockItem.getWarehouse().getId());
                 stockItemRepository.save(stockItem);
 
                 StockReservation reservation = StockReservation.builder()
@@ -142,6 +139,7 @@ public class StockService {
                         reservation.getId(), req.productId(),
                         stockItem.getWarehouse().getId(), allocate
                 ));
+                touchedProductIds.add(req.productId());
 
                 remaining -= allocate;
             }
@@ -154,6 +152,7 @@ public class StockService {
             }
         }
 
+        inventoryProductSearchSyncOutboxService.enqueueAll(touchedProductIds);
         return new StockReservationResponse(orderId, "RESERVED", reservationItems, expiresAt);
     }
 
@@ -177,7 +176,9 @@ public class StockService {
         }
 
         Instant now = Instant.now();
-        for (StockReservation reservation : reservations) {
+        List<StockReservation> orderedReservations = sortReservationsForLocking(reservations);
+        Set<UUID> touchedProductIds = new LinkedHashSet<>();
+        for (StockReservation reservation : orderedReservations) {
             StockItem stockItem = stockItemRepository.findByIdForUpdate(reservation.getStockItem().getId())
                     .orElseThrow(() -> new ResourceNotFoundException("StockItem not found: " + reservation.getStockItem().getId()));
 
@@ -194,8 +195,8 @@ public class StockService {
             int quantityBefore = stockItem.getQuantityAvailable();
             stockItem.setQuantityOnHand(stockItem.getQuantityOnHand() - reservation.getQuantityReserved());
             stockItem.setQuantityReserved(stockItem.getQuantityReserved() - reservation.getQuantityReserved());
-            stockItem.recalculateAvailable();
-            stockItem.recalculateStatus();
+            recalculateAndValidateStockState(stockItem,
+                    "Reservation confirmation would result in an invalid stock state for order " + orderId);
             stockItemRepository.save(stockItem);
 
             reservation.setStatus(ReservationStatus.CONFIRMED);
@@ -206,8 +207,10 @@ public class StockService {
                     quantityBefore, stockItem.getQuantityAvailable(),
                     "order", orderId, "system", "payment-confirmation",
                     "Confirmed for order " + orderId);
+            touchedProductIds.add(reservation.getProductId());
         }
 
+        inventoryProductSearchSyncOutboxService.enqueueAll(touchedProductIds);
         log.info("Confirmed {} reservations for order {}", reservations.size(), orderId);
     }
 
@@ -222,14 +225,16 @@ public class StockService {
         }
 
         Instant now = Instant.now();
-        for (StockReservation reservation : reservations) {
+        List<StockReservation> orderedReservations = sortReservationsForLocking(reservations);
+        Set<UUID> touchedProductIds = new LinkedHashSet<>();
+        for (StockReservation reservation : orderedReservations) {
             StockItem stockItem = stockItemRepository.findByIdForUpdate(reservation.getStockItem().getId())
                     .orElseThrow(() -> new ResourceNotFoundException("StockItem not found: " + reservation.getStockItem().getId()));
 
             int quantityBefore = stockItem.getQuantityAvailable();
             stockItem.setQuantityReserved(stockItem.getQuantityReserved() - reservation.getQuantityReserved());
-            stockItem.recalculateAvailable();
-            stockItem.recalculateStatus();
+            recalculateAndValidateStockState(stockItem,
+                    "Reservation release would result in an invalid stock state for order " + orderId);
             stockItemRepository.save(stockItem);
 
             reservation.setStatus(ReservationStatus.RELEASED);
@@ -241,8 +246,10 @@ public class StockService {
                     quantityBefore, stockItem.getQuantityAvailable(),
                     "order", orderId, "system", "order-service",
                     "Released: " + reason);
+            touchedProductIds.add(reservation.getProductId());
         }
 
+        inventoryProductSearchSyncOutboxService.enqueueAll(touchedProductIds);
         log.info("Released {} reservations for order {} (reason: {})", reservations.size(), orderId, reason);
     }
 
@@ -259,14 +266,15 @@ public class StockService {
         }
 
         Instant now = Instant.now();
-        for (StockReservation reservation : reserved) {
+        Set<UUID> touchedProductIds = new LinkedHashSet<>();
+        for (StockReservation reservation : sortReservationsForLocking(reserved)) {
             StockItem stockItem = stockItemRepository.findByIdForUpdate(reservation.getStockItem().getId())
                     .orElseThrow(() -> new ResourceNotFoundException("StockItem not found: " + reservation.getStockItem().getId()));
 
             int quantityBefore = stockItem.getQuantityAvailable();
             stockItem.setQuantityReserved(stockItem.getQuantityReserved() - reservation.getQuantityReserved());
-            stockItem.recalculateAvailable();
-            stockItem.recalculateStatus();
+            recalculateAndValidateStockState(stockItem,
+                    "Reservation cancellation would result in an invalid stock state for order " + orderId);
             stockItemRepository.save(stockItem);
 
             reservation.setStatus(ReservationStatus.RELEASED);
@@ -278,16 +286,17 @@ public class StockService {
                     quantityBefore, stockItem.getQuantityAvailable(),
                     "order", orderId, "system", "order-cancellation",
                     "Released (RESERVED): " + reason);
+            touchedProductIds.add(reservation.getProductId());
         }
 
-        for (StockReservation reservation : confirmed) {
+        for (StockReservation reservation : sortReservationsForLocking(confirmed)) {
             StockItem stockItem = stockItemRepository.findByIdForUpdate(reservation.getStockItem().getId())
                     .orElseThrow(() -> new ResourceNotFoundException("StockItem not found: " + reservation.getStockItem().getId()));
 
             int quantityBefore = stockItem.getQuantityAvailable();
             stockItem.setQuantityOnHand(stockItem.getQuantityOnHand() + reservation.getQuantityReserved());
-            stockItem.recalculateAvailable();
-            stockItem.recalculateStatus();
+            recalculateAndValidateStockState(stockItem,
+                    "Reservation reversal would result in an invalid stock state for order " + orderId);
             stockItemRepository.save(stockItem);
 
             reservation.setStatus(ReservationStatus.RELEASED);
@@ -299,8 +308,10 @@ public class StockService {
                     quantityBefore, stockItem.getQuantityAvailable(),
                     "order", orderId, "system", "order-cancellation",
                     "Reversed (CONFIRMED): " + reason);
+            touchedProductIds.add(reservation.getProductId());
         }
 
+        inventoryProductSearchSyncOutboxService.enqueueAll(touchedProductIds);
         log.info("Cancelled {} reserved + {} confirmed reservations for order {} (reason: {})",
                 reserved.size(), confirmed.size(), orderId, reason);
     }
@@ -362,7 +373,8 @@ public class StockService {
                 .lowStockThreshold(request.lowStockThreshold())
                 .backorderable(request.backorderable())
                 .build();
-        stockItem.recalculateStatus();
+        recalculateAndValidateStockState(stockItem,
+                "Stock item creation would result in an invalid stock state for product " + request.productId());
 
         stockItem = stockItemRepository.save(stockItem);
 
@@ -373,6 +385,7 @@ public class StockService {
                     "Initial stock creation");
         }
 
+        inventoryProductSearchSyncOutboxService.enqueue(stockItem.getProductId());
         return toStockItemResponse(stockItem);
     }
 
@@ -385,8 +398,11 @@ public class StockService {
         if (request.lowStockThreshold() != null) stockItem.setLowStockThreshold(request.lowStockThreshold());
         if (request.backorderable() != null) stockItem.setBackorderable(request.backorderable());
 
-        stockItem.recalculateStatus();
-        return toStockItemResponse(stockItemRepository.save(stockItem));
+        recalculateAndValidateStockState(stockItem,
+                "Stock item update would result in an invalid stock state for product " + stockItem.getProductId());
+        StockItem saved = stockItemRepository.save(stockItem);
+        inventoryProductSearchSyncOutboxService.enqueue(saved.getProductId());
+        return toStockItemResponse(saved);
     }
 
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
@@ -396,12 +412,7 @@ public class StockService {
 
         int quantityBefore = stockItem.getQuantityAvailable();
         stockItem.setQuantityOnHand(stockItem.getQuantityOnHand() + quantityChange);
-        stockItem.recalculateAvailable();
-        stockItem.recalculateStatus();
-
-        if (stockItem.getQuantityOnHand() < 0) {
-            throw new ValidationException("Adjustment would result in negative on-hand quantity");
-        }
+        recalculateAndValidateStockState(stockItem, "Adjustment would result in an invalid stock state");
 
         stockItem = stockItemRepository.save(stockItem);
 
@@ -409,6 +420,7 @@ public class StockService {
                 quantityBefore, stockItem.getQuantityAvailable(),
                 "adjustment", null, actorType, actorId, reason);
 
+        inventoryProductSearchSyncOutboxService.enqueue(stockItem.getProductId());
         return toStockItemResponse(stockItem);
     }
 
@@ -427,17 +439,21 @@ public class StockService {
             try {
                 String result = txTemplate.execute(status -> {
                     CatalogProduct catalogProduct = catalogProductService.requireOwnedProduct(req.productId(), req.vendorId());
-                    Optional<StockItem> existing = stockItemRepository.findByProductIdAndWarehouseId(req.productId(), req.warehouseId());
+                    Optional<StockItem> existing = stockItemRepository.findByProductIdAndWarehouseIdForUpdate(req.productId(), req.warehouseId());
                     if (existing.isPresent()) {
                         StockItem stockItem = existing.get();
+                        assertWarehouseBelongsToVendor(stockItem.getWarehouse(), req.vendorId());
+                        if (!req.vendorId().equals(stockItem.getVendorId())) {
+                            throw new ValidationException("Existing stock item belongs to a different vendor");
+                        }
                         int quantityBefore = stockItem.getQuantityAvailable();
                         int diff = req.quantityOnHand() - stockItem.getQuantityOnHand();
                         stockItem.setQuantityOnHand(req.quantityOnHand());
                         stockItem.setSku(resolveStockSku(req.sku(), catalogProduct));
                         stockItem.setLowStockThreshold(req.lowStockThreshold());
                         stockItem.setBackorderable(req.backorderable());
-                        stockItem.recalculateAvailable();
-                        stockItem.recalculateStatus();
+                        recalculateAndValidateStockState(stockItem,
+                                "Bulk import update would result in an invalid stock state for product " + req.productId());
                         stockItemRepository.save(stockItem);
 
                         if (diff != 0) {
@@ -445,6 +461,7 @@ public class StockService {
                                     quantityBefore, stockItem.getQuantityAvailable(),
                                     "bulk_import", null, actorType, actorId, "Bulk import update");
                         }
+                        inventoryProductSearchSyncOutboxService.enqueue(stockItem.getProductId());
                         return "updated";
                     } else {
                         Warehouse warehouse = warehouseService.findById(req.warehouseId());
@@ -460,7 +477,8 @@ public class StockService {
                                 .lowStockThreshold(req.lowStockThreshold())
                                 .backorderable(req.backorderable())
                                 .build();
-                        stockItem.recalculateStatus();
+                        recalculateAndValidateStockState(stockItem,
+                                "Bulk import create would result in an invalid stock state for product " + req.productId());
                         stockItem = stockItemRepository.save(stockItem);
 
                         if (req.quantityOnHand() > 0) {
@@ -468,6 +486,7 @@ public class StockService {
                                     0, req.quantityOnHand(),
                                     "bulk_import", null, actorType, actorId, "Bulk import create");
                         }
+                        inventoryProductSearchSyncOutboxService.enqueue(stockItem.getProductId());
                         return "created";
                     }
                 });
@@ -640,8 +659,8 @@ public class StockService {
 
         int quantityBefore = stockItem.getQuantityAvailable();
         stockItem.setQuantityReserved(stockItem.getQuantityReserved() - reservation.getQuantityReserved());
-        stockItem.recalculateAvailable();
-        stockItem.recalculateStatus();
+        recalculateAndValidateStockState(stockItem,
+                "Reservation expiry would result in an invalid stock state for order " + reservation.getOrderId());
         stockItemRepository.save(stockItem);
 
         reservation.setStatus(ReservationStatus.EXPIRED);
@@ -653,6 +672,7 @@ public class StockService {
                 quantityBefore, stockItem.getQuantityAvailable(),
                 "order", reservation.getOrderId(), "system", "scheduler",
                 "Reservation expired for order " + reservation.getOrderId());
+        inventoryProductSearchSyncOutboxService.enqueue(reservation.getProductId());
     }
 
     private String resolveAggregateStatus(int totalAvailable, boolean backorderable, List<StockItem> items) {
@@ -662,6 +682,53 @@ public class StockService {
         boolean anyLow = items.stream().anyMatch(s -> s.getStockStatus() == StockStatus.LOW_STOCK);
         if (anyLow) return StockStatus.LOW_STOCK.name();
         return StockStatus.IN_STOCK.name();
+    }
+
+    private List<StockCheckRequest> sortRequestsForLocking(List<StockCheckRequest> requests) {
+        if (requests == null || requests.isEmpty()) {
+            return List.of();
+        }
+        return requests.stream()
+                .sorted(Comparator.comparing(request -> request.productId().toString()))
+                .toList();
+    }
+
+    private List<StockReservation> sortReservationsForLocking(List<StockReservation> reservations) {
+        if (reservations == null || reservations.isEmpty()) {
+            return List.of();
+        }
+        return reservations.stream()
+                .sorted(Comparator.comparing(reservation -> reservation.getStockItem().getId().toString()))
+                .toList();
+    }
+
+    private void assertReservationRequest(UUID orderId, List<StockCheckRequest> items, Instant expiresAt) {
+        if (orderId == null) {
+            throw new ValidationException("orderId is required for stock reservation");
+        }
+        if (items == null || items.isEmpty()) {
+            throw new ValidationException("At least one stock reservation item is required");
+        }
+        if (expiresAt == null || !expiresAt.isAfter(Instant.now())) {
+            throw new ValidationException("Reservation expiry must be in the future");
+        }
+    }
+
+    private void recalculateAndValidateStockState(StockItem stockItem, String failureMessage) {
+        stockItem.recalculateAvailable();
+        if (stockItem.getQuantityOnHand() < 0) {
+            throw new ValidationException(failureMessage + ": quantityOnHand cannot be negative");
+        }
+        if (stockItem.getQuantityReserved() < 0) {
+            throw new ValidationException(failureMessage + ": quantityReserved cannot be negative");
+        }
+        if (stockItem.getLowStockThreshold() < 0) {
+            throw new ValidationException(failureMessage + ": lowStockThreshold cannot be negative");
+        }
+        if (!stockItem.isBackorderable() && stockItem.getQuantityAvailable() < 0) {
+            throw new ValidationException(failureMessage + ": non-backorderable stock cannot go below zero available quantity");
+        }
+        stockItem.recalculateStatus();
     }
 
     private void recordMovement(StockItem stockItem, MovementType type, int quantityChange,

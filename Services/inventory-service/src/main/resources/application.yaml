@@ -120,4 +120,11 @@ inventory:
   reservation:
     ttl-seconds: ${INVENTORY_RESERVATION_TTL_SECONDS:1800}
     cleanup-interval: ${INVENTORY_RESERVATION_CLEANUP_INTERVAL:PT1M}
+  search-sync:
+    enabled: ${INVENTORY_SEARCH_SYNC_ENABLED:true}
+    poll-interval-ms: ${INVENTORY_SEARCH_SYNC_POLL_INTERVAL_MS:5000}
+    initial-delay-ms: ${INVENTORY_SEARCH_SYNC_INITIAL_DELAY_MS:10000}
+    batch-size: ${INVENTORY_SEARCH_SYNC_BATCH_SIZE:50}
+    retry-base-delay-seconds: ${INVENTORY_SEARCH_SYNC_RETRY_BASE_DELAY_SECONDS:15}
+    retry-max-delay-seconds: ${INVENTORY_SEARCH_SYNC_RETRY_MAX_DELAY_SECONDS:900}
 

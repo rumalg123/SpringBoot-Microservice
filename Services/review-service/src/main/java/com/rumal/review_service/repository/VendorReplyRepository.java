@@ -12,6 +12,7 @@ import java.util.UUID;
 public interface VendorReplyRepository extends JpaRepository<VendorReply, UUID> {
 
     Optional<VendorReply> findByReview_Id(UUID reviewId);
+    Optional<VendorReply> findByIdAndVendorId(UUID id, UUID vendorId);
 
     boolean existsByReview_Id(UUID reviewId);
 

@@ -27,6 +27,8 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
     @Query("select p from Product p where p.slug = :slug")
     Optional<Product> findBySlugWithDetails(@Param("slug") String slug);
 
+    Optional<Product> findByIdAndVendorIdIn(UUID id, Collection<UUID> vendorIds);
+
     List<Product> findByParentProductIdAndDeletedFalseAndActiveTrue(UUID parentProductId);
     boolean existsByParentProductIdAndDeletedFalseAndActiveTrueAndProductType(UUID parentProductId, ProductType productType);
     boolean existsByParentProductIdAndDeletedFalseAndActiveTrueAndVariationSignatureAndIdNot(UUID parentProductId, String variationSignature, UUID excludeId);

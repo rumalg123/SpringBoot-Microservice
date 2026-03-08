@@ -2,6 +2,7 @@ package com.rumal.inventory_service.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.Check;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -9,6 +10,10 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
+@Check(
+        name = "chk_stock_items_consistent",
+        constraints = "quantity_on_hand >= 0 and quantity_reserved >= 0 and low_stock_threshold >= 0 and quantity_available = (quantity_on_hand - quantity_reserved) and (backorderable or quantity_available >= 0)"
+)
 @Table(
         name = "stock_items",
         uniqueConstraints = {

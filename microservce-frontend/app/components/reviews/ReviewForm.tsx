@@ -1,18 +1,19 @@
 "use client";
 
+import type { AxiosInstance } from "axios";
 import { useState } from "react";
 import StarRating from "./StarRating";
 import toast from "react-hot-toast";
+import { getErrorMessage } from "../../../lib/error";
 
 type Props = {
   productId: string;
-  vendorId: string;
-  apiClient: any; // Axios instance from useAuthSession
+  apiClient: AxiosInstance;
   onSuccess: () => void;
   onCancel: () => void;
 };
 
-export default function ReviewForm({ productId, vendorId, apiClient, onSuccess, onCancel }: Props) {
+export default function ReviewForm({ productId, apiClient, onSuccess, onCancel }: Props) {
   const [rating, setRating] = useState(0);
   const [title, setTitle] = useState("");
   const [comment, setComment] = useState("");
@@ -26,7 +27,6 @@ export default function ReviewForm({ productId, vendorId, apiClient, onSuccess, 
     try {
       await apiClient.post("/reviews/me", {
         productId,
-        vendorId,
         rating,
         title: title.trim() || null,
         comment: comment.trim(),
@@ -34,9 +34,8 @@ export default function ReviewForm({ productId, vendorId, apiClient, onSuccess, 
       });
       toast.success("Review submitted successfully!");
       onSuccess();
-    } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || "Failed to submit review";
-      toast.error(msg);
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error) || "Failed to submit review");
     } finally {
       setSubmitting(false);
     }

@@ -164,6 +164,14 @@ category:
   max-depth: ${CATEGORY_MAX_DEPTH:4}
 
 product:
+  audit:
+    outbox:
+      poll-interval-ms: ${PRODUCT_AUDIT_OUTBOX_POLL_INTERVAL_MS:5000}
+      initial-delay-ms: ${PRODUCT_AUDIT_OUTBOX_INITIAL_DELAY_MS:10000}
+      batch-size: ${PRODUCT_AUDIT_OUTBOX_BATCH_SIZE:50}
+      retry-base-delay-seconds: ${PRODUCT_AUDIT_OUTBOX_RETRY_BASE_DELAY_SECONDS:15}
+  search:
+    hide-out-of-stock: ${PRODUCT_SEARCH_HIDE_OUT_OF_STOCK:true}
   search-sync:
     enabled: ${PRODUCT_SEARCH_SYNC_ENABLED:true}
     poll-interval-ms: ${PRODUCT_SEARCH_SYNC_POLL_INTERVAL_MS:5000}

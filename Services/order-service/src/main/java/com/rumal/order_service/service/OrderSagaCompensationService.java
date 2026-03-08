@@ -3,17 +3,13 @@ package com.rumal.order_service.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rumal.order_service.entity.Order;
 import com.rumal.order_service.entity.OrderStatus;
-import com.rumal.order_service.entity.OrderStatusAudit;
 import com.rumal.order_service.entity.OutboxEvent;
 import com.rumal.order_service.entity.OutboxEventStatus;
 import com.rumal.order_service.entity.VendorOrder;
-import com.rumal.order_service.entity.VendorOrderStatusAudit;
 import com.rumal.order_service.exception.ResourceNotFoundException;
 import com.rumal.order_service.repo.OrderRepository;
-import com.rumal.order_service.repo.OrderStatusAuditRepository;
 import com.rumal.order_service.repo.OutboxEventRepository;
 import com.rumal.order_service.repo.VendorOrderRepository;
-import com.rumal.order_service.repo.VendorOrderStatusAuditRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,10 +30,10 @@ public class OrderSagaCompensationService {
 
     private final OrderRepository orderRepository;
     private final VendorOrderRepository vendorOrderRepository;
-    private final OrderStatusAuditRepository orderStatusAuditRepository;
-    private final VendorOrderStatusAuditRepository vendorOrderStatusAuditRepository;
     private final OutboxEventRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
+    private final OrderAnalyticsLiveUpdateService orderAnalyticsLiveUpdateService;
+    private final OrderService orderService;
 
     @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 20)
     public void compensatePermanentFailure(OutboxEvent failedEvent, String failureMessage) {
@@ -64,14 +60,16 @@ public class OrderSagaCompensationService {
         OrderStatus previousStatus = order.getStatus();
         order.setStatus(OrderStatus.CANCELLED);
         orderRepository.save(order);
-        orderStatusAuditRepository.save(OrderStatusAudit.builder()
-                .order(order)
-                .fromStatus(previousStatus)
-                .toStatus(OrderStatus.CANCELLED)
-                .actorType("system")
-                .changeSource("outbox_compensation")
-                .note(truncateAuditNote(compensationReason))
-                .build());
+        orderService.recordStatusAudit(
+                order,
+                previousStatus,
+                OrderStatus.CANCELLED,
+                null,
+                null,
+                "SYSTEM",
+                "outbox_compensation",
+                truncateAuditNote(compensationReason)
+        );
 
         if (order.getVendorOrders() != null) {
             for (VendorOrder vendorOrder : order.getVendorOrders()) {
@@ -81,14 +79,16 @@ public class OrderSagaCompensationService {
                 OrderStatus previousVendorStatus = vendorOrder.getStatus();
                 vendorOrder.setStatus(OrderStatus.CANCELLED);
                 vendorOrderRepository.save(vendorOrder);
-                vendorOrderStatusAuditRepository.save(VendorOrderStatusAudit.builder()
-                        .vendorOrder(vendorOrder)
-                        .fromStatus(previousVendorStatus)
-                        .toStatus(OrderStatus.CANCELLED)
-                        .actorType("system")
-                        .changeSource("outbox_compensation")
-                        .note(truncateAuditNote(compensationReason))
-                        .build());
+                orderService.recordVendorOrderStatusAudit(
+                        vendorOrder,
+                        previousVendorStatus,
+                        OrderStatus.CANCELLED,
+                        null,
+                        null,
+                        "SYSTEM",
+                        "outbox_compensation",
+                        truncateAuditNote(compensationReason)
+                );
             }
         }
 
@@ -102,6 +102,8 @@ public class OrderSagaCompensationService {
                     "reason", compensationReason
             ));
         }
+
+        orderAnalyticsLiveUpdateService.notifyOrderChangedAfterCommit(order, "order_compensated");
 
         log.error("Cancelled order {} after permanent outbox failure {}. Reason: {}",
                 order.getId(), failedEvent.getEventType(), compensationReason);

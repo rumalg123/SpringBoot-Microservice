@@ -39,20 +39,21 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 import java.time.Instant;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -60,24 +61,29 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
 public class CartService {
-    private static final int MAX_DISTINCT_CART_ITEMS = 200;
+    private static final int MAX_DISTINCT_CART_ITEMS = 100;
+    private static final int MAX_ITEM_QUANTITY = 100;
 
     private final CartRepository cartRepository;
+    private final ActiveCartStoreService activeCartStoreService;
     private final ProductClient productClient;
     private final VendorOperationalStateClient vendorOperationalStateClient;
     private final OrderClient orderClient;
     private final PromotionClient promotionClient;
     private final CustomerClient customerClient;
     private final ShippingFeeCalculator shippingFeeCalculator;
-    private final TransactionTemplate transactionTemplate;
 
     @Cacheable(cacheNames = "cartByKeycloak", key = "#keycloakId == null ? '' : #keycloakId.trim()")
     @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
     public CartResponse getByKeycloakId(String keycloakId) {
         String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
-        return cartRepository.findWithItemsByKeycloakId(normalizedKeycloakId)
-                .map(this::toResponse)
-                .orElseGet(() -> emptyCartResponse(normalizedKeycloakId));
+        return toResponse(loadCustomerCart(normalizedKeycloakId));
+    }
+
+    @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
+    public CartResponse getBySessionId(String guestCartId) {
+        String normalizedGuestCartId = normalizeGuestCartId(guestCartId);
+        return toResponse(loadGuestCart(normalizedGuestCartId));
     }
 
     @Caching(evict = {
@@ -88,44 +94,25 @@ public class CartService {
         String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
         int quantityToAdd = sanitizeQuantity(request.quantity());
         ProductDetails product = resolvePurchasableProduct(request.productId());
-        for (int attempt = 0; ; attempt++) {
-            try {
-                return transactionTemplate.execute(status -> {
-                    Cart cart = cartRepository.findWithItemsByKeycloakIdForUpdate(normalizedKeycloakId)
-                            .orElseGet(() -> {
-                                Cart created = Cart.builder()
-                                        .keycloakId(normalizedKeycloakId)
-                                        .build();
-                                created.setItems(new java.util.ArrayList<>());
-                                return created;
-                            });
+        return activeCartStoreService.withCustomerCartLock(normalizedKeycloakId, () -> {
+            Cart cart = loadCustomerCart(normalizedKeycloakId);
+            addOrMergeItem(cart, product.id(), quantityToAdd);
+            saveCustomerCart(normalizedKeycloakId, cart);
+            return toResponse(cart);
+        });
+    }
 
-                    CartItem existing = cart.getItems().stream()
-                            .filter(item -> item.getProductId().equals(product.id()))
-                            .findFirst()
-                            .orElse(null);
-
-                    if (existing == null) {
-                        if (cart.getItems().size() >= MAX_DISTINCT_CART_ITEMS) {
-                            throw new ValidationException("Cart cannot contain more than " + MAX_DISTINCT_CART_ITEMS + " distinct items");
-                        }
-                        CartItem created = buildCartItem(cart, product, quantityToAdd);
-                        cart.getItems().add(created);
-                    } else {
-                        int mergedQuantity = sanitizeQuantity(existing.getQuantity() + quantityToAdd);
-                        existing.setQuantity(mergedQuantity);
-                        refreshCartItemSnapshot(existing, product);
-                        existing.setLineTotal(calculateLineTotal(existing.getUnitPrice(), existing.getQuantity()));
-                    }
-
-                    cart.setLastActivityAt(Instant.now());
-                    Cart saved = cartRepository.save(cart);
-                    return toResponse(saved);
-                });
-            } catch (DataIntegrityViolationException e) {
-                if (attempt > 0) throw e;
-            }
-        }
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public CartResponse addItemToSession(String guestCartId, AddCartItemRequest request) {
+        String normalizedGuestCartId = normalizeGuestCartId(guestCartId);
+        int quantityToAdd = sanitizeQuantity(request.quantity());
+        ProductDetails product = resolvePurchasableProduct(request.productId());
+        return activeCartStoreService.withGuestCartLock(normalizedGuestCartId, () -> {
+            Cart cart = loadGuestCart(normalizedGuestCartId);
+            addOrMergeItem(cart, product.id(), quantityToAdd);
+            saveGuestCart(normalizedGuestCartId, cart);
+            return toResponse(cart);
+        });
     }
 
     @Caching(evict = {
@@ -135,25 +122,29 @@ public class CartService {
     public CartResponse updateItem(String keycloakId, UUID itemId, UpdateCartItemRequest request) {
         String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
         int quantity = sanitizeQuantity(request.quantity());
-
-        return transactionTemplate.execute(status -> {
-            Cart cart = cartRepository.findWithItemsByKeycloakIdForUpdate(normalizedKeycloakId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Cart item not found: " + itemId));
-
-            CartItem item = cart.getItems().stream()
-                    .filter(existing -> existing.getId().equals(itemId))
-                    .findFirst()
-                    .orElseThrow(() -> new ResourceNotFoundException("Cart item not found: " + itemId));
-
-            ProductDetails product = resolvePurchasableProduct(item.getProductId());
-
+        return activeCartStoreService.withCustomerCartLock(normalizedKeycloakId, () -> {
+            Cart cart = loadCustomerCart(normalizedKeycloakId);
+            CartItem item = findCartItem(cart, itemId);
+            resolvePurchasableProduct(item.getProductId());
             item.setQuantity(quantity);
-            refreshCartItemSnapshot(item, product);
-            item.setLineTotal(calculateLineTotal(item.getUnitPrice(), item.getQuantity()));
-            cart.setLastActivityAt(Instant.now());
+            touchCart(cart);
+            saveCustomerCart(normalizedKeycloakId, cart);
+            return toResponse(cart);
+        });
+    }
 
-            Cart saved = cartRepository.save(cart);
-            return toResponse(saved);
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public CartResponse updateSessionItem(String guestCartId, UUID itemId, UpdateCartItemRequest request) {
+        String normalizedGuestCartId = normalizeGuestCartId(guestCartId);
+        int quantity = sanitizeQuantity(request.quantity());
+        return activeCartStoreService.withGuestCartLock(normalizedGuestCartId, () -> {
+            Cart cart = loadGuestCart(normalizedGuestCartId);
+            CartItem item = findCartItem(cart, itemId);
+            resolvePurchasableProduct(item.getProductId());
+            item.setQuantity(quantity);
+            touchCart(cart);
+            saveGuestCart(normalizedGuestCartId, cart);
+            return toResponse(cart);
         });
     }
 
@@ -163,16 +154,23 @@ public class CartService {
     @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 20)
     public void removeItem(String keycloakId, UUID itemId) {
         String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
+        activeCartStoreService.withCustomerCartLock(normalizedKeycloakId, () -> {
+            Cart cart = loadCustomerCart(normalizedKeycloakId);
+            removeCartItem(cart, itemId);
+            saveCustomerCart(normalizedKeycloakId, cart);
+            return true;
+        });
+    }
 
-        Cart cart = cartRepository.findWithItemsByKeycloakIdForUpdate(normalizedKeycloakId)
-                .orElseThrow(() -> new ResourceNotFoundException("Cart item not found: " + itemId));
-
-        boolean removed = cart.getItems().removeIf(item -> item.getId().equals(itemId));
-        if (!removed) {
-            throw new ResourceNotFoundException("Cart item not found: " + itemId);
-        }
-        cart.setLastActivityAt(Instant.now());
-        cartRepository.save(cart);
+    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 20)
+    public void removeSessionItem(String guestCartId, UUID itemId) {
+        String normalizedGuestCartId = normalizeGuestCartId(guestCartId);
+        activeCartStoreService.withGuestCartLock(normalizedGuestCartId, () -> {
+            Cart cart = loadGuestCart(normalizedGuestCartId);
+            removeCartItem(cart, itemId);
+            saveGuestCart(normalizedGuestCartId, cart);
+            return true;
+        });
     }
 
     @Caching(evict = {
@@ -181,11 +179,48 @@ public class CartService {
     @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 20)
     public void clear(String keycloakId) {
         String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
-        cartRepository.findWithItemsByKeycloakIdForUpdate(normalizedKeycloakId)
-                .ifPresent(cart -> {
-                    cart.getItems().clear();
-                    cartRepository.save(cart);
-                });
+        activeCartStoreService.withCustomerCartLock(normalizedKeycloakId, () -> {
+            Cart cart = loadCustomerCart(normalizedKeycloakId);
+            cart.getItems().clear();
+            touchCart(cart);
+            saveCustomerCart(normalizedKeycloakId, cart);
+            return true;
+        });
+    }
+
+    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 20)
+    public void clearSession(String guestCartId) {
+        String normalizedGuestCartId = normalizeGuestCartId(guestCartId);
+        activeCartStoreService.withGuestCartLock(normalizedGuestCartId, () -> {
+            Cart cart = loadGuestCart(normalizedGuestCartId);
+            cart.getItems().clear();
+            touchCart(cart);
+            saveGuestCart(normalizedGuestCartId, cart);
+            return true;
+        });
+    }
+
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "cartByKeycloak", key = "#keycloakId == null ? '' : #keycloakId.trim()")
+    })
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public CartResponse mergeSessionIntoCustomerCart(String keycloakId, String guestCartId) {
+        String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
+        String normalizedGuestCartId = normalizeGuestCartId(guestCartId);
+        return activeCartStoreService.withCustomerCartLock(normalizedKeycloakId, () ->
+                activeCartStoreService.withGuestCartLock(normalizedGuestCartId, () -> {
+                    Cart customerCart = loadCustomerCart(normalizedKeycloakId);
+                    Cart guestCart = loadGuestCart(normalizedGuestCartId);
+                    for (CartItem guestItem : guestCart.getItems()) {
+                        addOrMergeItem(customerCart, guestItem.getProductId(), guestItem.getQuantity(), guestItem.isSavedForLater());
+                    }
+                    if (!StringUtils.hasText(customerCart.getNote()) && StringUtils.hasText(guestCart.getNote())) {
+                        customerCart.setNote(guestCart.getNote().trim());
+                    }
+                    saveCustomerCart(normalizedKeycloakId, customerCart);
+                    activeCartStoreService.deleteGuestCart(normalizedGuestCartId);
+                    return toResponse(customerCart);
+                }));
     }
 
     @Caching(evict = {
@@ -194,8 +229,7 @@ public class CartService {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public CheckoutResponse checkout(String keycloakId, CheckoutCartRequest request, String idempotencyKey) {
         String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
-        Cart previewCart = cartRepository.findWithItemsByKeycloakId(normalizedKeycloakId)
-                .orElseThrow(() -> new ValidationException("Cart is empty"));
+        Cart previewCart = loadCustomerCart(normalizedKeycloakId);
 
         List<CartItem> activeItems = activeCartItems(previewCart);
         if (activeItems.isEmpty()) {
@@ -212,10 +246,8 @@ public class CartService {
                         (a, b) -> a
                 ));
 
-        PreparedCheckout prepared = transactionTemplate.execute(status -> {
-            Cart cart = cartRepository.findWithItemsByKeycloakIdForUpdate(normalizedKeycloakId)
-                    .orElseThrow(() -> new ValidationException("Cart is empty"));
-
+        PreparedCheckout prepared = activeCartStoreService.withCustomerCartLock(normalizedKeycloakId, () -> {
+            Cart cart = loadCustomerCart(normalizedKeycloakId);
             if (activeCartItems(cart).isEmpty()) {
                 throw new ValidationException("Cart is empty");
             }
@@ -239,9 +271,6 @@ public class CartService {
 
             return new PreparedCheckout(orderItems, cart.getItems().size(), totalQuantity, normalizeMoney(subtotal));
         });
-        if (prepared == null) {
-            throw new ValidationException("Unable to prepare checkout");
-        }
 
         CustomerSummary customer = customerClient.getCustomerByKeycloakId(normalizedKeycloakId);
         if (customer == null || customer.id() == null) {
@@ -324,17 +353,15 @@ public class CartService {
             throw ex;
         }
 
-        boolean cartCleared = Boolean.TRUE.equals(transactionTemplate.execute(status ->
-                cartRepository.findWithItemsByKeycloakIdForUpdate(normalizedKeycloakId)
-                        .map(cart -> {
-                            if (checkoutSnapshot(cart).equals(expectedSnapshot)) {
-                                cart.getItems().removeIf(item -> !item.isSavedForLater());
-                                cartRepository.save(cart);
-                                return true;
-                            }
-                            return false;
-                        })
-                        .orElse(true)));
+        boolean cartCleared = activeCartStoreService.withCustomerCartLock(normalizedKeycloakId, () -> {
+            Cart cart = loadCustomerCart(normalizedKeycloakId);
+            if (!checkoutSnapshot(cart).equals(expectedSnapshot)) {
+                return false;
+            }
+            cart.getItems().removeIf(item -> !item.isSavedForLater());
+            saveCustomerCart(normalizedKeycloakId, cart);
+            return true;
+        });
 
         return new CheckoutResponse(
                 order.id(),
@@ -356,8 +383,7 @@ public class CartService {
     @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 15)
     public CheckoutPreviewResponse previewCheckout(String keycloakId, CheckoutPreviewRequest request) {
         String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
-        Cart cart = cartRepository.findWithItemsByKeycloakId(normalizedKeycloakId)
-                .orElseThrow(() -> new ValidationException("Cart is empty"));
+        Cart cart = loadCustomerCart(normalizedKeycloakId);
         List<CartItem> activeItems = activeCartItems(cart);
         if (activeItems.isEmpty()) {
             throw new ValidationException("Cart is empty");
@@ -476,39 +502,206 @@ public class CartService {
         return normalized;
     }
 
+    private String normalizeGuestCartId(String guestCartId) {
+        String normalized = guestCartId == null ? "" : guestCartId.trim();
+        if (!StringUtils.hasText(normalized)) {
+            throw new ValidationException("Missing guest cart header");
+        }
+        return normalized;
+    }
+
     private int sanitizeQuantity(int quantity) {
         if (quantity < 1) {
             throw new ValidationException("Quantity must be at least 1");
         }
-        if (quantity > 1000) {
-            throw new ValidationException("Quantity must be 1000 or less");
+        if (quantity > MAX_ITEM_QUANTITY) {
+            throw new ValidationException("Quantity must be " + MAX_ITEM_QUANTITY + " or less");
         }
         return quantity;
     }
 
-    private CartItem buildCartItem(Cart cart, ProductDetails product, int quantity) {
-        BigDecimal unitPrice = normalizeMoney(product.sellingPrice());
-        return CartItem.builder()
-                .cart(cart)
-                .productId(product.id())
-                .productSlug(resolveSlug(product))
-                .productName(product.name().trim())
-                .productSku(product.sku().trim())
-                .mainImage(resolveMainImage(product))
-                .categoryIds(serializeCategoryIds(product.categoryIds()))
-                .unitPrice(unitPrice)
-                .quantity(quantity)
-                .lineTotal(calculateLineTotal(unitPrice, quantity))
-                .build();
+    private Cart loadCustomerCart(String keycloakId) {
+        return activeCartStoreService.loadCustomerCart(keycloakId)
+                .map(this::toTransientCart)
+                .orElseGet(() -> cartRepository.findWithItemsByKeycloakId(keycloakId)
+                        .map(this::toTransientCart)
+                        .map(cart -> {
+                            saveCustomerCart(keycloakId, cart);
+                            return cart;
+                        })
+                        .orElseGet(() -> newTransientCart(keycloakId)));
     }
 
-    private void refreshCartItemSnapshot(CartItem item, ProductDetails product) {
-        item.setProductSlug(resolveSlug(product));
-        item.setProductName(product.name().trim());
-        item.setProductSku(product.sku().trim());
-        item.setMainImage(resolveMainImage(product));
-        item.setCategoryIds(serializeCategoryIds(product.categoryIds()));
-        item.setUnitPrice(normalizeMoney(product.sellingPrice()));
+    private Cart loadGuestCart(String guestCartId) {
+        return activeCartStoreService.loadGuestCart(guestCartId)
+                .map(this::toTransientCart)
+                .orElseGet(() -> newTransientCart(""));
+    }
+
+    private void saveCustomerCart(String keycloakId, Cart cart) {
+        activeCartStoreService.saveCustomerCart(keycloakId, toActiveCartState(touchCart(cart), keycloakId));
+    }
+
+    private void saveGuestCart(String guestCartId, Cart cart) {
+        activeCartStoreService.saveGuestCart(guestCartId, toActiveCartState(touchCart(cart), ""));
+    }
+
+    private Cart newTransientCart(String keycloakId) {
+        Instant now = Instant.now();
+        Cart cart = Cart.builder()
+                .id(UUID.randomUUID())
+                .keycloakId(keycloakId)
+                .note(null)
+                .items(new ArrayList<>())
+                .createdAt(now)
+                .updatedAt(now)
+                .lastActivityAt(now)
+                .build();
+        cart.setItems(new ArrayList<>());
+        return cart;
+    }
+
+    private Cart toTransientCart(ActiveCartState state) {
+        Cart cart = Cart.builder()
+                .id(state.id() == null ? UUID.randomUUID() : state.id())
+                .keycloakId(state.keycloakId())
+                .note(state.note())
+                .items(new ArrayList<>())
+                .createdAt(state.createdAt() == null ? Instant.now() : state.createdAt())
+                .updatedAt(state.updatedAt() == null ? state.createdAt() : state.updatedAt())
+                .lastActivityAt(state.lastActivityAt() == null ? Instant.now() : state.lastActivityAt())
+                .build();
+        List<CartItem> items = state.items().stream()
+                .map(item -> CartItem.builder()
+                        .id(item.id() == null ? UUID.randomUUID() : item.id())
+                        .cart(cart)
+                        .productId(item.productId())
+                        .productSlug("")
+                        .productName("")
+                        .productSku("")
+                        .quantity(item.quantity())
+                        .lineTotal(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP))
+                        .unitPrice(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP))
+                        .savedForLater(item.savedForLater())
+                        .build())
+                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+        cart.setItems(items);
+        return cart;
+    }
+
+    private Cart toTransientCart(Cart persistedCart) {
+        Cart cart = newTransientCart(persistedCart.getKeycloakId());
+        cart.setId(persistedCart.getId() == null ? UUID.randomUUID() : persistedCart.getId());
+        cart.setNote(persistedCart.getNote());
+        cart.setCreatedAt(persistedCart.getCreatedAt() == null ? Instant.now() : persistedCart.getCreatedAt());
+        cart.setUpdatedAt(persistedCart.getUpdatedAt() == null ? cart.getCreatedAt() : persistedCart.getUpdatedAt());
+        cart.setLastActivityAt(persistedCart.getLastActivityAt() == null ? cart.getUpdatedAt() : persistedCart.getLastActivityAt());
+        List<CartItem> items = persistedCart.getItems() == null ? List.of() : persistedCart.getItems();
+        cart.setItems(items.stream()
+                .map(item -> CartItem.builder()
+                        .id(item.getId() == null ? UUID.randomUUID() : item.getId())
+                        .cart(cart)
+                        .productId(item.getProductId())
+                        .productSlug(item.getProductSlug())
+                        .productName(item.getProductName())
+                        .productSku(item.getProductSku())
+                        .mainImage(item.getMainImage())
+                        .categoryIds(item.getCategoryIds())
+                        .unitPrice(item.getUnitPrice())
+                        .quantity(item.getQuantity())
+                        .lineTotal(item.getLineTotal())
+                        .savedForLater(item.isSavedForLater())
+                        .build())
+                .collect(java.util.stream.Collectors.toCollection(ArrayList::new)));
+        return cart;
+    }
+
+    private ActiveCartState toActiveCartState(Cart cart, String keycloakId) {
+        List<ActiveCartItemState> items = cart.getItems() == null ? List.of() : cart.getItems().stream()
+                .map(item -> new ActiveCartItemState(
+                        item.getId() == null ? UUID.randomUUID() : item.getId(),
+                        item.getProductId(),
+                        item.getQuantity(),
+                        item.isSavedForLater()
+                ))
+                .toList();
+        return new ActiveCartState(
+                cart.getId() == null ? UUID.randomUUID() : cart.getId(),
+                keycloakId,
+                trimToNull(cart.getNote()),
+                items,
+                cart.getCreatedAt(),
+                cart.getUpdatedAt(),
+                cart.getLastActivityAt()
+        );
+    }
+
+    private Cart touchCart(Cart cart) {
+        Instant now = Instant.now();
+        if (cart.getId() == null) {
+            cart.setId(UUID.randomUUID());
+        }
+        if (cart.getItems() == null) {
+            cart.setItems(new ArrayList<>());
+        }
+        if (cart.getCreatedAt() == null) {
+            cart.setCreatedAt(now);
+        }
+        cart.setUpdatedAt(now);
+        cart.setLastActivityAt(now);
+        return cart;
+    }
+
+    private void addOrMergeItem(Cart cart, UUID productId, int quantity) {
+        addOrMergeItem(cart, productId, quantity, false);
+    }
+
+    private void addOrMergeItem(Cart cart, UUID productId, int quantity, boolean savedForLater) {
+        CartItem existing = cart.getItems().stream()
+                .filter(item -> Objects.equals(item.getProductId(), productId) && item.isSavedForLater() == savedForLater)
+                .findFirst()
+                .orElse(null);
+        if (existing == null) {
+            if (cart.getItems().size() >= MAX_DISTINCT_CART_ITEMS) {
+                throw new ValidationException("Cart cannot contain more than " + MAX_DISTINCT_CART_ITEMS + " distinct items");
+            }
+            cart.getItems().add(buildCartItem(cart, productId, quantity, savedForLater));
+        } else {
+            existing.setQuantity(sanitizeQuantity(existing.getQuantity() + quantity));
+        }
+        touchCart(cart);
+    }
+
+    private void removeCartItem(Cart cart, UUID itemId) {
+        boolean removed = cart.getItems().removeIf(item -> Objects.equals(item.getId(), itemId));
+        if (!removed) {
+            throw new ResourceNotFoundException("Cart item not found: " + itemId);
+        }
+        touchCart(cart);
+    }
+
+    private CartItem findCartItem(Cart cart, UUID itemId) {
+        return cart.getItems().stream()
+                .filter(item -> Objects.equals(item.getId(), itemId))
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Cart item not found: " + itemId));
+    }
+
+    private CartItem buildCartItem(Cart cart, UUID productId, int quantity, boolean savedForLater) {
+        return CartItem.builder()
+                .id(UUID.randomUUID())
+                .cart(cart)
+                .productId(productId)
+                .productSlug("")
+                .productName("")
+                .productSku("")
+                .mainImage(null)
+                .categoryIds(null)
+                .unitPrice(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP))
+                .quantity(quantity)
+                .lineTotal(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP))
+                .savedForLater(savedForLater)
+                .build();
     }
 
     private String resolveSlug(ProductDetails product) {
@@ -560,16 +753,17 @@ public class CartService {
     }
 
     private CartResponse toResponse(Cart cart) {
+        Map<UUID, ProductDetails> productsById = resolveProductsById(cart.getItems());
         List<CartItemResponse> activeItems = cart.getItems().stream()
                 .filter(item -> !item.isSavedForLater())
-                .sorted(Comparator.comparing(CartItem::getProductName, String.CASE_INSENSITIVE_ORDER))
-                .map(this::toItemResponse)
+                .map(item -> toItemResponse(item, productsById.get(item.getProductId())))
+                .sorted(Comparator.comparing(CartItemResponse::productName, String.CASE_INSENSITIVE_ORDER))
                 .toList();
 
         List<CartItemResponse> savedItems = cart.getItems().stream()
                 .filter(CartItem::isSavedForLater)
-                .sorted(Comparator.comparing(CartItem::getProductName, String.CASE_INSENSITIVE_ORDER))
-                .map(this::toItemResponse)
+                .map(item -> toItemResponse(item, productsById.get(item.getProductId())))
+                .sorted(Comparator.comparing(CartItemResponse::productName, String.CASE_INSENSITIVE_ORDER))
                 .toList();
 
         int totalQuantity = activeItems.stream()
@@ -594,18 +788,50 @@ public class CartService {
         );
     }
 
-    private CartItemResponse toItemResponse(CartItem item) {
+    private Map<UUID, ProductDetails> resolveProductsById(List<CartItem> items) {
+        Map<UUID, ProductDetails> productsById = new HashMap<>();
+        if (items == null) {
+            return productsById;
+        }
+        for (CartItem item : items) {
+            UUID productId = item.getProductId();
+            if (productId == null || productsById.containsKey(productId)) {
+                continue;
+            }
+            try {
+                productsById.put(productId, productClient.getById(productId));
+            } catch (RuntimeException ex) {
+                productsById.put(productId, null);
+            }
+        }
+        return productsById;
+    }
+
+    private CartItemResponse toItemResponse(CartItem item, ProductDetails product) {
+        String productName = product != null && StringUtils.hasText(product.name())
+                ? product.name().trim()
+                : "Unavailable product";
+        String productSlug = product != null && StringUtils.hasText(product.slug())
+                ? resolveSlug(product)
+                : item.getProductId().toString();
+        String productSku = product != null && StringUtils.hasText(product.sku())
+                ? product.sku().trim()
+                : "";
+        List<UUID> categoryIds = product != null && product.categoryIds() != null
+                ? List.copyOf(product.categoryIds())
+                : List.of();
+        BigDecimal unitPrice = product != null ? normalizeMoney(product.sellingPrice()) : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         return new CartItemResponse(
                 item.getId(),
                 item.getProductId(),
-                item.getProductSlug(),
-                item.getProductName(),
-                item.getProductSku(),
-                item.getMainImage(),
-                deserializeCategoryIds(item.getCategoryIds()),
-                normalizeMoney(item.getUnitPrice()),
+                productSlug,
+                productName,
+                productSku,
+                product == null ? null : resolveMainImage(product),
+                categoryIds,
+                unitPrice,
                 item.getQuantity(),
-                normalizeMoney(item.getLineTotal()),
+                calculateLineTotal(unitPrice, item.getQuantity()),
                 item.isSavedForLater()
         );
     }
@@ -741,15 +967,27 @@ public class CartService {
     @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 10)
     public CartResponse saveForLater(String keycloakId, UUID itemId) {
         String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
-        Cart cart = cartRepository.findWithItemsByKeycloakIdForUpdate(normalizedKeycloakId)
-                .orElseThrow(() -> new ResourceNotFoundException("Cart item not found: " + itemId));
-        CartItem item = cart.getItems().stream()
-                .filter(i -> i.getId().equals(itemId))
-                .findFirst()
-                .orElseThrow(() -> new ResourceNotFoundException("Cart item not found: " + itemId));
-        item.setSavedForLater(true);
-        cart.setLastActivityAt(Instant.now());
-        return toResponse(cartRepository.save(cart));
+        return activeCartStoreService.withCustomerCartLock(normalizedKeycloakId, () -> {
+            Cart cart = loadCustomerCart(normalizedKeycloakId);
+            CartItem item = findCartItem(cart, itemId);
+            item.setSavedForLater(true);
+            touchCart(cart);
+            saveCustomerCart(normalizedKeycloakId, cart);
+            return toResponse(cart);
+        });
+    }
+
+    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 10)
+    public CartResponse saveSessionItemForLater(String guestCartId, UUID itemId) {
+        String normalizedGuestCartId = normalizeGuestCartId(guestCartId);
+        return activeCartStoreService.withGuestCartLock(normalizedGuestCartId, () -> {
+            Cart cart = loadGuestCart(normalizedGuestCartId);
+            CartItem item = findCartItem(cart, itemId);
+            item.setSavedForLater(true);
+            touchCart(cart);
+            saveGuestCart(normalizedGuestCartId, cart);
+            return toResponse(cart);
+        });
     }
 
     @Caching(evict = {
@@ -758,15 +996,27 @@ public class CartService {
     @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 10)
     public CartResponse moveToCart(String keycloakId, UUID itemId) {
         String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
-        Cart cart = cartRepository.findWithItemsByKeycloakIdForUpdate(normalizedKeycloakId)
-                .orElseThrow(() -> new ResourceNotFoundException("Cart item not found: " + itemId));
-        CartItem item = cart.getItems().stream()
-                .filter(i -> i.getId().equals(itemId))
-                .findFirst()
-                .orElseThrow(() -> new ResourceNotFoundException("Cart item not found: " + itemId));
-        item.setSavedForLater(false);
-        cart.setLastActivityAt(Instant.now());
-        return toResponse(cartRepository.save(cart));
+        return activeCartStoreService.withCustomerCartLock(normalizedKeycloakId, () -> {
+            Cart cart = loadCustomerCart(normalizedKeycloakId);
+            CartItem item = findCartItem(cart, itemId);
+            item.setSavedForLater(false);
+            touchCart(cart);
+            saveCustomerCart(normalizedKeycloakId, cart);
+            return toResponse(cart);
+        });
+    }
+
+    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 10)
+    public CartResponse moveSessionItemToCart(String guestCartId, UUID itemId) {
+        String normalizedGuestCartId = normalizeGuestCartId(guestCartId);
+        return activeCartStoreService.withGuestCartLock(normalizedGuestCartId, () -> {
+            Cart cart = loadGuestCart(normalizedGuestCartId);
+            CartItem item = findCartItem(cart, itemId);
+            item.setSavedForLater(false);
+            touchCart(cart);
+            saveGuestCart(normalizedGuestCartId, cart);
+            return toResponse(cart);
+        });
     }
 
     @Caching(evict = {
@@ -775,45 +1025,25 @@ public class CartService {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public CartResponse updateNote(String keycloakId, UpdateCartNoteRequest request) {
         String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
-        for (int attempt = 0; ; attempt++) {
-            try {
-                return transactionTemplate.execute(status -> {
-                    Cart cart = cartRepository.findWithItemsByKeycloakIdForUpdate(normalizedKeycloakId)
-                            .orElseGet(() -> {
-                                Cart created = Cart.builder()
-                                        .keycloakId(normalizedKeycloakId)
-                                        .build();
-                                created.setItems(new java.util.ArrayList<>());
-                                return created;
-                            });
-                    cart.setNote(request.note() != null ? request.note().trim() : null);
-                    cart.setLastActivityAt(Instant.now());
-                    return toResponse(cartRepository.save(cart));
-                });
-            } catch (DataIntegrityViolationException e) {
-                if (attempt > 0) throw e;
-            }
-        }
+        return activeCartStoreService.withCustomerCartLock(normalizedKeycloakId, () -> {
+            Cart cart = loadCustomerCart(normalizedKeycloakId);
+            cart.setNote(trimToNull(request.note()));
+            touchCart(cart);
+            saveCustomerCart(normalizedKeycloakId, cart);
+            return toResponse(cart);
+        });
     }
 
-    private String serializeCategoryIds(List<UUID> categoryIds) {
-        if (categoryIds == null || categoryIds.isEmpty()) {
-            return null;
-        }
-        return categoryIds.stream()
-                .filter(java.util.Objects::nonNull)
-                .map(UUID::toString)
-                .collect(java.util.stream.Collectors.joining(","));
-    }
-
-    private List<UUID> deserializeCategoryIds(String categoryIds) {
-        if (categoryIds == null || categoryIds.isBlank()) {
-            return List.of();
-        }
-        return java.util.Arrays.stream(categoryIds.split(","))
-                .filter(s -> !s.isBlank())
-                .map(UUID::fromString)
-                .toList();
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public CartResponse updateSessionNote(String guestCartId, UpdateCartNoteRequest request) {
+        String normalizedGuestCartId = normalizeGuestCartId(guestCartId);
+        return activeCartStoreService.withGuestCartLock(normalizedGuestCartId, () -> {
+            Cart cart = loadGuestCart(normalizedGuestCartId);
+            cart.setNote(trimToNull(request.note()));
+            touchCart(cart);
+            saveGuestCart(normalizedGuestCartId, cart);
+            return toResponse(cart);
+        });
     }
 
     private String trimToNull(String value) {

@@ -66,6 +66,34 @@ public class KeycloakRoleClaims {
         return Collections.unmodifiableSet(allowedRoles);
     }
 
+    public String extractTenantId(Jwt jwt) {
+        if (jwt == null) {
+            return null;
+        }
+
+        String[] claimNames = {
+                "tenant_id",
+                "tenantId",
+                "vendor_id",
+                "vendorId"
+        };
+
+        for (String claimName : claimNames) {
+            String value = jwt.getClaimAsString(claimName);
+            if (StringUtils.hasText(value)) {
+                return value.trim();
+            }
+            if (!claimsNamespace.isBlank()) {
+                String namespacedValue = jwt.getClaimAsString(claimsNamespace + claimName);
+                if (StringUtils.hasText(namespacedValue)) {
+                    return namespacedValue.trim();
+                }
+            }
+        }
+
+        return null;
+    }
+
     private Set<String> extractNormalizedRoles(Jwt jwt) {
         Set<String> roles = new LinkedHashSet<>();
         addRoles(roles, jwt.getClaimAsStringList("roles"));

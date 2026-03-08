@@ -155,6 +155,38 @@ public class RateLimitConfig {
     }
 
     @Bean
+    public RedisRateLimiter analyticsAdminRateLimiter(
+            @Value("${RATE_LIMIT_ANALYTICS_ADMIN_REPLENISH:6}") int replenishRate,
+            @Value("${RATE_LIMIT_ANALYTICS_ADMIN_BURST:12}") int burstCapacity
+    ) {
+        return redisRateLimiter(replenishRate, burstCapacity);
+    }
+
+    @Bean
+    public RedisRateLimiter analyticsVendorRateLimiter(
+            @Value("${RATE_LIMIT_ANALYTICS_VENDOR_REPLENISH:10}") int replenishRate,
+            @Value("${RATE_LIMIT_ANALYTICS_VENDOR_BURST:20}") int burstCapacity
+    ) {
+        return redisRateLimiter(replenishRate, burstCapacity);
+    }
+
+    @Bean
+    public RedisRateLimiter reportExportsCreateRateLimiter(
+            @Value("${RATE_LIMIT_REPORT_EXPORTS_CREATE_REPLENISH:2}") int replenishRate,
+            @Value("${RATE_LIMIT_REPORT_EXPORTS_CREATE_BURST:4}") int burstCapacity
+    ) {
+        return redisRateLimiter(replenishRate, burstCapacity);
+    }
+
+    @Bean
+    public RedisRateLimiter reportExportsReadRateLimiter(
+            @Value("${RATE_LIMIT_REPORT_EXPORTS_READ_REPLENISH:12}") int replenishRate,
+            @Value("${RATE_LIMIT_REPORT_EXPORTS_READ_BURST:24}") int burstCapacity
+    ) {
+        return redisRateLimiter(replenishRate, burstCapacity);
+    }
+
+    @Bean
     public RedisRateLimiter productsRateLimiter(
             @Value("${RATE_LIMIT_PRODUCTS_REPLENISH:40}") int replenishRate,
             @Value("${RATE_LIMIT_PRODUCTS_BURST:80}") int burstCapacity

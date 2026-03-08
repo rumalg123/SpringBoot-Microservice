@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthSession } from "../../../lib/authSession";
 import { money, moneyCompact } from "../../../lib/format";
+import { useAnalyticsLiveStream } from "../../../lib/hooks/useAnalyticsLiveStream";
 import VendorPageShell from "../../components/ui/VendorPageShell";
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
@@ -65,6 +66,7 @@ function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: 
 
 export default function VendorAnalyticsPage() {
   const session = useAuthSession();
+  const queryClient = useQueryClient();
   const [vendorId, setVendorId] = useState<string | null>(null);
   const api = session.apiClient;
 
@@ -91,6 +93,15 @@ export default function VendorAnalyticsPage() {
       return res.data as VendorDashboard;
     },
     enabled: vendorReady && !!vendorId,
+  });
+
+  useAnalyticsLiveStream({
+    enabled: vendorReady && !!vendorId,
+    url: vendorId ? `/api/gateway/analytics/vendor/${vendorId}/live/dashboard` : "",
+    onRefresh: () => {
+      if (!vendorId) return;
+      void queryClient.invalidateQueries({ queryKey: ["vendor-analytics", vendorId] });
+    },
   });
 
   if (session.status === "ready" && !canViewAnalytics) {

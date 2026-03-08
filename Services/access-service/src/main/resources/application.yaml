@@ -39,6 +39,12 @@ cache:
 access:
   expiry:
     check-interval-ms: ${ACCESS_EXPIRY_CHECK_INTERVAL_MS:60000}
+  audit:
+    outbox:
+      poll-interval-ms: ${ACCESS_AUDIT_OUTBOX_POLL_INTERVAL_MS:5000}
+      initial-delay-ms: ${ACCESS_AUDIT_OUTBOX_INITIAL_DELAY_MS:10000}
+      batch-size: ${ACCESS_AUDIT_OUTBOX_BATCH_SIZE:50}
+      retry-base-delay-seconds: ${ACCESS_AUDIT_OUTBOX_RETRY_BASE_DELAY_SECONDS:15}
   idempotency:
     enabled: ${ACCESS_IDEMPOTENCY_ENABLED:true}
     key-header-name: ${ACCESS_IDEMPOTENCY_KEY_HEADER_NAME:Idempotency-Key}

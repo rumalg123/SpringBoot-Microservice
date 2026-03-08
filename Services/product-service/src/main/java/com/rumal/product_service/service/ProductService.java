@@ -5,6 +5,7 @@ import com.rumal.product_service.dto.BulkDeleteRequest;
 import com.rumal.product_service.dto.BulkOperationResult;
 import com.rumal.product_service.dto.BulkPriceUpdateRequest;
 import com.rumal.product_service.dto.CsvImportResult;
+import com.rumal.product_service.dto.ProductMutationAuditResponse;
 import com.rumal.product_service.dto.ProductResponse;
 import com.rumal.product_service.dto.ProductSummaryResponse;
 import com.rumal.product_service.dto.UpsertProductRequest;
@@ -33,6 +34,7 @@ public interface ProductService {
     Page<ProductSummaryResponse> list(Pageable pageable, String q, String sku, String category, String mainCategory, String subCategory, UUID vendorId, ProductType type, BigDecimal minSellingPrice, BigDecimal maxSellingPrice, boolean includeOrphanParents, String brand, ApprovalStatus approvalStatus, Map<String, String> specs, String vendorName, Instant createdAfter, Instant createdBefore);
     Page<ProductSummaryResponse> adminList(Pageable pageable, String q, String sku, String category, String mainCategory, String subCategory, UUID vendorId, ProductType type, BigDecimal minSellingPrice, BigDecimal maxSellingPrice, boolean includeOrphanParents, String brand, ApprovalStatus approvalStatus, Boolean active);
     Page<ProductSummaryResponse> listDeleted(Pageable pageable, String q, String sku, String category, String mainCategory, String subCategory, UUID vendorId, ProductType type, BigDecimal minSellingPrice, BigDecimal maxSellingPrice, String brand);
+    Page<ProductMutationAuditResponse> listMutationAudit(UUID productId, Pageable pageable);
     void incrementViewCount(UUID productId);
     ProductResponse update(UUID id, UpsertProductRequest request, ProductWorkflowActor actor);
     void softDelete(UUID id);

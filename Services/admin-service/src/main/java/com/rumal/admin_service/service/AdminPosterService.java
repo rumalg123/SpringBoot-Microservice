@@ -3,7 +3,6 @@ package com.rumal.admin_service.service;
 import com.rumal.admin_service.client.PosterClient;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
@@ -39,11 +38,7 @@ public class AdminPosterService {
         return posterClient.restore(id, internalAuth, userSub, userRoles);
     }
 
-    public Map<String, Object> generateImageNames(Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
-        return posterClient.generateImageNames(request, internalAuth, userSub, userRoles);
-    }
-
-    public Map<String, Object> uploadImages(List<MultipartFile> files, List<String> keys, String internalAuth, String userSub, String userRoles) {
-        return posterClient.uploadImages(files, keys, internalAuth, userSub, userRoles);
+    public Map<String, Object> prepareImageUploads(Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
+        return posterClient.prepareImageUploads(request, internalAuth, userSub, userRoles);
     }
 }

@@ -41,6 +41,7 @@ object-storage:
   access-key: ${OBJECT_STORAGE_ACCESS_KEY:}
   secret-key: ${OBJECT_STORAGE_SECRET_KEY:}
   bucket: ${OBJECT_STORAGE_BUCKET:}
+  presign-expiry: ${OBJECT_STORAGE_PRESIGN_EXPIRY:10m}
 
 internal:
   auth:

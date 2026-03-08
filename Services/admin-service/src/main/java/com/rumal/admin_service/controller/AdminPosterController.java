@@ -6,7 +6,6 @@ import com.rumal.admin_service.service.AdminAuditService;
 import com.rumal.admin_service.service.AdminPosterService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -15,10 +14,8 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.validation.constraints.NotNull;
 
@@ -116,9 +113,9 @@ public class AdminPosterController {
         return result;
     }
 
-    @PostMapping("/images/names")
+    @PostMapping("/images/presign")
     @ResponseStatus(HttpStatus.CREATED)
-    public Map<String, Object> generateImageNames(
+    public Map<String, Object> prepareImageUploads(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
@@ -126,20 +123,6 @@ public class AdminPosterController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         adminActorScopeService.assertCanManagePosters(userSub, userRoles, internalAuth);
-        return adminPosterService.generateImageNames(request, internalAuth, userSub, userRoles);
-    }
-
-    @PostMapping(value = "/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @ResponseStatus(HttpStatus.CREATED)
-    public Map<String, Object> uploadImages(
-            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
-            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
-            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
-            @RequestParam("files") List<MultipartFile> files,
-            @RequestParam(value = "keys", required = false) List<String> keys
-    ) {
-        internalRequestVerifier.verify(internalAuth);
-        adminActorScopeService.assertCanManagePosters(userSub, userRoles, internalAuth);
-        return adminPosterService.uploadImages(files, keys, internalAuth, userSub, userRoles);
+        return adminPosterService.prepareImageUploads(request, internalAuth, userSub, userRoles);
     }
 }

@@ -161,6 +161,26 @@ public class AdminActorScopeService {
         }
     }
 
+    public void assertCanAccessOrderExport(
+            String userSub,
+            String userRolesHeader,
+            UUID exportVendorId,
+            String internalAuth
+    ) {
+        Set<String> roles = parseRoles(userRolesHeader);
+        if (roles.contains("super_admin")) {
+            return;
+        }
+        if (roles.contains("platform_staff")) {
+            assertCanReadOrders(userSub, userRolesHeader, internalAuth);
+            return;
+        }
+        if (exportVendorId == null) {
+            throw new UnauthorizedException("Vendor-scoped users cannot access global order exports");
+        }
+        resolveScopedVendorIdForOrderAccess(userSub, userRolesHeader, exportVendorId, internalAuth);
+    }
+
     public void assertCanManageOrders(String userSub, String userRolesHeader, String internalAuth) {
         Set<String> roles = parseRoles(userRolesHeader);
         if (roles.contains("super_admin")) {

@@ -7,6 +7,7 @@ import type { CustomerAddress } from "../../../lib/types/customer";
 
 type Props = {
   cart: CartResponse;
+  isAuthenticated: boolean;
   preview: CheckoutPreviewResponse | null;
   couponCode: string;
   onCouponChange: (code: string) => void;
@@ -30,6 +31,7 @@ type Props = {
 
 export default function CheckoutSidebar({
   cart,
+  isAuthenticated,
   preview,
   couponCode,
   onCouponChange,
@@ -50,7 +52,7 @@ export default function CheckoutSidebar({
   checkingOut,
   onCheckout,
 }: Props) {
-  const checkoutDisabled = busy || cart.items.length === 0 || !hasRequiredAddresses || emailVerified === false;
+  const checkoutDisabled = busy || cart.items.length === 0 || !isAuthenticated || !hasRequiredAddresses || emailVerified === false;
 
   return (
     <aside className="cart-summary-aside glass-card self-start sticky top-[80px]">
@@ -174,18 +176,24 @@ export default function CheckoutSidebar({
       )}
 
       {/* Address notices */}
-      {addresses.length === 0 && !addressLoading && (
+      {!isAuthenticated && cart.items.length > 0 && (
+        <div className="rounded-md border border-[rgba(0,212,255,0.25)] bg-[rgba(0,212,255,0.06)] px-3 py-2.5 text-[0.78rem] text-brand mb-3.5">
+          Sign in with your customer account to enter addresses and continue to checkout.
+        </div>
+      )}
+      {isAuthenticated && addresses.length === 0 && !addressLoading && (
         <div className="rounded-md border border-[rgba(245,158,11,0.25)] bg-[rgba(245,158,11,0.06)] px-3 py-2.5 text-[0.78rem] text-warning-text mb-3.5">
           Add at least one address in your profile before checkout.{" "}
           <Link href="/profile" className="text-brand font-bold">Open Profile</Link>
         </div>
       )}
-      {addressLoading && (
+      {isAuthenticated && addressLoading && (
         <p className="text-sm text-muted mb-3">Loading addresses...</p>
       )}
 
       <div className="flex flex-col gap-2.5">
         {/* Shipping */}
+        {isAuthenticated && (
         <div>
           <label className="block text-xs font-bold text-muted uppercase tracking-wide mb-1.5">
             Shipping Address
@@ -204,8 +212,10 @@ export default function CheckoutSidebar({
             ))}
           </select>
         </div>
+        )}
 
         {/* Billing same toggle */}
+        {isAuthenticated && (
         <label className="inline-flex items-center gap-2 text-sm text-muted cursor-pointer">
           <input
             type="checkbox"
@@ -216,9 +226,10 @@ export default function CheckoutSidebar({
           />
           Billing same as shipping
         </label>
+        )}
 
         {/* Billing address */}
-        {!billingSameAsShipping && (
+        {isAuthenticated && !billingSameAsShipping && (
           <div>
             <label className="block text-xs font-bold text-muted uppercase tracking-wide mb-1.5">
               Billing Address
@@ -246,7 +257,7 @@ export default function CheckoutSidebar({
           className={`w-full py-3 rounded-md border-none text-white text-[0.9rem] font-extrabold inline-flex items-center justify-center gap-2 mt-1.5 shadow-[0_0_20px_var(--line-bright)] ${checkoutDisabled ? "bg-brand/20 cursor-not-allowed" : "bg-[image:var(--gradient-brand)] cursor-pointer"}`}
         >
           {checkingOut && <span className="spinner-sm" />}
-          {checkingOut ? "Processing..." : "Checkout & Pay"}
+          {checkingOut ? "Processing..." : isAuthenticated ? "Checkout & Pay" : "Sign In to Checkout"}
         </button>
       </div>
     </aside>

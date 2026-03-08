@@ -9,6 +9,7 @@ import com.rumal.vendor_service.dto.UpdateVendorSelfServiceRequest;
 import com.rumal.vendor_service.dto.UpsertVendorPayoutConfigRequest;
 import com.rumal.vendor_service.dto.UpsertVendorRequest;
 import com.rumal.vendor_service.dto.UpsertVendorUserRequest;
+import com.rumal.vendor_service.dto.VendorMediaAssetType;
 import com.rumal.vendor_service.dto.VendorAccessMembershipResponse;
 import com.rumal.vendor_service.dto.VendorLifecycleAuditResponse;
 import com.rumal.vendor_service.dto.VendorDeletionEligibilityResponse;
@@ -18,6 +19,7 @@ import com.rumal.vendor_service.dto.VendorPayoutConfigResponse;
 import com.rumal.vendor_service.dto.PublicVendorResponse;
 import com.rumal.vendor_service.dto.VendorResponse;
 import com.rumal.vendor_service.dto.VendorUserResponse;
+import com.rumal.vendor_service.entity.VendorAuditOutboxEvent;
 import com.rumal.vendor_service.entity.Vendor;
 import com.rumal.vendor_service.entity.VendorLifecycleAction;
 import com.rumal.vendor_service.entity.VendorLifecycleAudit;
@@ -30,6 +32,7 @@ import com.rumal.vendor_service.exception.ResourceNotFoundException;
 import com.rumal.vendor_service.exception.ServiceUnavailableException;
 import com.rumal.vendor_service.exception.UnauthorizedException;
 import com.rumal.vendor_service.exception.ValidationException;
+import com.rumal.vendor_service.repo.VendorAuditOutboxRepository;
 import com.rumal.vendor_service.repo.VendorLifecycleAuditRepository;
 import com.rumal.vendor_service.repo.VendorPayoutConfigRepository;
 import com.rumal.vendor_service.repo.VendorRepository;
@@ -44,6 +47,7 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -75,11 +79,15 @@ public class VendorServiceImpl implements VendorService {
 
     private final VendorRepository vendorRepository;
     private final VendorLifecycleAuditRepository vendorLifecycleAuditRepository;
+    private final VendorAuditOutboxRepository vendorAuditOutboxRepository;
     private final VendorUserRepository vendorUserRepository;
     private final VendorPayoutConfigRepository vendorPayoutConfigRepository;
     private final OrderLifecycleClient orderLifecycleClient;
     private final ProductCatalogAdminClient productCatalogAdminClient;
+    private final VendorMediaStorageService vendorMediaStorageService;
     private final TransactionTemplate transactionTemplate;
+    private final VendorAuditRequestContextResolver vendorAuditRequestContextResolver;
+    private final VendorAuditPayloadSanitizer vendorAuditPayloadSanitizer;
 
     @Lazy
     @Autowired
@@ -91,14 +99,18 @@ public class VendorServiceImpl implements VendorService {
     @Value("${vendor.delete.refund-hold-days:14}")
     private int vendorDeleteRefundHoldDays;
 
+    @Value("${vendor.audit.outbox.retry-base-delay-seconds:15}")
+    private long vendorAuditRetryBaseDelaySeconds;
+
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public VendorResponse create(UpsertVendorRequest request) {
         Vendor vendor = new Vendor();
         applyVendorRequest(vendor, request);
         Vendor saved = vendorRepository.save(vendor);
-        recordLifecycleAudit(saved, VendorLifecycleAction.CREATED, null, null, null);
-        return toVendorResponse(saved);
+        VendorResponse response = toVendorResponse(saved);
+        recordLifecycleAudit(saved, VendorLifecycleAction.CREATED, null, null, null, "ADMIN_API", "VENDOR", saved.getId().toString(), null, response);
+        return response;
     }
 
     @Override
@@ -106,11 +118,13 @@ public class VendorServiceImpl implements VendorService {
     @CacheEvict(cacheNames = "vendorOperationalState", key = "#id")
     public VendorResponse update(UUID id, UpsertVendorRequest request) {
         Vendor vendor = getNonDeletedVendor(id);
+        VendorResponse beforeState = toVendorResponse(vendor);
         applyVendorRequest(vendor, request);
         Vendor saved = vendorRepository.save(vendor);
-        recordLifecycleAudit(saved, VendorLifecycleAction.UPDATED, null, null, null);
+        VendorResponse response = toVendorResponse(saved);
+        recordLifecycleAudit(saved, VendorLifecycleAction.UPDATED, null, null, null, "ADMIN_API", "VENDOR", saved.getId().toString(), beforeState, response);
         syncProductCatalogVisibility(saved.getId());
-        return toVendorResponse(saved);
+        return response;
     }
 
     @Override
@@ -226,11 +240,13 @@ public class VendorServiceImpl implements VendorService {
         if (vendor.getDeletionRequestedAt() != null) {
             return toVendorResponse(vendor);
         }
+        VendorResponse beforeState = toVendorResponse(vendor);
         vendor.setDeletionRequestedAt(Instant.now());
         vendor.setDeletionRequestReason(trimToNull(reason));
         Vendor saved = vendorRepository.save(vendor);
-        recordLifecycleAudit(saved, VendorLifecycleAction.DELETE_REQUESTED, reason, actorSub, actorRoles);
-        return toVendorResponse(saved);
+        VendorResponse response = toVendorResponse(saved);
+        recordLifecycleAudit(saved, VendorLifecycleAction.DELETE_REQUESTED, reason, actorSub, actorRoles, "ADMIN_API", "VENDOR", saved.getId().toString(), beforeState, response);
+        return response;
     }
 
     @Override
@@ -266,6 +282,7 @@ public class VendorServiceImpl implements VendorService {
             if (vendor.getDeletionRequestedAt() == null) {
                 throw new ValidationException("Delete request must be created before confirm delete");
             }
+            VendorResponse beforeState = toVendorResponse(vendor);
             vendor.setDeleted(true);
             vendor.setDeletedAt(Instant.now());
             vendor.setActive(false);
@@ -274,7 +291,7 @@ public class VendorServiceImpl implements VendorService {
                 vendor.setDeletionRequestReason(trimToNull(reason));
             }
             vendorRepository.save(vendor);
-            recordLifecycleAudit(vendor, VendorLifecycleAction.DELETE_CONFIRMED, reason, actorSub, actorRoles);
+            recordLifecycleAudit(vendor, VendorLifecycleAction.DELETE_CONFIRMED, reason, actorSub, actorRoles, "ADMIN_API", "VENDOR", vendor.getId().toString(), beforeState, toVendorResponse(vendor));
         });
 
         // Deactivate all vendor products in product-service (best-effort)
@@ -303,11 +320,13 @@ public class VendorServiceImpl implements VendorService {
         if (!vendor.isAcceptingOrders()) {
             return toVendorResponse(vendor);
         }
+        VendorResponse beforeState = toVendorResponse(vendor);
         vendor.setAcceptingOrders(false);
         Vendor saved = vendorRepository.save(vendor);
-        recordLifecycleAudit(saved, VendorLifecycleAction.STOP_ORDERS, reason, actorSub, actorRoles);
+        VendorResponse response = toVendorResponse(saved);
+        recordLifecycleAudit(saved, VendorLifecycleAction.STOP_ORDERS, reason, actorSub, actorRoles, "ADMIN_API", "VENDOR", saved.getId().toString(), beforeState, response);
         syncProductCatalogVisibility(saved.getId());
-        return toVendorResponse(saved);
+        return response;
     }
 
     @Override
@@ -331,11 +350,13 @@ public class VendorServiceImpl implements VendorService {
         if (vendor.isAcceptingOrders()) {
             return toVendorResponse(vendor);
         }
+        VendorResponse beforeState = toVendorResponse(vendor);
         vendor.setAcceptingOrders(true);
         Vendor saved = vendorRepository.save(vendor);
-        recordLifecycleAudit(saved, VendorLifecycleAction.RESUME_ORDERS, reason, actorSub, actorRoles);
+        VendorResponse response = toVendorResponse(saved);
+        recordLifecycleAudit(saved, VendorLifecycleAction.RESUME_ORDERS, reason, actorSub, actorRoles, "ADMIN_API", "VENDOR", saved.getId().toString(), beforeState, response);
         syncProductCatalogVisibility(saved.getId());
-        return toVendorResponse(saved);
+        return response;
     }
 
     @Override
@@ -354,15 +375,17 @@ public class VendorServiceImpl implements VendorService {
         if (!vendor.isDeleted()) {
             return toVendorResponse(vendor);
         }
+        VendorResponse beforeState = toVendorResponse(vendor);
         vendor.setDeleted(false);
         vendor.setDeletedAt(null);
         vendor.setDeletionRequestedAt(null);
         vendor.setDeletionRequestReason(null);
         vendor.setAcceptingOrders(false);
         Vendor saved = vendorRepository.save(vendor);
-        recordLifecycleAudit(saved, VendorLifecycleAction.RESTORED, reason, actorSub, actorRoles);
+        VendorResponse response = toVendorResponse(saved);
+        recordLifecycleAudit(saved, VendorLifecycleAction.RESTORED, reason, actorSub, actorRoles, "ADMIN_API", "VENDOR", saved.getId().toString(), beforeState, response);
         syncProductCatalogVisibility(saved.getId());
-        return toVendorResponse(saved);
+        return response;
     }
 
     @Override
@@ -404,7 +427,21 @@ public class VendorServiceImpl implements VendorService {
         user.setVendor(vendor);
         applyVendorUserRequest(user, request);
         try {
-            return toVendorUserResponse(vendorUserRepository.save(user));
+            VendorUser saved = vendorUserRepository.save(user);
+            VendorUserResponse response = toVendorUserResponse(saved);
+            recordLifecycleAudit(
+                    vendor,
+                    VendorLifecycleAction.USER_ADDED,
+                    "Vendor membership created",
+                    null,
+                    null,
+                    "ADMIN_API",
+                    "VENDOR_USER",
+                    saved.getId().toString(),
+                    null,
+                    response
+            );
+            return response;
         } catch (DataIntegrityViolationException ex) {
             throw new ValidationException("Vendor user already exists for vendor and keycloakUserId");
         }
@@ -413,9 +450,10 @@ public class VendorServiceImpl implements VendorService {
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public VendorUserResponse updateVendorUser(UUID vendorId, UUID membershipId, UpsertVendorUserRequest request) {
-        getNonDeletedVendor(vendorId);
+        Vendor vendor = getNonDeletedVendor(vendorId);
         VendorUser user = vendorUserRepository.findByIdAndVendorId(membershipId, vendorId)
                 .orElseThrow(() -> new ResourceNotFoundException("Vendor user membership not found: " + membershipId));
+        VendorUserResponse beforeState = toVendorUserResponse(user);
         String incomingKeycloak = normalizeRequired(request.keycloakUserId(), "keycloakUserId", 120);
         if (!incomingKeycloak.equalsIgnoreCase(user.getKeycloakUserId())
                 && vendorUserRepository.existsByVendorIdAndKeycloakUserId(vendorId, incomingKeycloak)) {
@@ -423,7 +461,21 @@ public class VendorServiceImpl implements VendorService {
         }
         applyVendorUserRequest(user, request);
         try {
-            return toVendorUserResponse(vendorUserRepository.save(user));
+            VendorUser saved = vendorUserRepository.save(user);
+            VendorUserResponse response = toVendorUserResponse(saved);
+            recordLifecycleAudit(
+                    vendor,
+                    VendorLifecycleAction.USER_UPDATED,
+                    "Vendor membership updated",
+                    null,
+                    null,
+                    "ADMIN_API",
+                    "VENDOR_USER",
+                    saved.getId().toString(),
+                    beforeState,
+                    response
+            );
+            return response;
         } catch (DataIntegrityViolationException ex) {
             throw new ValidationException("Another vendor user already exists with this keycloakUserId");
         }
@@ -432,10 +484,23 @@ public class VendorServiceImpl implements VendorService {
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public void removeVendorUser(UUID vendorId, UUID membershipId) {
-        getNonDeletedVendor(vendorId);
+        Vendor vendor = getNonDeletedVendor(vendorId);
         VendorUser user = vendorUserRepository.findByIdAndVendorId(membershipId, vendorId)
                 .orElseThrow(() -> new ResourceNotFoundException("Vendor user membership not found: " + membershipId));
+        VendorUserResponse beforeState = toVendorUserResponse(user);
         vendorUserRepository.delete(user);
+        recordLifecycleAudit(
+                vendor,
+                VendorLifecycleAction.USER_REMOVED,
+                "Vendor membership removed",
+                null,
+                null,
+                "ADMIN_API",
+                "VENDOR_USER",
+                membershipId.toString(),
+                beforeState,
+                Map.of("removed", true, "vendorId", vendorId, "membershipId", membershipId)
+        );
     }
 
     @Override
@@ -514,8 +579,8 @@ public class VendorServiceImpl implements VendorService {
         vendor.setSupportEmail(normalizeEmailOptional(request.supportEmail()));
         vendor.setContactPhone(trimToNull(request.contactPhone()));
         vendor.setContactPersonName(trimToNull(request.contactPersonName()));
-        vendor.setLogoImage(trimToNull(request.logoImage()));
-        vendor.setBannerImage(trimToNull(request.bannerImage()));
+        vendor.setLogoImage(resolveVendorMediaReference(vendor.getId(), vendor.getLogoImage(), request.logoImage(), VendorMediaAssetType.LOGO));
+        vendor.setBannerImage(resolveVendorMediaReference(vendor.getId(), vendor.getBannerImage(), request.bannerImage(), VendorMediaAssetType.BANNER));
         vendor.setWebsiteUrl(trimToNull(request.websiteUrl()));
         vendor.setDescription(trimToNull(request.description()));
         vendor.setCommissionRate(request.commissionRate());
@@ -704,11 +769,18 @@ public class VendorServiceImpl implements VendorService {
                 audit.getId(),
                 audit.getVendor().getId(),
                 audit.getAction(),
+                audit.getResourceType(),
+                audit.getResourceId(),
                 audit.getActorSub(),
+                audit.getActorTenantId(),
                 audit.getActorRoles(),
                 audit.getActorType(),
                 audit.getChangeSource(),
                 audit.getReason(),
+                audit.getChangeSet(),
+                audit.getClientIp(),
+                audit.getUserAgent(),
+                audit.getRequestId(),
                 audit.getCreatedAt()
         );
     }
@@ -780,24 +852,107 @@ public class VendorServiceImpl implements VendorService {
         syncTask.run();
     }
 
-    private void recordLifecycleAudit(Vendor vendor, VendorLifecycleAction action, String reason, String actorSub, String actorRoles) {
-        recordLifecycleAudit(vendor, action, reason, actorSub, actorRoles, "ADMIN_API");
+    @Transactional(readOnly = false, propagation = Propagation.REQUIRES_NEW)
+    public void processAuditOutboxBatch(int batchSize) {
+        List<VendorAuditOutboxEvent> events = vendorAuditOutboxRepository
+                .findByProcessedAtIsNullAndAvailableAtLessThanEqualOrderByAvailableAtAscCreatedAtAsc(
+                        Instant.now(),
+                        PageRequest.of(0, Math.max(1, batchSize))
+                );
+        for (VendorAuditOutboxEvent event : events) {
+            processAuditOutboxEvent(event.getId());
+        }
     }
 
-    private void recordLifecycleAudit(Vendor vendor, VendorLifecycleAction action, String reason, String actorSub, String actorRoles, String changeSource) {
-        if (vendor == null || action == null) {
+    @Transactional(readOnly = false, propagation = Propagation.REQUIRES_NEW)
+    public void processAuditOutboxEvent(UUID eventId) {
+        VendorAuditOutboxEvent event = vendorAuditOutboxRepository.findById(eventId).orElse(null);
+        if (event == null || event.getProcessedAt() != null) {
             return;
         }
-        VendorLifecycleAudit audit = VendorLifecycleAudit.builder()
-                .vendor(vendor)
+        try {
+            if (!vendorLifecycleAuditRepository.existsBySourceEventId(event.getId())) {
+                Vendor vendor = vendorRepository.findById(event.getVendorId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Vendor not found for audit event: " + event.getVendorId()));
+                vendorLifecycleAuditRepository.save(VendorLifecycleAudit.builder()
+                        .sourceEventId(event.getId())
+                        .vendor(vendor)
+                        .action(event.getAction())
+                        .resourceType(defaultValue(event.getResourceType(), "VENDOR"))
+                        .resourceId(trimToNull(event.getResourceId()))
+                        .actorSub(defaultValue(event.getActorSub(), "system"))
+                        .actorTenantId(trimToNull(event.getActorTenantId()))
+                        .actorRoles(trimToNull(event.getActorRoles()))
+                        .actorType(defaultValue(event.getActorType(), "SYSTEM"))
+                        .changeSource(defaultValue(event.getChangeSource(), "SYSTEM"))
+                        .reason(trimToNull(event.getReason()))
+                        .changeSet(trimToNull(event.getChangeSet()))
+                        .clientIp(trimToNull(event.getClientIp()))
+                        .userAgent(trimToNull(event.getUserAgent()))
+                        .requestId(trimToNull(event.getRequestId()))
+                        .build());
+            }
+            markAuditOutboxProcessed(event);
+        } catch (DataIntegrityViolationException duplicate) {
+            markAuditOutboxProcessed(event);
+        } catch (Exception ex) {
+            event.setAttemptCount(event.getAttemptCount() + 1);
+            event.setLastError(truncate(ex.getMessage(), 500));
+            event.setAvailableAt(Instant.now().plusSeconds(resolveAuditRetryDelaySeconds(event.getAttemptCount())));
+            vendorAuditOutboxRepository.save(event);
+            log.warn("Vendor audit outbox event {} failed on attempt {}", event.getId(), event.getAttemptCount(), ex);
+        }
+    }
+
+    private void recordLifecycleAudit(Vendor vendor, VendorLifecycleAction action, String reason, String actorSub, String actorRoles) {
+        recordLifecycleAudit(vendor, action, reason, actorSub, actorRoles, "ADMIN_API", "VENDOR", vendor == null ? null : vendor.getId().toString(), null, null);
+    }
+
+    private void recordLifecycleAudit(
+            Vendor vendor,
+            VendorLifecycleAction action,
+            String reason,
+            String actorSub,
+            String actorRoles,
+            String changeSource,
+            String resourceType,
+            String resourceId,
+            Object beforeState,
+            Object afterState
+    ) {
+        if (vendor == null || action == null || vendor.getId() == null) {
+            return;
+        }
+        VendorAuditRequestContext context = vendorAuditRequestContextResolver.resolve(actorSub, actorRoles, changeSource);
+        vendorAuditOutboxRepository.save(VendorAuditOutboxEvent.builder()
+                .vendorId(vendor.getId())
                 .action(action)
-                .actorSub(trimToNull(actorSub))
-                .actorRoles(trimToNull(actorRoles))
-                .actorType(StringUtils.hasText(actorSub) ? "USER" : "SYSTEM")
-                .changeSource(changeSource)
-                .reason(trimToNull(reason))
-                .build();
-        vendorLifecycleAuditRepository.save(audit);
+                .resourceType(defaultValue(resourceType, "VENDOR"))
+                .resourceId(trimToNull(resourceId))
+                .actorSub(defaultValue(context.actorSub(), "system"))
+                .actorTenantId(trimToNull(context.actorTenantId()))
+                .actorRoles(trimToNull(context.actorRoles()))
+                .actorType(defaultValue(context.actorType(), "SYSTEM"))
+                .changeSource(defaultValue(context.changeSource(), "SYSTEM"))
+                .reason(vendorAuditPayloadSanitizer.sanitizeReason(reason))
+                .changeSet(vendorAuditPayloadSanitizer.buildChangeSet(beforeState, afterState))
+                .clientIp(trimToNull(context.clientIp()))
+                .userAgent(trimToNull(context.userAgent()))
+                .requestId(trimToNull(context.requestId()))
+                .availableAt(Instant.now())
+                .build());
+    }
+
+    private void markAuditOutboxProcessed(VendorAuditOutboxEvent event) {
+        event.setProcessedAt(Instant.now());
+        event.setLastError(null);
+        vendorAuditOutboxRepository.save(event);
+    }
+
+    private long resolveAuditRetryDelaySeconds(int attemptCount) {
+        long base = Math.max(5L, vendorAuditRetryBaseDelaySeconds);
+        long multiplier = Math.max(1L, attemptCount);
+        return Math.min(900L, base * multiplier * multiplier);
     }
 
     private Vendor resolveVendorForKeycloakUser(String keycloakUserId, UUID vendorIdHint) {
@@ -857,11 +1012,13 @@ public class VendorServiceImpl implements VendorService {
     @CacheEvict(cacheNames = "vendorOperationalState", key = "#result.id()")
     public VendorResponse updateVendorSelfService(String keycloakUserId, UUID vendorIdHint, UpdateVendorSelfServiceRequest request) {
         Vendor vendor = resolveVendorForKeycloakUser(keycloakUserId, vendorIdHint);
+        VendorResponse beforeState = toVendorResponse(vendor);
         applySelfServiceRequest(vendor, request);
         Vendor saved = vendorRepository.save(vendor);
-        recordLifecycleAudit(saved, VendorLifecycleAction.UPDATED, null, keycloakUserId, null, "VENDOR_SELF_SERVICE");
+        VendorResponse response = toVendorResponse(saved);
+        recordLifecycleAudit(saved, VendorLifecycleAction.UPDATED, "Vendor storefront settings updated", keycloakUserId, null, "VENDOR_SELF_SERVICE", "VENDOR", saved.getId().toString(), beforeState, response);
         syncProductCatalogVisibility(saved.getId());
-        return toVendorResponse(saved);
+        return response;
     }
 
     @Override
@@ -872,11 +1029,13 @@ public class VendorServiceImpl implements VendorService {
         if (!vendor.isAcceptingOrders()) {
             return toVendorResponse(vendor);
         }
+        VendorResponse beforeState = toVendorResponse(vendor);
         vendor.setAcceptingOrders(false);
         Vendor saved = vendorRepository.save(vendor);
-        recordLifecycleAudit(saved, VendorLifecycleAction.STOP_ORDERS, null, keycloakUserId, null, "VENDOR_SELF_SERVICE");
+        VendorResponse response = toVendorResponse(saved);
+        recordLifecycleAudit(saved, VendorLifecycleAction.STOP_ORDERS, "Vendor stopped accepting orders", keycloakUserId, null, "VENDOR_SELF_SERVICE", "VENDOR", saved.getId().toString(), beforeState, response);
         syncProductCatalogVisibility(saved.getId());
-        return toVendorResponse(saved);
+        return response;
     }
 
     @Override
@@ -893,11 +1052,13 @@ public class VendorServiceImpl implements VendorService {
         if (vendor.isAcceptingOrders()) {
             return toVendorResponse(vendor);
         }
+        VendorResponse beforeState = toVendorResponse(vendor);
         vendor.setAcceptingOrders(true);
         Vendor saved = vendorRepository.save(vendor);
-        recordLifecycleAudit(saved, VendorLifecycleAction.RESUME_ORDERS, null, keycloakUserId, null, "VENDOR_SELF_SERVICE");
+        VendorResponse response = toVendorResponse(saved);
+        recordLifecycleAudit(saved, VendorLifecycleAction.RESUME_ORDERS, "Vendor resumed accepting orders", keycloakUserId, null, "VENDOR_SELF_SERVICE", "VENDOR", saved.getId().toString(), beforeState, response);
         syncProductCatalogVisibility(saved.getId());
-        return toVendorResponse(saved);
+        return response;
     }
 
     @Override
@@ -918,9 +1079,23 @@ public class VendorServiceImpl implements VendorService {
                     c.setVendor(vendor);
                     return c;
                 });
+        VendorPayoutConfigResponse beforeState = config.getId() == null ? null : toPayoutConfigResponse(config);
         applyPayoutConfigRequest(config, request);
         VendorPayoutConfig saved = vendorPayoutConfigRepository.save(config);
-        return toPayoutConfigResponse(saved);
+        VendorPayoutConfigResponse response = toPayoutConfigResponse(saved);
+        recordLifecycleAudit(
+                vendor,
+                VendorLifecycleAction.PAYOUT_CONFIG_UPDATED,
+                "Vendor payout configuration updated",
+                keycloakUserId,
+                null,
+                "VENDOR_SELF_SERVICE",
+                "VENDOR_PAYOUT_CONFIG",
+                saved.getId() == null ? vendor.getId().toString() : saved.getId().toString(),
+                beforeState,
+                response
+        );
+        return response;
     }
 
     private void applySelfServiceRequest(Vendor vendor, UpdateVendorSelfServiceRequest request) {
@@ -975,6 +1150,28 @@ public class VendorServiceImpl implements VendorService {
         config.setTaxId(trimToNull(request.taxId()));
     }
 
+    private String resolveVendorMediaReference(UUID vendorId, String currentValue, String requestedValue, VendorMediaAssetType assetType) {
+        String normalized = trimToNull(requestedValue);
+        if (!StringUtils.hasText(normalized)) {
+            return null;
+        }
+        if (isLegacyExternalMediaReference(normalized)) {
+            if (normalized.equals(currentValue)) {
+                return normalized;
+            }
+            throw new ValidationException("Direct external media URLs are no longer allowed. Upload the asset through the managed media flow.");
+        }
+        if (vendorId == null) {
+            return normalized;
+        }
+        return vendorMediaStorageService.assertVendorMediaReady(vendorId, assetType, normalized);
+    }
+
+    private boolean isLegacyExternalMediaReference(String value) {
+        String normalized = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+        return normalized.startsWith("http://") || normalized.startsWith("https://");
+    }
+
     private VendorPayoutConfigResponse toPayoutConfigResponse(VendorPayoutConfig c) {
         return new VendorPayoutConfigResponse(
                 c.getId(),
@@ -998,6 +1195,7 @@ public class VendorServiceImpl implements VendorService {
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public VendorResponse requestVerification(String keycloakUserId, UUID vendorIdHint, RequestVerificationRequest request) {
         Vendor vendor = resolveVendorForKeycloakUser(keycloakUserId, vendorIdHint);
+        VendorResponse beforeState = toVendorResponse(vendor);
         VerificationStatus current = vendor.getVerificationStatus();
         if (current != VerificationStatus.UNVERIFIED && current != VerificationStatus.VERIFICATION_REJECTED) {
             throw new ValidationException("Verification can only be requested when status is UNVERIFIED or VERIFICATION_REJECTED, current: " + current);
@@ -1009,8 +1207,9 @@ public class VendorServiceImpl implements VendorService {
             vendor.setVerificationNotes(trimToNull(request.notes()));
         }
         Vendor saved = vendorRepository.save(vendor);
-        recordLifecycleAudit(saved, VendorLifecycleAction.VERIFICATION_REQUESTED, null, keycloakUserId, null, "VENDOR_SELF_SERVICE");
-        return toVendorResponse(saved);
+        VendorResponse response = toVendorResponse(saved);
+        recordLifecycleAudit(saved, VendorLifecycleAction.VERIFICATION_REQUESTED, "Vendor verification requested", keycloakUserId, null, "VENDOR_SELF_SERVICE", "VENDOR", saved.getId().toString(), beforeState, response);
+        return response;
     }
 
     @Override
@@ -1018,6 +1217,7 @@ public class VendorServiceImpl implements VendorService {
     @CacheEvict(cacheNames = "vendorOperationalState", key = "#vendorId")
     public VendorResponse approveVerification(UUID vendorId, AdminVerificationActionRequest request, String actorSub, String actorRoles) {
         Vendor vendor = getNonDeletedVendor(vendorId);
+        VendorResponse beforeState = toVendorResponse(vendor);
         if (vendor.getVerificationStatus() != VerificationStatus.PENDING_VERIFICATION) {
             throw new ValidationException("Can only approve verification when status is PENDING_VERIFICATION, current: " + vendor.getVerificationStatus());
         }
@@ -1028,9 +1228,10 @@ public class VendorServiceImpl implements VendorService {
             vendor.setVerificationNotes(request.notes().trim());
         }
         Vendor saved = vendorRepository.save(vendor);
+        VendorResponse response = toVendorResponse(saved);
         recordLifecycleAudit(saved, VendorLifecycleAction.VERIFICATION_APPROVED,
-                request != null ? request.notes() : null, actorSub, actorRoles);
-        return toVendorResponse(saved);
+                request != null ? request.notes() : null, actorSub, actorRoles, "ADMIN_API", "VENDOR", saved.getId().toString(), beforeState, response);
+        return response;
     }
 
     @Override
@@ -1038,6 +1239,7 @@ public class VendorServiceImpl implements VendorService {
     @CacheEvict(cacheNames = "vendorOperationalState", key = "#vendorId")
     public VendorResponse rejectVerification(UUID vendorId, AdminVerificationActionRequest request, String actorSub, String actorRoles) {
         Vendor vendor = getNonDeletedVendor(vendorId);
+        VendorResponse beforeState = toVendorResponse(vendor);
         if (vendor.getVerificationStatus() != VerificationStatus.PENDING_VERIFICATION) {
             throw new ValidationException("Can only reject verification when status is PENDING_VERIFICATION, current: " + vendor.getVerificationStatus());
         }
@@ -1047,9 +1249,10 @@ public class VendorServiceImpl implements VendorService {
             vendor.setVerificationNotes(request.notes().trim());
         }
         Vendor saved = vendorRepository.save(vendor);
+        VendorResponse response = toVendorResponse(saved);
         recordLifecycleAudit(saved, VendorLifecycleAction.VERIFICATION_REJECTED,
-                request != null ? request.notes() : null, actorSub, actorRoles);
-        return toVendorResponse(saved);
+                request != null ? request.notes() : null, actorSub, actorRoles, "ADMIN_API", "VENDOR", saved.getId().toString(), beforeState, response);
+        return response;
     }
 
     // --- Gap 50: Performance metrics ---
@@ -1058,6 +1261,7 @@ public class VendorServiceImpl implements VendorService {
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public VendorResponse updateMetrics(UUID vendorId, UpdateVendorMetricsRequest request) {
         Vendor vendor = getNonDeletedVendor(vendorId);
+        VendorResponse beforeState = toVendorResponse(vendor);
         if (request.averageRating() != null) {
             vendor.setAverageRating(request.averageRating());
         }
@@ -1077,7 +1281,9 @@ public class VendorServiceImpl implements VendorService {
             vendor.setTotalOrdersCompleted(request.totalOrdersCompleted());
         }
         Vendor saved = vendorRepository.save(vendor);
-        return toVendorResponse(saved);
+        VendorResponse response = toVendorResponse(saved);
+        recordLifecycleAudit(saved, VendorLifecycleAction.UPDATED, "Vendor metrics synchronized", null, null, "SYSTEM_SYNC", "VENDOR", saved.getId().toString(), beforeState, response);
+        return response;
     }
 
     @Override
@@ -1085,5 +1291,20 @@ public class VendorServiceImpl implements VendorService {
         if (vendorIds == null || vendorIds.isEmpty()) return Map.of();
         return vendorRepository.findAllById(vendorIds).stream()
                 .collect(Collectors.toMap(Vendor::getId, Vendor::getName));
+    }
+
+    private String defaultValue(String value, String fallback) {
+        return StringUtils.hasText(value) ? value.trim() : fallback;
+    }
+
+    private String truncate(String value, int maxLength) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String normalized = value.trim();
+        if (normalized.length() <= maxLength) {
+            return normalized;
+        }
+        return normalized.substring(0, maxLength);
     }
 }

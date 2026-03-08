@@ -1,15 +1,18 @@
-import Keycloak, { KeycloakInstance, KeycloakTokenParsed } from "keycloak-js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createApiClient, clearIdempotencyCache } from "./apiClient";
 import { API_BASE } from "./constants";
+import { CSRF_HEADER_NAME, getCsrfToken } from "./csrf";
 import type { LoadingStatus } from "./types/status";
 
 type SessionStatus = LoadingStatus;
 type UserProfile = Record<string, unknown> | null;
-type TokenClaims = KeycloakTokenParsed & Record<string, unknown>;
-
-let keycloakSingleton: KeycloakInstance | null = null;
-let keycloakInitPromise: Promise<boolean> | null = null;
+type TokenClaims = Record<string, unknown>;
+type SessionApiResponse = {
+  authenticated: boolean;
+  claims: TokenClaims | null;
+  profile: UserProfile;
+  expiresAt: string | null;
+};
 
 const env = {
   url: process.env.NEXT_PUBLIC_KEYCLOAK_URL || "",
@@ -21,20 +24,6 @@ const env = {
   apiBase: API_BASE,
 };
 const SESSION_SYNC_INTERVAL_MS = 2 * 60 * 1000;
-
-function parseJwtPayload(token: string): Record<string, unknown> | null {
-  const parts = token.split(".");
-  if (parts.length < 2) return null;
-
-  try {
-    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-    const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
-    const decoded = atob(padded);
-    return JSON.parse(decoded) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-}
 
 function asObject(value: unknown): Record<string, unknown> | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
@@ -295,38 +284,8 @@ function resolveReturnTo(returnTo: string): string {
   }
 }
 
-function getCallbackParam(name: string): string {
-  if (typeof window === "undefined") return "";
-
-  const searchParams = new URLSearchParams(window.location.search);
-  const fromSearch = (searchParams.get(name) || "").trim();
-  if (fromSearch) return fromSearch;
-
-  const hash = window.location.hash.startsWith("#")
-    ? window.location.hash.slice(1)
-    : window.location.hash;
-  if (!hash) return "";
-
-  const hashParams = new URLSearchParams(hash);
-  return (hashParams.get(name) || "").trim();
-}
-
 function resolveKeycloakBaseUrl(url: string): string {
   return url.trim().replace(/\/+$/, "");
-}
-
-function resolveSilentCheckSsoUri(): string | undefined {
-  if (typeof window === "undefined") return undefined;
-  return `${window.location.origin}/silent-check-sso.html`;
-}
-
-function resolveRequestedScope(): string | undefined {
-  const normalized = env.scope
-    .split(/\s+/)
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .join(" ");
-  return normalized || undefined;
 }
 
 function buildResetCredentialsUrl(returnTo: string, loginHint?: string): string {
@@ -342,53 +301,26 @@ function buildResetCredentialsUrl(returnTo: string, loginHint?: string): string 
   return `${base}/realms/${encodeURIComponent(env.realm)}/login-actions/reset-credentials?${params.toString()}`;
 }
 
-function getKeycloak(): KeycloakInstance {
-  if (typeof window === "undefined") {
-    throw new Error("Keycloak can only be initialized in the browser");
-  }
-  if (keycloakSingleton) return keycloakSingleton;
-  keycloakSingleton = new Keycloak({
-    url: env.url,
-    realm: env.realm,
-    clientId: env.clientId,
-  });
-  return keycloakSingleton;
+function buildBffAuthUrl(path: string, returnTo: string): string {
+  if (typeof window === "undefined") return path;
+  const url = new URL(path, window.location.origin);
+  url.searchParams.set("returnTo", resolveReturnTo(returnTo));
+  return url.toString();
 }
 
-function initKeycloakOnce(client: KeycloakInstance): Promise<boolean> {
-  if (keycloakInitPromise) {
-    return keycloakInitPromise;
-  }
-
-  const maybeInitialized = (client as KeycloakInstance & { didInitialize?: boolean }).didInitialize;
-  if (maybeInitialized) {
-    return Promise.resolve(Boolean(client.authenticated));
-  }
-
-  keycloakInitPromise = client
-    .init({
-      onLoad: "check-sso",
-      pkceMethod: "S256",
-      scope: resolveRequestedScope(),
-      checkLoginIframe: false,
-      silentCheckSsoRedirectUri: resolveSilentCheckSsoUri(),
-      silentCheckSsoFallback: true,
-    })
-    .catch((error) => {
-      keycloakInitPromise = null;
-      keycloakSingleton = null;
-      throw error;
-    });
-
-  return keycloakInitPromise;
+function buildLogoutUrl(returnTo: string): string {
+  if (typeof window === "undefined") return `/api/auth/logout?returnTo=${encodeURIComponent(returnTo)}`;
+  const url = new URL("/api/auth/logout", window.location.origin);
+  url.searchParams.set("returnTo", resolveReturnTo(returnTo));
+  return url.toString();
 }
 
 export function useAuthSession() {
-  const [client, setClient] = useState<KeycloakInstance | null>(null);
   const [status, setStatus] = useState<SessionStatus>("idle");
   const [error, setError] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [profile, setProfile] = useState<UserProfile>(null);
+  const [claims, setClaims] = useState<TokenClaims | null>(null);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [isPlatformStaff, setIsPlatformStaff] = useState(false);
   const [isVendorAdmin, setIsVendorAdmin] = useState(false);
@@ -410,381 +342,307 @@ export function useAuthSession() {
   const [hasCustomerRole, setHasCustomerRole] = useState(false);
   const [emailVerified, setEmailVerified] = useState<boolean | null>(null);
   const customerBootstrapDoneRef = useRef(false);
-  const lastSessionSyncAtRef = useRef(0);
   const sessionSyncInFlightRef = useRef<Promise<void> | null>(null);
 
-  useEffect(() => {
-    const init = async () => {
-      if (!env.url || !env.realm || !env.clientId) {
-        setStatus("error");
-        setError(
-          "Missing Keycloak config. Check NEXT_PUBLIC_KEYCLOAK_URL, NEXT_PUBLIC_KEYCLOAK_REALM, NEXT_PUBLIC_KEYCLOAK_CLIENT_ID."
-        );
-        return;
-      }
+  const apiClient = useMemo(() => {
+    return createApiClient({
+      baseURL: env.apiBase,
+    });
+  }, []);
 
+  const resetPermissions = useCallback(() => {
+    setProfile(null);
+    setClaims(null);
+    setIsSuperAdmin(false);
+    setIsPlatformStaff(false);
+    setIsVendorAdmin(false);
+    setIsVendorStaff(false);
+    setCanViewAdmin(false);
+    setCanManageAdminOrders(false);
+    setCanManageAdminPayments(false);
+    setCanManageAdminProducts(false);
+    setCanManageAdminCategories(false);
+    setCanManageAdminPosters(false);
+    setCanManageAdminVendors(false);
+    setCanManageAdminPromotions(false);
+    setCanManageAdminReviews(false);
+    setCanManageAdminInventory(false);
+    setCanViewVendorAnalytics(false);
+    setCanViewVendorFinance(false);
+    setCanManageVendorFinance(false);
+    setCanManageVendorSettings(false);
+    setHasCustomerRole(false);
+    setEmailVerified(null);
+  }, []);
+
+  const hydrateCapabilities = useCallback(async (
+    parsedClaims: TokenClaims | null,
+    userProfile: UserProfile
+  ) => {
+    const superAdmin = isSuperAdminByClaims(parsedClaims, env.claimsNamespace);
+    const platformStaff = isPlatformStaffByClaims(parsedClaims, env.claimsNamespace);
+    const vendorAdmin = isVendorAdminByClaims(parsedClaims, env.claimsNamespace);
+    const vendorStaff = isVendorStaffByClaims(parsedClaims, env.claimsNamespace);
+    const customerRole = isCustomerByClaims(parsedClaims, env.claimsNamespace);
+    const anyAdmin = superAdmin || platformStaff || vendorAdmin || vendorStaff;
+    let manageOrders = superAdmin || vendorAdmin;
+    let managePayments = superAdmin || platformStaff;
+    let manageProducts = superAdmin || vendorAdmin;
+    let manageCategories = superAdmin;
+    let managePosters = superAdmin;
+    let manageVendors = superAdmin;
+    let managePromotions = superAdmin || vendorAdmin;
+    let manageReviews = superAdmin;
+    let manageInventory = superAdmin || vendorAdmin;
+    let viewVendorAnalytics = superAdmin || vendorAdmin;
+    let viewVendorFinance = superAdmin || vendorAdmin;
+    let manageVendorFinance = superAdmin || vendorAdmin;
+    let manageVendorSettings = superAdmin || vendorAdmin;
+
+    if (anyAdmin) {
       try {
-        setStatus("loading");
-        const keycloak = getKeycloak();
-        setClient(keycloak);
+        const capabilitiesRes = await fetch(`${env.apiBase}/admin/me/capabilities`, {
+          method: "GET",
+          credentials: "same-origin",
+          cache: "no-store",
+        });
+        if (capabilitiesRes.ok) {
+          const capabilities = (await capabilitiesRes.json()) as Record<string, unknown>;
+          const platformPermissionCodes = toPermissionCodeSet(capabilities.platformPermissions);
+          const vendorPermissionCodes = collectActiveVendorPermissionCodes(capabilities.vendorStaffAccess);
 
-        let callbackAction = "";
-        let callbackStatus = "";
-        keycloak.onActionUpdate = (status, action) => {
-          callbackStatus = (status || "").trim().toLowerCase();
-          callbackAction = (action || "").trim().toUpperCase();
-        };
+          const platformCanManageOrders =
+            platformPermissionCodes.has(PLATFORM_ORDERS_READ)
+            || platformPermissionCodes.has(PLATFORM_ORDERS_MANAGE);
+          const platformCanManagePayments =
+            platformPermissionCodes.has(PLATFORM_PAYMENTS_READ)
+            || platformPermissionCodes.has(PLATFORM_PAYMENTS_MANAGE);
+          const platformCanManageProducts = platformPermissionCodes.has(PLATFORM_PRODUCTS_MANAGE);
+          const platformCanManageCategories = platformPermissionCodes.has(PLATFORM_CATEGORIES_MANAGE);
+          const platformCanManagePosters = platformPermissionCodes.has(PLATFORM_POSTERS_MANAGE);
+          const platformCanManagePromotions = platformPermissionCodes.has(PLATFORM_PROMOTIONS_MANAGE);
+          const platformCanManageReviews = platformPermissionCodes.has(PLATFORM_REVIEWS_MANAGE);
+          const platformCanManageInventory =
+            platformPermissionCodes.has(PLATFORM_INVENTORY_MANAGE)
+            || platformCanManageProducts;
 
-        const keycloakError = getCallbackParam("error");
-        const keycloakErrorDescription = getCallbackParam("error_description");
-        const keycloakAction = getCallbackParam("kc_action").toUpperCase();
-        const keycloakActionStatus = getCallbackParam("kc_action_status").toLowerCase();
-        if (keycloakError || keycloakErrorDescription) {
-          setError(keycloakErrorDescription || keycloakError || "");
+          const vendorStaffCanManageOrders =
+            vendorPermissionCodes.has(VENDOR_ORDERS_READ)
+            || vendorPermissionCodes.has(VENDOR_ORDERS_MANAGE);
+          const vendorStaffCanManageProducts = vendorPermissionCodes.has(VENDOR_PRODUCTS_MANAGE);
+          const vendorStaffCanManagePromotions = vendorPermissionCodes.has(VENDOR_PROMOTIONS_MANAGE);
+          const vendorStaffCanManageInventory =
+            vendorPermissionCodes.has(VENDOR_INVENTORY_MANAGE)
+            || vendorStaffCanManageProducts;
+          const vendorStaffCanViewAnalytics = vendorPermissionCodes.has(VENDOR_ANALYTICS_READ);
+          const vendorStaffCanManageFinance = vendorPermissionCodes.has(VENDOR_FINANCE_MANAGE);
+          const vendorStaffCanViewFinance =
+            vendorStaffCanManageFinance
+            || vendorPermissionCodes.has(VENDOR_FINANCE_READ);
+          const vendorStaffCanManageSettings = vendorPermissionCodes.has(VENDOR_SETTINGS_MANAGE);
+
+          manageOrders =
+            superAdmin
+            || vendorAdmin
+            || (vendorStaff && vendorStaffCanManageOrders)
+            || platformCanManageOrders
+            || Boolean(capabilities.canManageAdminOrders);
+          managePayments =
+            superAdmin
+            || platformCanManagePayments;
+          manageProducts =
+            superAdmin
+            || vendorAdmin
+            || (vendorStaff && vendorStaffCanManageProducts)
+            || platformCanManageProducts
+            || Boolean(capabilities.canManageAdminProducts);
+          manageCategories =
+            superAdmin
+            || platformCanManageCategories
+            || Boolean(capabilities.canManageAdminCategories);
+          managePosters =
+            superAdmin
+            || platformCanManagePosters
+            || Boolean(capabilities.canManageAdminPosters);
+          manageVendors = superAdmin || Boolean(capabilities.canManageAdminVendors);
+          managePromotions =
+            superAdmin
+            || vendorAdmin
+            || (vendorStaff && vendorStaffCanManagePromotions)
+            || platformCanManagePromotions
+            || Boolean(capabilities.canManageAdminPromotions);
+          manageReviews =
+            superAdmin
+            || platformCanManageReviews
+            || Boolean(capabilities.canManageAdminReviews);
+          manageInventory =
+            superAdmin
+            || vendorAdmin
+            || (vendorStaff && vendorStaffCanManageInventory)
+            || platformCanManageInventory
+            || Boolean(capabilities.canManageAdminInventory);
+          viewVendorAnalytics =
+            superAdmin
+            || vendorAdmin
+            || (vendorStaff && vendorStaffCanViewAnalytics);
+          viewVendorFinance =
+            superAdmin
+            || vendorAdmin
+            || (vendorStaff && vendorStaffCanViewFinance);
+          manageVendorFinance =
+            superAdmin
+            || vendorAdmin
+            || (vendorStaff && vendorStaffCanManageFinance);
+          manageVendorSettings =
+            superAdmin
+            || vendorAdmin
+            || (vendorStaff && vendorStaffCanManageSettings);
+        }
+      } catch {
+        // Keep coarse-role fallback if capabilities endpoint is unavailable.
+      }
+    }
+
+    setProfile(userProfile);
+    setClaims(parsedClaims);
+    setIsSuperAdmin(superAdmin);
+    setIsPlatformStaff(platformStaff);
+    setIsVendorAdmin(vendorAdmin);
+    setIsVendorStaff(vendorStaff);
+    setCanViewAdmin(anyAdmin);
+    setCanManageAdminOrders(manageOrders);
+    setCanManageAdminPayments(managePayments);
+    setCanManageAdminProducts(manageProducts);
+    setCanManageAdminCategories(manageCategories);
+    setCanManageAdminPosters(managePosters);
+    setCanManageAdminVendors(manageVendors);
+    setCanManageAdminPromotions(managePromotions);
+    setCanManageAdminReviews(manageReviews);
+    setCanManageAdminInventory(manageInventory);
+    setCanViewVendorAnalytics(viewVendorAnalytics);
+    setCanViewVendorFinance(viewVendorFinance);
+    setCanManageVendorFinance(manageVendorFinance);
+    setCanManageVendorSettings(manageVendorSettings);
+    setHasCustomerRole(customerRole);
+    setEmailVerified(resolveEmailVerified(parsedClaims, userProfile, env.claimsNamespace));
+  }, []);
+
+  const loadSession = useCallback(async (force = false) => {
+    if (sessionSyncInFlightRef.current && !force) {
+      return sessionSyncInFlightRef.current;
+    }
+
+    const request = (async () => {
+      setStatus((current) => (current === "idle" ? "loading" : current));
+      try {
+        const response = await fetch("/api/auth/session", {
+          method: "GET",
+          credentials: "same-origin",
+          cache: "no-store",
+        });
+
+        if (response.status === 503) {
+          const body = (await response.json().catch(() => ({ message: "" }))) as { message?: string };
+          setStatus("error");
+          setError(body.message || "Session validation is temporarily unavailable");
+          return;
         }
 
-        const authenticated = await initKeycloakOnce(keycloak);
-
-        setIsAuthenticated(Boolean(authenticated));
-        if (authenticated) {
-          try {
-            await keycloak.updateToken(30);
-          } catch {
-            // Best effort token refresh on startup.
-          }
-
-          const resolvedAction = keycloakAction || callbackAction;
-          const resolvedActionStatus = keycloakActionStatus || callbackStatus;
-          if (resolvedAction === "UPDATE_PASSWORD" && resolvedActionStatus === "success") {
-            await keycloak.logout({
-              redirectUri: resolveReturnTo("/"),
-            });
-            return;
-          }
-
-          const parsedClaims =
-            (keycloak.tokenParsed as TokenClaims | undefined)
-            || (keycloak.token ? (parseJwtPayload(keycloak.token) as TokenClaims | null) : null);
-
-          let userProfile: UserProfile = null;
-          try {
-            const loaded = await keycloak.loadUserProfile();
-            userProfile = loaded ? ({
-              ...loaded,
-              email: (parsedClaims?.email as string | undefined) || loaded.email || "",
-              email_verified: parsedClaims?.email_verified,
-            } as Record<string, unknown>) : null;
-          } catch {
-            userProfile = null;
-          }
-
-          if (!userProfile && parsedClaims) {
-            userProfile = {
-              name: parsedClaims.name,
-              preferred_username: parsedClaims.preferred_username,
-              email: parsedClaims.email,
-              email_verified: parsedClaims.email_verified,
-            };
-          }
-
-          const resolvedProfileName = resolveProfileName(parsedClaims, userProfile);
-          if (resolvedProfileName) {
-            userProfile = {
-              ...(userProfile || {}),
-              name: resolvedProfileName,
-            };
-          }
-
-          const superAdmin = isSuperAdminByClaims(parsedClaims, env.claimsNamespace);
-          const platformStaff = isPlatformStaffByClaims(parsedClaims, env.claimsNamespace);
-          const vendorAdmin = isVendorAdminByClaims(parsedClaims, env.claimsNamespace);
-          const vendorStaff = isVendorStaffByClaims(parsedClaims, env.claimsNamespace);
-          const customerRole = isCustomerByClaims(parsedClaims, env.claimsNamespace);
-          const anyAdmin = superAdmin || platformStaff || vendorAdmin || vendorStaff;
-          let manageOrders = superAdmin || vendorAdmin;
-          let managePayments = superAdmin || platformStaff;
-          let manageProducts = superAdmin || vendorAdmin;
-          let manageCategories = superAdmin;
-          let managePosters = superAdmin;
-          let manageVendors = superAdmin;
-          let managePromotions = superAdmin || vendorAdmin;
-          let manageReviews = superAdmin;
-          let manageInventory = superAdmin || vendorAdmin;
-          let viewVendorAnalytics = superAdmin || vendorAdmin;
-          let viewVendorFinance = superAdmin || vendorAdmin;
-          let manageVendorFinance = superAdmin || vendorAdmin;
-          let manageVendorSettings = superAdmin || vendorAdmin;
-
-          if (anyAdmin && keycloak.token) {
-            try {
-              const capabilitiesRes = await fetch(`${env.apiBase}/admin/me/capabilities`, {
-                method: "GET",
-                headers: {
-                  Authorization: `Bearer ${keycloak.token}`,
-                },
-              });
-              if (capabilitiesRes.ok) {
-                const capabilities = (await capabilitiesRes.json()) as Record<string, unknown>;
-                const platformPermissionCodes = toPermissionCodeSet(capabilities.platformPermissions);
-                const vendorPermissionCodes = collectActiveVendorPermissionCodes(capabilities.vendorStaffAccess);
-
-                const platformCanManageOrders =
-                  platformPermissionCodes.has(PLATFORM_ORDERS_READ)
-                  || platformPermissionCodes.has(PLATFORM_ORDERS_MANAGE);
-                const platformCanManagePayments =
-                  platformPermissionCodes.has(PLATFORM_PAYMENTS_READ)
-                  || platformPermissionCodes.has(PLATFORM_PAYMENTS_MANAGE);
-                const platformCanManageProducts = platformPermissionCodes.has(PLATFORM_PRODUCTS_MANAGE);
-                const platformCanManageCategories = platformPermissionCodes.has(PLATFORM_CATEGORIES_MANAGE);
-                const platformCanManagePosters = platformPermissionCodes.has(PLATFORM_POSTERS_MANAGE);
-                const platformCanManagePromotions = platformPermissionCodes.has(PLATFORM_PROMOTIONS_MANAGE);
-                const platformCanManageReviews = platformPermissionCodes.has(PLATFORM_REVIEWS_MANAGE);
-                const platformCanManageInventory =
-                  platformPermissionCodes.has(PLATFORM_INVENTORY_MANAGE)
-                  || platformCanManageProducts;
-
-                const vendorStaffCanManageOrders =
-                  vendorPermissionCodes.has(VENDOR_ORDERS_READ)
-                  || vendorPermissionCodes.has(VENDOR_ORDERS_MANAGE);
-                const vendorStaffCanManageProducts = vendorPermissionCodes.has(VENDOR_PRODUCTS_MANAGE);
-                const vendorStaffCanManagePromotions = vendorPermissionCodes.has(VENDOR_PROMOTIONS_MANAGE);
-                const vendorStaffCanManageInventory =
-                  vendorPermissionCodes.has(VENDOR_INVENTORY_MANAGE)
-                  || vendorStaffCanManageProducts;
-                const vendorStaffCanViewAnalytics = vendorPermissionCodes.has(VENDOR_ANALYTICS_READ);
-                const vendorStaffCanManageFinance = vendorPermissionCodes.has(VENDOR_FINANCE_MANAGE);
-                const vendorStaffCanViewFinance =
-                  vendorStaffCanManageFinance
-                  || vendorPermissionCodes.has(VENDOR_FINANCE_READ);
-                const vendorStaffCanManageSettings = vendorPermissionCodes.has(VENDOR_SETTINGS_MANAGE);
-
-                manageOrders =
-                  superAdmin
-                  || vendorAdmin
-                  || (vendorStaff && vendorStaffCanManageOrders)
-                  || platformCanManageOrders
-                  || Boolean(capabilities.canManageAdminOrders);
-                managePayments =
-                  superAdmin
-                  || platformCanManagePayments;
-                manageProducts =
-                  superAdmin
-                  || vendorAdmin
-                  || (vendorStaff && vendorStaffCanManageProducts)
-                  || platformCanManageProducts
-                  || Boolean(capabilities.canManageAdminProducts);
-                manageCategories =
-                  superAdmin
-                  || platformCanManageCategories
-                  || Boolean(capabilities.canManageAdminCategories);
-                managePosters =
-                  superAdmin
-                  || platformCanManagePosters
-                  || Boolean(capabilities.canManageAdminPosters);
-                manageVendors = superAdmin || Boolean(capabilities.canManageAdminVendors);
-                managePromotions =
-                  superAdmin
-                  || vendorAdmin
-                  || (vendorStaff && vendorStaffCanManagePromotions)
-                  || platformCanManagePromotions
-                  || Boolean(capabilities.canManageAdminPromotions);
-                manageReviews =
-                  superAdmin
-                  || platformCanManageReviews
-                  || Boolean(capabilities.canManageAdminReviews);
-                manageInventory =
-                  superAdmin
-                  || vendorAdmin
-                  || (vendorStaff && vendorStaffCanManageInventory)
-                  || platformCanManageInventory
-                  || Boolean(capabilities.canManageAdminInventory);
-                viewVendorAnalytics =
-                  superAdmin
-                  || vendorAdmin
-                  || (vendorStaff && vendorStaffCanViewAnalytics);
-                viewVendorFinance =
-                  superAdmin
-                  || vendorAdmin
-                  || (vendorStaff && vendorStaffCanViewFinance);
-                manageVendorFinance =
-                  superAdmin
-                  || vendorAdmin
-                  || (vendorStaff && vendorStaffCanManageFinance);
-                manageVendorSettings =
-                  superAdmin
-                  || vendorAdmin
-                  || (vendorStaff && vendorStaffCanManageSettings);
-              }
-            } catch {
-              // Keep coarse-role fallback if capabilities endpoint is unavailable.
-            }
-          }
-
-          setProfile(userProfile);
-          setIsSuperAdmin(superAdmin);
-          setIsPlatformStaff(platformStaff);
-          setIsVendorAdmin(vendorAdmin);
-          setIsVendorStaff(vendorStaff);
-          setCanViewAdmin(anyAdmin);
-          setCanManageAdminOrders(manageOrders);
-          setCanManageAdminPayments(managePayments);
-          setCanManageAdminProducts(manageProducts);
-          setCanManageAdminCategories(manageCategories);
-          setCanManageAdminPosters(managePosters);
-          setCanManageAdminVendors(manageVendors);
-          setCanManageAdminPromotions(managePromotions);
-          setCanManageAdminReviews(manageReviews);
-          setCanManageAdminInventory(manageInventory);
-          setCanViewVendorAnalytics(viewVendorAnalytics);
-          setCanViewVendorFinance(viewVendorFinance);
-          setCanManageVendorFinance(manageVendorFinance);
-          setCanManageVendorSettings(manageVendorSettings);
-          setHasCustomerRole(customerRole);
-          setEmailVerified(resolveEmailVerified(parsedClaims, userProfile, env.claimsNamespace));
-        } else {
-          setProfile(null);
-          setIsSuperAdmin(false);
-          setIsPlatformStaff(false);
-          setIsVendorAdmin(false);
-          setIsVendorStaff(false);
-          setCanViewAdmin(false);
-          setCanManageAdminOrders(false);
-          setCanManageAdminPayments(false);
-          setCanManageAdminProducts(false);
-          setCanManageAdminCategories(false);
-          setCanManageAdminPosters(false);
-          setCanManageAdminVendors(false);
-          setCanManageAdminPromotions(false);
-          setCanManageAdminReviews(false);
-          setCanManageAdminInventory(false);
-          setCanViewVendorAnalytics(false);
-          setCanViewVendorFinance(false);
-          setCanManageVendorFinance(false);
-          setCanManageVendorSettings(false);
-          setHasCustomerRole(false);
-          setEmailVerified(null);
+        if (!response.ok) {
+          setStatus("error");
+          setError("Auth session initialization failed");
+          return;
         }
 
+        const payload = (await response.json()) as SessionApiResponse;
+        if (!payload.authenticated) {
+          setIsAuthenticated(false);
+          resetPermissions();
+          setError("");
+          setStatus("ready");
+          return;
+        }
+
+        const parsedClaims = payload.claims || null;
+        let userProfile = payload.profile || null;
+        const resolvedProfileName = resolveProfileName(parsedClaims, userProfile);
+        if (resolvedProfileName) {
+          userProfile = {
+            ...(userProfile || {}),
+            name: resolvedProfileName,
+          };
+        }
+
+        setIsAuthenticated(true);
+        setError("");
+        await hydrateCapabilities(parsedClaims, userProfile);
         setStatus("ready");
       } catch (e) {
         setStatus("error");
         setError(e instanceof Error ? e.message : "Auth initialization failed");
       }
-    };
+    })().finally(() => {
+      sessionSyncInFlightRef.current = null;
+    });
 
-    void init();
+    sessionSyncInFlightRef.current = request;
+    return request;
+  }, [hydrateCapabilities, resetPermissions]);
+
+  useEffect(() => {
+    void loadSession(true);
+  }, [loadSession]);
+
+  const login = useCallback(async (returnTo: string) => {
+    if (typeof window !== "undefined") {
+      window.location.assign(buildBffAuthUrl("/api/auth/login", returnTo));
+    }
   }, []);
 
-  const apiClient = useMemo(() => {
-    if (!client) return null;
-    return createApiClient({
-      baseURL: env.apiBase,
-      getToken: async () => {
-        if (!client.authenticated) {
-          throw new Error("User is not authenticated");
-        }
-        try {
-          await client.updateToken(30);
-        } catch {
-          // Token refresh can fail if token is still valid or on transient network errors.
-        }
-        if (!client.token) {
-          throw new Error("Missing access token");
-        }
-        return client.token;
-      },
-    });
-  }, [client]);
+  const signup = useCallback(async (returnTo: string) => {
+    if (typeof window !== "undefined") {
+      window.location.assign(buildBffAuthUrl("/api/auth/signup", returnTo));
+    }
+  }, []);
 
-  const syncGatewaySession = useCallback(
-    async (force = false) => {
-      if (!apiClient || !isAuthenticated) return;
+  const changePassword = useCallback(async (returnTo: string) => {
+    if (typeof window !== "undefined") {
+      window.location.assign(buildBffAuthUrl("/api/auth/change-password", returnTo));
+    }
+  }, []);
 
-      const now = Date.now();
-      if (!force && now - lastSessionSyncAtRef.current < SESSION_SYNC_INTERVAL_MS) {
-        return;
-      }
-      if (sessionSyncInFlightRef.current) {
-        return sessionSyncInFlightRef.current;
-      }
-
-      const request = apiClient.post("/auth/session")
-        .then(() => {
-          lastSessionSyncAtRef.current = Date.now();
-        })
-        .finally(() => {
-          sessionSyncInFlightRef.current = null;
-        });
-      sessionSyncInFlightRef.current = request;
-      return request;
-    },
-    [apiClient, isAuthenticated]
-  );
-
-  const login = useCallback(
-    async (returnTo: string) => {
-      if (!client) return;
-      await client.login({
-        redirectUri: resolveReturnTo(returnTo),
-        scope: resolveRequestedScope(),
-      });
-    },
-    [client]
-  );
-
-  const signup = useCallback(
-    async (returnTo: string) => {
-      if (!client) return;
-      await client.register({
-        redirectUri: resolveReturnTo(returnTo),
-        scope: resolveRequestedScope(),
-      });
-    },
-    [client]
-  );
-
-  const changePassword = useCallback(
-    async (returnTo: string) => {
-      if (!client) return;
-      await client.login({
-        redirectUri: resolveReturnTo(returnTo),
-        scope: resolveRequestedScope(),
-        action: "UPDATE_PASSWORD",
-      });
-    },
-    [client]
-  );
-
-  const forgotPassword = useCallback(
-    async (returnTo: string, loginHint?: string) => {
-      const target = buildResetCredentialsUrl(returnTo, loginHint);
-      if (typeof window !== "undefined") {
-        window.location.assign(target);
-      }
-    },
-    []
-  );
+  const forgotPassword = useCallback(async (returnTo: string, loginHint?: string) => {
+    const target = buildResetCredentialsUrl(returnTo, loginHint);
+    if (typeof window !== "undefined") {
+      window.location.assign(target);
+    }
+  }, []);
 
   const logout = useCallback(async () => {
-    if (!client) return;
     if (typeof localStorage !== "undefined") {
       localStorage.removeItem("_ps_merged");
     }
     clearIdempotencyCache();
-    if (apiClient && client.token) {
-      try {
-        await apiClient.post("/auth/logout");
-      } catch {
-        // Continue with IdP logout so browser SSO state is still cleared.
+    if (typeof window !== "undefined") {
+      const logoutUrl = buildLogoutUrl(window.location.pathname || "/");
+      const response = await fetch(logoutUrl, {
+        method: "POST",
+        headers: {
+          [CSRF_HEADER_NAME]: getCsrfToken(),
+          Accept: "application/json",
+        },
+        credentials: "include",
+      });
+      if (!response.ok) {
+        throw new Error("Logout failed");
       }
+      const payload = (await response.json()) as { redirectUrl?: string };
+      window.location.assign(payload.redirectUrl || "/");
     }
-    await client.logout({
-      redirectUri: typeof window === "undefined" ? undefined : window.location.origin,
-    });
-  }, [apiClient, client]);
+  }, []);
 
   const ensureCustomer = useCallback(async () => {
-    if (!apiClient || !isAuthenticated) return;
+    if (!isAuthenticated) return;
 
     try {
       await apiClient.get("/customers/me");
@@ -807,39 +665,37 @@ export function useAuthSession() {
   useEffect(() => {
     if (!isAuthenticated) {
       customerBootstrapDoneRef.current = false;
-      lastSessionSyncAtRef.current = 0;
       sessionSyncInFlightRef.current = null;
     }
   }, [isAuthenticated]);
 
   useEffect(() => {
-    if (status !== "ready" || !isAuthenticated || !apiClient) return;
+    if (status !== "ready") return;
 
-    const syncOnResume = () => {
+    const refreshOnResume = () => {
       if (document.visibilityState === "visible") {
-        void syncGatewaySession(false);
+        void loadSession(false);
       }
     };
 
-    void syncGatewaySession(true).catch(() => {});
     const intervalId = window.setInterval(() => {
       if (document.visibilityState === "visible") {
-        void syncGatewaySession(false);
+        void loadSession(false);
       }
     }, SESSION_SYNC_INTERVAL_MS);
 
-    window.addEventListener("focus", syncOnResume);
-    document.addEventListener("visibilitychange", syncOnResume);
+    window.addEventListener("focus", refreshOnResume);
+    document.addEventListener("visibilitychange", refreshOnResume);
     return () => {
       window.clearInterval(intervalId);
-      window.removeEventListener("focus", syncOnResume);
-      document.removeEventListener("visibilitychange", syncOnResume);
+      window.removeEventListener("focus", refreshOnResume);
+      document.removeEventListener("visibilitychange", refreshOnResume);
     };
-  }, [status, isAuthenticated, apiClient, syncGatewaySession]);
+  }, [status, loadSession]);
 
   useEffect(() => {
     if (status !== "ready" || customerBootstrapDoneRef.current) return;
-    if (!isAuthenticated || !apiClient) return;
+    if (!isAuthenticated) return;
     if (emailVerified === false) return;
 
     let cancelled = false;
@@ -858,24 +714,24 @@ export function useAuthSession() {
     return () => {
       cancelled = true;
     };
-  }, [status, isAuthenticated, apiClient, emailVerified, ensureCustomer]);
+  }, [status, isAuthenticated, emailVerified, ensureCustomer]);
 
-  // Merge anonymous personalization session on login
   useEffect(() => {
-    if (!isAuthenticated || !client?.token) return;
+    if (!isAuthenticated) return;
     import("./personalization").then(({ mergeSession }) => {
-      if (client.token) mergeSession(client.token).catch(() => {});
+      mergeSession().catch(() => {});
     }).catch(() => {});
-  }, [isAuthenticated, client]);
+  }, [isAuthenticated]);
 
   const resendVerificationEmail = useCallback(async () => {
-    if (!apiClient || !isAuthenticated) return;
+    if (!isAuthenticated) return;
     await apiClient.post("/auth/resend-verification");
   }, [apiClient, isAuthenticated]);
 
   return {
     env,
-    token: client?.token || null,
+    token: null,
+    getAccessToken: null,
     status,
     error,
     isAuthenticated,
@@ -900,6 +756,7 @@ export function useAuthSession() {
     hasCustomerRole,
     emailVerified,
     profile,
+    claims,
     apiClient,
     login,
     signup,
@@ -908,5 +765,6 @@ export function useAuthSession() {
     logout,
     ensureCustomer,
     resendVerificationEmail,
+    refreshSession: loadSession,
   };
 }

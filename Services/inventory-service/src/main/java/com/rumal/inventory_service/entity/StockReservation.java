@@ -2,6 +2,7 @@ package com.rumal.inventory_service.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.Check;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -9,6 +10,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
+@Check(name = "chk_stock_reservations_positive_quantity", constraints = "quantity_reserved > 0")
 @Table(
         name = "stock_reservations",
         indexes = {

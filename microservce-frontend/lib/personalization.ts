@@ -1,4 +1,5 @@
 import { API_BASE } from "./constants";
+import { getCsrfToken, CSRF_HEADER_NAME } from "./csrf";
 import type { PersonalizationProduct, TrackEventPayload } from "./types/personalization";
 
 export type { PersonalizationProduct } from "./types/personalization";
@@ -21,15 +22,20 @@ export function getSessionId(): string | null {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
-function buildHeaders(token?: string | null): Record<string, string> {
+function buildHeaders(mutating = false): Record<string, string> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   const sessionId = getOrCreateSessionId();
   if (sessionId) headers["X-Session-Id"] = sessionId;
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+  if (mutating) {
+    const csrfToken = getCsrfToken();
+    if (csrfToken) {
+      headers[CSRF_HEADER_NAME] = csrfToken;
+    }
+  }
   return headers;
 }
 
-type QueuedEvent = { payload: TrackEventPayload; token?: string | null };
+type QueuedEvent = { payload: TrackEventPayload };
 
 let eventQueue: QueuedEvent[] = [];
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -38,12 +44,11 @@ const FLUSH_INTERVAL = 2000;
 function flushEvents(): void {
   if (eventQueue.length === 0) return;
   const batch = eventQueue.splice(0);
-  const token = batch.find((e) => e.token)?.token;
   const payloads = batch.map((e) => e.payload);
   try {
     fetch(`${API_BASE}/personalization/events`, {
       method: "POST",
-      headers: buildHeaders(token),
+      headers: buildHeaders(true),
       body: JSON.stringify(payloads),
     }).catch(() => {});
   } catch {}
@@ -61,14 +66,13 @@ if (typeof window !== "undefined") {
   const onUnload = () => {
     if (eventQueue.length === 0) return;
     const batch = eventQueue.splice(0);
-    const token = batch.find((e) => e.token)?.token;
     const payloads = batch.map((e) => e.payload);
     try {
       // Use fetch with keepalive instead of sendBeacon so custom headers
-      // (Authorization, X-Session-Id) are actually transmitted.
+      // (CSRF, X-Session-Id) are actually transmitted.
       fetch(`${API_BASE}/personalization/events`, {
         method: "POST",
-        headers: buildHeaders(token),
+        headers: buildHeaders(true),
         body: JSON.stringify(payloads),
         keepalive: true,
       }).catch(() => {});
@@ -80,8 +84,8 @@ if (typeof window !== "undefined") {
   window.addEventListener("pagehide", onUnload);
 }
 
-export function trackEvent(payload: TrackEventPayload, token?: string | null): void {
-  eventQueue.push({ payload, token });
+export function trackEvent(payload: TrackEventPayload, _token?: string | null): void {
+  eventQueue.push({ payload });
   scheduleFlush();
 }
 
@@ -145,7 +149,7 @@ export function trackWishlistAdd(
   );
 }
 
-export async function mergeSession(token: string): Promise<void> {
+export async function mergeSession(_token?: string | null): Promise<void> {
   const sessionId = getSessionId();
   if (!sessionId) return;
   const merged = typeof localStorage !== "undefined" && localStorage.getItem("_ps_merged");
@@ -154,9 +158,10 @@ export async function mergeSession(token: string): Promise<void> {
     await fetch(`${API_BASE}/personalization/sessions/merge`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${token}`,
         "X-Session-Id": sessionId,
+        [CSRF_HEADER_NAME]: getCsrfToken(),
       },
+      credentials: "same-origin",
     });
     if (typeof localStorage !== "undefined") {
       localStorage.setItem("_ps_merged", "1");
@@ -180,12 +185,13 @@ export async function fetchTrending(
 
 export async function fetchRecommended(
   limit: number,
-  token?: string | null
+  _token?: string | null
 ): Promise<PersonalizationProduct[]> {
   try {
     const res = await fetch(`${API_BASE}/personalization/me/recommended?limit=${limit}`, {
-      headers: buildHeaders(token),
+      headers: buildHeaders(false),
       cache: "no-store",
+      credentials: "same-origin",
     });
     if (!res.ok) return [];
     return await res.json();
@@ -196,12 +202,13 @@ export async function fetchRecommended(
 
 export async function fetchRecentlyViewed(
   limit: number,
-  token?: string | null
+  _token?: string | null
 ): Promise<PersonalizationProduct[]> {
   try {
     const res = await fetch(`${API_BASE}/personalization/me/recently-viewed?limit=${limit}`, {
-      headers: buildHeaders(token),
+      headers: buildHeaders(false),
       cache: "no-store",
+      credentials: "same-origin",
     });
     if (!res.ok) return [];
     return await res.json();

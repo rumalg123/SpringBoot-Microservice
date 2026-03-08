@@ -144,18 +144,14 @@ public class VendorBankAccountController {
         }
         bankAccountRepository.saveAll(allAccounts);
 
-        account = bankAccountRepository.findById(id)
+        account = bankAccountRepository.findByIdAndVendorId(id, resolvedVendorId)
                 .orElseThrow(() -> new ResourceNotFoundException("Bank account not found: " + id));
         return toResponse(account);
     }
 
     private VendorBankAccount findOwnedAccount(UUID vendorId, UUID accountId) {
-        VendorBankAccount account = bankAccountRepository.findById(accountId)
+        return bankAccountRepository.findByIdAndVendorId(accountId, vendorId)
                 .orElseThrow(() -> new ResourceNotFoundException("Bank account not found: " + accountId));
-        if (!vendorId.equals(account.getVendorId())) {
-            throw new ResourceNotFoundException("Bank account not found: " + accountId);
-        }
-        return account;
     }
 
     private String requireUserSub(String userSub) {

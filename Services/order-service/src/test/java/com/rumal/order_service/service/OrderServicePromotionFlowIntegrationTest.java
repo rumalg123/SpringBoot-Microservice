@@ -95,6 +95,7 @@ class OrderServicePromotionFlowIntegrationTest {
         vendorOperationalStateClient = Mockito.mock(VendorOperationalStateClient.class);
         OrderCacheVersionService orderCacheVersionService = Mockito.mock(OrderCacheVersionService.class);
         outboxService = Mockito.mock(OutboxService.class);
+        OrderAnalyticsLiveUpdateService orderAnalyticsLiveUpdateService = Mockito.mock(OrderAnalyticsLiveUpdateService.class);
 
         orderService = new OrderService(
                 orderRepository,
@@ -116,13 +117,14 @@ class OrderServicePromotionFlowIntegrationTest {
                 new OrderAggregationProperties(CustomerDetailsMode.GRACEFUL),
                 orderCacheVersionService,
                 transactionTemplate,
-                outboxService
+                outboxService,
+                orderAnalyticsLiveUpdateService
         );
         ReflectionTestUtils.setField(orderService, "orderExpiryTtl", Duration.ofMinutes(30));
     }
 
     @Test
-    void createForKeycloak_commitsCouponReservation_andCancelReleasesReservation() {
+    void createForKeycloak_delaysCouponCommit_untilOrderConfirmed() {
         String keycloakId = "kc-user-1";
         UUID customerId = UUID.fromString("10101010-1010-1010-1010-101010101010");
         UUID productId = UUID.fromString("20202020-2020-2020-2020-202020202020");
@@ -205,20 +207,210 @@ class OrderServicePromotionFlowIntegrationTest {
         assertEquals(new BigDecimal("3.00"), created.totalDiscount());
         assertEquals(new BigDecimal("23.59"), created.orderTotal());
 
-        verify(outboxService).enqueue(eq("Order"), eq(created.id()), eq("COUPON_COMMIT"), any(Map.class));
         verify(outboxService).enqueue(eq("Order"), eq(created.id()), eq("INVENTORY_RESERVE"), any(Map.class));
+        verify(outboxService, never()).enqueue(eq("Order"), eq(created.id()), eq("COUPON_COMMIT"), any(Map.class));
+        verify(outboxService, never()).enqueue(eq("Order"), eq(created.id()), eq("CONFIRM_INVENTORY_RESERVATION"), any(Map.class));
 
-        OrderResponse cancelled = orderService.updateStatus(created.id(), OrderStatus.CANCELLED, null, null, null, null, "admin-sub", "platform_staff");
-        assertEquals("CANCELLED", cancelled.status());
-        assertEquals(couponReservationId, cancelled.couponReservationId());
+        OrderResponse confirmed = orderService.updateStatus(
+                created.id(),
+                OrderStatus.CONFIRMED,
+                null,
+                null,
+                null,
+                null,
+                "payment-sync",
+                "system"
+        );
+        assertEquals("CONFIRMED", confirmed.status());
+        assertEquals(couponReservationId, confirmed.couponReservationId());
 
-        verify(outboxService).enqueue(eq("Order"), eq(created.id()), eq("RELEASE_COUPON_RESERVATION"), any(Map.class));
-        verify(outboxService).enqueue(eq("Order"), eq(created.id()), eq("RELEASE_INVENTORY_RESERVATION"), any(Map.class));
+        verify(outboxService).enqueue(eq("Order"), eq(created.id()), eq("COUPON_COMMIT"), any(Map.class));
+        verify(outboxService).enqueue(eq("Order"), eq(created.id()), eq("CONFIRM_INVENTORY_RESERVATION"), any(Map.class));
 
         Order stored = orderRepository.findById(created.id()).orElseThrow();
-        assertEquals(OrderStatus.CANCELLED, stored.getStatus());
+        assertEquals(OrderStatus.CONFIRMED, stored.getStatus());
         assertEquals(couponReservationId, stored.getCouponReservationId());
         assertEquals(new BigDecimal("23.59"), stored.getOrderTotal());
+    }
+
+    @Test
+    void createForKeycloak_paymentFailureReleasesCouponReservation() {
+        String keycloakId = "kc-user-3";
+        UUID customerId = UUID.fromString("70707070-7070-7070-7070-707070707070");
+        UUID productId = UUID.fromString("80808080-8080-8080-8080-808080808080");
+        UUID vendorId = UUID.fromString("90909090-9090-9090-9090-909090909090");
+        UUID shippingAddressId = UUID.fromString("a0a0a0a0-a0a0-a0a0-a0a0-a0a0a0a0a0a0");
+        UUID billingAddressId = UUID.fromString("b0b0b0b0-b0b0-b0b0-b0b0-b0b0b0b0b0b0");
+        UUID couponReservationId = UUID.fromString("c0c0c0c0-c0c0-c0c0-c0c0-c0c0c0c0c0c0");
+
+        when(customerClient.getCustomerByKeycloakId(keycloakId)).thenReturn(new CustomerSummary(customerId, "Customer", "c@example.com"));
+        when(productClient.getBatch(anyList())).thenReturn(List.of(new ProductSummary(
+                productId,
+                null,
+                vendorId,
+                "Test Product",
+                "SKU-3",
+                "CHILD",
+                new BigDecimal("10.00"),
+                true
+        )));
+        @SuppressWarnings("unchecked")
+        Set<UUID> anyVendorIds = any(Set.class);
+        when(vendorOperationalStateClient.batchGetStates(anyVendorIds)).thenReturn(Map.of(
+                vendorId,
+                new VendorOperationalStateResponse(vendorId, true, false, "ACTIVE", true, true)
+        ));
+        when(vendorClient.getVendorNames(anyList())).thenReturn(Map.of(vendorId, "Vendor One"));
+        when(inventoryClient.checkAvailability(anyList())).thenReturn(List.of(
+                new StockCheckResult(productId, 10, true, false, "IN_STOCK")
+        ));
+        when(customerClient.getCustomerAddress(customerId, shippingAddressId)).thenReturn(address(shippingAddressId, customerId, "US"));
+        when(customerClient.getCustomerAddress(customerId, billingAddressId)).thenReturn(address(billingAddressId, customerId, "US"));
+        when(promotionClient.getCouponReservation(eq(couponReservationId))).thenReturn(new CouponReservationResponse(
+                couponReservationId,
+                UUID.randomUUID(),
+                null,
+                "SAVE3",
+                "RESERVED",
+                customerId,
+                null,
+                new BigDecimal("3.00"),
+                new BigDecimal("20.00"),
+                new BigDecimal("23.59"),
+                Instant.parse("2030-02-23T10:00:00Z"),
+                Instant.parse("2030-02-23T10:15:00Z"),
+                null,
+                null,
+                null
+        ));
+
+        OrderResponse created = orderService.createForKeycloak(keycloakId, new CreateMyOrderRequest(
+                null,
+                null,
+                List.of(new CreateOrderItemRequest(productId, 2)),
+                shippingAddressId,
+                billingAddressId,
+                new PromotionCheckoutPricingRequest(
+                        couponReservationId,
+                        "SAVE3",
+                        new BigDecimal("20.00"),
+                        new BigDecimal("0.00"),
+                        new BigDecimal("3.00"),
+                        new BigDecimal("6.59"),
+                        new BigDecimal("0.00"),
+                        new BigDecimal("3.00"),
+                        new BigDecimal("23.59")
+                ),
+                null
+        ));
+
+        OrderResponse paymentPending = orderService.updateStatus(
+                created.id(),
+                OrderStatus.PAYMENT_PENDING,
+                "Payment session opened",
+                null,
+                null,
+                null,
+                "payment-sync",
+                "system"
+        );
+        assertEquals("PAYMENT_PENDING", paymentPending.status());
+
+        OrderResponse paymentFailed = orderService.updateStatus(
+                created.id(),
+                OrderStatus.PAYMENT_FAILED,
+                "Payment gateway rejected charge",
+                null,
+                null,
+                null,
+                "payment-sync",
+                "system"
+        );
+
+        assertEquals("PAYMENT_FAILED", paymentFailed.status());
+        verify(outboxService).enqueue(eq("Order"), eq(created.id()), eq("RELEASE_COUPON_RESERVATION"), any(Map.class));
+        verify(outboxService).enqueue(eq("Order"), eq(created.id()), eq("RELEASE_INVENTORY_RESERVATION"), any(Map.class));
+    }
+
+    @Test
+    void createForKeycloak_zeroTotalOrder_confirmsImmediately_withoutPayment() {
+        String keycloakId = "kc-user-4";
+        UUID customerId = UUID.fromString("d1d1d1d1-d1d1-d1d1-d1d1-d1d1d1d1d1d1");
+        UUID productId = UUID.fromString("e2e2e2e2-e2e2-e2e2-e2e2-e2e2e2e2e2e2");
+        UUID vendorId = UUID.fromString("f3f3f3f3-f3f3-f3f3-f3f3-f3f3f3f3f3f3");
+        UUID shippingAddressId = UUID.fromString("12121212-1212-1212-1212-121212121212");
+        UUID billingAddressId = UUID.fromString("34343434-3434-3434-3434-343434343434");
+        UUID couponReservationId = UUID.fromString("56565656-5656-5656-5656-565656565656");
+
+        when(customerClient.getCustomerByKeycloakId(keycloakId)).thenReturn(new CustomerSummary(customerId, "Customer", "c@example.com"));
+        when(productClient.getBatch(anyList())).thenReturn(List.of(new ProductSummary(
+                productId,
+                null,
+                vendorId,
+                "Free Order Product",
+                "SKU-4",
+                "CHILD",
+                new BigDecimal("10.00"),
+                true
+        )));
+        @SuppressWarnings("unchecked")
+        Set<UUID> anyVendorIds = any(Set.class);
+        when(vendorOperationalStateClient.batchGetStates(anyVendorIds)).thenReturn(Map.of(
+                vendorId,
+                new VendorOperationalStateResponse(vendorId, true, false, "ACTIVE", true, true)
+        ));
+        when(vendorClient.getVendorNames(anyList())).thenReturn(Map.of(vendorId, "Vendor One"));
+        when(inventoryClient.checkAvailability(anyList())).thenReturn(List.of(
+                new StockCheckResult(productId, 10, true, false, "IN_STOCK")
+        ));
+        when(customerClient.getCustomerAddress(customerId, shippingAddressId)).thenReturn(address(shippingAddressId, customerId, "US"));
+        when(customerClient.getCustomerAddress(customerId, billingAddressId)).thenReturn(address(billingAddressId, customerId, "US"));
+        when(promotionClient.getCouponReservation(eq(couponReservationId))).thenReturn(new CouponReservationResponse(
+                couponReservationId,
+                UUID.randomUUID(),
+                null,
+                "FREEALL",
+                "RESERVED",
+                customerId,
+                null,
+                new BigDecimal("26.59"),
+                new BigDecimal("20.00"),
+                BigDecimal.ZERO.setScale(2),
+                Instant.parse("2030-02-23T10:00:00Z"),
+                Instant.parse("2030-02-23T10:15:00Z"),
+                null,
+                null,
+                null
+        ));
+
+        OrderResponse created = orderService.createForKeycloak(keycloakId, new CreateMyOrderRequest(
+                null,
+                null,
+                List.of(new CreateOrderItemRequest(productId, 2)),
+                shippingAddressId,
+                billingAddressId,
+                new PromotionCheckoutPricingRequest(
+                        couponReservationId,
+                        "FREEALL",
+                        new BigDecimal("20.00"),
+                        new BigDecimal("20.00"),
+                        BigDecimal.ZERO.setScale(2),
+                        new BigDecimal("6.59"),
+                        new BigDecimal("6.59"),
+                        new BigDecimal("26.59"),
+                        BigDecimal.ZERO.setScale(2)
+                ),
+                null
+        ));
+
+        assertEquals("CONFIRMED", created.status());
+        assertEquals(BigDecimal.ZERO.setScale(2), created.orderTotal());
+        assertEquals("NO_CHARGE", created.paymentMethod());
+        assertEquals("NO_PAYMENT_REQUIRED", created.paymentGatewayRef());
+        assertNotNull(created.paidAt());
+        verify(outboxService).enqueue(eq("Order"), eq(created.id()), eq("INVENTORY_RESERVE"), any(Map.class));
+        verify(outboxService).enqueue(eq("Order"), eq(created.id()), eq("COUPON_COMMIT"), any(Map.class));
+        verify(outboxService).enqueue(eq("Order"), eq(created.id()), eq("CONFIRM_INVENTORY_RESERVATION"), any(Map.class));
     }
 
     @Test

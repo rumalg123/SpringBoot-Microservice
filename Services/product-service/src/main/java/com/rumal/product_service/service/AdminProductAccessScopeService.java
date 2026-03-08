@@ -132,9 +132,7 @@ public class AdminProductAccessScopeService {
     }
 
     public UpsertProductRequest scopeVariationCreateRequest(ProductMutationAuthority authority, UUID parentId, UpsertProductRequest request) {
-        Product parent = productRepository.findById(parentId)
-                .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + parentId));
-        assertCanManageProduct(authority, parent);
+        Product parent = findManagedProduct(authority, parentId);
         UUID parentVendorId = requireProductVendorId(parent);
         if (request.vendorId() != null && !parentVendorId.equals(request.vendorId())) {
             throw new UnauthorizedException("Variation vendorId must match parent product vendorId");
@@ -147,9 +145,7 @@ public class AdminProductAccessScopeService {
     }
 
     public UpsertProductRequest scopeUpdateRequest(ProductMutationAuthority authority, UUID productId, UpsertProductRequest request) {
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + productId));
-        assertCanManageProduct(authority, product);
+        Product product = findManagedProduct(authority, productId);
         UUID existingVendorId = requireProductVendorId(product);
         if (request.vendorId() != null && !existingVendorId.equals(request.vendorId())) {
             throw new UnauthorizedException("Product vendorId is immutable after creation");
@@ -163,12 +159,7 @@ public class AdminProductAccessScopeService {
 
     public void assertCanManageProduct(ProductMutationAuthority authority, UUID productId) {
         assertCanManageProductOperations(authority);
-        if (authority.isPlatformPrivileged()) {
-            return;
-        }
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + productId));
-        assertCanManageProduct(authority, product);
+        findManagedProduct(authority, productId);
     }
 
     public void assertCanManageProductOperations(String userSub, String userRolesHeader, String internalAuth) {
@@ -225,8 +216,7 @@ public class AdminProductAccessScopeService {
     }
 
     public void assertCanSubmitProductForReview(ProductMutationAuthority authority, UUID productId) {
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + productId));
+        Product product = findManagedProduct(authority, productId);
         if (authority.isPlatformPrivileged()) {
             return;
         }
@@ -242,8 +232,7 @@ public class AdminProductAccessScopeService {
     }
 
     public ProductWorkflowActor resolveWorkflowActorForProduct(ProductMutationAuthority authority, UUID productId) {
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + productId));
+        Product product = findManagedProduct(authority, productId);
         return authority.workflowActorForVendor(requireProductVendorId(product));
     }
 
@@ -263,6 +252,16 @@ public class AdminProductAccessScopeService {
             throw new ValidationException("Existing product vendorId is missing");
         }
         return vendorId;
+    }
+
+    private Product findManagedProduct(ProductMutationAuthority authority, UUID productId) {
+        if (authority.isPlatformPrivileged()) {
+            return productRepository.findById(productId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + productId));
+        }
+        assertCanManageProductOperations(authority);
+        return productRepository.findByIdAndVendorIdIn(productId, authority.manageableVendorIds())
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + productId));
     }
 
     private UUID resolveVendorIdForVendorScopedActor(Set<UUID> vendorIds, UUID requestedVendorId) {

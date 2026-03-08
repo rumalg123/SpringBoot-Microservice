@@ -183,6 +183,12 @@ resilience4j:
 order:
   aggregation:
     customerDetailsMode: GRACEFUL   # STRICT or GRACEFUL
+  audit:
+    outbox:
+      poll-interval-ms: ${ORDER_AUDIT_OUTBOX_POLL_INTERVAL_MS:5000}
+      initial-delay-ms: ${ORDER_AUDIT_OUTBOX_INITIAL_DELAY_MS:10000}
+      batch-size: ${ORDER_AUDIT_OUTBOX_BATCH_SIZE:50}
+      retry-base-delay-seconds: ${ORDER_AUDIT_OUTBOX_RETRY_BASE_DELAY_SECONDS:15}
   expiry:
     ttl: ${ORDER_EXPIRY_TTL:30m}
     check-interval: ${ORDER_EXPIRY_CHECK_INTERVAL:PT5M}
@@ -192,6 +198,23 @@ order:
     key-prefix: ${ORDER_IDEMPOTENCY_KEY_PREFIX:os:idem:v1::}
     pending-ttl: ${ORDER_IDEMPOTENCY_PENDING_TTL:30s}
     response-ttl: ${ORDER_IDEMPOTENCY_RESPONSE_TTL:24h}
+  analytics:
+    cache-warmup:
+      initial-delay-ms: ${ORDER_ANALYTICS_CACHE_WARMUP_INITIAL_DELAY_MS:5000}
+      interval-ms: ${ORDER_ANALYTICS_CACHE_WARMUP_INTERVAL_MS:300000}
+    live:
+      redis-channel: ${ANALYTICS_LIVE_REDIS_CHANNEL:analytics:live:dashboard:v1}
+  export:
+    processor:
+      interval-ms: ${ORDER_EXPORT_PROCESSOR_INTERVAL_MS:5000}
+      batch-size: ${ORDER_EXPORT_PROCESSOR_BATCH_SIZE:2}
+    cleanup:
+      interval-ms: ${ORDER_EXPORT_CLEANUP_INTERVAL_MS:3600000}
+    processing-lease: ${ORDER_EXPORT_PROCESSING_LEASE:PT10M}
+    retention: ${ORDER_EXPORT_RETENTION:PT24H}
+    max-range: ${ORDER_EXPORT_MAX_RANGE:PT8760H}
+    storage:
+      local-dir: ${ORDER_EXPORT_STORAGE_LOCAL_DIR:${java.io.tmpdir}/rumal-order-exports}
 
 outbox:
   processor:
@@ -206,6 +229,15 @@ internal:
 cache:
   orders-by-keycloak-ttl: ${CACHE_ORDERS_BY_KEYCLOAK_TTL:60s}
   order-details-by-keycloak-ttl: ${CACHE_ORDER_DETAILS_BY_KEYCLOAK_TTL:60s}
+  order-analytics-platform-summary-ttl: ${CACHE_ORDER_ANALYTICS_PLATFORM_SUMMARY_TTL:5m}
+  order-analytics-revenue-trend-ttl: ${CACHE_ORDER_ANALYTICS_REVENUE_TREND_TTL:5m}
+  order-analytics-top-products-ttl: ${CACHE_ORDER_ANALYTICS_TOP_PRODUCTS_TTL:10m}
+  order-analytics-status-breakdown-ttl: ${CACHE_ORDER_ANALYTICS_STATUS_BREAKDOWN_TTL:5m}
+  order-analytics-vendor-summary-ttl: ${CACHE_ORDER_ANALYTICS_VENDOR_SUMMARY_TTL:5m}
+  order-analytics-vendor-revenue-trend-ttl: ${CACHE_ORDER_ANALYTICS_VENDOR_REVENUE_TREND_TTL:5m}
+  order-analytics-vendor-top-products-ttl: ${CACHE_ORDER_ANALYTICS_VENDOR_TOP_PRODUCTS_TTL:10m}
+  order-analytics-customer-summary-ttl: ${CACHE_ORDER_ANALYTICS_CUSTOMER_SUMMARY_TTL:5m}
+  order-analytics-customer-spending-trend-ttl: ${CACHE_ORDER_ANALYTICS_CUSTOMER_SPENDING_TREND_TTL:10m}
 
 shipping:
   fee:
@@ -213,4 +245,12 @@ shipping:
     base-per-vendor: ${SHIPPING_FEE_BASE_PER_VENDOR:4.99}
     per-item: ${SHIPPING_FEE_PER_ITEM:0.80}
     international-surcharge-per-vendor: ${SHIPPING_FEE_INTL_SURCHARGE_PER_VENDOR:3.50}
+
+object-storage:
+  enabled: ${OBJECT_STORAGE_ENABLED:false}
+  endpoint: ${OBJECT_STORAGE_ENDPOINT:}
+  region: ${OBJECT_STORAGE_REGION:us-east-1}
+  access-key: ${OBJECT_STORAGE_ACCESS_KEY:}
+  secret-key: ${OBJECT_STORAGE_SECRET_KEY:}
+  bucket: ${OBJECT_STORAGE_BUCKET:}
 

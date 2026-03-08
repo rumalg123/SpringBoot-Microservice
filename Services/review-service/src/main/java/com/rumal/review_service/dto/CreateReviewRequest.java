@@ -8,7 +8,6 @@ public record CreateReviewRequest(
         @NotNull(message = "productId is required")
         UUID productId,
 
-        @NotNull(message = "vendorId is required")
         UUID vendorId,
 
         UUID orderId,

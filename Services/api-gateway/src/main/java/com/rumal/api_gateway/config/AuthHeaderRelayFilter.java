@@ -6,11 +6,13 @@ import org.springframework.core.Ordered;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpCookie;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.http.server.reactive.ServerHttpRequestDecorator;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -25,26 +27,40 @@ import java.util.HexFormat;
 @Component
 public class AuthHeaderRelayFilter implements GlobalFilter, Ordered {
 
+    private static final int MAX_USER_AGENT_LENGTH = 512;
+    private static final String GUEST_CART_ID_COOKIE = "rs_guest_cart_id";
+    private static final String GUEST_CART_SIGNATURE_COOKIE = "rs_guest_cart_sig";
+
     private final String internalSharedSecret;
+    private final String guestCartSigningSecret;
     private final String claimsNamespace;
     private final KeycloakRoleClaims keycloakRoleClaims;
+    private final TrustedProxyResolver trustedProxyResolver;
 
     public AuthHeaderRelayFilter(
             @Value("${internal.auth.shared-secret:}") String internalSharedSecret,
+            @Value("${guest.cart.signing-secret:dev-guest-cart-signing-secret-change-me}") String guestCartSigningSecret,
             @Value("${keycloak.claims-namespace:}") String claimsNamespace,
-            KeycloakRoleClaims keycloakRoleClaims
+            KeycloakRoleClaims keycloakRoleClaims,
+            TrustedProxyResolver trustedProxyResolver
     ) {
         this.internalSharedSecret = internalSharedSecret == null ? "" : internalSharedSecret.trim();
+        this.guestCartSigningSecret = guestCartSigningSecret == null ? "" : guestCartSigningSecret.trim();
         if (claimsNamespace == null || claimsNamespace.isBlank()) {
             this.claimsNamespace = "";
         } else {
             this.claimsNamespace = claimsNamespace.endsWith("/") ? claimsNamespace : claimsNamespace + "/";
         }
         this.keycloakRoleClaims = keycloakRoleClaims;
+        this.trustedProxyResolver = trustedProxyResolver;
     }
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, org.springframework.cloud.gateway.filter.GatewayFilterChain chain) {
+        if (isLocalGatewayEndpoint(exchange)) {
+            return chain.filter(exchange);
+        }
+
         ServerHttpRequest sanitizedRequest = exchange.getRequest().mutate()
                 .headers(headers -> {
                     headers.remove("X-User-Sub");
@@ -53,6 +69,10 @@ public class AuthHeaderRelayFilter implements GlobalFilter, Ordered {
                     headers.remove("X-User-Roles");
                     headers.remove("X-User-Vendor-Id");
                     headers.remove("X-Caller-Vendor-Id");
+                    headers.remove("X-Actor-Tenant-Id");
+                    headers.remove("X-Audit-Client-Ip");
+                    headers.remove("X-Audit-User-Agent");
+                    headers.remove("X-Guest-Cart-Id");
                     headers.remove("X-Internal-Auth");
                     headers.remove("X-Internal-Signature");
                     headers.remove("X-Internal-Timestamp");
@@ -98,6 +118,18 @@ public class AuthHeaderRelayFilter implements GlobalFilter, Ordered {
                     if (!serializedRoles.isBlank()) {
                         requestBuilder.headers(headers -> headers.set("X-User-Roles", serializedRoles));
                     }
+                    String tenantId = keycloakRoleClaims.extractTenantId(auth.getToken());
+                    if (StringUtils.hasText(tenantId)) {
+                        requestBuilder.headers(headers -> headers.set("X-Actor-Tenant-Id", tenantId));
+                    }
+                    String clientIp = trustedProxyResolver.resolveClientIp(sanitizedExchange);
+                    if (StringUtils.hasText(clientIp)) {
+                        requestBuilder.headers(headers -> headers.set("X-Audit-Client-Ip", clientIp));
+                    }
+                    String userAgent = sanitizeUserAgent(sanitizedExchange.getRequest().getHeaders().getFirst("User-Agent"));
+                    if (StringUtils.hasText(userAgent)) {
+                        requestBuilder.headers(headers -> headers.set("X-Audit-User-Agent", userAgent));
+                    }
                     if (!internalSharedSecret.isBlank()) {
                         requestBuilder.headers(headers -> headers.set("X-Internal-Auth", internalSharedSecret));
                     }
@@ -105,7 +137,44 @@ public class AuthHeaderRelayFilter implements GlobalFilter, Ordered {
                     return sanitizedExchange.mutate().request(requestBuilder.build()).build();
                 })
                 .defaultIfEmpty(sanitizedExchange)
+                .map(this::attachGuestCartHeader)
                 .flatMap(ex -> attachHmacSignature(ex, chain));
+    }
+
+    private boolean isLocalGatewayEndpoint(ServerWebExchange exchange) {
+        String path = exchange.getRequest().getPath().value();
+        return path.startsWith("/auth/")
+                || path.startsWith("/internal/")
+                || path.startsWith("/fallback/");
+    }
+
+    private ServerWebExchange attachGuestCartHeader(ServerWebExchange exchange) {
+        String guestCartId = resolveSignedGuestCartId(exchange.getRequest());
+        if (!StringUtils.hasText(guestCartId)) {
+            return exchange;
+        }
+        ServerHttpRequest request = exchange.getRequest().mutate()
+                .headers(headers -> headers.set("X-Guest-Cart-Id", guestCartId))
+                .build();
+        return exchange.mutate().request(request).build();
+    }
+
+    private String resolveSignedGuestCartId(ServerHttpRequest request) {
+        if (!StringUtils.hasText(guestCartSigningSecret)) {
+            return null;
+        }
+        HttpCookie cartIdCookie = request.getCookies().getFirst(GUEST_CART_ID_COOKIE);
+        HttpCookie signatureCookie = request.getCookies().getFirst(GUEST_CART_SIGNATURE_COOKIE);
+        String guestCartId = cartIdCookie == null ? null : cartIdCookie.getValue();
+        String signature = signatureCookie == null ? null : signatureCookie.getValue();
+        if (!StringUtils.hasText(guestCartId) || !StringUtils.hasText(signature)) {
+            return null;
+        }
+        String expectedSignature = computeHmac(guestCartSigningSecret, guestCartId.trim());
+        if (!MessageDigest.isEqual(expectedSignature.getBytes(StandardCharsets.UTF_8), signature.trim().getBytes(StandardCharsets.UTF_8))) {
+            return null;
+        }
+        return guestCartId.trim();
     }
 
     private Mono<Void> attachHmacSignature(ServerWebExchange exchange, org.springframework.cloud.gateway.filter.GatewayFilterChain chain) {
@@ -196,6 +265,17 @@ public class AuthHeaderRelayFilter implements GlobalFilter, Ordered {
     @Override
     public int getOrder() {
         return -1;
+    }
+
+    private String sanitizeUserAgent(String userAgent) {
+        if (!StringUtils.hasText(userAgent)) {
+            return null;
+        }
+        String normalized = userAgent.trim().replaceAll("[\\r\\n]+", " ");
+        if (normalized.length() > MAX_USER_AGENT_LENGTH) {
+            return normalized.substring(0, MAX_USER_AGENT_LENGTH);
+        }
+        return normalized;
     }
 
     private String serializeRoles(JwtAuthenticationToken auth) {

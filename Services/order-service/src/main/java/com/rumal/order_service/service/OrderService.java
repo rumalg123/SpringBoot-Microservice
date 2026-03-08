@@ -25,6 +25,7 @@ import com.rumal.order_service.dto.CreateMyOrderRequest;
 import com.rumal.order_service.dto.CreateOrderRequest;
 import com.rumal.order_service.dto.CustomerAddressSummary;
 import com.rumal.order_service.dto.CustomerSummary;
+import com.rumal.order_service.dto.CustomerPromotionEligibilityResponse;
 import com.rumal.order_service.dto.OrderAddressResponse;
 import com.rumal.order_service.dto.OrderDetailsResponse;
 import com.rumal.order_service.dto.OrderItemResponse;
@@ -44,6 +45,7 @@ import com.rumal.order_service.entity.OrderAddressSnapshot;
 import com.rumal.order_service.entity.OrderItem;
 import com.rumal.order_service.entity.OrderStatus;
 import com.rumal.order_service.entity.OrderStatusAudit;
+import com.rumal.order_service.entity.OrderStatusAuditOutboxEvent;
 import com.rumal.order_service.entity.VendorOrder;
 import com.rumal.order_service.entity.VendorOrderStatusAudit;
 import com.rumal.order_service.exception.ResourceNotFoundException;
@@ -53,15 +55,18 @@ import com.rumal.order_service.exception.ValidationException;
 import com.rumal.order_service.repo.OrderRepository;
 import com.rumal.order_service.repo.OrderSpecifications;
 import com.rumal.order_service.repo.OrderStatusAuditRepository;
+import com.rumal.order_service.repo.OrderStatusAuditOutboxRepository;
 import com.rumal.order_service.repo.VendorOrderRepository;
 import com.rumal.order_service.repo.VendorOrderStatusAuditRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
@@ -69,8 +74,12 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
+import java.io.BufferedWriter;
+import java.io.ByteArrayOutputStream;
+import java.io.OutputStreamWriter;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.*;
 
@@ -81,7 +90,22 @@ public class OrderService {
     private static final Logger log = LoggerFactory.getLogger(OrderService.class);
     private static final int MAX_ITEM_QUANTITY = 1000;
     private static final int MAX_DISTINCT_ITEMS = 200;
+    private static final int CSV_EXPORT_MAX_ROWS = 250_000;
     private static final BigDecimal PLATFORM_FEE_RATE = new BigDecimal("0.10");
+    private static final String NO_PAYMENT_METHOD = "NO_CHARGE";
+    private static final String NO_PAYMENT_GATEWAY_REF = "NO_PAYMENT_REQUIRED";
+    private static final Set<OrderStatus> PROMOTION_QUALIFYING_ORDER_STATUSES = EnumSet.of(
+            OrderStatus.CONFIRMED,
+            OrderStatus.ON_HOLD,
+            OrderStatus.PROCESSING,
+            OrderStatus.SHIPPED,
+            OrderStatus.DELIVERED,
+            OrderStatus.RETURN_REQUESTED,
+            OrderStatus.RETURN_REJECTED,
+            OrderStatus.REFUND_PENDING,
+            OrderStatus.REFUNDED,
+            OrderStatus.CLOSED
+    );
 
     private static final Set<OrderStatus> CUSTOMER_CANCELLABLE_STATUSES = EnumSet.of(
             OrderStatus.PENDING,
@@ -110,8 +134,11 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final OrderStatusAuditRepository orderStatusAuditRepository;
+    private final OrderStatusAuditOutboxRepository orderStatusAuditOutboxRepository;
     private final VendorOrderRepository vendorOrderRepository;
     private final VendorOrderStatusAuditRepository vendorOrderStatusAuditRepository;
+    private final OrderAuditRequestContextResolver orderAuditRequestContextResolver;
+    private final OrderAuditPayloadSanitizer orderAuditPayloadSanitizer;
     private final CustomerClient customerClient;
     private final ProductClient productClient;
     private final PromotionClient promotionClient;
@@ -123,9 +150,16 @@ public class OrderService {
     private final OrderCacheVersionService orderCacheVersionService;
     private final TransactionTemplate transactionTemplate;
     private final OutboxService outboxService;
+    private final OrderAnalyticsLiveUpdateService orderAnalyticsLiveUpdateService;
 
     @org.springframework.beans.factory.annotation.Value("${order.expiry.ttl:30m}")
     private java.time.Duration orderExpiryTtl;
+
+    @org.springframework.beans.factory.annotation.Value("${order.audit.outbox.retry-base-delay-seconds:15}")
+    private long orderAuditRetryBaseDelaySeconds;
+
+    public record OrderCsvExportResult(byte[] content, int rowCount) {
+    }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public OrderResponse create(CreateOrderRequest req) {
@@ -141,6 +175,7 @@ public class OrderService {
                     recordVendorOrderStatusAudit(vendorOrder, null, OrderStatus.PENDING, null, null, "system", "order_create", "Vendor order created")
             );
             evictOrdersListCaches();
+            orderAnalyticsLiveUpdateService.notifyOrderChangedAfterCommit(saved, "order_created");
             return toResponse(saved);
         });
     }
@@ -155,17 +190,11 @@ public class OrderService {
         PromotionPricingSnapshot pricingSnapshot = toPromotionPricingSnapshot(req.promotionPricing());
         Order saved = transactionTemplate.execute(status -> {
             Order order = orderRepository.save(buildOrder(customer.id(), lines, addresses, pricingSnapshot, req.customerNote()));
-            recordStatusAudit(order, null, OrderStatus.PENDING, keycloakId, "customer", "customer", "order_create", "Customer order created");
+            OrderStatus initialStatus = order.getStatus();
+            recordStatusAudit(order, null, initialStatus, keycloakId, "customer", "customer", "order_create", "Customer order created");
             order.getVendorOrders().forEach(vendorOrder ->
-                    recordVendorOrderStatusAudit(vendorOrder, null, OrderStatus.PENDING, keycloakId, "customer", "customer", "order_create", "Vendor order created")
+                    recordVendorOrderStatusAudit(vendorOrder, null, vendorOrder.getStatus(), keycloakId, "customer", "customer", "order_create", "Vendor order created")
             );
-
-            // Enqueue coupon commit as an outbox event inside the transaction
-            if (pricingSnapshot != null && pricingSnapshot.couponReservationId() != null) {
-                outboxService.enqueue("Order", order.getId(), "COUPON_COMMIT",
-                        Map.of("reservationId", pricingSnapshot.couponReservationId().toString(),
-                                "customerId", customer.id().toString()));
-            }
 
             // Enqueue inventory reserve as an outbox event inside the transaction
             if (lines != null && !lines.isEmpty()) {
@@ -182,7 +211,12 @@ public class OrderService {
                                 "expiresAt", expiresAt.toString()));
             }
 
+            if (initialStatus == OrderStatus.CONFIRMED) {
+                enqueueCompensationEvents(order, OrderStatus.CONFIRMED);
+            }
+
             evictOrdersListCaches();
+            orderAnalyticsLiveUpdateService.notifyOrderChangedAfterCommit(order, "order_created");
             return order;
         });
         return toResponse(saved);
@@ -331,6 +365,7 @@ public class OrderService {
         );
         enqueueCompensationEvents(saved, status);
         evictOrderCachesAfterStatusMutation();
+        orderAnalyticsLiveUpdateService.notifyOrderChangedAfterCommit(saved, "order_status_updated");
         return toResponse(saved);
     }
 
@@ -395,6 +430,7 @@ public class OrderService {
             enqueueCompensationEvents(savedOrder, nextAggregate);
         }
         evictOrderCachesAfterStatusMutation();
+        orderAnalyticsLiveUpdateService.notifyOrderChangedAfterCommit(parent, "vendor_order_status_updated");
         return toVendorOrderResponse(savedVendorOrder);
     }
 
@@ -523,9 +559,11 @@ public class OrderService {
         }
 
         BigDecimal orderTotal = pricing.grandTotal();
-        if (orderTotal == null || orderTotal.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new ValidationException("Order grandTotal must be positive");
+        if (orderTotal == null || orderTotal.compareTo(BigDecimal.ZERO) < 0) {
+            throw new ValidationException("Order grandTotal cannot be negative");
         }
+        boolean paymentRequired = orderTotal.compareTo(BigDecimal.ZERO) > 0;
+        OrderStatus initialStatus = paymentRequired ? OrderStatus.PENDING : OrderStatus.CONFIRMED;
         int itemCount = lines.size();
         String summaryItem;
         if (itemCount == 1) {
@@ -555,13 +593,16 @@ public class OrderService {
                 .couponCode(pricing.couponCode())
                 .couponReservationId(pricing.couponReservationId())
                 .orderTotal(orderTotal)
-                .status(OrderStatus.PENDING)
+                .paymentMethod(paymentRequired ? null : NO_PAYMENT_METHOD)
+                .paymentGatewayRef(paymentRequired ? null : NO_PAYMENT_GATEWAY_REF)
+                .paidAt(paymentRequired ? null : Instant.now())
+                .status(initialStatus)
                 .shippingAddressId(addresses.shippingAddress().id())
                 .billingAddressId(addresses.billingAddress().id())
                 .shippingAddress(toAddressSnapshot(addresses.shippingAddress()))
                 .billingAddress(toAddressSnapshot(addresses.billingAddress()))
                 .customerNote(customerNote)
-                .expiresAt(Instant.now().plus(orderExpiryTtl))
+                .expiresAt(paymentRequired ? Instant.now().plus(orderExpiryTtl) : null)
                 .build();
 
         Map<UUID, List<ResolvedOrderLine>> linesByVendor = new LinkedHashMap<>();
@@ -621,7 +662,7 @@ public class OrderService {
                     .order(order)
                     .vendorId(vendorId)
                     .vendorName(vendorNames.getOrDefault(vendorId, null))
-                    .status(OrderStatus.PENDING)
+                    .status(initialStatus)
                     .itemCount(vendorItemCount)
                     .quantity(vendorQuantity)
                     .orderTotal(vendorTotal)
@@ -1149,7 +1190,9 @@ public class OrderService {
         if (order == null || nextStatus == null) {
             return;
         }
-        if (nextStatus != OrderStatus.CANCELLED && nextStatus != OrderStatus.REFUNDED) {
+        if (nextStatus != OrderStatus.CANCELLED
+                && nextStatus != OrderStatus.PAYMENT_FAILED
+                && nextStatus != OrderStatus.REFUNDED) {
             return;
         }
         if (order.getCouponReservationId() == null) {
@@ -1203,8 +1246,17 @@ public class OrderService {
     private void enqueueCompensationEvents(Order order, OrderStatus nextStatus) {
         if (order == null || nextStatus == null) return;
 
-        // Coupon reservation release for final statuses
-        if ((nextStatus == OrderStatus.CANCELLED || nextStatus == OrderStatus.REFUNDED)
+        if (nextStatus == OrderStatus.CONFIRMED
+                && order.getCouponReservationId() != null) {
+            outboxService.enqueue("Order", order.getId(), "COUPON_COMMIT",
+                    Map.of("reservationId", order.getCouponReservationId().toString(),
+                            "customerId", order.getCustomerId().toString()));
+        }
+
+        // Coupon reservation release for terminal or failed-payment statuses
+        if ((nextStatus == OrderStatus.CANCELLED
+                || nextStatus == OrderStatus.PAYMENT_FAILED
+                || nextStatus == OrderStatus.REFUNDED)
                 && order.getCouponReservationId() != null) {
             outboxService.enqueue("Order", order.getId(), "RELEASE_COUPON_RESERVATION",
                     Map.of("reservationId", order.getCouponReservationId().toString(),
@@ -1233,6 +1285,21 @@ public class OrderService {
             return null;
         }
         return value.trim();
+    }
+
+    private String defaultValue(String value, String fallback) {
+        return StringUtils.hasText(value) ? value.trim() : fallback;
+    }
+
+    private String truncate(String value, int maxLength) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String normalized = value.trim();
+        if (normalized.length() <= maxLength) {
+            return normalized;
+        }
+        return normalized.substring(0, maxLength);
     }
 
     private record ResolvedOrderAddresses(
@@ -1382,7 +1449,81 @@ public class OrderService {
         }
     }
 
-    private void recordStatusAudit(
+    @Transactional(readOnly = false, propagation = Propagation.REQUIRES_NEW)
+    public void processStatusAuditOutboxBatch(int batchSize) {
+        List<OrderStatusAuditOutboxEvent> events = orderStatusAuditOutboxRepository
+                .findByProcessedAtIsNullAndAvailableAtLessThanEqualOrderByAvailableAtAscCreatedAtAsc(
+                        Instant.now(),
+                        PageRequest.of(0, Math.max(1, batchSize))
+                );
+        for (OrderStatusAuditOutboxEvent event : events) {
+            processStatusAuditOutboxEvent(event.getId());
+        }
+    }
+
+    @Transactional(readOnly = false, propagation = Propagation.REQUIRES_NEW)
+    public void processStatusAuditOutboxEvent(UUID eventId) {
+        OrderStatusAuditOutboxEvent event = orderStatusAuditOutboxRepository.findById(eventId).orElse(null);
+        if (event == null || event.getProcessedAt() != null) {
+            return;
+        }
+        try {
+            if ("ORDER".equals(event.getAuditScope())) {
+                if (!orderStatusAuditRepository.existsBySourceEventId(event.getId())) {
+                    Order order = orderRepository.findById(event.getOrderId())
+                            .orElseThrow(() -> new ResourceNotFoundException("Order not found for audit event: " + event.getOrderId()));
+                    orderStatusAuditRepository.save(OrderStatusAudit.builder()
+                            .sourceEventId(event.getId())
+                            .order(order)
+                            .fromStatus(event.getFromStatus())
+                            .toStatus(event.getToStatus())
+                            .actorSub(defaultValue(event.getActorSub(), "system"))
+                            .actorTenantId(trimToNull(event.getActorTenantId()))
+                            .actorRoles(trimToNull(event.getActorRoles()))
+                            .actorType(defaultValue(event.getActorType(), "SYSTEM"))
+                            .changeSource(defaultValue(event.getChangeSource(), "SYSTEM"))
+                            .note(trimToNull(event.getNote()))
+                            .changeSet(trimToNull(event.getChangeSet()))
+                            .clientIp(trimToNull(event.getClientIp()))
+                            .userAgent(trimToNull(event.getUserAgent()))
+                            .requestId(trimToNull(event.getRequestId()))
+                            .build());
+                }
+            } else if ("VENDOR_ORDER".equals(event.getAuditScope())) {
+                if (!vendorOrderStatusAuditRepository.existsBySourceEventId(event.getId())) {
+                    VendorOrder vendorOrder = vendorOrderRepository.findById(event.getVendorOrderId())
+                            .orElseThrow(() -> new ResourceNotFoundException("Vendor order not found for audit event: " + event.getVendorOrderId()));
+                    vendorOrderStatusAuditRepository.save(VendorOrderStatusAudit.builder()
+                            .sourceEventId(event.getId())
+                            .vendorOrder(vendorOrder)
+                            .fromStatus(event.getFromStatus())
+                            .toStatus(event.getToStatus())
+                            .actorSub(defaultValue(event.getActorSub(), "system"))
+                            .actorTenantId(trimToNull(event.getActorTenantId()))
+                            .actorRoles(trimToNull(event.getActorRoles()))
+                            .actorType(defaultValue(event.getActorType(), "SYSTEM"))
+                            .changeSource(defaultValue(event.getChangeSource(), "SYSTEM"))
+                            .note(trimToNull(event.getNote()))
+                            .changeSet(trimToNull(event.getChangeSet()))
+                            .clientIp(trimToNull(event.getClientIp()))
+                            .userAgent(trimToNull(event.getUserAgent()))
+                            .requestId(trimToNull(event.getRequestId()))
+                            .build());
+                }
+            }
+            markStatusAuditOutboxProcessed(event);
+        } catch (DataIntegrityViolationException duplicate) {
+            markStatusAuditOutboxProcessed(event);
+        } catch (Exception ex) {
+            event.setAttemptCount(event.getAttemptCount() + 1);
+            event.setLastError(truncate(ex.getMessage(), 500));
+            event.setAvailableAt(Instant.now().plusSeconds(resolveStatusAuditRetryDelaySeconds(event.getAttemptCount())));
+            orderStatusAuditOutboxRepository.save(event);
+            log.warn("Order status audit outbox event {} failed on attempt {}", event.getId(), event.getAttemptCount(), ex);
+        }
+    }
+
+    public void recordStatusAudit(
             Order order,
             OrderStatus fromStatus,
             OrderStatus toStatus,
@@ -1392,19 +1533,30 @@ public class OrderService {
             String changeSource,
             String note
     ) {
-        orderStatusAuditRepository.save(OrderStatusAudit.builder()
-                .order(order)
+        if (order == null || order.getId() == null || toStatus == null) {
+            return;
+        }
+        OrderAuditRequestContext context = orderAuditRequestContextResolver.resolve(actorSub, actorRoles, actorType, changeSource);
+        orderStatusAuditOutboxRepository.save(OrderStatusAuditOutboxEvent.builder()
+                .auditScope("ORDER")
+                .orderId(order.getId())
                 .fromStatus(fromStatus)
                 .toStatus(toStatus)
-                .actorSub(StringUtils.hasText(actorSub) ? actorSub.trim() : null)
-                .actorRoles(StringUtils.hasText(actorRoles) ? actorRoles.trim() : null)
-                .actorType(actorType)
-                .changeSource(changeSource)
-                .note(note)
+                .actorSub(defaultValue(context.actorSub(), "system"))
+                .actorTenantId(trimToNull(context.actorTenantId()))
+                .actorRoles(trimToNull(context.actorRoles()))
+                .actorType(defaultValue(context.actorType(), "SYSTEM"))
+                .changeSource(defaultValue(context.changeSource(), "SYSTEM"))
+                .note(orderAuditPayloadSanitizer.sanitizeNote(note))
+                .changeSet(orderAuditPayloadSanitizer.buildStatusChangeSet(fromStatus, toStatus, note))
+                .clientIp(trimToNull(context.clientIp()))
+                .userAgent(trimToNull(context.userAgent()))
+                .requestId(trimToNull(context.requestId()))
+                .availableAt(Instant.now())
                 .build());
     }
 
-    private void recordVendorOrderStatusAudit(
+    public void recordVendorOrderStatusAudit(
             VendorOrder vendorOrder,
             OrderStatus fromStatus,
             OrderStatus toStatus,
@@ -1414,16 +1566,41 @@ public class OrderService {
             String changeSource,
             String note
     ) {
-        vendorOrderStatusAuditRepository.save(VendorOrderStatusAudit.builder()
-                .vendorOrder(vendorOrder)
+        if (vendorOrder == null || vendorOrder.getId() == null || toStatus == null) {
+            return;
+        }
+        OrderAuditRequestContext context = orderAuditRequestContextResolver.resolve(actorSub, actorRoles, actorType, changeSource);
+        orderStatusAuditOutboxRepository.save(OrderStatusAuditOutboxEvent.builder()
+                .auditScope("VENDOR_ORDER")
+                .orderId(vendorOrder.getOrder() == null ? null : vendorOrder.getOrder().getId())
+                .vendorOrderId(vendorOrder.getId())
+                .vendorId(vendorOrder.getVendorId())
                 .fromStatus(fromStatus)
                 .toStatus(toStatus)
-                .actorSub(StringUtils.hasText(actorSub) ? actorSub.trim() : null)
-                .actorRoles(StringUtils.hasText(actorRoles) ? actorRoles.trim() : null)
-                .actorType(actorType)
-                .changeSource(changeSource)
-                .note(note)
+                .actorSub(defaultValue(context.actorSub(), "system"))
+                .actorTenantId(trimToNull(context.actorTenantId()))
+                .actorRoles(trimToNull(context.actorRoles()))
+                .actorType(defaultValue(context.actorType(), "SYSTEM"))
+                .changeSource(defaultValue(context.changeSource(), "SYSTEM"))
+                .note(orderAuditPayloadSanitizer.sanitizeNote(note))
+                .changeSet(orderAuditPayloadSanitizer.buildStatusChangeSet(fromStatus, toStatus, note))
+                .clientIp(trimToNull(context.clientIp()))
+                .userAgent(trimToNull(context.userAgent()))
+                .requestId(trimToNull(context.requestId()))
+                .availableAt(Instant.now())
                 .build());
+    }
+
+    private void markStatusAuditOutboxProcessed(OrderStatusAuditOutboxEvent event) {
+        event.setProcessedAt(Instant.now());
+        event.setLastError(null);
+        orderStatusAuditOutboxRepository.save(event);
+    }
+
+    private long resolveStatusAuditRetryDelaySeconds(int attemptCount) {
+        long base = Math.max(5L, orderAuditRetryBaseDelaySeconds);
+        long multiplier = Math.max(1L, attemptCount);
+        return Math.min(900L, base * multiplier * multiplier);
     }
 
     private OrderStatusAuditResponse toStatusAuditResponse(OrderStatusAudit audit) {
@@ -1432,10 +1609,15 @@ public class OrderService {
                 audit.getFromStatus() == null ? null : audit.getFromStatus().name(),
                 audit.getToStatus() == null ? null : audit.getToStatus().name(),
                 audit.getActorSub(),
+                audit.getActorTenantId(),
                 audit.getActorRoles(),
                 audit.getActorType(),
                 audit.getChangeSource(),
                 audit.getNote(),
+                audit.getChangeSet(),
+                audit.getClientIp(),
+                audit.getUserAgent(),
+                audit.getRequestId(),
                 audit.getCreatedAt()
         );
     }
@@ -1446,10 +1628,15 @@ public class OrderService {
                 audit.getFromStatus() == null ? null : audit.getFromStatus().name(),
                 audit.getToStatus() == null ? null : audit.getToStatus().name(),
                 audit.getActorSub(),
+                audit.getActorTenantId(),
                 audit.getActorRoles(),
                 audit.getActorType(),
                 audit.getChangeSource(),
                 audit.getNote(),
+                audit.getChangeSet(),
+                audit.getClientIp(),
+                audit.getUserAgent(),
+                audit.getRequestId(),
                 audit.getCreatedAt()
         );
     }
@@ -1598,6 +1785,7 @@ public class OrderService {
 
         enqueueCompensationEvents(saved, OrderStatus.CANCELLED);
         evictOrderCachesAfterStatusMutation();
+        orderAnalyticsLiveUpdateService.notifyOrderChangedAfterCommit(saved, "order_cancelled");
         return toResponse(saved);
     }
 
@@ -1652,6 +1840,19 @@ public class OrderService {
         UUID orderId = (UUID) first[0];
         UUID vendorId = (UUID) first[1];
         return new CustomerProductPurchaseCheckResponse(true, orderId, vendorId);
+    }
+
+    @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
+    public CustomerPromotionEligibilityResponse getCustomerPromotionEligibility(UUID customerId) {
+        long qualifyingOrderCount = orderRepository.countByCustomerIdAndStatusIn(
+                customerId,
+                PROMOTION_QUALIFYING_ORDER_STATUSES
+        );
+        return new CustomerPromotionEligibilityResponse(
+                customerId,
+                qualifyingOrderCount,
+                qualifyingOrderCount > 0
+        );
     }
 
     // ── Vendor self-service ─────────────────────────────────────
@@ -1772,43 +1973,41 @@ public class OrderService {
 
     // ── CSV export ──────────────────────────────────────────────
 
-    private static final int CSV_EXPORT_MAX_ROWS = 100_000;
-    private static final long CSV_EXPORT_MAX_RANGE_DAYS = 90;
-
-    public void exportOrdersCsv(OrderStatus status, Instant createdAfter, Instant createdBefore, java.io.Writer writer) {
-        // Default createdAfter to 90 days ago if not provided
-        if (createdAfter == null) {
-            createdAfter = Instant.now().minus(java.time.Duration.ofDays(CSV_EXPORT_MAX_RANGE_DAYS));
-        }
-
-        // Validate date range does not exceed 90 days
-        Instant effectiveBefore = createdBefore != null ? createdBefore : Instant.now();
-        long rangeDays = java.time.Duration.between(createdAfter, effectiveBefore).toDays();
-        if (rangeDays > CSV_EXPORT_MAX_RANGE_DAYS) {
-            throw new ValidationException("CSV export date range must not exceed " + CSV_EXPORT_MAX_RANGE_DAYS + " days");
+    public OrderCsvExportResult generateOrdersCsv(
+            OrderStatus status,
+            Instant createdAfter,
+            Instant createdBefore,
+            UUID vendorId,
+            String customerEmail
+    ) {
+        UUID resolvedCustomerId = null;
+        if (StringUtils.hasText(customerEmail)) {
+            resolvedCustomerId = customerClient.getCustomerByEmail(customerEmail.trim()).id();
         }
 
         try {
-            writer.write("orderId,customerKeycloakId,customerEmail,status,grandTotal,currency,createdAt,updatedAt,itemCount\n");
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8));
+            writer.write("orderId,customerId,customerEmail,status,grandTotal,currency,createdAt,updatedAt,itemCount\n");
 
             int page = 0;
             int pageSize = 500;
             int totalRowsWritten = 0;
             Page<Order> orderPage;
-            java.util.Map<UUID, CustomerSummary> customerCache = new java.util.HashMap<>();
+            Map<UUID, CustomerSummary> customerCache = new HashMap<>();
             do {
                 orderPage = orderRepository.findAll(
-                        OrderSpecifications.withFilters(null, null, status, createdAfter, createdBefore),
-                        PageRequest.of(page, pageSize)
+                        OrderSpecifications.withFilters(resolvedCustomerId, vendorId, status, createdAfter, createdBefore),
+                        PageRequest.of(page, pageSize, Sort.by(Sort.Direction.DESC, "createdAt"))
                 );
                 for (Order order : orderPage.getContent()) {
-                    UUID custId = order.getCustomerId();
-                    if (custId != null && !customerCache.containsKey(custId)) {
+                    UUID customerId = order.getCustomerId();
+                    if (customerId != null && !customerCache.containsKey(customerId)) {
                         try {
-                            customerCache.put(custId, customerClient.getCustomer(custId));
+                            customerCache.put(customerId, customerClient.getCustomer(customerId));
                         } catch (Exception ex) {
-                            log.warn("Failed to fetch customer for CSV export, customerId={}", custId, ex);
-                            customerCache.put(custId, null);
+                            log.warn("Failed to fetch customer for CSV export, customerId={}", customerId, ex);
+                            customerCache.put(customerId, null);
                         }
                     }
                 }
@@ -1839,8 +2038,11 @@ public class OrderService {
                 }
                 page++;
             } while (orderPage.hasNext());
-        } catch (java.io.IOException e) {
-            throw new RuntimeException("Failed to write CSV export", e);
+
+            writer.flush();
+            return new OrderCsvExportResult(outputStream.toByteArray(), totalRowsWritten);
+        } catch (java.io.IOException ex) {
+            throw new RuntimeException("Failed to write CSV export", ex);
         }
     }
 

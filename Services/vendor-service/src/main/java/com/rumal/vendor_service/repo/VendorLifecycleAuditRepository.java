@@ -12,5 +12,6 @@ public interface VendorLifecycleAuditRepository extends JpaRepository<VendorLife
     List<VendorLifecycleAudit> findByVendorIdOrderByCreatedAtDesc(UUID vendorId);
 
     Page<VendorLifecycleAudit> findByVendorIdOrderByCreatedAtDesc(UUID vendorId, Pageable pageable);
-}
 
+    boolean existsBySourceEventId(UUID sourceEventId);
+}

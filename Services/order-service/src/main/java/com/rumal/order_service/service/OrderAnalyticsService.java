@@ -6,6 +6,7 @@ import com.rumal.order_service.repo.OrderItemRepository;
 import com.rumal.order_service.repo.OrderRepository;
 import com.rumal.order_service.repo.VendorOrderRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -38,6 +39,7 @@ public class OrderAnalyticsService {
         OrderStatus.DELIVERED, OrderStatus.CLOSED
     );
 
+    @Cacheable(cacheNames = "orderAnalyticsPlatformSummary", key = "#periodDays", sync = true)
     public PlatformOrderSummary getPlatformSummary(int periodDays) {
         Map<OrderStatus, Long> statusCounts = resolveStatusCounts();
         long total = statusCounts.values().stream().mapToLong(Long::longValue).sum();
@@ -67,6 +69,7 @@ public class OrderAnalyticsService {
             avgOrderValue, Math.round(completionRate * 100.0) / 100.0);
     }
 
+    @Cacheable(cacheNames = "orderAnalyticsRevenueTrend", key = "#days", sync = true)
     public List<DailyRevenueBucket> getRevenueTrend(int days) {
         Instant since = LocalDate.now(ZoneOffset.UTC).minusDays(days).atStartOfDay(ZoneOffset.UTC).toInstant();
         List<Object[]> rows = orderRepository.getRevenueByDay(since, REVENUE_STATUSES);
@@ -78,6 +81,7 @@ public class OrderAnalyticsService {
             .toList();
     }
 
+    @Cacheable(cacheNames = "orderAnalyticsTopProducts", key = "#limit", sync = true)
     public List<TopProductEntry> getTopProducts(int limit) {
         List<Object[]> rows = orderItemRepository.findTopProductsByRevenue(COMPLETED_STATUSES, PageRequest.of(0, limit));
         return rows.stream()
@@ -87,6 +91,7 @@ public class OrderAnalyticsService {
             .toList();
     }
 
+    @Cacheable(cacheNames = "orderAnalyticsStatusBreakdown", key = "'platform'", sync = true)
     public Map<String, Long> getStatusBreakdown() {
         Map<OrderStatus, Long> statusCounts = resolveStatusCounts();
         Map<String, Long> breakdown = new LinkedHashMap<>();
@@ -106,6 +111,11 @@ public class OrderAnalyticsService {
         return map;
     }
 
+    @Cacheable(
+            cacheNames = "orderAnalyticsVendorSummary",
+            key = "#vendorId.toString() + '::' + #periodDays",
+            sync = true
+    )
     public VendorOrderSummary getVendorSummary(UUID vendorId, int periodDays) {
         long total = vendorOrderRepository.countByVendorId(vendorId);
         long active = vendorOrderRepository.countByVendorIdAndStatusIn(vendorId, ACTIVE_STATUSES);
@@ -126,6 +136,11 @@ public class OrderAnalyticsService {
             refunded, revenue, fees, payouts, avgValue);
     }
 
+    @Cacheable(
+            cacheNames = "orderAnalyticsVendorRevenueTrend",
+            key = "#vendorId.toString() + '::' + #days",
+            sync = true
+    )
     public List<DailyRevenueBucket> getVendorRevenueTrend(UUID vendorId, int days) {
         Instant since = LocalDate.now(ZoneOffset.UTC).minusDays(days).atStartOfDay(ZoneOffset.UTC).toInstant();
         List<Object[]> rows = vendorOrderRepository.getVendorRevenueByDay(vendorId, since, REVENUE_STATUSES);
@@ -137,6 +152,11 @@ public class OrderAnalyticsService {
             .toList();
     }
 
+    @Cacheable(
+            cacheNames = "orderAnalyticsVendorTopProducts",
+            key = "#vendorId.toString() + '::' + #limit",
+            sync = true
+    )
     public List<TopProductEntry> getVendorTopProducts(UUID vendorId, int limit) {
         List<Object[]> rows = orderItemRepository.findTopProductsByRevenueForVendor(vendorId, COMPLETED_STATUSES, PageRequest.of(0, limit));
         return rows.stream()
@@ -146,6 +166,7 @@ public class OrderAnalyticsService {
             .toList();
     }
 
+    @Cacheable(cacheNames = "orderAnalyticsCustomerSummary", key = "#customerId", sync = true)
     public CustomerOrderSummary getCustomerSummary(UUID customerId) {
         long total = orderRepository.countByCustomerId(customerId);
         long active = orderRepository.countByCustomerIdAndStatusIn(customerId, ACTIVE_STATUSES);
@@ -164,6 +185,11 @@ public class OrderAnalyticsService {
             spent, saved, avgValue, uniqueVendors);
     }
 
+    @Cacheable(
+            cacheNames = "orderAnalyticsCustomerSpendingTrend",
+            key = "#customerId.toString() + '::' + #months",
+            sync = true
+    )
     public List<MonthlySpendBucket> getCustomerSpendingTrend(UUID customerId, int months) {
         Instant since = LocalDate.now(ZoneOffset.UTC).minusMonths(months).withDayOfMonth(1)
             .atStartOfDay(ZoneOffset.UTC).toInstant();

@@ -126,6 +126,19 @@ spring:
                   args:
                     name: wishlistService
                     fallbackUri: forward:/fallback/unavailable
+
+            - id: analytics-admin-live
+              uri: lb://analytics-service
+              predicates:
+                - Path=/analytics/admin/live/dashboard
+              metadata:
+                response-timeout: -1
+            - id: analytics-vendor-live
+              uri: lb://analytics-service
+              predicates:
+                - Path=/analytics/vendor/*/live/dashboard
+              metadata:
+                response-timeout: -1
             - id: analytics-admin
               uri: lb://analytics-service
               predicates:
@@ -566,6 +579,8 @@ keycloak:
   audience: ${KEYCLOAK_AUDIENCE:rumal-api}
   accept-azp-as-audience: ${KEYCLOAK_ACCEPT_AZP_AS_AUDIENCE:false}
   claims-namespace: ${KEYCLOAK_CLAIMS_NAMESPACE:}
+  backchannel:
+    client-id: ${KEYCLOAK_BACKCHANNEL_CLIENT_ID:${KEYCLOAK_BFF_CLIENT_ID:}}
   admin:
     client-id: ${KEYCLOAK_ADMIN_CLIENT_ID}
     client-secret: ${KEYCLOAK_ADMIN_CLIENT_SECRET}
@@ -573,6 +588,24 @@ keycloak:
 internal:
   auth:
     shared-secret: ${INTERNAL_AUTH_SHARED_SECRET:}
+    max-timestamp-drift-ms: ${INTERNAL_AUTH_MAX_TIMESTAMP_DRIFT_MS:60000}
+
+auth:
+  revoked-token:
+    key-prefix: ${AUTH_REVOKED_TOKEN_KEY_PREFIX:gw:revoked-jwt:v1::}
+    fallback-ttl: ${AUTH_REVOKED_TOKEN_FALLBACK_TTL:15m}
+    fail-open-on-error: ${AUTH_REVOKED_TOKEN_FAIL_OPEN_ON_ERROR:false}
+  active-session:
+    key-prefix: ${AUTH_ACTIVE_SESSION_KEY_PREFIX:gw:active-session:v1::}
+    fallback-ttl: ${AUTH_ACTIVE_SESSION_FALLBACK_TTL:15m}
+    subject-index-key-prefix: ${AUTH_ACTIVE_SESSION_SUBJECT_INDEX_KEY_PREFIX:gw:active-session-subject:v1::}
+    subject-index-ttl: ${AUTH_ACTIVE_SESSION_SUBJECT_INDEX_TTL:30d}
+    enforce-client-fingerprint: ${AUTH_ACTIVE_SESSION_ENFORCE_CLIENT_FINGERPRINT:true}
+  revoked-session:
+    key-prefix: ${AUTH_REVOKED_SESSION_KEY_PREFIX:gw:revoked-session:v1::}
+    fallback-ttl: ${AUTH_REVOKED_SESSION_FALLBACK_TTL:15m}
+  revoked-subject:
+    key-prefix: ${AUTH_REVOKED_SUBJECT_KEY_PREFIX:gw:revoked-subject:v1::}
 
 idempotency:
   enabled: ${IDEMPOTENCY_ENABLED:true}
@@ -675,6 +708,10 @@ resilience4j:
         base-config: default
       accessService:
         base-config: default
+
+guest:
+  cart:
+    signing-secret: ${GUEST_CART_SIGNING_SECRET:dev-guest-cart-signing-secret-change-me}
 
 logging:
   pattern:

@@ -1,5 +1,4 @@
-export const API_BASE =
-  (process.env.NEXT_PUBLIC_API_BASE || "https://gateway.rumalg.me").replace(/\/+$/, "");
+export const API_BASE = "/api/gateway";
 
 /* ── Pagination ── */
 export const PAGE_SIZE_DEFAULT = 20;

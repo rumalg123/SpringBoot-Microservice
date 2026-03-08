@@ -1,8 +1,8 @@
 package com.rumal.poster_service.controller;
 
 import com.rumal.poster_service.dto.PosterAnalyticsResponse;
-import com.rumal.poster_service.dto.PosterImageNameRequest;
-import com.rumal.poster_service.dto.PosterImageUploadResponse;
+import com.rumal.poster_service.dto.PosterImagePrepareUploadRequest;
+import com.rumal.poster_service.dto.PosterImagePrepareUploadResponse;
 import com.rumal.poster_service.dto.PosterResponse;
 import com.rumal.poster_service.dto.PosterVariantResponse;
 import com.rumal.poster_service.dto.UpsertPosterRequest;
@@ -26,10 +26,8 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -136,29 +134,16 @@ public class AdminPosterController {
         return posterService.getAnalytics(id);
     }
 
-    @PostMapping(value = "/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping("/images/presign")
     @ResponseStatus(HttpStatus.CREATED)
-    public PosterImageUploadResponse uploadImages(
+    public PosterImagePrepareUploadResponse prepareImageUploads(
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
-            @RequestParam("files") List<MultipartFile> files,
-            @RequestParam(value = "keys", required = false) List<String> keys
+            @Valid @RequestBody PosterImagePrepareUploadRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
         requirePosterAdmin(userRoles);
-        return new PosterImageUploadResponse(posterImageStorageService.uploadImages(files, keys));
-    }
-
-    @PostMapping("/images/names")
-    @ResponseStatus(HttpStatus.CREATED)
-    public PosterImageUploadResponse generateImageNames(
-            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
-            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
-            @Valid @RequestBody PosterImageNameRequest request
-    ) {
-        internalRequestVerifier.verify(internalAuth);
-        requirePosterAdmin(userRoles);
-        return new PosterImageUploadResponse(posterImageStorageService.generateImageNames(request.fileNames()));
+        return posterImageStorageService.prepareUploads(request);
     }
 
     // ── A/B testing variant endpoints ─────────────────────────────────────

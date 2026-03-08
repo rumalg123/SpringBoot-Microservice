@@ -31,7 +31,16 @@ public class CacheConfig implements CachingConfigurer {
     public RedisCacheManager cacheManager(
             RedisConnectionFactory redisConnectionFactory,
             @Value("${cache.orders-by-keycloak-ttl:60s}") Duration ordersByKeycloakTtl,
-            @Value("${cache.order-details-by-keycloak-ttl:60s}") Duration orderDetailsByKeycloakTtl
+            @Value("${cache.order-details-by-keycloak-ttl:60s}") Duration orderDetailsByKeycloakTtl,
+            @Value("${cache.order-analytics-platform-summary-ttl:5m}") Duration orderAnalyticsPlatformSummaryTtl,
+            @Value("${cache.order-analytics-revenue-trend-ttl:5m}") Duration orderAnalyticsRevenueTrendTtl,
+            @Value("${cache.order-analytics-top-products-ttl:10m}") Duration orderAnalyticsTopProductsTtl,
+            @Value("${cache.order-analytics-status-breakdown-ttl:5m}") Duration orderAnalyticsStatusBreakdownTtl,
+            @Value("${cache.order-analytics-vendor-summary-ttl:5m}") Duration orderAnalyticsVendorSummaryTtl,
+            @Value("${cache.order-analytics-vendor-revenue-trend-ttl:5m}") Duration orderAnalyticsVendorRevenueTrendTtl,
+            @Value("${cache.order-analytics-vendor-top-products-ttl:10m}") Duration orderAnalyticsVendorTopProductsTtl,
+            @Value("${cache.order-analytics-customer-summary-ttl:5m}") Duration orderAnalyticsCustomerSummaryTtl,
+            @Value("${cache.order-analytics-customer-spending-trend-ttl:10m}") Duration orderAnalyticsCustomerSpendingTrendTtl
     ) {
         GenericJacksonJsonRedisSerializer valueSerializer = GenericJacksonJsonRedisSerializer.builder()
                 .enableDefaultTyping(BasicPolymorphicTypeValidator.builder()
@@ -55,9 +64,18 @@ public class CacheConfig implements CachingConfigurer {
 
         return RedisCacheManager.builder(redisConnectionFactory)
                 .cacheDefaults(defaultConfig.entryTtl(Duration.ofSeconds(60)))
-                .withInitialCacheConfigurations(Map.of(
-                        "ordersByKeycloak", defaultConfig.entryTtl(ordersByKeycloakTtl),
-                        "orderDetailsByKeycloak", defaultConfig.entryTtl(orderDetailsByKeycloakTtl)
+                .withInitialCacheConfigurations(Map.ofEntries(
+                        Map.entry("ordersByKeycloak", defaultConfig.entryTtl(ordersByKeycloakTtl)),
+                        Map.entry("orderDetailsByKeycloak", defaultConfig.entryTtl(orderDetailsByKeycloakTtl)),
+                        Map.entry("orderAnalyticsPlatformSummary", defaultConfig.entryTtl(orderAnalyticsPlatformSummaryTtl)),
+                        Map.entry("orderAnalyticsRevenueTrend", defaultConfig.entryTtl(orderAnalyticsRevenueTrendTtl)),
+                        Map.entry("orderAnalyticsTopProducts", defaultConfig.entryTtl(orderAnalyticsTopProductsTtl)),
+                        Map.entry("orderAnalyticsStatusBreakdown", defaultConfig.entryTtl(orderAnalyticsStatusBreakdownTtl)),
+                        Map.entry("orderAnalyticsVendorSummary", defaultConfig.entryTtl(orderAnalyticsVendorSummaryTtl)),
+                        Map.entry("orderAnalyticsVendorRevenueTrend", defaultConfig.entryTtl(orderAnalyticsVendorRevenueTrendTtl)),
+                        Map.entry("orderAnalyticsVendorTopProducts", defaultConfig.entryTtl(orderAnalyticsVendorTopProductsTtl)),
+                        Map.entry("orderAnalyticsCustomerSummary", defaultConfig.entryTtl(orderAnalyticsCustomerSummaryTtl)),
+                        Map.entry("orderAnalyticsCustomerSpendingTrend", defaultConfig.entryTtl(orderAnalyticsCustomerSpendingTrendTtl))
                 ))
                 .build();
     }

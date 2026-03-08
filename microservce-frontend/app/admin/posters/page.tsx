@@ -25,6 +25,7 @@ import {
   getApiErrorMessage,
 } from "../../components/posters/admin/types";
 import { useAuthSession } from "../../../lib/authSession";
+import { uploadFileToPresignedUrl } from "../../../lib/directUpload";
 
 export default function AdminPostersPage() {
   const session = useAuthSession();
@@ -68,7 +69,7 @@ export default function AdminPostersPage() {
   });
 
   /* ───── deleted posters query ───── */
-  const { data: deletedItems = [], isLoading: loadingDeleted, isFetched: deletedLoaded } = useQuery<Poster[]>({
+  const { data: deletedItems = [], isLoading: loadingDeleted } = useQuery<Poster[]>({
     queryKey: ["admin-posters", "deleted"],
     queryFn: async () => {
       const d = await session.apiClient!.get("/admin/posters/deleted");
@@ -297,16 +298,29 @@ export default function AdminPostersPage() {
     if (!files.length || !session.apiClient) return;
     setUploading(true);
     try {
-      const namesRes = await session.apiClient.post("/admin/posters/images/names", { fileNames: [files[0].name] });
-      const key = ((namesRes.data as { images?: string[] }).images || [])[0];
-      if (!key) throw new Error("Could not prepare image name");
-      const fd = new FormData();
-      fd.append("files", files[0]);
-      fd.append("keys", key);
-      const upRes = await session.apiClient.post("/admin/posters/images", fd, { headers: { "Content-Type": "multipart/form-data" } });
-      const uploaded = ((upRes.data as { images?: string[] }).images || [])[0];
-      if (!uploaded) throw new Error("Upload failed");
-      setField(target, uploaded as PosterFormState[typeof target]);
+      const file = files[0];
+      const contentType = (file.type || "").trim().toLowerCase();
+      if (!contentType.startsWith("image/")) {
+        throw new Error("Please choose a valid image file");
+      }
+
+      const presignRes = await session.apiClient.post("/admin/posters/images/presign", {
+        files: [
+          {
+            fileName: file.name,
+            contentType,
+            sizeBytes: file.size,
+          },
+        ],
+      });
+
+      const upload = ((presignRes.data as { uploads?: Array<{ key?: string; uploadUrl?: string; contentType?: string }> }).uploads || [])[0];
+      if (!upload?.key || !upload.uploadUrl || !upload.contentType) {
+        throw new Error("Could not prepare image upload");
+      }
+
+      await uploadFileToPresignedUrl(upload.uploadUrl, file, upload.contentType);
+      setField(target, upload.key as PosterFormState[typeof target]);
       toast.success("Image uploaded");
     } catch (err) {
       toast.error(getApiErrorMessage(err, "Upload failed"));

@@ -1,8 +1,10 @@
 "use client";
 
+import type { AxiosInstance } from "axios";
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { API_BASE } from "../../../lib/constants";
+import { getErrorMessage } from "../../../lib/error";
 import ReviewSummaryBar from "./ReviewSummaryBar";
 import ReviewCard from "./ReviewCard";
 import ReviewForm from "./ReviewForm";
@@ -20,12 +22,11 @@ type Summary = { productId: string; averageRating: number; totalReviews: number;
 
 type Props = {
   productId: string;
-  vendorId: string;
   isAuthenticated: boolean;
-  apiClient: any | null; // Axios instance, null when not authenticated
+  apiClient: AxiosInstance | null;
 };
 
-export default function ReviewSection({ productId, vendorId, isAuthenticated, apiClient }: Props) {
+export default function ReviewSection({ productId, isAuthenticated, apiClient }: Props) {
   const apiBase = API_BASE;
 
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -59,16 +60,57 @@ export default function ReviewSection({ productId, vendorId, isAuthenticated, ap
     setLoading(false);
   }, [apiBase, productId, page, sortBy]);
 
-  useEffect(() => { loadSummary(); }, [loadSummary]);
-  useEffect(() => { loadReviews(); }, [loadReviews]);
+  useEffect(() => {
+    const controller = new AbortController();
+    const { signal } = controller;
+    const run = async () => {
+      try {
+        const res = await fetch(`${apiBase}/reviews/products/${productId}/summary`, { cache: "no-store", signal });
+        if (!res.ok || signal.aborted) {
+          return;
+        }
+        setSummary(await res.json());
+      } catch {
+      }
+    };
+    void run();
+    return () => controller.abort();
+  }, [apiBase, productId]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const { signal } = controller;
+    setLoading(true);
+    const run = async () => {
+      try {
+        const res = await fetch(`${apiBase}/reviews/products/${productId}?page=${page}&size=10&sortBy=${sortBy}`, { cache: "no-store", signal });
+        if (!res.ok || signal.aborted) {
+          return;
+        }
+        const data = await res.json();
+        if (signal.aborted) {
+          return;
+        }
+        setReviews(data.content || []);
+        setTotalPages(data.totalPages || 0);
+      } catch {
+      } finally {
+        if (!signal.aborted) {
+          setLoading(false);
+        }
+      }
+    };
+    void run();
+    return () => controller.abort();
+  }, [apiBase, page, productId, sortBy]);
 
   const handleVote = async (reviewId: string, helpful: boolean) => {
     if (!apiClient) { toast.error("Sign in to vote"); return; }
     try {
       await apiClient.post(`/reviews/me/${reviewId}/vote`, { helpful });
       loadReviews();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Failed to vote");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error) || "Failed to vote");
     }
   };
 
@@ -88,8 +130,8 @@ export default function ReviewSection({ productId, vendorId, isAuthenticated, ap
       });
       toast.success("Review reported");
       setReportingId(null);
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Failed to report");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error) || "Failed to report");
     }
   };
 
@@ -120,7 +162,6 @@ export default function ReviewSection({ productId, vendorId, isAuthenticated, ap
         <div className="mt-5">
           <ReviewForm
             productId={productId}
-            vendorId={vendorId}
             apiClient={apiClient}
             onSuccess={handleReviewSubmitted}
             onCancel={() => setShowForm(false)}

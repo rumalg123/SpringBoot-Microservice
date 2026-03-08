@@ -11,6 +11,8 @@ import java.util.UUID;
 
 public interface AdminAuditLogRepository extends JpaRepository<AdminAuditLog, UUID>, JpaSpecificationExecutor<AdminAuditLog> {
 
+    boolean existsBySourceEventId(UUID sourceEventId);
+
     Page<AdminAuditLog> findByActorKeycloakId(String actorKeycloakId, Pageable pageable);
 
     Page<AdminAuditLog> findByAction(String action, Pageable pageable);
