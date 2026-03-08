@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -40,6 +41,9 @@ public interface UserEventRepository extends JpaRepository<UserEvent, UUID> {
     Page<UserEvent> findByUserIdOrderByCreatedAtDesc(UUID userId, Pageable pageable);
 
     Page<UserEvent> findBySessionIdOrderByCreatedAtDesc(String sessionId, Pageable pageable);
+
+    @Query("SELECT e.externalEventId FROM UserEvent e WHERE e.externalEventId IN :externalEventIds")
+    List<String> findExistingExternalEventIds(Collection<String> externalEventIds);
 
     @Query("""
             SELECT e.productId FROM UserEvent e

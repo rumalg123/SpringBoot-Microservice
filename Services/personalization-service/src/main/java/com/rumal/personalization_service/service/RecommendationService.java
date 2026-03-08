@@ -6,12 +6,12 @@ import com.rumal.personalization_service.repository.UserAffinityRepository;
 import com.rumal.personalization_service.repository.UserEventRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -27,27 +27,41 @@ public class RecommendationService {
     private final UserAffinityRepository userAffinityRepository;
     private final UserEventRepository userEventRepository;
     private final TrendingService trendingService;
-
-    @Value("${personalization.recommendation-limit:20}")
-    private int defaultLimit;
+    private final RecommendationProfileService recommendationProfileService;
 
     @Cacheable(cacheNames = "recommendations", key = "'user::' + #userId + '::' + #limit")
     public List<ProductSummary> getRecommendationsForUser(UUID userId, int limit) {
-        List<UserAffinity> categoryAffinities = userAffinityRepository
-                .findByUserIdAndAffinityTypeOrderByScoreDesc(userId, "CATEGORY", PageRequest.of(0, 5));
-        List<UserAffinity> brandAffinities = userAffinityRepository
-                .findByUserIdAndAffinityTypeOrderByScoreDesc(userId, "BRAND", PageRequest.of(0, 3));
+        List<String> categories = recommendationProfileService.getTopUserCategories(userId, 5);
+        if (categories.isEmpty()) {
+            categories = userAffinityRepository
+                    .findByUserIdAndAffinityTypeOrderByScoreDesc(userId, "CATEGORY", PageRequest.of(0, 5))
+                    .stream()
+                    .map(UserAffinity::getAffinityKey)
+                    .toList();
+        }
 
-        Set<UUID> excludeIds = new HashSet<>(
-                userEventRepository.findRecentPurchasedProductIds(userId, Instant.now().minus(30, ChronoUnit.DAYS))
-        );
+        List<String> brands = recommendationProfileService.getTopUserBrands(userId, 3);
+        if (brands.isEmpty()) {
+            brands = userAffinityRepository
+                    .findByUserIdAndAffinityTypeOrderByScoreDesc(userId, "BRAND", PageRequest.of(0, 3))
+                    .stream()
+                    .map(UserAffinity::getAffinityKey)
+                    .toList();
+        }
 
-        Set<UUID> candidateIds = new LinkedHashSet<>();
-
-        List<String> categories = categoryAffinities.stream().map(UserAffinity::getAffinityKey).toList();
-        List<String> brands = brandAffinities.stream().map(UserAffinity::getAffinityKey).toList();
+        Set<UUID> excludeIds = new HashSet<>(recommendationProfileService.getRecentPurchasedProductIds(
+                userId,
+                Instant.now().minus(30, ChronoUnit.DAYS)
+        ));
+        if (excludeIds.isEmpty()) {
+            excludeIds.addAll(userEventRepository.findRecentPurchasedProductIds(
+                    userId,
+                    Instant.now().minus(30, ChronoUnit.DAYS)
+            ));
+        }
 
         // Get trending products and filter by user's preferred categories/brands
+        Set<UUID> candidateIds = new LinkedHashSet<>();
         List<ProductSummary> trending = trendingService.getTrending(limit * 3);
         for (ProductSummary p : trending) {
             if (excludeIds.contains(p.id())) continue;
@@ -81,13 +95,9 @@ public class RecommendationService {
 
     @Cacheable(cacheNames = "recommendations", key = "'anon::' + #sessionId + '::' + #limit")
     public List<ProductSummary> getRecommendationsForAnonymous(String sessionId, int limit) {
-        List<String> recentCategories = userEventRepository.findRecentCategorySlugsBySession(
-                sessionId, Instant.now().minus(7, ChronoUnit.DAYS), PageRequest.of(0, 10));
-
-        Set<String> preferredCategories = recentCategories.stream()
-                .flatMap(slugs -> Arrays.stream(slugs.split(",")))
+        Set<String> preferredCategories = recommendationProfileService.getTopSessionCategories(sessionId, 10).stream()
+                .filter(StringUtils::hasText)
                 .map(String::trim)
-                .filter(s -> !s.isEmpty())
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
         List<ProductSummary> trending = trendingService.getTrending(limit * 2);

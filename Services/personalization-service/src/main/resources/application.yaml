@@ -38,6 +38,17 @@ personalization:
   trending-window-hours: ${PERSONALIZATION_TRENDING_WINDOW_HOURS:48}
   event-retention-days: ${PERSONALIZATION_EVENT_RETENTION_DAYS:90}
   anonymous-session-expiry-days: ${PERSONALIZATION_ANONYMOUS_SESSION_EXPIRY_DAYS:30}
+  profile:
+    session-ttl: ${PERSONALIZATION_PROFILE_SESSION_TTL:30d}
+    user-purchase-ttl: ${PERSONALIZATION_PROFILE_USER_PURCHASE_TTL:35d}
+    session-link-ttl: ${PERSONALIZATION_PROFILE_SESSION_LINK_TTL:30d}
+  ingestion:
+    stream-key: ${PERSONALIZATION_INGESTION_STREAM_KEY:person:events:v1}
+    stream-group: ${PERSONALIZATION_INGESTION_STREAM_GROUP:person-event-persister}
+    stream-max-len: ${PERSONALIZATION_INGESTION_STREAM_MAX_LEN:250000}
+    batch-size: ${PERSONALIZATION_INGESTION_BATCH_SIZE:200}
+    claim-idle: ${PERSONALIZATION_INGESTION_CLAIM_IDLE:30s}
+    poll-delay-ms: ${PERSONALIZATION_INGESTION_POLL_DELAY_MS:500}
   computation:
     co-purchase-cron: ${PERSONALIZATION_CO_PURCHASE_CRON:0 0 */6 * * *}
     similarity-cron: ${PERSONALIZATION_SIMILARITY_CRON:0 30 */6 * * *}

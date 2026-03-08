@@ -77,9 +77,12 @@ public class SecurityConfig {
                         .pathMatchers("/customers/me", "/customers/me/**", "/customers/register-identity", "/orders/me", "/orders/me/**", "/cart/me", "/cart/me/**", "/wishlist/me", "/wishlist/me/**", "/promotions/me", "/promotions/me/**", "/payments/me", "/payments/me/**")
                         .access(this::hasCustomerAccess)
                         .pathMatchers(HttpMethod.GET, "/promotions", "/promotions/**").permitAll()
-                        .pathMatchers(HttpMethod.POST, "/personalization/sessions/merge").authenticated()
-                        .pathMatchers("/personalization/me", "/personalization/me/**").authenticated()
-                        .pathMatchers("/personalization/**").permitAll()
+                        .pathMatchers(HttpMethod.POST, "/personalization/sessions/merge").access(this::hasCustomerAccess)
+                        .pathMatchers(HttpMethod.POST, "/personalization/me/tracking/opt-in", "/personalization/me/tracking/opt-out").access(this::hasCustomerAccess)
+                        .pathMatchers(HttpMethod.GET, "/personalization/me/tracking/status").access(this::hasCustomerAccess)
+                        .pathMatchers(HttpMethod.POST, "/personalization/events").access(this::hasCustomerOrAnonymousAccess)
+                        .pathMatchers(HttpMethod.GET, "/personalization/me/recommended", "/personalization/me/recently-viewed").access(this::hasCustomerOrAnonymousAccess)
+                        .pathMatchers(HttpMethod.GET, "/personalization/trending", "/personalization/products/**").permitAll()
                         .pathMatchers("/admin/vendors/**").access(this::hasSuperAdminOrPlatformStaffAccess)
                         .pathMatchers("/admin/platform-staff/**").access(this::hasSuperAdminAccess)
                         .pathMatchers("/admin/vendor-staff/**", "/admin/keycloak/users/**", "/admin/access-audit/**").access(this::hasSuperAdminOrVendorAdminAccess)
@@ -194,6 +197,20 @@ public class SecurityConfig {
                                 || keycloakRoleClaims.hasRole(jwt, "vendor_staff"))
                 ))
                 .defaultIfEmpty(new AuthorizationDecision(false));
+    }
+
+    private Mono<AuthorizationResult> hasCustomerOrAnonymousAccess(Mono<Authentication> authentication, AuthorizationContext context) {
+        return authentication
+                .flatMap(auth -> {
+                    if (!auth.isAuthenticated() || !(auth instanceof JwtAuthenticationToken jwtAuthenticationToken)) {
+                        return Mono.just((AuthorizationResult) new AuthorizationDecision(false));
+                    }
+                    Jwt jwt = jwtAuthenticationToken.getToken();
+                    boolean allowed = keycloakRoleClaims.isEmailVerified(jwt)
+                            && keycloakRoleClaims.hasRole(jwt, "customer");
+                    return Mono.just((AuthorizationResult) new AuthorizationDecision(allowed));
+                })
+                .defaultIfEmpty(new AuthorizationDecision(true));
     }
 
     private Mono<AuthorizationResult> hasCustomerAccess(Mono<Authentication> authentication, AuthorizationContext context) {

@@ -307,6 +307,22 @@ public class RateLimitConfig {
     }
 
     @Bean
+    public RedisRateLimiter personalizationEventsRateLimiter(
+            @Value("${RATE_LIMIT_PERSONALIZATION_EVENTS_REPLENISH:12}") int replenishRate,
+            @Value("${RATE_LIMIT_PERSONALIZATION_EVENTS_BURST:24}") int burstCapacity
+    ) {
+        return redisRateLimiter(replenishRate, burstCapacity);
+    }
+
+    @Bean
+    public RedisRateLimiter personalizationReadRateLimiter(
+            @Value("${RATE_LIMIT_PERSONALIZATION_READ_REPLENISH:25}") int replenishRate,
+            @Value("${RATE_LIMIT_PERSONALIZATION_READ_BURST:50}") int burstCapacity
+    ) {
+        return redisRateLimiter(replenishRate, burstCapacity);
+    }
+
+    @Bean
     public RedisRateLimiter webhookRateLimiter(
             @Value("${RATE_LIMIT_WEBHOOK_REPLENISH:100}") int replenishRate,
             @Value("${RATE_LIMIT_WEBHOOK_BURST:200}") int burstCapacity

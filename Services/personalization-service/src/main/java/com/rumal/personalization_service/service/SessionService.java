@@ -24,17 +24,13 @@ public class SessionService {
     private final AnonymousSessionRepository anonymousSessionRepository;
     private final UserEventRepository userEventRepository;
     private final RecentlyViewedService recentlyViewedService;
+    private final RecommendationProfileService recommendationProfileService;
     private final CacheManager cacheManager;
 
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public void mergeSession(UUID userId, String sessionId) {
-        var sessionOpt = anonymousSessionRepository.findBySessionIdAndMergedAtIsNull(sessionId);
-        if (sessionOpt.isEmpty()) {
-            log.debug("No unmerged anonymous session found for sessionId={}", sessionId);
-            return;
-        }
-
-        AnonymousSession session = sessionOpt.get();
+        Instant now = Instant.now();
+        recommendationProfileService.rememberMergedSession(userId, sessionId);
 
         int mergedEvents = userEventRepository.mergeSessionEvents(userId, sessionId);
         log.info("Merged {} anonymous events from session {} to user {}", mergedEvents, sessionId, userId);
@@ -45,8 +41,20 @@ public class SessionService {
             log.error("Failed to merge recently-viewed for session {}", sessionId, e);
         }
 
+        try {
+            recommendationProfileService.mergeAnonymousToUser(userId, sessionId);
+        } catch (Exception e) {
+            log.error("Failed to merge recommendation profile state for session {}", sessionId, e);
+        }
+
+        AnonymousSession session = anonymousSessionRepository.findById(sessionId)
+                .orElseGet(() -> AnonymousSession.builder()
+                        .sessionId(sessionId)
+                        .createdAt(now)
+                        .build());
         session.setUserId(userId);
-        session.setMergedAt(Instant.now());
+        session.setMergedAt(now);
+        session.setLastActivityAt(now);
         anonymousSessionRepository.save(session);
 
         evictRecommendationsFor(userId, sessionId);

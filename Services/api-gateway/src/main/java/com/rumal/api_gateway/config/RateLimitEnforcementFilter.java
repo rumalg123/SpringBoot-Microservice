@@ -65,6 +65,8 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
     private final RedisRateLimiter adminKeycloakSearchRateLimiter;
     private final RedisRateLimiter paymentMeRateLimiter;
     private final RedisRateLimiter paymentMeWriteRateLimiter;
+    private final RedisRateLimiter personalizationEventsRateLimiter;
+    private final RedisRateLimiter personalizationReadRateLimiter;
     private final RedisRateLimiter webhookRateLimiter;
     private final RedisRateLimiter gatewayDefaultRateLimiter;
     private final KeyResolver ipKeyResolver;
@@ -106,6 +108,8 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
             @Qualifier("adminKeycloakSearchRateLimiter") RedisRateLimiter adminKeycloakSearchRateLimiter,
             @Qualifier("paymentMeRateLimiter") RedisRateLimiter paymentMeRateLimiter,
             @Qualifier("paymentMeWriteRateLimiter") RedisRateLimiter paymentMeWriteRateLimiter,
+            @Qualifier("personalizationEventsRateLimiter") RedisRateLimiter personalizationEventsRateLimiter,
+            @Qualifier("personalizationReadRateLimiter") RedisRateLimiter personalizationReadRateLimiter,
             @Qualifier("webhookRateLimiter") RedisRateLimiter webhookRateLimiter,
             @Qualifier("gatewayDefaultRateLimiter") RedisRateLimiter gatewayDefaultRateLimiter,
             @Qualifier("ipKeyResolver") KeyResolver ipKeyResolver,
@@ -146,6 +150,8 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
         this.adminKeycloakSearchRateLimiter = adminKeycloakSearchRateLimiter;
         this.paymentMeRateLimiter = paymentMeRateLimiter;
         this.paymentMeWriteRateLimiter = paymentMeWriteRateLimiter;
+        this.personalizationEventsRateLimiter = personalizationEventsRateLimiter;
+        this.personalizationReadRateLimiter = personalizationReadRateLimiter;
         this.webhookRateLimiter = webhookRateLimiter;
         this.gatewayDefaultRateLimiter = gatewayDefaultRateLimiter;
         this.ipKeyResolver = ipKeyResolver;
@@ -239,7 +245,7 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
         if (path.startsWith("/orders") || path.startsWith("/cart/me/checkout")
                 || path.startsWith("/payments") || path.startsWith("/webhooks")
                 || "/customers/register".equals(path) || "/customers/register-identity".equals(path)
-                || path.startsWith("/auth")) {
+                || path.startsWith("/auth") || path.startsWith("/personalization/events")) {
             return false;
         }
         return true;
@@ -390,6 +396,17 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
         if (("/payments/me".equals(path) || path.startsWith("/payments/me/"))
                 && (method == HttpMethod.POST || method == HttpMethod.PUT || method == HttpMethod.DELETE)) {
             return new Policy("payment-me-write", paymentMeWriteRateLimiter, userOrIpKeyResolver);
+        }
+        if ("/personalization/events".equals(path) && method == HttpMethod.POST) {
+            return new Policy("personalization-events", personalizationEventsRateLimiter, userOrIpKeyResolver);
+        }
+        if (("/personalization/me".equals(path) || path.startsWith("/personalization/me/")
+                || "/personalization/trending".equals(path) || path.startsWith("/personalization/products/"))
+                && (method == HttpMethod.GET || method == HttpMethod.HEAD)) {
+            return new Policy("personalization-read", personalizationReadRateLimiter, userOrIpKeyResolver);
+        }
+        if ("/personalization/sessions/merge".equals(path) && method == HttpMethod.POST) {
+            return new Policy("personalization-read", personalizationReadRateLimiter, userOrIpKeyResolver);
         }
         if ("/payments/vendor/me".equals(path) || path.startsWith("/payments/vendor/me/")) {
             if (method == HttpMethod.GET || method == HttpMethod.HEAD) {

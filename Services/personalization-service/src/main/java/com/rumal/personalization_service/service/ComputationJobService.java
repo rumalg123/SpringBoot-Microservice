@@ -7,6 +7,8 @@ import com.rumal.personalization_service.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -30,6 +32,8 @@ public class ComputationJobService {
     private final ProductSimilarityRepository productSimilarityRepository;
     private final UserAffinityRepository userAffinityRepository;
     private final AnonymousSessionRepository anonymousSessionRepository;
+    private final TrendingService trendingService;
+    private final CacheManager cacheManager;
 
     @Value("${personalization.event-retention-days:90}")
     private int eventRetentionDays;
@@ -364,9 +368,21 @@ public class ComputationJobService {
     // ---- Trending cache refresh (every 30m) ----
 
     @Scheduled(cron = "${personalization.computation.trending-cron:0 */30 * * * *}")
-    @CacheEvict(cacheNames = "trending", allEntries = true)
     public void refreshTrendingCache() {
-        log.info("Trending cache evicted for refresh");
+        Cache cache = cacheManager.getCache("trending");
+        if (cache != null) {
+            cache.clear();
+        }
+
+        for (int limit : List.of(8, 20, 50, 100)) {
+            try {
+                trendingService.getTrending(limit);
+            } catch (Exception ex) {
+                log.warn("Failed warming trending cache for limit {}: {}", limit, ex.getMessage());
+            }
+        }
+
+        log.info("Trending cache refreshed and warmed");
     }
 
     // ---- Cleanup job (daily 3 AM) ----

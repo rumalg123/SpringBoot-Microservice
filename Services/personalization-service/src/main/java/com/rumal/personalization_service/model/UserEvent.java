@@ -9,6 +9,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "user_event", indexes = {
+        @Index(name = "idx_user_event_external_event_id", columnList = "external_event_id"),
         @Index(name = "idx_user_event_user_type_created", columnList = "user_id, event_type, created_at"),
         @Index(name = "idx_user_event_session_created", columnList = "session_id, created_at"),
         @Index(name = "idx_user_event_session_type_created", columnList = "session_id, event_type, created_at"),
@@ -26,6 +27,9 @@ public class UserEvent {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
+
+    @Column(length = 64)
+    private String externalEventId;
 
     private UUID userId;
 
