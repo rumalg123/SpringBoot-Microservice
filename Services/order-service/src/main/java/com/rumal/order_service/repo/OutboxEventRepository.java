@@ -1,23 +1,32 @@
 package com.rumal.order_service.repo;
 
 import com.rumal.order_service.entity.OutboxEvent;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> {
 
     @Query(value = """
             SELECT * FROM outbox_events
-            WHERE status = 'PENDING'
-              AND (next_retry_at IS NULL OR next_retry_at < :now)
+            WHERE (
+                    (status = 'PENDING' AND (next_retry_at IS NULL OR next_retry_at <= :now))
+                 OR (status = 'PROCESSING' AND next_retry_at IS NOT NULL AND next_retry_at <= :now)
+                  )
             ORDER BY created_at ASC
             LIMIT :limit
             FOR UPDATE SKIP LOCKED
             """, nativeQuery = true)
-    List<OutboxEvent> findPendingEventsForProcessing(@Param("now") Instant now, @Param("limit") int limit);
+    List<OutboxEvent> findEventsReadyToClaim(@Param("now") Instant now, @Param("limit") int limit);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT e FROM OutboxEvent e WHERE e.id = :id")
+    Optional<OutboxEvent> findByIdForUpdate(@Param("id") UUID id);
 }

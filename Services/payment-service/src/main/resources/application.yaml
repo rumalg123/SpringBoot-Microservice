@@ -190,6 +190,15 @@ payhere:
   notify-url: ${PAYHERE_NOTIFY_URL:http://localhost:8080/webhooks/payhere/notify}
 
 payment:
+  idempotency:
+    enabled: ${PAYMENT_IDEMPOTENCY_ENABLED:true}
+    key-header-name: ${PAYMENT_IDEMPOTENCY_KEY_HEADER:Idempotency-Key}
+    key-prefix: ${PAYMENT_IDEMPOTENCY_KEY_PREFIX:pay:idem:v1::}
+    pending-ttl: ${PAYMENT_IDEMPOTENCY_PENDING_TTL:30s}
+    response-ttl: ${PAYMENT_IDEMPOTENCY_RESPONSE_TTL:24h}
+  initiation-lock:
+    ttl: ${PAYMENT_INITIATION_LOCK_TTL:15s}
+    key-prefix: ${PAYMENT_INITIATION_LOCK_KEY_PREFIX:payment:initiate:order:}
   expiry:
     ttl: ${PAYMENT_EXPIRY_TTL:30m}
     check-interval: ${PAYMENT_EXPIRY_CHECK_INTERVAL:PT5M}

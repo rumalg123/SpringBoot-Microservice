@@ -1544,12 +1544,21 @@ public class OrderService {
     public OrderResponse setPaymentInfo(UUID orderId, SetPaymentInfoRequest req) {
         Order order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId));
+        String requestedPaymentId = trimToNull(req.paymentId());
+        String requestedPaymentMethod = trimToNull(req.paymentMethod());
+        String requestedGatewayRef = trimToNull(req.paymentGatewayRef());
         if (order.getPaymentId() != null) {
+            boolean samePaymentInfo = Objects.equals(order.getPaymentId(), requestedPaymentId)
+                    && Objects.equals(trimToNull(order.getPaymentMethod()), requestedPaymentMethod)
+                    && Objects.equals(trimToNull(order.getPaymentGatewayRef()), requestedGatewayRef);
+            if (samePaymentInfo) {
+                return toResponse(order);
+            }
             throw new ValidationException("Payment info is already set for order: " + orderId);
         }
-        order.setPaymentId(req.paymentId());
-        order.setPaymentMethod(req.paymentMethod());
-        order.setPaymentGatewayRef(req.paymentGatewayRef());
+        order.setPaymentId(requestedPaymentId);
+        order.setPaymentMethod(requestedPaymentMethod);
+        order.setPaymentGatewayRef(requestedGatewayRef);
         order.setPaidAt(Instant.now());
         Order saved = orderRepository.save(order);
         evictOrderCachesAfterStatusMutation();

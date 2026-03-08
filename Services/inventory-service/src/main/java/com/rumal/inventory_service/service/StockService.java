@@ -1,9 +1,11 @@
 package com.rumal.inventory_service.service;
 
+import com.rumal.inventory_service.client.OrderClient;
 import com.rumal.inventory_service.dto.*;
 import com.rumal.inventory_service.entity.*;
 import com.rumal.inventory_service.exception.InsufficientStockException;
 import com.rumal.inventory_service.exception.ResourceNotFoundException;
+import com.rumal.inventory_service.exception.ServiceUnavailableException;
 import com.rumal.inventory_service.exception.ValidationException;
 import com.rumal.inventory_service.repo.StockItemRepository;
 import com.rumal.inventory_service.repo.StockMovementRepository;
@@ -32,10 +34,10 @@ public class StockService {
     private final StockItemRepository stockItemRepository;
     private final StockReservationRepository stockReservationRepository;
     private final StockMovementRepository stockMovementRepository;
+    private final CatalogProductService catalogProductService;
     private final WarehouseService warehouseService;
+    private final OrderClient orderClient;
     private final org.springframework.transaction.PlatformTransactionManager txManager;
-
-    // ─── Internal: Check Availability ───
 
     @Transactional(readOnly = true)
     public List<StockCheckResult> checkAvailability(List<StockCheckRequest> requests) {
@@ -64,14 +66,12 @@ public class StockService {
         );
     }
 
-    // ─── Internal: Reserve Stock ───
-
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public StockReservationResponse reserveForOrder(UUID orderId, List<StockCheckRequest> items, Instant expiresAt) {
         List<StockReservation> existing = stockReservationRepository
                 .findByOrderIdAndStatusWithStockItem(orderId, ReservationStatus.RESERVED);
         if (!existing.isEmpty()) {
-            log.info("Reservation already exists for order {} — returning existing reservation (idempotent)", orderId);
+            log.info("Reservation already exists for order {} - returning existing reservation (idempotent)", orderId);
             List<ReservationItemResponse> existingItems = existing.stream()
                     .map(r -> new ReservationItemResponse(r.getId(), r.getProductId(),
                             r.getStockItem().getWarehouse().getId(), r.getQuantityReserved()))
@@ -102,9 +102,6 @@ public class StockService {
             for (StockItem stockItem : stockItems) {
                 if (remaining <= 0) break;
 
-                // C-05: Re-read the locked row to get the true current available quantity.
-                // findByProductIdForUpdateOrderByAvailableDesc already holds the PESSIMISTIC_WRITE lock
-                // on these rows, so the values are guaranteed consistent within this transaction.
                 int currentAvailable = stockItem.getQuantityAvailable();
                 int allocate = Math.min(remaining, Math.max(0, currentAvailable));
                 if (allocate == 0 && !stockItem.isBackorderable()) continue;
@@ -116,7 +113,6 @@ public class StockService {
                 stockItem.setQuantityReserved(stockItem.getQuantityReserved() + allocate);
                 stockItem.recalculateAvailable();
 
-                // C-05: Prevent negative available stock (guard against overselling)
                 if (stockItem.getQuantityAvailable() < 0 && !stockItem.isBackorderable()) {
                     throw new InsufficientStockException(
                             "Reservation would result in negative available stock for product "
@@ -161,18 +157,23 @@ public class StockService {
         return new StockReservationResponse(orderId, "RESERVED", reservationItems, expiresAt);
     }
 
-    // ─── Internal: Confirm Reservation ───
-
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public void confirmReservation(UUID orderId) {
         List<StockReservation> reservations = stockReservationRepository
-                .findByOrderIdAndStatusWithStockItem(orderId, ReservationStatus.RESERVED);
+                .findByOrderIdAndStatusWithStockItemForUpdate(orderId, ReservationStatus.RESERVED);
 
-        // H-09: Fail loudly if no reservations found — don't silently proceed with an unconfirmed order
         if (reservations.isEmpty()) {
+            boolean alreadyConfirmed = stockReservationRepository.existsByOrderIdAndStatusIn(
+                    orderId,
+                    EnumSet.of(ReservationStatus.CONFIRMED)
+            );
+            if (alreadyConfirmed) {
+                log.info("Reservations for order {} are already confirmed. Skipping duplicate confirmation.", orderId);
+                return;
+            }
             throw new ResourceNotFoundException(
                     "No RESERVED reservations found for order " + orderId
-                    + ". The reservation may have expired. A new order may be needed.");
+                            + ". The reservation may have expired. A new order may be needed.");
         }
 
         Instant now = Instant.now();
@@ -180,15 +181,14 @@ public class StockService {
             StockItem stockItem = stockItemRepository.findByIdForUpdate(reservation.getStockItem().getId())
                     .orElseThrow(() -> new ResourceNotFoundException("StockItem not found: " + reservation.getStockItem().getId()));
 
-            // H-15: Guard against negative on-hand (can occur if admin adjusts stock downward between reservation and confirmation)
             if (stockItem.getQuantityOnHand() < reservation.getQuantityReserved()) {
                 log.error("Insufficient on-hand ({}) for reservation confirmation ({}). Stock item: {}, Reservation: {}, Order: {}",
                         stockItem.getQuantityOnHand(), reservation.getQuantityReserved(),
                         stockItem.getId(), reservation.getId(), orderId);
                 throw new InsufficientStockException(
                         "On-hand quantity (" + stockItem.getQuantityOnHand()
-                        + ") insufficient for confirmation of " + reservation.getQuantityReserved()
-                        + " units. Stock item: " + stockItem.getId());
+                                + ") insufficient for confirmation of " + reservation.getQuantityReserved()
+                                + " units. Stock item: " + stockItem.getId());
             }
 
             int quantityBefore = stockItem.getQuantityAvailable();
@@ -211,12 +211,10 @@ public class StockService {
         log.info("Confirmed {} reservations for order {}", reservations.size(), orderId);
     }
 
-    // ─── Internal: Release Reservation ───
-
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public void releaseReservation(UUID orderId, String reason) {
         List<StockReservation> reservations = stockReservationRepository
-                .findByOrderIdAndStatusWithStockItem(orderId, ReservationStatus.RESERVED);
+                .findByOrderIdAndStatusWithStockItemForUpdate(orderId, ReservationStatus.RESERVED);
 
         if (reservations.isEmpty()) {
             log.warn("No RESERVED reservations found to release for order {}", orderId);
@@ -248,16 +246,12 @@ public class StockService {
         log.info("Released {} reservations for order {} (reason: {})", reservations.size(), orderId, reason);
     }
 
-    // ─── Internal: Cancel/Reverse All Reservations (handles both RESERVED and CONFIRMED) ───
-
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public void cancelOrderReservations(UUID orderId, String reason) {
-        // Release any still-RESERVED reservations
         List<StockReservation> reserved = stockReservationRepository
-                .findByOrderIdAndStatusWithStockItem(orderId, ReservationStatus.RESERVED);
-        // Reverse any CONFIRMED reservations (stock already deducted from on-hand)
+                .findByOrderIdAndStatusWithStockItemForUpdate(orderId, ReservationStatus.RESERVED);
         List<StockReservation> confirmed = stockReservationRepository
-                .findByOrderIdAndStatusWithStockItem(orderId, ReservationStatus.CONFIRMED);
+                .findByOrderIdAndStatusWithStockItemForUpdate(orderId, ReservationStatus.CONFIRMED);
 
         if (reserved.isEmpty() && confirmed.isEmpty()) {
             log.warn("No active reservations found to cancel for order {}", orderId);
@@ -265,7 +259,6 @@ public class StockService {
         }
 
         Instant now = Instant.now();
-
         for (StockReservation reservation : reserved) {
             StockItem stockItem = stockItemRepository.findByIdForUpdate(reservation.getStockItem().getId())
                     .orElseThrow(() -> new ResourceNotFoundException("StockItem not found: " + reservation.getStockItem().getId()));
@@ -292,7 +285,6 @@ public class StockService {
                     .orElseThrow(() -> new ResourceNotFoundException("StockItem not found: " + reservation.getStockItem().getId()));
 
             int quantityBefore = stockItem.getQuantityAvailable();
-            // Reverse the on-hand deduction that happened during confirmation
             stockItem.setQuantityOnHand(stockItem.getQuantityOnHand() + reservation.getQuantityReserved());
             stockItem.recalculateAvailable();
             stockItem.recalculateStatus();
@@ -313,30 +305,28 @@ public class StockService {
                 reserved.size(), confirmed.size(), orderId, reason);
     }
 
-    // ─── Internal: Stock Summary ───
-
     @Transactional(readOnly = true)
     public StockAvailabilitySummary getStockSummary(UUID productId) {
+        CatalogProduct catalogProduct = catalogProductService.findByProductId(productId);
         List<StockItem> items = stockItemRepository.findByProductId(productId);
-        return buildSummary(productId, items);
+        return buildSummary(productId, catalogProduct, items);
     }
 
     @Transactional(readOnly = true)
     public List<StockAvailabilitySummary> getBatchStockSummary(List<UUID> productIds) {
         if (productIds == null || productIds.isEmpty()) return List.of();
         List<StockItem> allItems = stockItemRepository.findByProductIdIn(productIds);
+        Map<UUID, CatalogProduct> catalogProducts = catalogProductService.findByProductIds(productIds);
         Map<UUID, List<StockItem>> grouped = allItems.stream()
                 .collect(Collectors.groupingBy(StockItem::getProductId));
 
         List<StockAvailabilitySummary> results = new ArrayList<>();
         for (UUID productId : productIds) {
             List<StockItem> items = grouped.getOrDefault(productId, List.of());
-            results.add(buildSummary(productId, items));
+            results.add(buildSummary(productId, catalogProducts.get(productId), items));
         }
         return results;
     }
-
-    // ─── Admin/Vendor: Stock CRUD ───
 
     @Transactional(readOnly = true)
     public Page<StockItemResponse> listStock(Pageable pageable, UUID vendorId, UUID productId, UUID warehouseId, StockStatus stockStatus) {
@@ -351,12 +341,9 @@ public class StockService {
 
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public StockItemResponse createStockItem(StockItemCreateRequest request) {
+        CatalogProduct catalogProduct = catalogProductService.requireOwnedProduct(request.productId(), request.vendorId());
         Warehouse warehouse = warehouseService.findById(request.warehouseId());
-
-        if (warehouse.getVendorId() != null && !warehouse.getVendorId().equals(request.vendorId())) {
-            throw new ValidationException("Warehouse " + request.warehouseId()
-                    + " does not belong to vendor " + request.vendorId());
-        }
+        assertWarehouseBelongsToVendor(warehouse, request.vendorId());
 
         stockItemRepository.findByProductIdAndWarehouseId(request.productId(), request.warehouseId())
                 .ifPresent(existing -> {
@@ -368,7 +355,7 @@ public class StockService {
                 .productId(request.productId())
                 .vendorId(request.vendorId())
                 .warehouse(warehouse)
-                .sku(request.sku())
+                .sku(resolveStockSku(request.sku(), catalogProduct))
                 .quantityOnHand(request.quantityOnHand())
                 .quantityReserved(0)
                 .quantityAvailable(request.quantityOnHand())
@@ -392,8 +379,9 @@ public class StockService {
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public StockItemResponse updateStockItem(UUID id, StockItemUpdateRequest request) {
         StockItem stockItem = findStockItemById(id);
+        CatalogProduct catalogProduct = catalogProductService.requireOwnedProduct(stockItem.getProductId(), stockItem.getVendorId());
 
-        if (request.sku() != null) stockItem.setSku(request.sku());
+        if (request.sku() != null) stockItem.setSku(resolveStockSku(request.sku(), catalogProduct));
         if (request.lowStockThreshold() != null) stockItem.setLowStockThreshold(request.lowStockThreshold());
         if (request.backorderable() != null) stockItem.setBackorderable(request.backorderable());
 
@@ -438,13 +426,14 @@ public class StockService {
             final int index = i;
             try {
                 String result = txTemplate.execute(status -> {
+                    CatalogProduct catalogProduct = catalogProductService.requireOwnedProduct(req.productId(), req.vendorId());
                     Optional<StockItem> existing = stockItemRepository.findByProductIdAndWarehouseId(req.productId(), req.warehouseId());
                     if (existing.isPresent()) {
                         StockItem stockItem = existing.get();
                         int quantityBefore = stockItem.getQuantityAvailable();
                         int diff = req.quantityOnHand() - stockItem.getQuantityOnHand();
                         stockItem.setQuantityOnHand(req.quantityOnHand());
-                        stockItem.setSku(req.sku());
+                        stockItem.setSku(resolveStockSku(req.sku(), catalogProduct));
                         stockItem.setLowStockThreshold(req.lowStockThreshold());
                         stockItem.setBackorderable(req.backorderable());
                         stockItem.recalculateAvailable();
@@ -459,11 +448,12 @@ public class StockService {
                         return "updated";
                     } else {
                         Warehouse warehouse = warehouseService.findById(req.warehouseId());
+                        assertWarehouseBelongsToVendor(warehouse, req.vendorId());
                         StockItem stockItem = StockItem.builder()
                                 .productId(req.productId())
                                 .vendorId(req.vendorId())
                                 .warehouse(warehouse)
-                                .sku(req.sku())
+                                .sku(resolveStockSku(req.sku(), catalogProduct))
                                 .quantityOnHand(req.quantityOnHand())
                                 .quantityReserved(0)
                                 .quantityAvailable(req.quantityOnHand())
@@ -501,8 +491,6 @@ public class StockService {
         return stockItemRepository.findLowStockByVendorId(vendorId, pageable).map(this::toStockItemResponse);
     }
 
-    // ─── Movements ───
-
     @Transactional(readOnly = true)
     public Page<StockMovementResponse> listMovements(Pageable pageable, UUID vendorId, UUID productId, UUID warehouseId, MovementType movementType) {
         if (vendorId != null) {
@@ -519,8 +507,6 @@ public class StockService {
                 .map(this::toMovementResponse);
     }
 
-    // ─── Reservations ───
-
     @Transactional(readOnly = true)
     public Page<StockReservationDetailResponse> listReservations(Pageable pageable, UUID vendorId, ReservationStatus status, UUID orderId) {
         if (vendorId != null) {
@@ -531,60 +517,142 @@ public class StockService {
                 .map(this::toReservationDetailResponse);
     }
 
-    // ─── Expiry (called by scheduler) ───
-
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public int expireStaleReservationsBatch(int batchSize) {
         Instant now = Instant.now();
         Page<StockReservation> page = stockReservationRepository
                 .findExpiredReservations(ReservationStatus.RESERVED, now, PageRequest.of(0, batchSize));
 
-        for (StockReservation reservation : page.getContent()) {
-            StockItem stockItem = stockItemRepository.findByIdForUpdate(reservation.getStockItem().getId())
+        int expired = 0;
+        for (StockReservation candidate : page.getContent()) {
+            StockReservation reservation = stockReservationRepository
+                    .findByIdAndStatusWithStockItemForUpdate(candidate.getId(), ReservationStatus.RESERVED)
                     .orElse(null);
-            if (stockItem == null) {
-                log.warn("StockItem {} not found during expiry of reservation {}", reservation.getStockItem().getId(), reservation.getId());
+            if (reservation == null) {
                 continue;
             }
 
-            int quantityBefore = stockItem.getQuantityAvailable();
-            stockItem.setQuantityReserved(stockItem.getQuantityReserved() - reservation.getQuantityReserved());
-            stockItem.recalculateAvailable();
-            stockItem.recalculateStatus();
-            stockItemRepository.save(stockItem);
+            String orderStatus = lookupOrderStatus(reservation.getOrderId());
+            if (shouldConfirmExpiredReservation(orderStatus)) {
+                confirmReservation(reservation.getOrderId());
+                continue;
+            }
+            if (!shouldReleaseExpiredReservation(orderStatus)) {
+                log.warn("Skipping expiry for reservation {} on order {} because order status could not be safely verified (status={}).",
+                        reservation.getId(), reservation.getOrderId(), orderStatusForLog(orderStatus));
+                continue;
+            }
 
-            reservation.setStatus(ReservationStatus.EXPIRED);
-            reservation.setReleasedAt(now);
-            reservation.setReleaseReason("Reservation expired");
-            stockReservationRepository.save(reservation);
-
-            recordMovement(stockItem, MovementType.RESERVATION_RELEASE, reservation.getQuantityReserved(),
-                    quantityBefore, stockItem.getQuantityAvailable(),
-                    "order", reservation.getOrderId(), "system", "scheduler",
-                    "Reservation expired for order " + reservation.getOrderId());
+            expireReservation(reservation, now);
+            expired++;
         }
 
-        int expired = page.getNumberOfElements();
         if (expired > 0) {
             log.info("Expired {} stale reservations (batch)", expired);
         }
         return expired;
     }
 
-    // ─── Helpers ───
-
     public StockItem findStockItemById(UUID id) {
         return stockItemRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Stock item not found: " + id));
     }
 
-    private StockAvailabilitySummary buildSummary(UUID productId, List<StockItem> items) {
-        int totalAvailable = items.stream().mapToInt(StockItem::getQuantityAvailable).sum();
-        int totalOnHand = items.stream().mapToInt(StockItem::getQuantityOnHand).sum();
-        int totalReserved = items.stream().mapToInt(StockItem::getQuantityReserved).sum();
-        boolean backorderable = items.stream().anyMatch(StockItem::isBackorderable);
-        String status = resolveAggregateStatus(totalAvailable, backorderable, items);
+    private StockAvailabilitySummary buildSummary(UUID productId, CatalogProduct catalogProduct, List<StockItem> items) {
+        if (catalogProduct == null || catalogProduct.isDeleted()) {
+            return new StockAvailabilitySummary(productId, 0, 0, 0, false, StockStatus.OUT_OF_STOCK.name());
+        }
+        List<StockItem> filteredItems = items.stream()
+                .filter(item -> catalogProduct.getVendorId().equals(item.getVendorId()))
+                .toList();
+        int totalAvailable = filteredItems.stream().mapToInt(StockItem::getQuantityAvailable).sum();
+        int totalOnHand = filteredItems.stream().mapToInt(StockItem::getQuantityOnHand).sum();
+        int totalReserved = filteredItems.stream().mapToInt(StockItem::getQuantityReserved).sum();
+        boolean backorderable = filteredItems.stream().anyMatch(StockItem::isBackorderable);
+        String status = resolveAggregateStatus(totalAvailable, backorderable, filteredItems);
         return new StockAvailabilitySummary(productId, totalAvailable, totalOnHand, totalReserved, backorderable, status);
+    }
+
+    private String resolveStockSku(String requestedSku, CatalogProduct catalogProduct) {
+        String catalogSku = catalogProduct.getSku();
+        if (requestedSku == null || requestedSku.isBlank()) {
+            return catalogSku;
+        }
+        String normalizedRequestedSku = requestedSku.trim();
+        if (!normalizedRequestedSku.equals(catalogSku)) {
+            throw new ValidationException("Stock item SKU must match the product catalog SKU");
+        }
+        return normalizedRequestedSku;
+    }
+
+    private void assertWarehouseBelongsToVendor(Warehouse warehouse, UUID vendorId) {
+        if (warehouse.getVendorId() != null && !warehouse.getVendorId().equals(vendorId)) {
+            throw new ValidationException("Warehouse " + warehouse.getId()
+                    + " does not belong to vendor " + vendorId);
+        }
+    }
+
+    private String lookupOrderStatus(UUID orderId) {
+        try {
+            OrderStatusSnapshot snapshot = orderClient.getOrderStatus(orderId);
+            return snapshot == null ? null : snapshot.status();
+        } catch (ResourceNotFoundException | ServiceUnavailableException ex) {
+            log.warn("Failed to verify order status before expiring reservation for order {}.", orderId, ex);
+            return null;
+        } catch (RuntimeException ex) {
+            log.warn("Unexpected failure while verifying order status before expiring reservation for order {}.", orderId, ex);
+            return null;
+        }
+    }
+
+    private boolean shouldConfirmExpiredReservation(String orderStatus) {
+        if (orderStatus == null) {
+            return false;
+        }
+        return switch (orderStatus) {
+            case "CONFIRMED", "ON_HOLD", "PROCESSING", "SHIPPED", "DELIVERED",
+                    "RETURN_REQUESTED", "RETURN_REJECTED", "REFUND_PENDING", "REFUNDED", "CLOSED" -> true;
+            default -> false;
+        };
+    }
+
+    private boolean shouldReleaseExpiredReservation(String orderStatus) {
+        if (orderStatus == null) {
+            return false;
+        }
+        return switch (orderStatus) {
+            case "PENDING", "PAYMENT_PENDING", "PAYMENT_FAILED", "CANCELLED" -> true;
+            default -> false;
+        };
+    }
+
+    private String orderStatusForLog(String orderStatus) {
+        return orderStatus == null || orderStatus.isBlank() ? "UNKNOWN" : orderStatus;
+    }
+
+    private void expireReservation(StockReservation reservation, Instant now) {
+        StockItem stockItem = stockItemRepository.findByIdForUpdate(reservation.getStockItem().getId())
+                .orElse(null);
+        if (stockItem == null) {
+            log.warn("StockItem {} not found during expiry of reservation {}", reservation.getStockItem().getId(), reservation.getId());
+            return;
+        }
+
+        int quantityBefore = stockItem.getQuantityAvailable();
+        stockItem.setQuantityReserved(stockItem.getQuantityReserved() - reservation.getQuantityReserved());
+        stockItem.recalculateAvailable();
+        stockItem.recalculateStatus();
+        stockItemRepository.save(stockItem);
+
+        reservation.setStatus(ReservationStatus.EXPIRED);
+        reservation.setReleasedAt(now);
+        reservation.setReleaseReason("Reservation expired");
+        stockReservationRepository.save(reservation);
+
+        recordMovement(stockItem, MovementType.RESERVATION_RELEASE, reservation.getQuantityReserved(),
+                quantityBefore, stockItem.getQuantityAvailable(),
+                "order", reservation.getOrderId(), "system", "scheduler",
+                "Reservation expired for order " + reservation.getOrderId());
     }
 
     private String resolveAggregateStatus(int totalAvailable, boolean backorderable, List<StockItem> items) {

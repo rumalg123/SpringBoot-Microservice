@@ -456,6 +456,9 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
         if (path.startsWith("/orders/me/") && path.endsWith("/cancel") && method == HttpMethod.POST) {
             return true;
         }
+        if ("/payments/me/initiate".equals(path) && method == HttpMethod.POST) {
+            return true;
+        }
         if (("/customers/me/addresses".equals(path) || path.startsWith("/customers/me/addresses/"))
                 && (method == HttpMethod.POST || method == HttpMethod.PUT || method == HttpMethod.DELETE)) {
             return true;

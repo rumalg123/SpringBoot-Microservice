@@ -10,10 +10,12 @@ import com.rumal.order_service.repo.OutboxEventRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -27,7 +29,11 @@ public class OutboxService {
     private final OutboxEventRepository outboxEventRepository;
     private final InventoryClient inventoryClient;
     private final PromotionClient promotionClient;
+    private final OrderSagaCompensationService orderSagaCompensationService;
     private final ObjectMapper objectMapper;
+
+    @Value("${outbox.processor.processing-lease:PT2M}")
+    private Duration processingLease;
 
     /**
      * Enqueue an outbox event within the current transaction.
@@ -51,22 +57,57 @@ public class OutboxService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void processEvent(OutboxEvent event) {
+    public List<UUID> claimEventsForProcessing(Instant now, int limit) {
+        List<OutboxEvent> events = outboxEventRepository.findEventsReadyToClaim(now, limit);
+        if (events.isEmpty()) {
+            return List.of();
+        }
+
+        Instant leaseExpiry = now.plus(processingLease == null ? Duration.ofMinutes(2) : processingLease);
+        for (OutboxEvent event : events) {
+            event.setStatus(OutboxEventStatus.PROCESSING);
+            event.setNextRetryAt(leaseExpiry);
+            event.setLastError(null);
+        }
+        outboxEventRepository.saveAll(events);
+        return events.stream().map(OutboxEvent::getId).toList();
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void processEvent(UUID eventId) {
+        OutboxEvent event = outboxEventRepository.findByIdForUpdate(eventId)
+                .orElse(null);
+        if (event == null) {
+            return;
+        }
+        if (event.getStatus() != OutboxEventStatus.PROCESSING) {
+            log.debug("Skipping outbox event {} because status is {}", event.getId(), event.getStatus());
+            return;
+        }
+
         try {
             dispatch(event);
             event.setStatus(OutboxEventStatus.PROCESSED);
             event.setProcessedAt(Instant.now());
+            event.setNextRetryAt(null);
+            event.setLastError(null);
             outboxEventRepository.save(event);
         } catch (Exception ex) {
-            event.setRetryCount(event.getRetryCount() + 1);
+            int nextRetryCount = event.getRetryCount() + 1;
+            event.setRetryCount(nextRetryCount);
             event.setLastError(truncate(ex.getMessage()));
-            if (event.getRetryCount() >= event.getMaxRetries()) {
+            if (nextRetryCount >= event.getMaxRetries()) {
+                if (requiresSagaCompensation(event.getEventType())) {
+                    orderSagaCompensationService.compensatePermanentFailure(event, ex.getMessage());
+                }
                 event.setStatus(OutboxEventStatus.FAILED);
+                event.setNextRetryAt(null);
                 log.error("Outbox event {} permanently failed after {} retries: {}/{}",
                         event.getId(), event.getRetryCount(), event.getAggregateType(), event.getEventType(), ex);
             } else {
                 // Exponential backoff: 5s, 20s, 45s, 80s, 125s
                 long delaySec = 5L * event.getRetryCount() * event.getRetryCount();
+                event.setStatus(OutboxEventStatus.PENDING);
                 event.setNextRetryAt(Instant.now().plusSeconds(delaySec));
                 log.warn("Outbox event {} failed (attempt {}), next retry at {}: {}/{}",
                         event.getId(), event.getRetryCount(), event.getNextRetryAt(),
@@ -74,6 +115,10 @@ public class OutboxService {
             }
             outboxEventRepository.save(event);
         }
+    }
+
+    private boolean requiresSagaCompensation(String eventType) {
+        return "COUPON_COMMIT".equals(eventType) || "INVENTORY_RESERVE".equals(eventType);
     }
 
     private void dispatch(OutboxEvent event) throws Exception {

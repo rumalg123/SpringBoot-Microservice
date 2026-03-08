@@ -65,6 +65,19 @@ resilience4j:
           - com.rumal.inventory_service.exception.ResourceNotFoundException
           - com.rumal.inventory_service.exception.ValidationException
           - com.rumal.inventory_service.exception.UnauthorizedException
+      orderService:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 20
+        minimumNumberOfCalls: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 3
+        slowCallRateThreshold: 70
+        slowCallDurationThreshold: 3000
+        ignoreExceptions:
+          - com.rumal.inventory_service.exception.ResourceNotFoundException
+          - com.rumal.inventory_service.exception.ValidationException
+          - com.rumal.inventory_service.exception.UnauthorizedException
 
   retry:
     instances:
@@ -79,6 +92,16 @@ resilience4j:
           - org.springframework.web.client.HttpServerErrorException
           - com.rumal.inventory_service.exception.ServiceUnavailableException
       vendorService:
+        maxAttempts: 3
+        waitDuration: 300ms
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - java.io.IOException
+          - org.springframework.web.client.ResourceAccessException
+          - org.springframework.web.client.HttpServerErrorException
+          - com.rumal.inventory_service.exception.ServiceUnavailableException
+      orderService:
         maxAttempts: 3
         waitDuration: 300ms
         enableExponentialBackoff: true

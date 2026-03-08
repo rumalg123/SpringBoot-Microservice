@@ -4,7 +4,13 @@ import com.rumal.payment_service.client.CustomerClient;
 import com.rumal.payment_service.client.InventoryClient;
 import com.rumal.payment_service.client.OrderClient;
 import com.rumal.payment_service.config.PayHereProperties;
-import com.rumal.payment_service.dto.*;
+import com.rumal.payment_service.dto.CustomerAddressSummary;
+import com.rumal.payment_service.dto.CustomerSummary;
+import com.rumal.payment_service.dto.OrderSummary;
+import com.rumal.payment_service.dto.PayHereCheckoutFormData;
+import com.rumal.payment_service.dto.PaymentAuditResponse;
+import com.rumal.payment_service.dto.PaymentDetailResponse;
+import com.rumal.payment_service.dto.PaymentResponse;
 import com.rumal.payment_service.entity.Payment;
 import com.rumal.payment_service.entity.PaymentAudit;
 import com.rumal.payment_service.entity.PaymentStatus;
@@ -34,7 +40,13 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
-import static com.rumal.payment_service.entity.PaymentStatus.*;
+import static com.rumal.payment_service.entity.PaymentStatus.CANCELLED;
+import static com.rumal.payment_service.entity.PaymentStatus.CHARGEBACKED;
+import static com.rumal.payment_service.entity.PaymentStatus.EXPIRED;
+import static com.rumal.payment_service.entity.PaymentStatus.FAILED;
+import static com.rumal.payment_service.entity.PaymentStatus.INITIATED;
+import static com.rumal.payment_service.entity.PaymentStatus.PENDING;
+import static com.rumal.payment_service.entity.PaymentStatus.SUCCESS;
 
 @Service
 @RequiredArgsConstructor
@@ -50,177 +62,163 @@ public class PaymentService {
     private final InventoryClient inventoryClient;
     private final CustomerClient customerClient;
     private final PayHereClient payHereClient;
+    private final PaymentInitiationLockService paymentInitiationLockService;
 
     @Value("${payment.expiry.ttl:30m}")
     private Duration expiryTtl;
 
-    // ── Payment Initiation ─────────────────────────────────────────────
-
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public PayHereCheckoutFormData initiatePayment(String keycloakId, UUID orderId) {
+        PaymentInitiationLockService.LockHandle lockHandle = paymentInitiationLockService.acquire(orderId);
+        try {
+            OrderSummary order = orderClient.getOrder(orderId);
 
-        // 1. Fetch order
-        OrderSummary order = orderClient.getOrder(orderId);
-
-        // 2. Verify requesting customer owns this order
-        CustomerSummary customer = customerClient.getCustomerByKeycloakId(keycloakId);
-        if (!customer.id().equals(order.customerId())) {
-            throw new com.rumal.payment_service.exception.UnauthorizedException(
-                    "You are not authorized to pay for this order");
-        }
-        String customerEmail = requireNonBlank(
-                customer.email(),
-                "Customer email is required to initiate payment. Please update your profile and retry."
-        );
-        String customerPhone = trimToNull(customer.phone());
-
-        // 3. Validate order status and transition PENDING → PAYMENT_PENDING
-        if (!"PENDING".equals(order.status()) && !"PAYMENT_PENDING".equals(order.status())) {
-            throw new ValidationException("Order is not eligible for payment (status: " + order.status() + ")");
-        }
-        assertInventoryReservationReady(orderId);
-        if ("PENDING".equals(order.status())) {
-            orderClient.updateOrderStatus(orderId, "PAYMENT_PENDING", "Payment initiated by customer");
-        }
-
-        // 4. Check for existing payment (with lock to prevent duplicate creation)
-        Optional<Payment> existing = paymentRepository.findByOrderIdAndStatusInForUpdate(
-                orderId, List.of(INITIATED, PENDING));
-
-        Payment payment;
-
-        if (existing.isPresent()) {
-            Payment found = existing.get();
-            if (found.getStatus() == INITIATED) {
-                // Reuse initiated payment – refresh expiry
-                found.setExpiresAt(Instant.now().plus(expiryTtl));
-                payment = paymentRepository.save(found);
-            } else {
-                // PENDING – payment is actively being processed
-                throw new ValidationException("Payment is already being processed");
+            CustomerSummary customer = customerClient.getCustomerByKeycloakId(keycloakId);
+            if (!customer.id().equals(order.customerId())) {
+                throw new com.rumal.payment_service.exception.UnauthorizedException(
+                        "You are not authorized to pay for this order");
             }
-        } else {
-            // 5. Create new payment
-            List<CustomerAddressSummary> addresses = customerClient.getCustomerAddresses(keycloakId);
+            String customerEmail = requireNonBlank(
+                    customer.email(),
+                    "Customer email is required to initiate payment. Please update your profile and retry."
+            );
+            String customerPhone = trimToNull(customer.phone());
 
-            // Find default billing address, fallback to first non-deleted
-            CustomerAddressSummary address = addresses.stream()
-                    .filter(a -> a.defaultBilling() && !a.deleted())
-                    .findFirst()
-                    .orElseGet(() -> addresses.stream()
-                            .filter(a -> !a.deleted())
-                            .findFirst()
-                            .orElse(null));
-
-            // Split customer name
-            String fullName = customer.name() != null ? customer.name().trim() : "";
-            String firstName;
-            String lastName;
-            int spaceIdx = fullName.indexOf(' ');
-            if (spaceIdx > 0) {
-                firstName = fullName.substring(0, spaceIdx);
-                lastName = fullName.substring(spaceIdx + 1).trim();
-            } else {
-                firstName = fullName;
-                lastName = "";
+            if (!"PENDING".equals(order.status())
+                    && !"PAYMENT_PENDING".equals(order.status())
+                    && !"PAYMENT_FAILED".equals(order.status())) {
+                throw new ValidationException("Order is not eligible for payment (status: " + order.status() + ")");
             }
 
-            // Truncate items description to 500 chars
-            String itemsDesc = order.item() != null
-                    ? (order.item().length() > 500 ? order.item().substring(0, 500) : order.item())
-                    : "";
+            assertInventoryReservationReady(orderId);
+            if ("PENDING".equals(order.status()) || "PAYMENT_FAILED".equals(order.status())) {
+                orderClient.updateOrderStatus(orderId, "PAYMENT_PENDING", "Payment initiated by customer");
+            }
 
-            // Build address fields
-            String customerAddress = null;
-            String customerCity = null;
-            String customerCountry = null;
-            String fallbackAddressPhone = null;
-            if (address != null) {
-                customerAddress = address.line1();
-                if (address.line2() != null && !address.line2().isBlank()) {
-                    customerAddress += ", " + address.line2();
+            Optional<Payment> existing = paymentRepository.findByOrderIdAndStatusInForUpdate(
+                    orderId, List.of(INITIATED, PENDING));
+
+            Payment payment;
+
+            if (existing.isPresent()) {
+                Payment found = existing.get();
+                if (found.getStatus() == INITIATED) {
+                    found.setExpiresAt(Instant.now().plus(expiryTtl));
+                    payment = paymentRepository.save(found);
+                } else {
+                    throw new ValidationException("Payment is already being processed");
                 }
-                customerCity = address.city();
-                customerCountry = address.countryCode();
-                fallbackAddressPhone = trimToNull(address.phone());
+            } else {
+                List<CustomerAddressSummary> addresses = customerClient.getCustomerAddresses(keycloakId);
+                CustomerAddressSummary address = addresses.stream()
+                        .filter(a -> a.defaultBilling() && !a.deleted())
+                        .findFirst()
+                        .orElseGet(() -> addresses.stream()
+                                .filter(a -> !a.deleted())
+                                .findFirst()
+                                .orElse(null));
+
+                String fullName = customer.name() != null ? customer.name().trim() : "";
+                String firstName;
+                String lastName;
+                int spaceIdx = fullName.indexOf(' ');
+                if (spaceIdx > 0) {
+                    firstName = fullName.substring(0, spaceIdx);
+                    lastName = fullName.substring(spaceIdx + 1).trim();
+                } else {
+                    firstName = fullName;
+                    lastName = "";
+                }
+
+                String itemsDesc = order.item() != null
+                        ? (order.item().length() > 500 ? order.item().substring(0, 500) : order.item())
+                        : "";
+
+                String customerAddress = null;
+                String customerCity = null;
+                String customerCountry = null;
+                String fallbackAddressPhone = null;
+                if (address != null) {
+                    customerAddress = address.line1();
+                    if (address.line2() != null && !address.line2().isBlank()) {
+                        customerAddress += ", " + address.line2();
+                    }
+                    customerCity = address.city();
+                    customerCountry = address.countryCode();
+                    fallbackAddressPhone = trimToNull(address.phone());
+                }
+
+                String resolvedCustomerPhone = customerPhone != null ? customerPhone : fallbackAddressPhone;
+                if (resolvedCustomerPhone == null) {
+                    throw new ValidationException(
+                            "Customer phone number is required to initiate payment. Add a phone in profile or address and retry."
+                    );
+                }
+
+                String currency = order.currency() != null ? order.currency() : "LKR";
+
+                payment = Payment.builder()
+                        .orderId(orderId)
+                        .customerId(order.customerId())
+                        .customerKeycloakId(keycloakId)
+                        .amount(order.orderTotal())
+                        .currency(currency)
+                        .status(INITIATED)
+                        .itemsDescription(itemsDesc)
+                        .customerFirstName(firstName)
+                        .customerLastName(lastName)
+                        .customerEmail(customerEmail)
+                        .customerPhone(resolvedCustomerPhone)
+                        .customerAddress(customerAddress)
+                        .customerCity(customerCity)
+                        .customerCountry(customerCountry)
+                        .expiresAt(Instant.now().plus(expiryTtl))
+                        .build();
+
+                payment = paymentRepository.save(payment);
+                paymentAuditService.writeAudit(payment.getId(), null, null,
+                        "PAYMENT_INITIATED", null, "INITIATED",
+                        "customer", keycloakId, null, null);
             }
 
-            String resolvedCustomerPhone = customerPhone != null ? customerPhone : fallbackAddressPhone;
-            if (resolvedCustomerPhone == null) {
-                throw new ValidationException(
-                        "Customer phone number is required to initiate payment. Add a phone in profile or address and retry."
-                );
-            }
+            String payhereOrderId = "ORD-" + payment.getId();
+            String hash = PayHereHashUtil.generateCheckoutHash(
+                    payHereProperties.getMerchantId(),
+                    payhereOrderId,
+                    payment.getAmount(),
+                    payment.getCurrency(),
+                    payHereProperties.getMerchantSecret());
 
-            String currency = order.currency() != null ? order.currency() : "LKR";
+            String formattedAmount = payment.getAmount()
+                    .setScale(2, RoundingMode.HALF_UP)
+                    .toPlainString();
 
-            payment = Payment.builder()
-                    .orderId(orderId)
-                    .customerId(order.customerId())
-                    .customerKeycloakId(keycloakId)
-                    .amount(order.orderTotal())
-                    .currency(currency)
-                    .status(INITIATED)
-                    .itemsDescription(itemsDesc)
-                    .customerFirstName(firstName)
-                    .customerLastName(lastName)
-                    .customerEmail(customerEmail)
-                    .customerPhone(resolvedCustomerPhone)
-                    .customerAddress(customerAddress)
-                    .customerCity(customerCity)
-                    .customerCountry(customerCountry)
-                    .expiresAt(Instant.now().plus(expiryTtl))
-                    .build();
-
-            payment = paymentRepository.save(payment);
-
-            // Audit
-            paymentAuditService.writeAudit(payment.getId(), null, null,
-                    "PAYMENT_INITIATED", null, "INITIATED",
-                    "customer", keycloakId, null, null);
+            return new PayHereCheckoutFormData(
+                    payment.getId(),
+                    payHereProperties.getMerchantId(),
+                    payHereProperties.getReturnUrl(),
+                    payHereProperties.getCancelUrl(),
+                    payHereProperties.getNotifyUrl(),
+                    payhereOrderId,
+                    payment.getItemsDescription(),
+                    payment.getCurrency(),
+                    formattedAmount,
+                    hash,
+                    payment.getCustomerFirstName(),
+                    payment.getCustomerLastName(),
+                    payment.getCustomerEmail(),
+                    payment.getCustomerPhone(),
+                    payment.getCustomerAddress(),
+                    payment.getCustomerCity(),
+                    payment.getCustomerCountry(),
+                    payHereProperties.getCheckoutUrl(),
+                    payment.getOrderId().toString(),
+                    ""
+            );
+        } finally {
+            paymentInitiationLockService.release(lockHandle);
         }
-
-        // 6. Generate PayHere order ID
-        String payhereOrderId = "ORD-" + payment.getId();
-
-        // 7. Generate hash
-        String hash = PayHereHashUtil.generateCheckoutHash(
-                payHereProperties.getMerchantId(),
-                payhereOrderId,
-                payment.getAmount(),
-                payment.getCurrency(),
-                payHereProperties.getMerchantSecret());
-
-        // 8. Build and return checkout form data
-        String formattedAmount = payment.getAmount()
-                .setScale(2, RoundingMode.HALF_UP)
-                .toPlainString();
-
-        return new PayHereCheckoutFormData(
-                payment.getId(),
-                payHereProperties.getMerchantId(),
-                payHereProperties.getReturnUrl(),
-                payHereProperties.getCancelUrl(),
-                payHereProperties.getNotifyUrl(),
-                payhereOrderId,
-                payment.getItemsDescription(),
-                payment.getCurrency(),
-                formattedAmount,
-                hash,
-                payment.getCustomerFirstName(),
-                payment.getCustomerLastName(),
-                payment.getCustomerEmail(),
-                payment.getCustomerPhone(),
-                payment.getCustomerAddress(),
-                payment.getCustomerCity(),
-                payment.getCustomerCountry(),
-                payHereProperties.getCheckoutUrl(),
-                payment.getOrderId().toString(),
-                ""
-        );
     }
-
-    // ── Webhook Processing ─────────────────────────────────────────────
 
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public void processWebhook(String merchantId, String orderId, String paymentId,
@@ -228,14 +226,12 @@ public class PaymentService {
                                String md5sig, String method, String cardHolderName,
                                String cardNo, String cardExpiry, String rawPayload) {
 
-        // 1. Verify merchant ID
         if (!payHereProperties.getMerchantId().equals(merchantId)) {
             log.warn("Webhook merchant_id mismatch: expected={}, received={}",
                     payHereProperties.getMerchantId(), merchantId);
             return;
         }
 
-        // 2. Verify signature
         boolean validSig = PayHereHashUtil.verifyWebhookSignature(
                 merchantId, orderId, payhereAmount, currency, statusCode,
                 payHereProperties.getMerchantSecret(), md5sig);
@@ -244,7 +240,6 @@ public class PaymentService {
             return;
         }
 
-        // 3. Parse payment UUID from orderId
         UUID paymentUuid;
         try {
             String uuidStr = orderId.startsWith("ORD-") ? orderId.substring(4) : orderId;
@@ -254,7 +249,6 @@ public class PaymentService {
             return;
         }
 
-        // 4. Find payment with pessimistic lock
         Optional<Payment> opt = paymentRepository.findByIdForUpdate(paymentUuid);
         if (opt.isEmpty()) {
             log.error("Payment not found for id={} (order_id={})", paymentUuid, orderId);
@@ -262,14 +256,12 @@ public class PaymentService {
         }
         Payment payment = opt.get();
 
-        // 5. Store old status – skip if already terminal (idempotency)
         PaymentStatus oldStatus = payment.getStatus();
-        if (oldStatus == SUCCESS || oldStatus == FAILED || oldStatus == CANCELLED || oldStatus == CHARGEBACKED) {
+        if (isTerminalStatus(oldStatus)) {
             log.info("Webhook for payment {} already in terminal state {}. Skipping.", paymentUuid, oldStatus);
             return;
         }
 
-        // C-02: Validate webhook amount matches stored payment amount
         try {
             BigDecimal receivedAmount = new BigDecimal(payhereAmount).setScale(2, RoundingMode.HALF_UP);
             BigDecimal expectedAmount = payment.getAmount().setScale(2, RoundingMode.HALF_UP);
@@ -282,12 +274,11 @@ public class PaymentService {
                         "Expected: " + expectedAmount + ", Received: " + receivedAmount);
                 return;
             }
-        } catch (NumberFormatException e) {
+        } catch (NumberFormatException ex) {
             log.error("Invalid payhere_amount format for payment {}: '{}'", paymentUuid, payhereAmount);
             return;
         }
 
-        // C-04: Webhook deduplication — hash of webhook params to detect retries
         String webhookHash = computeWebhookHash(merchantId, orderId, payhereAmount, currency, statusCode);
         if (webhookHash.equals(payment.getWebhookIdempotencyHash())) {
             log.info("Duplicate webhook detected for payment {} (hash={}). Skipping.", paymentUuid, webhookHash);
@@ -295,7 +286,6 @@ public class PaymentService {
         }
         payment.setWebhookIdempotencyHash(webhookHash);
 
-        // 6. Set webhook fields
         payment.setPayherePaymentId(paymentId);
         payment.setPayhereStatusCode(statusCode);
         payment.setPaymentMethod(method);
@@ -303,7 +293,6 @@ public class PaymentService {
         payment.setCardNoMasked(cardNo);
         payment.setCardExpiry(cardExpiry);
 
-        // 7. Map status code
         PaymentStatus newStatus = switch (statusCode) {
             case 2 -> SUCCESS;
             case 0 -> PENDING;
@@ -313,45 +302,26 @@ public class PaymentService {
             default -> FAILED;
         };
 
-        // 8. Update status
         payment.setStatus(newStatus);
 
-        // 9. Mark order sync pending for statuses that require order updates
-        if (newStatus == SUCCESS || newStatus == FAILED || newStatus == CANCELLED) {
-            payment.setOrderSyncPending(true);
+        if (requiresOrderSync(newStatus)) {
+            markOrderSyncRequired(payment);
+        } else {
+            payment.setOrderSyncPending(false);
+            payment.setOrderSyncRetryCount(0);
+            payment.setOrderSyncFailed(false);
         }
 
         if (newStatus == SUCCESS) {
             payment.setPaidAt(Instant.now());
         }
 
-        // 10. Save payment first to persist the status change
         paymentRepository.save(payment);
 
-        // 11. Sync order status (best-effort, flag stays true on failure for scheduler retry)
-        if (newStatus == SUCCESS) {
+        if (payment.isOrderSyncPending()) {
             try {
-                orderClient.setPaymentInfo(
-                        payment.getOrderId(),
-                        payment.getId().toString(),
-                        method,
-                        paymentId);
-                orderClient.updateOrderStatus(
-                        payment.getOrderId(), "CONFIRMED", "Payment confirmed via PayHere");
-                payment.setOrderSyncPending(false);
-                paymentRepository.save(payment);
-            } catch (Exception ex) {
-                log.error("Failed to sync order {} after successful payment. Will retry via scheduler.",
-                        payment.getOrderId(), ex);
-            }
-        }
-
-        if (newStatus == FAILED || newStatus == CANCELLED) {
-            try {
-                orderClient.updateOrderStatus(
-                        payment.getOrderId(), "PAYMENT_FAILED",
-                        "Payment " + newStatus.name().toLowerCase());
-                payment.setOrderSyncPending(false);
+                synchronizeOrderState(payment);
+                markOrderSyncCompleted(payment);
                 paymentRepository.save(payment);
             } catch (Exception ex) {
                 log.error("Failed to sync order {} after payment {}. Will retry via scheduler.",
@@ -359,13 +329,29 @@ public class PaymentService {
             }
         }
 
-        // 12. Audit
         paymentAuditService.writeAudit(paymentUuid, null, null,
                 "WEBHOOK_RECEIVED", oldStatus.name(), newStatus.name(),
                 "payhere", null, null, rawPayload);
     }
 
-    // ── Query Methods ──────────────────────────────────────────────────
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    public void reconcilePendingOrderSync(UUID paymentId) {
+        Payment payment = paymentRepository.findByIdForUpdate(paymentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Payment not found: " + paymentId));
+        if (!payment.isOrderSyncPending()) {
+            return;
+        }
+
+        try {
+            synchronizeOrderState(payment);
+            markOrderSyncCompleted(payment);
+            paymentRepository.save(payment);
+        } catch (Exception ex) {
+            registerOrderSyncFailure(payment, ex);
+            paymentRepository.save(payment);
+            throw ex;
+        }
+    }
 
     @Transactional(readOnly = true)
     public PaymentResponse getPaymentById(UUID paymentId, String keycloakId) {
@@ -415,15 +401,12 @@ public class PaymentService {
                 .map(this::toPaymentResponse);
     }
 
-    // ── Admin Verify ───────────────────────────────────────────────────
-
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public PaymentDetailResponse verifyPaymentWithPayHere(UUID paymentId) {
-        Payment payment = paymentRepository.findById(paymentId)
+        paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment not found: " + paymentId));
 
         Map<String, Object> response = payHereClient.retrievePayment("ORD-" + paymentId);
-        // H-02: Don't log full PayHere response (may contain card data — PCI violation)
         log.info("PayHere verify for payment {} completed, status={}", paymentId,
                 response != null ? response.get("status") : "null");
 
@@ -434,15 +417,11 @@ public class PaymentService {
         return getPaymentDetail(paymentId);
     }
 
-    // ── Audit Trail ────────────────────────────────────────────────────
-
     @Transactional(readOnly = true)
     public Page<PaymentAuditResponse> getAuditTrail(UUID paymentId, Pageable pageable) {
         return auditRepository.findByPaymentIdOrderByCreatedAtAsc(paymentId, pageable)
                 .map(this::toAuditResponse);
     }
-
-    // ── Private Helpers ────────────────────────────────────────────────
 
     private void assertInventoryReservationReady(UUID orderId) {
         boolean ready = inventoryClient.isReservationReadyForPayment(orderId);
@@ -453,6 +432,82 @@ public class PaymentService {
         }
     }
 
+    private void synchronizeOrderState(Payment payment) {
+        if (payment.getStatus() == SUCCESS) {
+            orderClient.setPaymentInfo(
+                    payment.getOrderId(),
+                    payment.getId().toString(),
+                    payment.getPaymentMethod(),
+                    payment.getPayherePaymentId());
+            orderClient.updateOrderStatus(
+                    payment.getOrderId(), "CONFIRMED", "Payment confirmed via PayHere");
+            return;
+        }
+
+        if (payment.getStatus() == FAILED || payment.getStatus() == CANCELLED || payment.getStatus() == EXPIRED) {
+            orderClient.updateOrderStatus(
+                    payment.getOrderId(),
+                    "PAYMENT_FAILED",
+                    buildFailureReason(payment.getStatus()));
+            return;
+        }
+
+        throw new ValidationException("Payment status does not require downstream synchronization: " + payment.getStatus());
+    }
+
+    private String buildFailureReason(PaymentStatus status) {
+        if (status == null) {
+            return "Payment failed";
+        }
+        return switch (status) {
+            case EXPIRED -> "Payment expired";
+            case CANCELLED -> "Payment cancelled";
+            case FAILED -> "Payment failed";
+            default -> "Payment " + status.name().toLowerCase();
+        };
+    }
+
+    private boolean requiresOrderSync(PaymentStatus status) {
+        return status == SUCCESS || status == FAILED || status == CANCELLED || status == EXPIRED;
+    }
+
+    private boolean isTerminalStatus(PaymentStatus status) {
+        return status == SUCCESS
+                || status == FAILED
+                || status == CANCELLED
+                || status == CHARGEBACKED
+                || status == EXPIRED;
+    }
+
+    private void markOrderSyncRequired(Payment payment) {
+        payment.setOrderSyncPending(true);
+        payment.setOrderSyncRetryCount(0);
+        payment.setOrderSyncFailed(false);
+    }
+
+    private void markOrderSyncCompleted(Payment payment) {
+        payment.setOrderSyncPending(false);
+        payment.setOrderSyncRetryCount(0);
+        payment.setOrderSyncFailed(false);
+    }
+
+    private void registerOrderSyncFailure(Payment payment, Exception ex) {
+        int nextRetryCount = payment.getOrderSyncRetryCount() + 1;
+        payment.setOrderSyncRetryCount(nextRetryCount);
+        if (nextRetryCount >= payment.getOrderSyncMaxRetries()) {
+            payment.setOrderSyncPending(false);
+            payment.setOrderSyncFailed(true);
+            log.error("CRITICAL: Order sync permanently failed for payment {} (order {}) after {} retries.",
+                    payment.getId(), payment.getOrderId(), nextRetryCount, ex);
+            paymentAuditService.writeAudit(payment.getId(), null, null,
+                    "ORDER_SYNC_PERMANENT_FAILURE", payment.getStatus().name(), null,
+                    "system", null, null,
+                    "Sync abandoned after " + nextRetryCount + " retries for order " + payment.getOrderId());
+            return;
+        }
+        payment.setOrderSyncFailed(false);
+    }
+
     private String requireNonBlank(String value, String message) {
         if (value == null || value.isBlank()) {
             throw new ValidationException(message);
@@ -461,78 +516,78 @@ public class PaymentService {
     }
 
     private String trimToNull(String value) {
-        if (value == null) return null;
+        if (value == null) {
+            return null;
+        }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
     }
 
-    private PaymentResponse toPaymentResponse(Payment p) {
+    private PaymentResponse toPaymentResponse(Payment payment) {
         return new PaymentResponse(
-                p.getId(),
-                p.getOrderId(),
-                p.getCustomerId(),
-                p.getAmount(),
-                p.getCurrency(),
-                p.getStatus().name(),
-                p.getPaymentMethod(),
-                p.getCardNoMasked(),
-                p.getPayherePaymentId(),
-                p.getPaidAt(),
-                p.getCreatedAt()
+                payment.getId(),
+                payment.getOrderId(),
+                payment.getCustomerId(),
+                payment.getAmount(),
+                payment.getCurrency(),
+                payment.getStatus().name(),
+                payment.getPaymentMethod(),
+                payment.getCardNoMasked(),
+                payment.getPayherePaymentId(),
+                payment.getPaidAt(),
+                payment.getCreatedAt()
         );
     }
 
-    private PaymentDetailResponse toPaymentDetailResponse(Payment p) {
+    private PaymentDetailResponse toPaymentDetailResponse(Payment payment) {
         return new PaymentDetailResponse(
-                p.getId(),
-                p.getOrderId(),
-                p.getCustomerId(),
-                p.getCustomerKeycloakId(),
-                p.getAmount(),
-                p.getCurrency(),
-                p.getStatus().name(),
-                p.getPayhereStatusCode(),
-                p.getStatusMessage(),
-                p.getPayherePaymentId(),
-                p.getPaymentMethod(),
-                p.getCardHolderName(),
-                p.getCardNoMasked(),
-                p.getCardExpiry(),
-                p.getItemsDescription(),
-                p.getPaidAt(),
-                p.getExpiresAt(),
-                p.getCreatedAt(),
-                p.getUpdatedAt()
+                payment.getId(),
+                payment.getOrderId(),
+                payment.getCustomerId(),
+                payment.getCustomerKeycloakId(),
+                payment.getAmount(),
+                payment.getCurrency(),
+                payment.getStatus().name(),
+                payment.getPayhereStatusCode(),
+                payment.getStatusMessage(),
+                payment.getPayherePaymentId(),
+                payment.getPaymentMethod(),
+                payment.getCardHolderName(),
+                payment.getCardNoMasked(),
+                payment.getCardExpiry(),
+                payment.getItemsDescription(),
+                payment.getPaidAt(),
+                payment.getExpiresAt(),
+                payment.getCreatedAt(),
+                payment.getUpdatedAt()
         );
     }
 
-    // C-04: Compute a SHA-256 hash of webhook parameters for deduplication
     private String computeWebhookHash(String merchantId, String orderId,
-                                       String amount, String currency, int statusCode) {
+                                      String amount, String currency, int statusCode) {
         try {
             String data = merchantId + "|" + orderId + "|" + amount + "|" + currency + "|" + statusCode;
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] hash = digest.digest(data.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(hash);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 not available", e);
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 not available", ex);
         }
     }
 
-    private PaymentAuditResponse toAuditResponse(PaymentAudit a) {
+    private PaymentAuditResponse toAuditResponse(PaymentAudit audit) {
         return new PaymentAuditResponse(
-                a.getId(),
-                a.getPaymentId(),
-                a.getRefundRequestId(),
-                a.getPayoutId(),
-                a.getEventType(),
-                a.getFromStatus(),
-                a.getToStatus(),
-                a.getActorType(),
-                a.getActorId(),
-                a.getNote(),
-                a.getCreatedAt()
+                audit.getId(),
+                audit.getPaymentId(),
+                audit.getRefundRequestId(),
+                audit.getPayoutId(),
+                audit.getEventType(),
+                audit.getFromStatus(),
+                audit.getToStatus(),
+                audit.getActorType(),
+                audit.getActorId(),
+                audit.getNote(),
+                audit.getCreatedAt()
         );
     }
-
 }

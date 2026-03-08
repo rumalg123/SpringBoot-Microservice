@@ -193,6 +193,12 @@ order:
     pending-ttl: ${ORDER_IDEMPOTENCY_PENDING_TTL:30s}
     response-ttl: ${ORDER_IDEMPOTENCY_RESPONSE_TTL:24h}
 
+outbox:
+  processor:
+    interval-ms: ${OUTBOX_PROCESSOR_INTERVAL_MS:5000}
+    batch-size: ${OUTBOX_PROCESSOR_BATCH_SIZE:50}
+    processing-lease: ${OUTBOX_PROCESSOR_PROCESSING_LEASE:PT2M}
+
 internal:
   auth:
     shared-secret: ${INTERNAL_AUTH_SHARED_SECRET:}

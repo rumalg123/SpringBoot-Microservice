@@ -5,15 +5,13 @@ import com.rumal.payment_service.entity.PaymentAudit;
 import com.rumal.payment_service.entity.PaymentStatus;
 import com.rumal.payment_service.repo.PaymentAuditRepository;
 import com.rumal.payment_service.repo.PaymentRepository;
-import com.rumal.payment_service.service.PaymentAuditService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
-
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -25,14 +23,8 @@ public class PaymentExpiryScheduler {
 
     private final PaymentRepository paymentRepository;
     private final PaymentAuditRepository auditRepository;
-    private final PaymentAuditService paymentAuditService;
     private final TransactionTemplate transactionTemplate;
 
-    /**
-     * Expire INITIATED payments that have passed their expiresAt time.
-     * Runs based on configured interval (default every 5 minutes).
-     * Each payment is expired in its own transaction to prevent one failure from rolling back the entire batch.
-     */
     @Scheduled(fixedDelayString = "${payment.expiry.check-interval:PT5M}")
     public void expireStalePayments() {
         log.debug("Running payment expiry check...");
@@ -49,16 +41,20 @@ public class PaymentExpiryScheduler {
                 UUID paymentId = payment.getId();
                 try {
                     transactionTemplate.executeWithoutResult(status -> {
-                        Payment p = paymentRepository.findById(paymentId).orElse(null);
-                        if (p == null || p.getStatus() != PaymentStatus.INITIATED) {
+                        Payment current = paymentRepository.findById(paymentId).orElse(null);
+                        if (current == null || current.getStatus() != PaymentStatus.INITIATED) {
                             return;
                         }
-                        String oldStatus = p.getStatus().name();
-                        p.setStatus(PaymentStatus.EXPIRED);
-                        paymentRepository.save(p);
+
+                        String oldStatus = current.getStatus().name();
+                        current.setStatus(PaymentStatus.EXPIRED);
+                        current.setOrderSyncPending(true);
+                        current.setOrderSyncRetryCount(0);
+                        current.setOrderSyncFailed(false);
+                        paymentRepository.save(current);
 
                         auditRepository.save(PaymentAudit.builder()
-                                .paymentId(p.getId())
+                                .paymentId(current.getId())
                                 .eventType("PAYMENT_EXPIRED")
                                 .fromStatus(oldStatus)
                                 .toStatus("EXPIRED")
@@ -67,9 +63,9 @@ public class PaymentExpiryScheduler {
                                 .build());
                     });
                     totalExpired++;
-                } catch (Exception e) {
+                } catch (Exception ex) {
                     totalFailed++;
-                    log.error("Failed to expire payment {}: {}", paymentId, e.getMessage());
+                    log.error("Failed to expire payment {}: {}", paymentId, ex.getMessage());
                 }
             }
         } while (!page.isEmpty());

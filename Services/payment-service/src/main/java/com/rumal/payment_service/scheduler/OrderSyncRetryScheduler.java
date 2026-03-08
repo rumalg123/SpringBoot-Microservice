@@ -1,22 +1,22 @@
 package com.rumal.payment_service.scheduler;
 
-import com.rumal.payment_service.client.OrderClient;
 import com.rumal.payment_service.entity.Payment;
-import com.rumal.payment_service.entity.PaymentStatus;
 import com.rumal.payment_service.repo.PaymentRepository;
-import com.rumal.payment_service.service.PaymentAuditService;
+import com.rumal.payment_service.service.PaymentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-
 import java.util.List;
 
-import static com.rumal.payment_service.entity.PaymentStatus.*;
+import static com.rumal.payment_service.entity.PaymentStatus.CANCELLED;
+import static com.rumal.payment_service.entity.PaymentStatus.EXPIRED;
+import static com.rumal.payment_service.entity.PaymentStatus.FAILED;
+import static com.rumal.payment_service.entity.PaymentStatus.SUCCESS;
 
 @Slf4j
 @Component
@@ -24,9 +24,8 @@ import static com.rumal.payment_service.entity.PaymentStatus.*;
 public class OrderSyncRetryScheduler {
 
     private final PaymentRepository paymentRepository;
-    private final OrderClient orderClient;
+    private final PaymentService paymentService;
     private final TransactionTemplate transactionTemplate;
-    private final PaymentAuditService paymentAuditService;
 
     @Scheduled(fixedDelayString = "${payment.order-sync.retry-interval:PT2M}")
     public void retryPendingOrderSyncs() {
@@ -38,41 +37,17 @@ public class OrderSyncRetryScheduler {
             do {
                 page = transactionTemplate.execute(status ->
                         paymentRepository.findOrderSyncPending(
-                                List.of(SUCCESS, FAILED, CANCELLED), PageRequest.of(0, 100)));
+                                List.of(SUCCESS, FAILED, CANCELLED, EXPIRED), PageRequest.of(0, 100)));
 
-                if (page == null || page.isEmpty()) break;
+                if (page == null || page.isEmpty()) {
+                    break;
+                }
 
                 for (Payment payment : page.getContent()) {
                     try {
-                        syncOrder(payment);
-                        transactionTemplate.executeWithoutResult(status -> {
-                            Payment p = paymentRepository.findById(payment.getId()).orElse(null);
-                            if (p != null) {
-                                p.setOrderSyncPending(false);
-                                paymentRepository.save(p);
-                            }
-                        });
+                        paymentService.reconcilePendingOrderSync(payment.getId());
                         totalSynced++;
                     } catch (Exception ex) {
-                        transactionTemplate.executeWithoutResult(status -> {
-                            Payment p = paymentRepository.findById(payment.getId()).orElse(null);
-                            if (p != null) {
-                                p.setOrderSyncRetryCount(p.getOrderSyncRetryCount() + 1);
-                                if (p.getOrderSyncRetryCount() >= p.getOrderSyncMaxRetries()) {
-                                    p.setOrderSyncPending(false);
-                                    // H-04: Flag permanently failed syncs and write audit for reconciliation
-                                    p.setOrderSyncFailed(true);
-                                    log.error("CRITICAL: Order sync permanently failed for payment {} (order {}) " +
-                                            "after {} retries. Manual reconciliation required.",
-                                            p.getId(), p.getOrderId(), p.getOrderSyncRetryCount());
-                                    paymentAuditService.writeAudit(p.getId(), null, null,
-                                            "ORDER_SYNC_PERMANENT_FAILURE", p.getStatus().name(), null,
-                                            "system", null, null,
-                                            "Sync abandoned after " + p.getOrderSyncRetryCount() + " retries for order " + p.getOrderId());
-                                }
-                                paymentRepository.save(p);
-                            }
-                        });
                         totalFailed++;
                         log.warn("Order sync retry failed for payment {}. Attempt {}/{}.",
                                 payment.getId(), payment.getOrderSyncRetryCount() + 1,
@@ -86,22 +61,6 @@ public class OrderSyncRetryScheduler {
             }
         } catch (Exception ex) {
             log.error("Error during order sync retry", ex);
-        }
-    }
-
-    private void syncOrder(Payment payment) {
-        if (payment.getStatus() == SUCCESS) {
-            orderClient.setPaymentInfo(
-                    payment.getOrderId(),
-                    payment.getId().toString(),
-                    payment.getPaymentMethod(),
-                    payment.getPayherePaymentId());
-            orderClient.updateOrderStatus(
-                    payment.getOrderId(), "CONFIRMED", "Payment confirmed via PayHere (sync retry)");
-        } else {
-            orderClient.updateOrderStatus(
-                    payment.getOrderId(), "PAYMENT_FAILED",
-                    "Payment " + payment.getStatus().name().toLowerCase() + " (sync retry)");
         }
     }
 }
