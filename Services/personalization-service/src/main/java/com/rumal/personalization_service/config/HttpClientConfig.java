@@ -31,6 +31,9 @@ public class HttpClientConfig {
     @Value("${http.client.max-connections-per-route:30}")
     private int maxConnectionsPerRoute;
 
+    @Value("${internal.auth.shared-secret:}")
+    private String internalAuthSharedSecret;
+
     @Bean
     @Primary
     public RestClient.Builder restClientBuilder() {
@@ -59,6 +62,8 @@ public class HttpClientConfig {
                 .build();
 
         var requestFactory = new HttpComponentsClientHttpRequestFactory(httpClient);
-        return RestClient.builder().requestFactory(requestFactory);
+        return RestClient.builder()
+                .requestFactory(requestFactory)
+                .requestInterceptor(new InternalRequestSigningInterceptor(internalAuthSharedSecret));
     }
 }

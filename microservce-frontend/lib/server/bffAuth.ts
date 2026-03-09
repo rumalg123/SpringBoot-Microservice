@@ -14,6 +14,8 @@ const GATEWAY_SYNC_COOKIE = "rs_gateway_sync_at";
 const DEFAULT_SCOPE = "openid profile email";
 const DEFAULT_SESSION_SYNC_INTERVAL_MS = 2 * 60 * 1000;
 const ACCESS_TOKEN_REFRESH_MARGIN_SECONDS = 30;
+const OAUTH_STATE_TTL_SECONDS = 10 * 60;
+const OAUTH_STATE_VERSION = 1;
 
 type SameSite = "lax" | "strict" | "none";
 
@@ -58,6 +60,15 @@ type StoredTokens = {
 type GuestCartCookies = {
   cartId: string;
   signature: string;
+};
+
+type OauthStatePayload = {
+  version: number;
+  nonce: string;
+  verifier: string;
+  returnTo: string;
+  fingerprint: string;
+  issuedAtEpochSeconds: number;
 };
 
 export type SessionPayload = {
@@ -196,6 +207,13 @@ function getGuestCartSigningSecret(): string {
   return getEnv("GUEST_CART_SIGNING_SECRET", "dev-guest-cart-signing-secret-change-me");
 }
 
+function getOauthStateSecret(): string {
+  return getEnv(
+    "KEYCLOAK_BFF_STATE_SECRET",
+    getEnv("KEYCLOAK_BFF_CLIENT_SECRET", getEnv("GUEST_CART_SIGNING_SECRET", "dev-bff-state-secret-change-me"))
+  );
+}
+
 function authorizationEndpoint(mode: "login" | "signup"): string {
   const baseUrl = getKeycloakBaseUrl();
   const realm = encodeURIComponent(getKeycloakRealm());
@@ -253,6 +271,108 @@ function createState(): string {
 
 function createCsrfToken(): string {
   return crypto.randomBytes(24).toString("base64url");
+}
+
+function getClientIp(request: NextRequest): string {
+  const forwardedFor = (request.headers.get("x-forwarded-for") || "").trim();
+  const raw = forwardedFor ? forwardedFor.split(",")[0]?.trim() || "" : "";
+  const fallback = (request.headers.get("x-real-ip") || "").trim();
+  const candidate = raw || fallback;
+  if (!candidate) {
+    return "";
+  }
+  return candidate.startsWith("::ffff:") ? candidate.slice("::ffff:".length) : candidate;
+}
+
+function normalizeIpFingerprint(ip: string): string {
+  const normalized = ip.trim();
+  if (!normalized) {
+    return "unknown-ip";
+  }
+  if (normalized.includes(":")) {
+    const segments = normalized.split(":").filter(Boolean);
+    return segments.slice(0, 4).join(":");
+  }
+  const segments = normalized.split(".");
+  if (segments.length === 4) {
+    return `${segments[0]}.${segments[1]}.${segments[2]}.0`;
+  }
+  return normalized;
+}
+
+function buildOauthBrowserFingerprint(request: NextRequest): string {
+  const userAgent = (request.headers.get("user-agent") || "").trim().toLowerCase();
+  const ipPrefix = normalizeIpFingerprint(getClientIp(request));
+  return crypto.createHash("sha256")
+    .update(`${userAgent}|${ipPrefix}`)
+    .digest("base64url");
+}
+
+function getOauthStateKey(): Buffer {
+  return crypto.createHash("sha256")
+    .update(getOauthStateSecret(), "utf8")
+    .digest();
+}
+
+function encodeOauthStateToken(payload: OauthStatePayload): string {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", getOauthStateKey(), iv);
+  const plaintext = Buffer.from(JSON.stringify(payload), "utf8");
+  const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+  const packed = Buffer.concat([Buffer.from([OAUTH_STATE_VERSION]), iv, authTag, ciphertext]);
+  return packed.toString("base64url");
+}
+
+function decodeOauthStateToken(token: string): OauthStatePayload | null {
+  const normalized = token.trim();
+  if (!normalized) {
+    return null;
+  }
+  try {
+    const packed = Buffer.from(normalized, "base64url");
+    if (packed.length <= 1 + 12 + 16 || packed[0] !== OAUTH_STATE_VERSION) {
+      return null;
+    }
+    const iv = packed.subarray(1, 13);
+    const authTag = packed.subarray(13, 29);
+    const ciphertext = packed.subarray(29);
+    const decipher = crypto.createDecipheriv("aes-256-gcm", getOauthStateKey(), iv);
+    decipher.setAuthTag(authTag);
+    const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString("utf8");
+    const parsed = JSON.parse(plaintext) as Partial<OauthStatePayload>;
+    if (parsed.version !== OAUTH_STATE_VERSION) {
+      return null;
+    }
+    if (typeof parsed.nonce !== "string" || typeof parsed.verifier !== "string" || typeof parsed.returnTo !== "string") {
+      return null;
+    }
+    if (typeof parsed.fingerprint !== "string" || typeof parsed.issuedAtEpochSeconds !== "number") {
+      return null;
+    }
+    return {
+      version: parsed.version,
+      nonce: parsed.nonce,
+      verifier: parsed.verifier,
+      returnTo: parsed.returnTo,
+      fingerprint: parsed.fingerprint,
+      issuedAtEpochSeconds: parsed.issuedAtEpochSeconds,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function isRecentOauthState(payload: OauthStatePayload): boolean {
+  const nowEpochSeconds = Math.floor(Date.now() / 1000);
+  return payload.issuedAtEpochSeconds <= nowEpochSeconds
+    && (nowEpochSeconds - payload.issuedAtEpochSeconds) <= OAUTH_STATE_TTL_SECONDS;
+}
+
+function safeEqualText(left: string, right: string): boolean {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer);
 }
 
 function signGuestCartId(cartId: string): string {
@@ -618,8 +738,15 @@ export async function buildAuthorizationRedirect(
   mode: "login" | "signup" | "change-password"
 ): Promise<{ redirectUrl: string; cookieMutations: CookieMutation[] }> {
   const verifier = createPkceVerifier();
-  const state = createState();
   const returnTo = normalizeReturnTo(request, request.nextUrl.searchParams.get("returnTo"));
+  const state = encodeOauthStateToken({
+    version: OAUTH_STATE_VERSION,
+    nonce: createState(),
+    verifier,
+    returnTo,
+    fingerprint: buildOauthBrowserFingerprint(request),
+    issuedAtEpochSeconds: Math.floor(Date.now() / 1000),
+  });
   const redirectUri = `${resolveAppOrigin(request)}/api/auth/callback`;
   const endpoint = authorizationEndpoint(mode === "signup" ? "signup" : "login");
   const params = new URLSearchParams({
@@ -639,9 +766,9 @@ export async function buildAuthorizationRedirect(
   return {
     redirectUrl: `${endpoint}?${params.toString()}`,
     cookieMutations: [
-      buildCookieMutation(OAUTH_STATE_COOKIE, state, 10 * 60, true),
-      buildCookieMutation(OAUTH_VERIFIER_COOKIE, verifier, 10 * 60, true),
-      buildCookieMutation(OAUTH_RETURN_TO_COOKIE, returnTo, 10 * 60, true),
+      buildCookieMutation(OAUTH_STATE_COOKIE, state, OAUTH_STATE_TTL_SECONDS, true),
+      buildCookieMutation(OAUTH_VERIFIER_COOKIE, verifier, OAUTH_STATE_TTL_SECONDS, true),
+      buildCookieMutation(OAUTH_RETURN_TO_COOKIE, returnTo, OAUTH_STATE_TTL_SECONDS, true),
     ],
   };
 }
@@ -650,8 +777,8 @@ export async function exchangeCallback(request: NextRequest): Promise<{ redirect
   const code = (request.nextUrl.searchParams.get("code") || "").trim();
   const state = (request.nextUrl.searchParams.get("state") || "").trim();
   const expectedState = (request.cookies.get(OAUTH_STATE_COOKIE)?.value || "").trim();
-  const verifier = (request.cookies.get(OAUTH_VERIFIER_COOKIE)?.value || "").trim();
-  const returnTo = normalizeReturnTo(request, request.cookies.get(OAUTH_RETURN_TO_COOKIE)?.value || "/");
+  const cookieVerifier = (request.cookies.get(OAUTH_VERIFIER_COOKIE)?.value || "").trim();
+  const cookieReturnTo = (request.cookies.get(OAUTH_RETURN_TO_COOKIE)?.value || "").trim();
   const clearFlowCookies = [
     deleteCookieMutation(OAUTH_STATE_COOKIE),
     deleteCookieMutation(OAUTH_VERIFIER_COOKIE),
@@ -659,11 +786,32 @@ export async function exchangeCallback(request: NextRequest): Promise<{ redirect
     deleteCookieMutation(GATEWAY_SYNC_COOKIE),
   ];
 
-  if (!code || !state || !expectedState || !verifier || state !== expectedState) {
+  if (!code || !state) {
     return {
       redirectTo: `${resolveAppOrigin(request)}/?authError=invalid_callback`,
       cookieMutations: [...clearAuthCookieMutations(), ...clearFlowCookies],
     };
+  }
+
+  let verifier = cookieVerifier;
+  let returnTo = normalizeReturnTo(request, cookieReturnTo || "/");
+  const hasCookieStateMatch = Boolean(expectedState)
+    && Boolean(cookieVerifier)
+    && safeEqualText(state, expectedState);
+
+  if (!hasCookieStateMatch) {
+    const decodedState = decodeOauthStateToken(state);
+    const currentFingerprint = buildOauthBrowserFingerprint(request);
+    if (!decodedState
+      || !isRecentOauthState(decodedState)
+      || !safeEqualText(decodedState.fingerprint, currentFingerprint)) {
+      return {
+        redirectTo: `${resolveAppOrigin(request)}/?authError=invalid_callback`,
+        cookieMutations: [...clearAuthCookieMutations(), ...clearFlowCookies],
+      };
+    }
+    verifier = decodedState.verifier;
+    returnTo = normalizeReturnTo(request, decodedState.returnTo);
   }
 
   try {
