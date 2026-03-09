@@ -15,7 +15,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: ${PROMOTION_JPA_DDL_AUTO:update}
+      ddl-auto: ${PROMOTION_JPA_DDL_AUTO:create-drop}
     show-sql: ${PROMOTION_SHOW_SQL:true}
 
 server:

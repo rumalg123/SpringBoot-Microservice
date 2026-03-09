@@ -12,7 +12,7 @@ spring:
     password: ${VENDOR_DB_PASS:vendor_pass}
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: create-drop
     show-sql: false
 
 server:

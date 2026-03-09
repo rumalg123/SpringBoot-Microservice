@@ -12,7 +12,7 @@ spring:
       timeout: ${REDIS_TIMEOUT:2s}
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: create-drop
     show-sql: false
 
 server:

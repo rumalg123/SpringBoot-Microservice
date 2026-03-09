@@ -12,7 +12,7 @@ spring:
     password: ${ACCESS_DB_PASS:access_pass}
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: create-drop
     show-sql: false
 
 server:
