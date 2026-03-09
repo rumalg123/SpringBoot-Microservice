@@ -77,6 +77,7 @@ public interface AccessService {
     ActiveSessionResponse registerSession(RegisterSessionRequest request);
     Page<ActiveSessionResponse> listSessionsByKeycloakId(String keycloakId, Pageable pageable);
     void revokeSession(UUID sessionId);
+    void revokeOwnSession(UUID sessionId, String keycloakId);
     void revokeSessionByKeycloakSessionId(String keycloakSessionId);
     void revokeSessionByKeycloakSessionIdFromGateway(String keycloakSessionId);
     void revokeAllSessions(String keycloakId);

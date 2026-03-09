@@ -11,6 +11,7 @@ import AddressBook from "../components/profile/AddressBook";
 import CommunicationPrefsTab from "../components/profile/CommunicationPrefsTab";
 import ActivityLogTab from "../components/profile/ActivityLogTab";
 import CouponUsageTab from "../components/profile/CouponUsageTab";
+import SessionSecurityTab from "../components/profile/SessionSecurityTab";
 import { useAuthSession } from "../../lib/authSession";
 import type { CustomerAddress, AddressForm, CommunicationPreferences } from "../../lib/types/customer";
 import { emptyAddressForm } from "../../lib/types/customer";
@@ -18,7 +19,7 @@ import { useCustomerProfile, useUpdateProfile, useCommunicationPrefs, useUpdateC
 import { useAddresses, useSaveAddress, useDeleteAddress, useSetDefaultAddress } from "../../lib/hooks/queries/useAddresses";
 
 type DefaultAction = { addressId: string; type: "shipping" | "billing" };
-type TabKey = "account" | "preferences" | "activity" | "coupon-history";
+type TabKey = "account" | "preferences" | "activity" | "coupon-history" | "sessions";
 
 function splitDisplayName(name: string) {
   const normalized = name.trim().replace(/\s+/g, " ");
@@ -38,7 +39,7 @@ export default function ProfilePage() {
   const session = useAuthSession();
   const {
     status: sessionStatus, isAuthenticated, canViewAdmin, apiClient, ensureCustomer,
-    resendVerificationEmail, changePassword, profile, logout, emailVerified,
+    resendVerificationEmail, changePassword, profile, claims, logout, emailVerified,
   } = session;
 
   const [status, setStatus] = useState("Loading account...");
@@ -270,7 +271,13 @@ export default function ProfilePage() {
     { key: "preferences", label: "Preferences" },
     { key: "activity", label: "Activity" },
     { key: "coupon-history", label: "Coupon History" },
+    { key: "sessions", label: "Sessions" },
   ];
+
+  const currentKeycloakSessionId =
+    (typeof claims?.sid === "string" && claims.sid.trim())
+    || (typeof claims?.session_state === "string" && claims.session_state.trim())
+    || null;
 
   return (
     <div className="min-h-screen bg-bg">
@@ -446,6 +453,13 @@ export default function ProfilePage() {
             couponUsageLoading={couponUsageLoading}
             couponUsagePage={couponUsagePage}
             onPageChange={handleCouponPageChange}
+          />
+        )}
+
+        {activeTab === "sessions" && (
+          <SessionSecurityTab
+            apiClient={apiClient}
+            currentKeycloakSessionId={currentKeycloakSessionId}
           />
         )}
       </main>

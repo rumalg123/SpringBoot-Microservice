@@ -6,6 +6,7 @@ import java.util.UUID;
 public record ActiveSessionResponse(
         UUID id,
         String keycloakId,
+        String keycloakSessionId,
         String ipAddress,
         String userAgent,
         Instant lastActivityAt,

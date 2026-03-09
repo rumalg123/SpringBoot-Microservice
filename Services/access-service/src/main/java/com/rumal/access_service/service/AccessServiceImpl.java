@@ -48,6 +48,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.dao.TransientDataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.annotation.Isolation;
@@ -78,6 +79,8 @@ public class AccessServiceImpl implements AccessService {
 
     private static final Logger log = LoggerFactory.getLogger(AccessServiceImpl.class);
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final int SESSION_SYNC_MAX_ATTEMPTS = 3;
+    private static final long SESSION_ACTIVITY_WRITE_THROTTLE_SECONDS = 30;
 
     private final PlatformStaffAccessRepository platformStaffAccessRepository;
     private final VendorStaffAccessRepository vendorStaffAccessRepository;
@@ -1092,33 +1095,37 @@ public class AccessServiceImpl implements AccessService {
     // ── Session Management ─────────────────────────────────────────────
 
     @Override
-    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 10)
     public ActiveSessionResponse registerSession(RegisterSessionRequest request) {
         String keycloakId = normalizeRequired(request.keycloakId(), "keycloakId", 120);
         String keycloakSessionId = normalizeRequired(request.keycloakSessionId(), "keycloakSessionId", 120);
+        String ipAddress = trimToNull(request.ipAddress());
+        String userAgent = trimToNull(request.userAgent());
 
-        ActiveSession existing = activeSessionRepository.findByKeycloakSessionIdIgnoreCase(keycloakSessionId).orElse(null);
-        if (existing != null) {
-            applySessionSnapshot(existing, keycloakId, keycloakSessionId, request);
-            return toActiveSessionResponse(activeSessionRepository.save(existing));
+        for (int attempt = 1; attempt <= SESSION_SYNC_MAX_ATTEMPTS; attempt++) {
+            try {
+                return registerSessionOnce(keycloakId, keycloakSessionId, ipAddress, userAgent);
+            } catch (TransientDataAccessException ex) {
+                if (attempt >= SESSION_SYNC_MAX_ATTEMPTS) {
+                    throw ex;
+                }
+                log.warn(
+                        "Transient active session write conflict for keycloakId={} keycloakSessionId={} attempt={}/{}",
+                        keycloakId,
+                        keycloakSessionId,
+                        attempt,
+                        SESSION_SYNC_MAX_ATTEMPTS
+                );
+            }
         }
 
-        try {
-            ActiveSession session = ActiveSession.builder().build();
-            applySessionSnapshot(session, keycloakId, keycloakSessionId, request);
-            return toActiveSessionResponse(activeSessionRepository.save(session));
-        } catch (DataIntegrityViolationException ex) {
-            ActiveSession retry = activeSessionRepository.findByKeycloakSessionIdIgnoreCase(keycloakSessionId)
-                    .orElseThrow(() -> ex);
-            applySessionSnapshot(retry, keycloakId, keycloakSessionId, request);
-            return toActiveSessionResponse(activeSessionRepository.save(retry));
-        }
+        throw new IllegalStateException("Unable to register active session");
     }
 
     @Override
     public Page<ActiveSessionResponse> listSessionsByKeycloakId(String keycloakId, Pageable pageable) {
         String normalized = normalizeRequired(keycloakId, "keycloakId", 120);
-        return activeSessionRepository.findByKeycloakIdOrderByLastActivityAtDesc(normalized, pageable)
+        return activeSessionRepository.findByKeycloakIdIgnoreCaseOrderByLastActivityAtDesc(normalized, pageable)
                 .map(this::toActiveSessionResponse);
     }
 
@@ -1126,6 +1133,17 @@ public class AccessServiceImpl implements AccessService {
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public void revokeSession(UUID sessionId) {
         ActiveSession session = activeSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Session not found: " + sessionId));
+        String keycloakSessionId = normalizeRequired(session.getKeycloakSessionId(), "keycloakSessionId", 120);
+        activeSessionRepository.delete(session);
+        gatewaySessionClient.revokeSessionByKeycloakSessionId(keycloakSessionId);
+    }
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 20)
+    public void revokeOwnSession(UUID sessionId, String keycloakId) {
+        String normalizedKeycloakId = normalizeRequired(keycloakId, "keycloakId", 120);
+        ActiveSession session = activeSessionRepository.findByIdAndKeycloakIdIgnoreCase(sessionId, normalizedKeycloakId)
                 .orElseThrow(() -> new ResourceNotFoundException("Session not found: " + sessionId));
         String keycloakSessionId = normalizeRequired(session.getKeycloakSessionId(), "keycloakSessionId", 120);
         activeSessionRepository.delete(session);
@@ -1160,24 +1178,12 @@ public class AccessServiceImpl implements AccessService {
         return new ActiveSessionResponse(
                 entity.getId(),
                 entity.getKeycloakId(),
+                entity.getKeycloakSessionId(),
                 entity.getIpAddress(),
                 entity.getUserAgent(),
                 entity.getLastActivityAt(),
                 entity.getCreatedAt()
         );
-    }
-
-    private void applySessionSnapshot(
-            ActiveSession session,
-            String keycloakId,
-            String keycloakSessionId,
-            RegisterSessionRequest request
-    ) {
-        session.setKeycloakId(keycloakId);
-        session.setKeycloakSessionId(keycloakSessionId);
-        session.setIpAddress(trimToNull(request.ipAddress()));
-        session.setUserAgent(trimToNull(request.userAgent()));
-        session.setLastActivityAt(Instant.now());
     }
 
     private void revokeSessionByKeycloakSessionIdInternal(String keycloakSessionId, boolean propagateToGateway) {
@@ -1193,13 +1199,96 @@ public class AccessServiceImpl implements AccessService {
 
     private void revokeAllSessionsInternal(String keycloakId, boolean propagateToGateway) {
         String normalized = normalizeRequired(keycloakId, "keycloakId", 120);
-        List<ActiveSession> activeSessions = activeSessionRepository.findByKeycloakIdOrderByLastActivityAtDesc(normalized);
+        List<ActiveSession> activeSessions = activeSessionRepository.findByKeycloakIdIgnoreCaseOrderByLastActivityAtDesc(normalized);
         if (!activeSessions.isEmpty()) {
             activeSessionRepository.deleteAllInBatch(activeSessions);
         }
         if (propagateToGateway) {
             gatewaySessionClient.revokeAllSessionsForKeycloakUser(normalized);
         }
+    }
+
+    private ActiveSessionResponse registerSessionOnce(
+            String keycloakId,
+            String keycloakSessionId,
+            String ipAddress,
+            String userAgent
+    ) {
+        Instant now = Instant.now();
+        ActiveSession existing = activeSessionRepository.findByKeycloakSessionIdIgnoreCase(keycloakSessionId).orElse(null);
+        if (existing != null) {
+            if (shouldSkipSessionTouch(existing, keycloakId, ipAddress, userAgent, now)) {
+                return toActiveSessionResponse(existing);
+            }
+            activeSessionRepository.touchByKeycloakSessionId(keycloakId, keycloakSessionId, ipAddress, userAgent, now);
+            return activeSessionRepository.findByKeycloakSessionIdIgnoreCase(keycloakSessionId)
+                    .map(this::toActiveSessionResponse)
+                    .orElseGet(() -> buildDetachedSessionResponse(existing, keycloakId, keycloakSessionId, ipAddress, userAgent, now));
+        }
+
+        try {
+            ActiveSession created = activeSessionRepository.save(ActiveSession.builder()
+                    .keycloakId(keycloakId)
+                    .keycloakSessionId(keycloakSessionId)
+                    .ipAddress(ipAddress)
+                    .userAgent(userAgent)
+                    .lastActivityAt(now)
+                    .build());
+            return toActiveSessionResponse(created);
+        } catch (DataIntegrityViolationException ex) {
+            ActiveSession concurrent = activeSessionRepository.findByKeycloakSessionIdIgnoreCase(keycloakSessionId)
+                    .orElseThrow(() -> ex);
+            if (shouldSkipSessionTouch(concurrent, keycloakId, ipAddress, userAgent, now)) {
+                return toActiveSessionResponse(concurrent);
+            }
+            activeSessionRepository.touchByKeycloakSessionId(keycloakId, keycloakSessionId, ipAddress, userAgent, now);
+            return activeSessionRepository.findByKeycloakSessionIdIgnoreCase(keycloakSessionId)
+                    .map(this::toActiveSessionResponse)
+                    .orElseGet(() -> buildDetachedSessionResponse(concurrent, keycloakId, keycloakSessionId, ipAddress, userAgent, now));
+        }
+    }
+
+    private boolean shouldSkipSessionTouch(
+            ActiveSession session,
+            String keycloakId,
+            String ipAddress,
+            String userAgent,
+            Instant now
+    ) {
+        if (session == null) {
+            return false;
+        }
+        if (!Objects.equals(trimToNull(session.getKeycloakId()), keycloakId)) {
+            return false;
+        }
+        if (!Objects.equals(trimToNull(session.getIpAddress()), ipAddress)) {
+            return false;
+        }
+        if (!Objects.equals(trimToNull(session.getUserAgent()), userAgent)) {
+            return false;
+        }
+        Instant lastActivityAt = session.getLastActivityAt();
+        return lastActivityAt != null
+                && !lastActivityAt.isBefore(now.minusSeconds(SESSION_ACTIVITY_WRITE_THROTTLE_SECONDS));
+    }
+
+    private ActiveSessionResponse buildDetachedSessionResponse(
+            ActiveSession source,
+            String keycloakId,
+            String keycloakSessionId,
+            String ipAddress,
+            String userAgent,
+            Instant lastActivityAt
+    ) {
+        return new ActiveSessionResponse(
+                source.getId(),
+                keycloakId,
+                keycloakSessionId,
+                ipAddress,
+                userAgent,
+                lastActivityAt,
+                source.getCreatedAt()
+        );
     }
 
     // ── API Key Management ─────────────────────────────────────────────
