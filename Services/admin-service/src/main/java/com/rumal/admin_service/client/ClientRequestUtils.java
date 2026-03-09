@@ -25,7 +25,7 @@ final class ClientRequestUtils {
         return spec.header(IDEMPOTENCY_HEADER, resolvedKey);
     }
 
-    private static String resolveIdempotencyKey(String explicitKey) {
+    static String resolveIdempotencyKey(String explicitKey) {
         if (StringUtils.hasText(explicitKey)) {
             return explicitKey.trim();
         }

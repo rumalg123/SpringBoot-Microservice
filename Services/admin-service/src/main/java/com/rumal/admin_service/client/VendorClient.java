@@ -1,5 +1,7 @@
 package com.rumal.admin_service.client;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rumal.admin_service.exception.DownstreamHttpException;
 import com.rumal.admin_service.exception.ServiceUnavailableException;
 import io.github.resilience4j.retry.RetryRegistry;
@@ -31,15 +33,18 @@ public class VendorClient {
     private final RestClient restClient;
     private final CircuitBreakerFactory<?, ?> circuitBreakerFactory;
     private final RetryRegistry retryRegistry;
+    private final ObjectMapper objectMapper;
 
     public VendorClient(
             @Qualifier("loadBalancedRestClientBuilder") RestClient.Builder lbRestClientBuilder,
             CircuitBreakerFactory<?, ?> circuitBreakerFactory,
-            RetryRegistry retryRegistry
+            RetryRegistry retryRegistry,
+            ObjectMapper objectMapper
     ) {
         this.restClient = lbRestClientBuilder.build();
         this.circuitBreakerFactory = circuitBreakerFactory;
         this.retryRegistry = retryRegistry;
+        this.objectMapper = objectMapper;
     }
 
     public List<Map<String, Object>> listAll(String internalAuth) {
@@ -261,32 +266,86 @@ public class VendorClient {
     }
 
     public Map<String, Object> addVendorUser(UUID vendorId, Map<String, Object> request, String internalAuth) {
-        return addVendorUser(vendorId, request, internalAuth, null, null);
+        return addVendorUser(vendorId, request, internalAuth, null, null, null);
     }
 
     public Map<String, Object> addVendorUser(UUID vendorId, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
-        return jsonRequest("POST", "/admin/vendors/" + vendorId + "/users", request, internalAuth, userSub, userRoles);
+        return addVendorUser(vendorId, request, internalAuth, userSub, userRoles, null);
+    }
+
+    public Map<String, Object> addVendorUser(
+            UUID vendorId,
+            Map<String, Object> request,
+            String internalAuth,
+            String userSub,
+            String userRoles,
+            String idempotencyKey
+    ) {
+        return jsonRequest(
+                "POST",
+                "/admin/vendors/" + vendorId + "/users",
+                request,
+                internalAuth,
+                userSub,
+                userRoles,
+                ensureIdempotencyKey(idempotencyKey)
+        );
     }
 
     public Map<String, Object> updateVendorUser(UUID vendorId, UUID membershipId, Map<String, Object> request, String internalAuth) {
-        return updateVendorUser(vendorId, membershipId, request, internalAuth, null, null);
+        return updateVendorUser(vendorId, membershipId, request, internalAuth, null, null, null);
     }
 
     public Map<String, Object> updateVendorUser(UUID vendorId, UUID membershipId, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
-        return jsonRequest("PUT", "/admin/vendors/" + vendorId + "/users/" + membershipId, request, internalAuth, userSub, userRoles);
+        return updateVendorUser(vendorId, membershipId, request, internalAuth, userSub, userRoles, null);
+    }
+
+    public Map<String, Object> updateVendorUser(
+            UUID vendorId,
+            UUID membershipId,
+            Map<String, Object> request,
+            String internalAuth,
+            String userSub,
+            String userRoles,
+            String idempotencyKey
+    ) {
+        return jsonRequest(
+                "PUT",
+                "/admin/vendors/" + vendorId + "/users/" + membershipId,
+                request,
+                internalAuth,
+                userSub,
+                userRoles,
+                ensureIdempotencyKey(idempotencyKey)
+        );
     }
 
     public void removeVendorUser(UUID vendorId, UUID membershipId, String internalAuth) {
-        removeVendorUser(vendorId, membershipId, internalAuth, null, null);
+        removeVendorUser(vendorId, membershipId, internalAuth, null, null, null);
     }
 
     public void removeVendorUser(UUID vendorId, UUID membershipId, String internalAuth, String userSub, String userRoles) {
+        removeVendorUser(vendorId, membershipId, internalAuth, userSub, userRoles, null);
+    }
+
+    public void removeVendorUser(
+            UUID vendorId,
+            UUID membershipId,
+            String internalAuth,
+            String userSub,
+            String userRoles,
+            String idempotencyKey
+    ) {
+        String resolvedIdempotencyKey = ensureIdempotencyKey(idempotencyKey);
         runVendorVoid(() -> {
             RestClient rc = restClient;
             try {
-                applyActorHeaders(rc.delete()
-                        .uri(buildUri("/admin/vendors/" + vendorId + "/users/" + membershipId))
-                        .header("X-Internal-Auth", internalAuth), userSub, userRoles)
+                applyIdempotencyHeader(
+                        applyActorHeaders(rc.delete()
+                                .uri(buildUri("/admin/vendors/" + vendorId + "/users/" + membershipId))
+                                .header("X-Internal-Auth", internalAuth), userSub, userRoles),
+                        resolvedIdempotencyKey
+                )
                         .retrieve()
                         .toBodilessEntity();
             } catch (RestClientResponseException ex) {
@@ -467,7 +526,7 @@ public class VendorClient {
         String body = ex.getResponseBodyAsString();
         String message;
         if (StringUtils.hasText(body)) {
-            String compactBody = body.replaceAll("\\s+", " ").trim();
+            String compactBody = extractDownstreamMessage(body);
             if (compactBody.length() > 300) {
                 compactBody = compactBody.substring(0, 300) + "...";
             }
@@ -480,6 +539,39 @@ public class VendorClient {
 
     private RestClient.RequestHeadersSpec<?> applyIdempotencyHeader(RestClient.RequestHeadersSpec<?> spec, String idempotencyKey) {
         return ClientRequestUtils.applyIdempotencyHeader(spec, idempotencyKey);
+    }
+
+    private String ensureIdempotencyKey(String idempotencyKey) {
+        String resolved = ClientRequestUtils.resolveIdempotencyKey(idempotencyKey);
+        if (StringUtils.hasText(resolved)) {
+            return resolved;
+        }
+        return UUID.randomUUID().toString();
+    }
+
+    private String extractDownstreamMessage(String body) {
+        String compactBody = body.replaceAll("\\s+", " ").trim();
+        if (!(compactBody.startsWith("{") && compactBody.endsWith("}"))) {
+            return compactBody;
+        }
+        try {
+            JsonNode root = objectMapper.readTree(compactBody);
+            if (root.hasNonNull("message") && root.get("message").isTextual()) {
+                String message = root.get("message").asText().trim();
+                if (StringUtils.hasText(message)) {
+                    return message;
+                }
+            }
+            if (root.hasNonNull("error") && root.get("error").isTextual()) {
+                String error = root.get("error").asText().trim();
+                if (StringUtils.hasText(error)) {
+                    return error;
+                }
+            }
+        } catch (Exception ignored) {
+            return compactBody;
+        }
+        return compactBody;
     }
 
     private URI buildUri(String path) {

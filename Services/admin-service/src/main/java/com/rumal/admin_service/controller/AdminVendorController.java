@@ -271,12 +271,13 @@ public class AdminVendorController {
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @PathVariable UUID vendorId,
             @RequestBody @NotNull Map<String, Object> request
     ) {
         internalRequestVerifier.verify(internalAuth);
         actorScopeService.assertCanManageVendors(userSub, userRoles, internalAuth);
-        return adminVendorService.addVendorUser(vendorId, request, internalAuth, userSub, userRoles);
+        return adminVendorService.addVendorUser(vendorId, request, internalAuth, userSub, userRoles, idempotencyKey);
     }
 
     @PutMapping("/{vendorId}/users/{membershipId}")
@@ -284,13 +285,14 @@ public class AdminVendorController {
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @PathVariable UUID vendorId,
             @PathVariable UUID membershipId,
             @RequestBody @NotNull Map<String, Object> request
     ) {
         internalRequestVerifier.verify(internalAuth);
         actorScopeService.assertCanManageVendors(userSub, userRoles, internalAuth);
-        return adminVendorService.updateVendorUser(vendorId, membershipId, request, internalAuth, userSub, userRoles);
+        return adminVendorService.updateVendorUser(vendorId, membershipId, request, internalAuth, userSub, userRoles, idempotencyKey);
     }
 
     @DeleteMapping("/{vendorId}/users/{membershipId}")
@@ -299,12 +301,13 @@ public class AdminVendorController {
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @PathVariable UUID vendorId,
             @PathVariable UUID membershipId
     ) {
         internalRequestVerifier.verify(internalAuth);
         actorScopeService.assertCanManageVendors(userSub, userRoles, internalAuth);
-        adminVendorService.removeVendorUser(vendorId, membershipId, internalAuth, userSub, userRoles);
+        adminVendorService.removeVendorUser(vendorId, membershipId, internalAuth, userSub, userRoles, idempotencyKey);
     }
 
     @PostMapping("/{vendorId}/users/onboard")
@@ -313,11 +316,12 @@ public class AdminVendorController {
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @PathVariable UUID vendorId,
             @Valid @RequestBody VendorAdminOnboardRequest request
     ) {
         internalRequestVerifier.verify(internalAuth);
         actorScopeService.assertCanManageVendors(userSub, userRoles, internalAuth);
-        return adminVendorService.onboardVendorAdmin(vendorId, request, internalAuth, userSub, userRoles);
+        return adminVendorService.onboardVendorAdmin(vendorId, request, internalAuth, userSub, userRoles, idempotencyKey);
     }
 }
