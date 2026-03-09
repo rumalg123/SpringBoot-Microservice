@@ -33,7 +33,7 @@ public class OrderSagaCompensationService {
     private final OutboxEventRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
     private final OrderAnalyticsLiveUpdateService orderAnalyticsLiveUpdateService;
-    private final OrderService orderService;
+    private final OrderStatusAuditRecorder orderStatusAuditRecorder;
 
     @Transactional(readOnly = false, isolation = Isolation.READ_COMMITTED, timeout = 20)
     public void compensatePermanentFailure(OutboxEvent failedEvent, String failureMessage) {
@@ -60,7 +60,7 @@ public class OrderSagaCompensationService {
         OrderStatus previousStatus = order.getStatus();
         order.setStatus(OrderStatus.CANCELLED);
         orderRepository.save(order);
-        orderService.recordStatusAudit(
+        orderStatusAuditRecorder.recordStatusAudit(
                 order,
                 previousStatus,
                 OrderStatus.CANCELLED,
@@ -79,7 +79,7 @@ public class OrderSagaCompensationService {
                 OrderStatus previousVendorStatus = vendorOrder.getStatus();
                 vendorOrder.setStatus(OrderStatus.CANCELLED);
                 vendorOrderRepository.save(vendorOrder);
-                orderService.recordVendorOrderStatusAudit(
+                orderStatusAuditRecorder.recordVendorOrderStatusAudit(
                         vendorOrder,
                         previousVendorStatus,
                         OrderStatus.CANCELLED,
