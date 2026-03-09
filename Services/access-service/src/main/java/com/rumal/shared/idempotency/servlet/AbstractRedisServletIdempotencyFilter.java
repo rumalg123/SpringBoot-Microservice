@@ -306,8 +306,7 @@ public abstract class AbstractRedisServletIdempotencyFilter extends OncePerReque
             Boolean ok = redisTemplate.opsForValue().setIfAbsent(key, PENDING_PREFIX + pendingPayload(reqHash), pendingTtl);
             return Boolean.TRUE.equals(ok);
         } catch (Exception ex) {
-            log.warn("{} Redis acquire failed (fail-closed) for key {}", logName(), key, ex);
-            throw new IdempotencyStateUnavailableException("Redis acquire failed for key " + key, ex);
+            throw redisStateUnavailable("Redis acquire failed", key, ex);
         }
     }
 
@@ -315,8 +314,7 @@ public abstract class AbstractRedisServletIdempotencyFilter extends OncePerReque
         try {
             return redisTemplate.opsForValue().get(key);
         } catch (Exception ex) {
-            log.warn("{} Redis lookup failed (fail-closed) for key {}", logName(), key, ex);
-            throw new IdempotencyStateUnavailableException("Redis lookup failed for key " + key, ex);
+            throw redisStateUnavailable("Redis lookup failed", key, ex);
         }
     }
 
@@ -329,8 +327,7 @@ public abstract class AbstractRedisServletIdempotencyFilter extends OncePerReque
             payload.put(BODY_BASE64, Base64.getEncoder().encodeToString(response.getContentAsByteArray()));
             redisTemplate.opsForValue().set(key, DONE_PREFIX + objectMapper.writeValueAsString(payload), responseTtl);
         } catch (Exception ex) {
-            log.warn("{} Redis completion write failed (fail-closed) for key {}", logName(), key, ex);
-            throw new IdempotencyStateUnavailableException("Redis completion write failed for key " + key, ex);
+            throw redisStateUnavailable("Redis completion write failed", key, ex);
         }
     }
 
@@ -430,6 +427,10 @@ public abstract class AbstractRedisServletIdempotencyFilter extends OncePerReque
 
     private String logName() {
         return getClass().getSimpleName();
+    }
+
+    private IdempotencyStateUnavailableException redisStateUnavailable(String operation, String key, Exception cause) {
+        return new IdempotencyStateUnavailableException(logName() + " " + operation + " for key " + key, cause);
     }
 
     private static final class IdempotencyStateUnavailableException extends RuntimeException {

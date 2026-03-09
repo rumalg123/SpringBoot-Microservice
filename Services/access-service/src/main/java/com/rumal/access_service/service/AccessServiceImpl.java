@@ -37,15 +37,13 @@ import com.rumal.access_service.repo.PlatformStaffAccessRepository;
 import com.rumal.access_service.repo.VendorStaffAccessRepository;
 import com.rumal.access_service.repo.AccessChangeAuditRepository;
 import com.rumal.access_service.repo.AccessAuditOutboxRepository;
-import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.PageRequest;
@@ -79,7 +77,6 @@ import java.util.Set;
 import java.util.UUID;
 
 @Service
-@RequiredArgsConstructor
 @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
 public class AccessServiceImpl implements AccessService {
 
@@ -110,13 +107,40 @@ public class AccessServiceImpl implements AccessService {
     private final AccessAuditRequestContextResolver accessAuditRequestContextResolver;
     private final AccessAuditPayloadSanitizer accessAuditPayloadSanitizer;
     private final PlatformTransactionManager transactionManager;
-
-    @Autowired
-    @Lazy
-    private AccessService self;
+    private final ObjectProvider<AccessService> selfProvider;
 
     @Value("${access.audit.outbox.retry-base-delay-seconds:15}")
     private long accessAuditRetryBaseDelaySeconds;
+
+    public AccessServiceImpl(
+            PlatformStaffAccessRepository platformStaffAccessRepository,
+            VendorStaffAccessRepository vendorStaffAccessRepository,
+            AccessChangeAuditRepository accessChangeAuditRepository,
+            AccessAuditOutboxRepository accessAuditOutboxRepository,
+            PermissionGroupRepository permissionGroupRepository,
+            ActiveSessionRepository activeSessionRepository,
+            ApiKeyRepository apiKeyRepository,
+            GatewaySessionClient gatewaySessionClient,
+            CacheManager cacheManager,
+            AccessAuditRequestContextResolver accessAuditRequestContextResolver,
+            AccessAuditPayloadSanitizer accessAuditPayloadSanitizer,
+            PlatformTransactionManager transactionManager,
+            ObjectProvider<AccessService> selfProvider
+    ) {
+        this.platformStaffAccessRepository = platformStaffAccessRepository;
+        this.vendorStaffAccessRepository = vendorStaffAccessRepository;
+        this.accessChangeAuditRepository = accessChangeAuditRepository;
+        this.accessAuditOutboxRepository = accessAuditOutboxRepository;
+        this.permissionGroupRepository = permissionGroupRepository;
+        this.activeSessionRepository = activeSessionRepository;
+        this.apiKeyRepository = apiKeyRepository;
+        this.gatewaySessionClient = gatewaySessionClient;
+        this.cacheManager = cacheManager;
+        this.accessAuditRequestContextResolver = accessAuditRequestContextResolver;
+        this.accessAuditPayloadSanitizer = accessAuditPayloadSanitizer;
+        this.transactionManager = transactionManager;
+        this.selfProvider = selfProvider;
+    }
 
     @Override
     public AccessChangeAuditPageResponse listAccessAudit(AccessAuditQuery auditQuery) {
@@ -200,7 +224,7 @@ public class AccessServiceImpl implements AccessService {
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public PlatformStaffAccessResponse createPlatformStaff(UpsertPlatformStaffAccessRequest request) {
-        return self.createPlatformStaff(request, null, null, null);
+        return self().createPlatformStaff(request, null, null, null);
     }
 
     @Override
@@ -233,7 +257,7 @@ public class AccessServiceImpl implements AccessService {
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public PlatformStaffAccessResponse updatePlatformStaff(UUID id, UpsertPlatformStaffAccessRequest request) {
-        return self.updatePlatformStaff(id, request, null, null, null);
+        return self().updatePlatformStaff(id, request, null, null, null);
     }
 
     @Override
@@ -265,7 +289,7 @@ public class AccessServiceImpl implements AccessService {
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public void softDeletePlatformStaff(UUID id) {
-        self.softDeletePlatformStaff(id, null, null, null);
+        self().softDeletePlatformStaff(id, null, null, null);
     }
 
     @Override
@@ -296,7 +320,7 @@ public class AccessServiceImpl implements AccessService {
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public PlatformStaffAccessResponse restorePlatformStaff(UUID id) {
-        return self.restorePlatformStaff(id, null, null, null);
+        return self().restorePlatformStaff(id, null, null, null);
     }
 
     @Override
@@ -392,7 +416,7 @@ public class AccessServiceImpl implements AccessService {
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public VendorStaffAccessResponse createVendorStaff(UpsertVendorStaffAccessRequest request) {
-        return self.createVendorStaff(request, null, null, null);
+        return self().createVendorStaff(request, null, null, null);
     }
 
     @Override
@@ -425,7 +449,7 @@ public class AccessServiceImpl implements AccessService {
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public VendorStaffAccessResponse updateVendorStaff(UUID id, UpsertVendorStaffAccessRequest request) {
-        return self.updateVendorStaff(id, request, null, null, null);
+        return self().updateVendorStaff(id, request, null, null, null);
     }
 
     @Override
@@ -460,13 +484,19 @@ public class AccessServiceImpl implements AccessService {
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public void softDeleteVendorStaff(UUID id) {
-        self.softDeleteVendorStaff(id, null, null, null);
+        self().softDeleteVendorStaff(id, null, null, null);
     }
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public void softDeleteVendorStaff(UUID id, String actorSub, String actorRoles, String reason) {
-        self.softDeleteVendorStaff(id, actorSub, actorRoles, reason, null);
+        self().softDeleteVendorStaff(id, actorSub, actorRoles, reason, null);
+    }
+
+    @Override
+    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
+    public VendorStaffAccessResponse restoreVendorStaff(UUID id) {
+        return self().restoreVendorStaff(id, null, null, null);
     }
 
     @Override
@@ -497,14 +527,8 @@ public class AccessServiceImpl implements AccessService {
 
     @Override
     @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
-    public VendorStaffAccessResponse restoreVendorStaff(UUID id) {
-        return self.restoreVendorStaff(id, null, null, null);
-    }
-
-    @Override
-    @Transactional(readOnly = false, isolation = Isolation.REPEATABLE_READ, timeout = 20)
     public VendorStaffAccessResponse restoreVendorStaff(UUID id, String actorSub, String actorRoles, String reason) {
-        return self.restoreVendorStaff(id, actorSub, actorRoles, reason, null);
+        return self().restoreVendorStaff(id, actorSub, actorRoles, reason, null);
     }
 
     @Override
@@ -1012,6 +1036,10 @@ public class AccessServiceImpl implements AccessService {
     private String normalizedLookupKey(String keycloakUserId) {
         String trimmed = trimToNull(keycloakUserId);
         return trimmed == null ? null : trimmed.toLowerCase(Locale.ROOT);
+    }
+
+    private AccessService self() {
+        return selfProvider.getObject();
     }
 
     private boolean isExpired(Instant accessExpiresAt) {
