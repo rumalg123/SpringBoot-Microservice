@@ -31,61 +31,20 @@ public class RecommendationService {
 
     @Cacheable(cacheNames = "recommendations", key = "'user::' + #userId + '::' + #limit")
     public List<ProductSummary> getRecommendationsForUser(UUID userId, int limit) {
-        List<String> categories = recommendationProfileService.getTopUserCategories(userId, 5);
-        if (categories.isEmpty()) {
-            categories = userAffinityRepository
-                    .findByUserIdAndAffinityTypeOrderByScoreDesc(userId, "CATEGORY", PageRequest.of(0, 5))
-                    .stream()
-                    .map(UserAffinity::getAffinityKey)
-                    .toList();
+        List<String> categories = resolvePreferredAffinities(userId, "CATEGORY", 5);
+        List<String> brands = resolvePreferredAffinities(userId, "BRAND", 3);
+        Instant purchaseCutoff = Instant.now().minus(30, ChronoUnit.DAYS);
+        Set<UUID> excludedProductIds = resolveExcludedProductIds(userId, purchaseCutoff);
+        List<ProductSummary> trendingProducts = trendingService.getTrending(limit * 3);
+        Set<UUID> candidateIds = collectPreferredCandidateIds(trendingProducts, categories, brands, excludedProductIds);
+
+        fillWithTrendingFallback(candidateIds, trendingProducts, excludedProductIds, limit);
+        if (candidateIds.isEmpty()) {
+            return List.of();
         }
 
-        List<String> brands = recommendationProfileService.getTopUserBrands(userId, 3);
-        if (brands.isEmpty()) {
-            brands = userAffinityRepository
-                    .findByUserIdAndAffinityTypeOrderByScoreDesc(userId, "BRAND", PageRequest.of(0, 3))
-                    .stream()
-                    .map(UserAffinity::getAffinityKey)
-                    .toList();
-        }
-
-        Set<UUID> excludeIds = new HashSet<>(recommendationProfileService.getRecentPurchasedProductIds(
-                userId,
-                Instant.now().minus(30, ChronoUnit.DAYS)
-        ));
-        if (excludeIds.isEmpty()) {
-            excludeIds.addAll(userEventRepository.findRecentPurchasedProductIds(
-                    userId,
-                    Instant.now().minus(30, ChronoUnit.DAYS)
-            ));
-        }
-
-        // Get trending products and filter by user's preferred categories/brands
-        Set<UUID> candidateIds = new LinkedHashSet<>();
-        List<ProductSummary> trending = trendingService.getTrending(limit * 3);
-        for (ProductSummary p : trending) {
-            if (excludeIds.contains(p.id())) continue;
-            boolean matchesCategory = p.categories() != null && categories.stream().anyMatch(c -> p.categories().contains(c));
-            boolean matchesBrand = brands.contains(p.brandName());
-            if (matchesCategory || matchesBrand) {
-                candidateIds.add(p.id());
-            }
-        }
-
-        // Fill remaining with general trending
-        if (candidateIds.size() < limit) {
-            for (ProductSummary p : trending) {
-                if (candidateIds.size() >= limit) break;
-                if (!excludeIds.contains(p.id())) {
-                    candidateIds.add(p.id());
-                }
-            }
-        }
-
-        if (candidateIds.isEmpty()) return List.of();
-
-        Map<UUID, ProductSummary> productMap = trending.stream()
-                .collect(Collectors.toMap(ProductSummary::id, p -> p, (a, b) -> a));
+        Map<UUID, ProductSummary> productMap = trendingProducts.stream()
+                .collect(Collectors.toMap(ProductSummary::id, product -> product, (left, right) -> left));
         return candidateIds.stream()
                 .limit(limit)
                 .map(productMap::get)
@@ -119,5 +78,74 @@ public class RecommendationService {
         List<ProductSummary> result = new ArrayList<>(matched);
         result.addAll(rest);
         return result.stream().limit(limit).toList();
+    }
+
+    private List<String> resolvePreferredAffinities(UUID userId, String affinityType, int limit) {
+        List<String> profileAffinities = "CATEGORY".equals(affinityType)
+                ? recommendationProfileService.getTopUserCategories(userId, limit)
+                : recommendationProfileService.getTopUserBrands(userId, limit);
+
+        if (!profileAffinities.isEmpty()) {
+            return profileAffinities;
+        }
+
+        return userAffinityRepository
+                .findByUserIdAndAffinityTypeOrderByScoreDesc(userId, affinityType, PageRequest.of(0, limit))
+                .stream()
+                .map(UserAffinity::getAffinityKey)
+                .toList();
+    }
+
+    private Set<UUID> resolveExcludedProductIds(UUID userId, Instant purchaseCutoff) {
+        Set<UUID> excludedProductIds = new HashSet<>(recommendationProfileService.getRecentPurchasedProductIds(userId, purchaseCutoff));
+        if (excludedProductIds.isEmpty()) {
+            excludedProductIds.addAll(userEventRepository.findRecentPurchasedProductIds(userId, purchaseCutoff));
+        }
+        return excludedProductIds;
+    }
+
+    private Set<UUID> collectPreferredCandidateIds(
+            List<ProductSummary> trendingProducts,
+            List<String> categories,
+            List<String> brands,
+            Set<UUID> excludedProductIds
+    ) {
+        Set<UUID> candidateIds = new LinkedHashSet<>();
+        for (ProductSummary product : trendingProducts) {
+            boolean excluded = excludedProductIds.contains(product.id());
+            boolean matchesPreference = !excluded && (matchesPreferredCategory(product, categories) || matchesPreferredBrand(product, brands));
+            if (matchesPreference) {
+                candidateIds.add(product.id());
+            }
+        }
+        return candidateIds;
+    }
+
+    private boolean matchesPreferredCategory(ProductSummary product, List<String> categories) {
+        return product.categories() != null && categories.stream().anyMatch(category -> product.categories().contains(category));
+    }
+
+    private boolean matchesPreferredBrand(ProductSummary product, List<String> brands) {
+        return brands.contains(product.brandName());
+    }
+
+    private void fillWithTrendingFallback(
+            Set<UUID> candidateIds,
+            List<ProductSummary> trendingProducts,
+            Set<UUID> excludedProductIds,
+            int limit
+    ) {
+        if (candidateIds.size() >= limit) {
+            return;
+        }
+
+        for (ProductSummary product : trendingProducts) {
+            if (candidateIds.size() >= limit) {
+                return;
+            }
+            if (!excludedProductIds.contains(product.id())) {
+                candidateIds.add(product.id());
+            }
+        }
     }
 }

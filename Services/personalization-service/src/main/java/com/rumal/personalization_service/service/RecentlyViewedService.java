@@ -43,7 +43,7 @@ public class RecentlyViewedService {
         if (key == null) return List.of();
 
         try {
-            Set<String> ids = redisTemplate.opsForZSet().reverseRange(key, 0, limit - 1);
+            Set<String> ids = redisTemplate.opsForZSet().reverseRange(key, 0, limit - 1L);
             if (ids == null || ids.isEmpty()) return List.of();
 
             List<UUID> productIds = ids.stream().map(UUID::fromString).toList();
@@ -80,7 +80,7 @@ public class RecentlyViewedService {
                 }
                 if (!validEntries.isEmpty()) {
                     redisTemplate.opsForZSet().add(userKey, validEntries);
-                    redisTemplate.opsForZSet().removeRange(userKey, 0, -(maxItems + 1));
+                    redisTemplate.opsForZSet().removeRange(userKey, 0, -((long) maxItems + 1L));
                 }
             }
             redisTemplate.delete(anonKey);

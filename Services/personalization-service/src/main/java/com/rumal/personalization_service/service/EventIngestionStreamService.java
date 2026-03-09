@@ -89,9 +89,9 @@ public class EventIngestionStreamService {
 
         try {
             for (RecordEventRequest request : requests) {
-                Record<String, Map<String, String>> record = Record.of(toStreamFields(userId, sessionId, request))
+                Record<String, Map<String, String>> streamRecord = Record.of(toStreamFields(userId, sessionId, request))
                         .withStreamKey(streamKey);
-                streamOperations.add(record, options);
+                streamOperations.add(streamRecord, options);
             }
         } catch (Exception ex) {
             throw new ServiceUnavailableException("Personalization ingestion unavailable", ex);
@@ -197,13 +197,13 @@ public class EventIngestionStreamService {
         List<QueuedEventPayload> payloads = new ArrayList<>();
         List<MapRecord<String, String, String>> invalidRecords = new ArrayList<>();
 
-        for (MapRecord<String, String, String> record : records) {
-            QueuedEventPayload payload = toPayload(record);
+        for (MapRecord<String, String, String> streamRecord : records) {
+            QueuedEventPayload payload = toPayload(streamRecord);
             if (payload == null) {
-                invalidRecords.add(record);
+                invalidRecords.add(streamRecord);
                 continue;
             }
-            validRecords.add(record);
+            validRecords.add(streamRecord);
             payloads.add(payload);
         }
 
@@ -266,14 +266,14 @@ public class EventIngestionStreamService {
         return fields;
     }
 
-    private QueuedEventPayload toPayload(MapRecord<String, String, String> record) {
-        Map<String, String> fields = record.getValue();
+    private QueuedEventPayload toPayload(MapRecord<String, String, String> streamRecord) {
+        Map<String, String> fields = streamRecord.getValue();
         String eventId = fields.get("eventId");
         EventType eventType = parseEventType(fields.get("eventType"));
         UUID productId = parseUuid(fields.get("productId"));
 
         if (!StringUtils.hasText(eventId) || eventType == null || productId == null) {
-            log.warn("Discarding malformed personalization event record {}", record.getId());
+            log.warn("Discarding malformed personalization event record {}", streamRecord.getId());
             return null;
         }
 

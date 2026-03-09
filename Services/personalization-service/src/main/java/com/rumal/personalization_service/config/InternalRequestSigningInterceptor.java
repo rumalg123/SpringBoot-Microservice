@@ -55,7 +55,7 @@ public final class InternalRequestSigningInterceptor implements ClientHttpReques
         if (!"POST".equals(method) && !"PUT".equals(method) && !"PATCH".equals(method)) {
             return "";
         }
-        if (body == null || body.length == 0) {
+        if (body.length == 0) {
             return "";
         }
         try {

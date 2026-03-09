@@ -46,87 +46,141 @@ public class EventService {
             return;
         }
 
+        Set<String> existingEventIds = findExistingEventIds(events);
+        Map<String, UUID> mergedSessionUsers = resolveMergedSessionUsers(events);
+        Map<UUID, ProductSummary> productSummaries = loadProductSummaries(events);
+        Instant activityAt = Instant.now();
+        PersistenceBatch batch = prepareBatch(events, existingEventIds, mergedSessionUsers, productSummaries, activityAt);
+
+        if (batch.isEmpty()) {
+            return;
+        }
+
+        userEventRepository.saveAll(batch.userEvents());
+        userEventRepository.flush();
+        upsertAnonymousSessions(batch.anonymousSessionIds(), activityAt);
+        updateReadModels(batch.persistedStates());
+
+        log.debug("Persisted {} personalization events ({} deduped, {} anonymous sessions touched)",
+                batch.userEvents().size(), existingEventIds.size(), batch.anonymousSessionIds().size());
+    }
+
+    private Set<String> findExistingEventIds(List<QueuedEventPayload> events) {
         Set<String> candidateEventIds = events.stream()
+                .filter(Objects::nonNull)
                 .map(QueuedEventPayload::eventId)
                 .filter(StringUtils::hasText)
                 .map(String::trim)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
-        Set<String> existingEventIds = candidateEventIds.isEmpty()
-                ? Set.of()
-                : new LinkedHashSet<>(userEventRepository.findExistingExternalEventIds(candidateEventIds));
+        if (candidateEventIds.isEmpty()) {
+            return Set.of();
+        }
 
-        Map<String, UUID> mergedSessionUsers = resolveMergedSessionUsers(events);
-        Map<UUID, ProductSummary> productSummaries = loadProductSummaries(events);
-        Instant activityAt = Instant.now();
+        return new LinkedHashSet<>(userEventRepository.findExistingExternalEventIds(candidateEventIds));
+    }
 
-        List<UserEvent> toPersist = new ArrayList<>();
+    private PersistenceBatch prepareBatch(
+            List<QueuedEventPayload> events,
+            Set<String> existingEventIds,
+            Map<String, UUID> mergedSessionUsers,
+            Map<UUID, ProductSummary> productSummaries,
+            Instant activityAt
+    ) {
+        List<UserEvent> userEvents = new ArrayList<>();
         List<PersistedEventState> persistedStates = new ArrayList<>();
         Set<String> anonymousSessionIds = new LinkedHashSet<>();
 
         for (QueuedEventPayload event : events) {
-            if (event == null || !StringUtils.hasText(event.eventId()) || existingEventIds.contains(event.eventId().trim())) {
-                continue;
-            }
-
-            UUID resolvedUserId = resolveUserId(event, mergedSessionUsers);
-            if (resolvedUserId != null && trackingOptOutService.hasOptedOut(resolvedUserId)) {
-                log.debug("Skipping persisted event {} for opted-out user {}", event.eventId(), resolvedUserId);
-                continue;
-            }
-
-            ProductSummary productSummary = productSummaries.get(event.productId());
-            Set<String> categories = resolveCategories(productSummary, event);
-            String categorySlugs = toCategoryCsv(categories, event.categorySlugs());
-            String brandName = resolveBrandName(productSummary, event.brandName());
-            UUID vendorId = productSummary != null && productSummary.vendorId() != null
-                    ? productSummary.vendorId()
-                    : event.vendorId();
-            BigDecimal price = productSummary != null && productSummary.sellingPrice() != null
-                    ? productSummary.sellingPrice()
-                    : event.price();
-
-            toPersist.add(UserEvent.builder()
-                    .externalEventId(event.eventId().trim())
-                    .userId(resolvedUserId)
-                    .sessionId(truncate(event.sessionId(), 64))
-                    .eventType(event.eventType().name())
-                    .productId(event.productId())
-                    .categorySlugs(truncate(categorySlugs, 500))
-                    .vendorId(vendorId)
-                    .brandName(truncate(brandName, 255))
-                    .price(price)
-                    .metadata(truncate(event.metadata(), 1000))
-                    .createdAt(event.enqueuedAt() != null ? event.enqueuedAt() : activityAt)
-                    .build());
-
-            persistedStates.add(new PersistedEventState(
-                    resolvedUserId,
-                    truncate(event.sessionId(), 64),
-                    event.productId(),
-                    event.eventType().name(),
-                    categories,
-                    brandName,
-                    event.enqueuedAt() != null ? event.enqueuedAt() : activityAt
-            ));
-
-            if (resolvedUserId == null && StringUtils.hasText(event.sessionId())) {
-                anonymousSessionIds.add(event.sessionId().trim());
+            PreparedEvent preparedEvent = prepareEvent(event, existingEventIds, mergedSessionUsers, productSummaries, activityAt);
+            if (preparedEvent != null) {
+                userEvents.add(preparedEvent.userEvent());
+                persistedStates.add(preparedEvent.persistedState());
+                if (preparedEvent.touchAnonymousSession()) {
+                    anonymousSessionIds.add(preparedEvent.persistedState().sessionId());
+                }
             }
         }
 
-        if (toPersist.isEmpty()) {
-            return;
+        return new PersistenceBatch(userEvents, persistedStates, anonymousSessionIds);
+    }
+
+    private PreparedEvent prepareEvent(
+            QueuedEventPayload event,
+            Set<String> existingEventIds,
+            Map<String, UUID> mergedSessionUsers,
+            Map<UUID, ProductSummary> productSummaries,
+            Instant activityAt
+    ) {
+        String externalEventId = normalizeEventId(event);
+        if (externalEventId == null || existingEventIds.contains(externalEventId)) {
+            return null;
         }
 
-        userEventRepository.saveAll(toPersist);
-        userEventRepository.flush();
+        UUID resolvedUserId = resolveUserId(event, mergedSessionUsers);
+        if (shouldSkipOptedOutUser(externalEventId, resolvedUserId)) {
+            return null;
+        }
 
-        upsertAnonymousSessions(anonymousSessionIds, activityAt);
-        updateReadModels(persistedStates);
+        ProductSummary productSummary = productSummaries.get(event.productId());
+        EventDetails eventDetails = resolveEventDetails(productSummary, event);
+        Instant occurredAt = event.enqueuedAt() != null ? event.enqueuedAt() : activityAt;
+        String sessionId = truncate(event.sessionId(), 64);
+        String eventType = event.eventType().name();
 
-        log.debug("Persisted {} personalization events ({} deduped, {} anonymous sessions touched)",
-                toPersist.size(), existingEventIds.size(), anonymousSessionIds.size());
+        UserEvent userEvent = UserEvent.builder()
+                .externalEventId(externalEventId)
+                .userId(resolvedUserId)
+                .sessionId(sessionId)
+                .eventType(eventType)
+                .productId(event.productId())
+                .categorySlugs(truncate(eventDetails.categorySlugs(), 500))
+                .vendorId(eventDetails.vendorId())
+                .brandName(truncate(eventDetails.brandName(), 255))
+                .price(eventDetails.price())
+                .metadata(truncate(event.metadata(), 1000))
+                .createdAt(occurredAt)
+                .build();
+
+        PersistedEventState persistedState = new PersistedEventState(
+                resolvedUserId,
+                sessionId,
+                event.productId(),
+                eventType,
+                eventDetails.categories(),
+                eventDetails.brandName(),
+                occurredAt
+        );
+
+        return new PreparedEvent(userEvent, persistedState, resolvedUserId == null && sessionId != null);
+    }
+
+    private String normalizeEventId(QueuedEventPayload event) {
+        if (event == null || !StringUtils.hasText(event.eventId())) {
+            return null;
+        }
+        return event.eventId().trim();
+    }
+
+    private boolean shouldSkipOptedOutUser(String eventId, UUID userId) {
+        if (userId == null || !trackingOptOutService.hasOptedOut(userId)) {
+            return false;
+        }
+        log.debug("Skipping persisted event {} for opted-out user {}", eventId, userId);
+        return true;
+    }
+
+    private EventDetails resolveEventDetails(ProductSummary productSummary, QueuedEventPayload event) {
+        Set<String> categories = resolveCategories(productSummary, event);
+        String brandName = resolveBrandName(productSummary, event.brandName());
+        UUID vendorId = productSummary != null && productSummary.vendorId() != null
+                ? productSummary.vendorId()
+                : event.vendorId();
+        BigDecimal price = productSummary != null && productSummary.sellingPrice() != null
+                ? productSummary.sellingPrice()
+                : event.price();
+
+        return new EventDetails(categories, toCategoryCsv(categories, event.categorySlugs()), brandName, vendorId, price);
     }
 
     private Map<String, UUID> resolveMergedSessionUsers(List<QueuedEventPayload> events) {
@@ -296,5 +350,31 @@ public class EventService {
             String brandName,
             Instant occurredAt
     ) {
+    }
+
+    private record EventDetails(
+            Set<String> categories,
+            String categorySlugs,
+            String brandName,
+            UUID vendorId,
+            BigDecimal price
+    ) {
+    }
+
+    private record PreparedEvent(
+            UserEvent userEvent,
+            PersistedEventState persistedState,
+            boolean touchAnonymousSession
+    ) {
+    }
+
+    private record PersistenceBatch(
+            List<UserEvent> userEvents,
+            List<PersistedEventState> persistedStates,
+            Set<String> anonymousSessionIds
+    ) {
+        private boolean isEmpty() {
+            return userEvents.isEmpty();
+        }
     }
 }
