@@ -133,6 +133,20 @@ function collectActiveVendorPermissionCodes(vendorStaffAccess: unknown): Set<str
   return codes;
 }
 
+function countActiveVendorMemberships(vendorMemberships: unknown): number {
+  if (!Array.isArray(vendorMemberships)) return 0;
+  let count = 0;
+  for (const row of vendorMemberships) {
+    const record = asObject(row);
+    if (!record) continue;
+    const vendorId = toTrimmedString(record.vendorId);
+    if (vendorId) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
 function composeName(first: string, last: string): string {
   return `${first} ${last}`.trim();
 }
@@ -381,23 +395,25 @@ export function useAuthSession() {
   ) => {
     const superAdmin = isSuperAdminByClaims(parsedClaims, env.claimsNamespace);
     const platformStaff = isPlatformStaffByClaims(parsedClaims, env.claimsNamespace);
-    const vendorAdmin = isVendorAdminByClaims(parsedClaims, env.claimsNamespace);
-    const vendorStaff = isVendorStaffByClaims(parsedClaims, env.claimsNamespace);
+    const vendorAdminRole = isVendorAdminByClaims(parsedClaims, env.claimsNamespace);
+    const vendorStaffRole = isVendorStaffByClaims(parsedClaims, env.claimsNamespace);
     const customerRole = isCustomerByClaims(parsedClaims, env.claimsNamespace);
-    const anyAdmin = superAdmin || platformStaff || vendorAdmin || vendorStaff;
-    let manageOrders = superAdmin || vendorAdmin;
+    const anyAdmin = superAdmin || platformStaff || vendorAdminRole || vendorStaffRole;
+    let effectiveVendorAdmin = vendorAdminRole;
+    let effectiveVendorStaff = vendorStaffRole;
+    let manageOrders = superAdmin || effectiveVendorAdmin;
     let managePayments = superAdmin || platformStaff;
-    let manageProducts = superAdmin || vendorAdmin;
+    let manageProducts = superAdmin || effectiveVendorAdmin;
     let manageCategories = superAdmin;
     let managePosters = superAdmin;
     let manageVendors = superAdmin;
-    let managePromotions = superAdmin || vendorAdmin;
+    let managePromotions = superAdmin || effectiveVendorAdmin;
     let manageReviews = superAdmin;
-    let manageInventory = superAdmin || vendorAdmin;
-    let viewVendorAnalytics = superAdmin || vendorAdmin;
-    let viewVendorFinance = superAdmin || vendorAdmin;
-    let manageVendorFinance = superAdmin || vendorAdmin;
-    let manageVendorSettings = superAdmin || vendorAdmin;
+    let manageInventory = superAdmin || effectiveVendorAdmin;
+    let viewVendorAnalytics = superAdmin || effectiveVendorAdmin;
+    let viewVendorFinance = superAdmin || effectiveVendorAdmin;
+    let manageVendorFinance = superAdmin || effectiveVendorAdmin;
+    let manageVendorSettings = superAdmin || effectiveVendorAdmin;
 
     if (anyAdmin) {
       try {
@@ -409,7 +425,10 @@ export function useAuthSession() {
         if (capabilitiesRes.ok) {
           const capabilities = (await capabilitiesRes.json()) as Record<string, unknown>;
           const platformPermissionCodes = toPermissionCodeSet(capabilities.platformPermissions);
+          const activeVendorMembershipCount = countActiveVendorMemberships(capabilities.vendorMemberships);
           const vendorPermissionCodes = collectActiveVendorPermissionCodes(capabilities.vendorStaffAccess);
+          effectiveVendorAdmin = vendorAdminRole && activeVendorMembershipCount > 0;
+          effectiveVendorStaff = vendorStaffRole && vendorPermissionCodes.size > 0;
 
           const platformCanManageOrders =
             platformPermissionCodes.has(PLATFORM_ORDERS_READ)
@@ -443,8 +462,8 @@ export function useAuthSession() {
 
           manageOrders =
             superAdmin
-            || vendorAdmin
-            || (vendorStaff && vendorStaffCanManageOrders)
+            || effectiveVendorAdmin
+            || (effectiveVendorStaff && vendorStaffCanManageOrders)
             || platformCanManageOrders
             || Boolean(capabilities.canManageAdminOrders);
           managePayments =
@@ -452,8 +471,8 @@ export function useAuthSession() {
             || platformCanManagePayments;
           manageProducts =
             superAdmin
-            || vendorAdmin
-            || (vendorStaff && vendorStaffCanManageProducts)
+            || effectiveVendorAdmin
+            || (effectiveVendorStaff && vendorStaffCanManageProducts)
             || platformCanManageProducts
             || Boolean(capabilities.canManageAdminProducts);
           manageCategories =
@@ -467,8 +486,8 @@ export function useAuthSession() {
           manageVendors = superAdmin || Boolean(capabilities.canManageAdminVendors);
           managePromotions =
             superAdmin
-            || vendorAdmin
-            || (vendorStaff && vendorStaffCanManagePromotions)
+            || effectiveVendorAdmin
+            || (effectiveVendorStaff && vendorStaffCanManagePromotions)
             || platformCanManagePromotions
             || Boolean(capabilities.canManageAdminPromotions);
           manageReviews =
@@ -477,26 +496,26 @@ export function useAuthSession() {
             || Boolean(capabilities.canManageAdminReviews);
           manageInventory =
             superAdmin
-            || vendorAdmin
-            || (vendorStaff && vendorStaffCanManageInventory)
+            || effectiveVendorAdmin
+            || (effectiveVendorStaff && vendorStaffCanManageInventory)
             || platformCanManageInventory
             || Boolean(capabilities.canManageAdminInventory);
           viewVendorAnalytics =
             superAdmin
-            || vendorAdmin
-            || (vendorStaff && vendorStaffCanViewAnalytics);
+            || effectiveVendorAdmin
+            || (effectiveVendorStaff && vendorStaffCanViewAnalytics);
           viewVendorFinance =
             superAdmin
-            || vendorAdmin
-            || (vendorStaff && vendorStaffCanViewFinance);
+            || effectiveVendorAdmin
+            || (effectiveVendorStaff && vendorStaffCanViewFinance);
           manageVendorFinance =
             superAdmin
-            || vendorAdmin
-            || (vendorStaff && vendorStaffCanManageFinance);
+            || effectiveVendorAdmin
+            || (effectiveVendorStaff && vendorStaffCanManageFinance);
           manageVendorSettings =
             superAdmin
-            || vendorAdmin
-            || (vendorStaff && vendorStaffCanManageSettings);
+            || effectiveVendorAdmin
+            || (effectiveVendorStaff && vendorStaffCanManageSettings);
         }
       } catch {
         // Keep coarse-role fallback if capabilities endpoint is unavailable.
@@ -507,8 +526,8 @@ export function useAuthSession() {
     setClaims(parsedClaims);
     setIsSuperAdmin(superAdmin);
     setIsPlatformStaff(platformStaff);
-    setIsVendorAdmin(vendorAdmin);
-    setIsVendorStaff(vendorStaff);
+    setIsVendorAdmin(effectiveVendorAdmin);
+    setIsVendorStaff(effectiveVendorStaff);
     setCanViewAdmin(anyAdmin);
     setCanManageAdminOrders(manageOrders);
     setCanManageAdminPayments(managePayments);

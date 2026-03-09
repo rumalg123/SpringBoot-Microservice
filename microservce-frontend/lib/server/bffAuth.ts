@@ -965,11 +965,6 @@ export async function proxyToGateway(request: NextRequest, pathSegments: string[
     headers: responseHeaders,
   });
 
-  if ((upstreamResponse.status === 401 || upstreamResponse.status === 403) && resolved.accessToken) {
-    applyCookieMutations(response, clearAuthCookieMutations());
-    return response;
-  }
-
   if (upstreamResponse.headers.get("x-cart-session-cleared") === "true") {
     cookieMutations.push(...clearGuestCartCookieMutations());
   }
