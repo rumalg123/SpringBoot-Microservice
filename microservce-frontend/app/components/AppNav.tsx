@@ -160,6 +160,7 @@ export default function AppNav({
     { href: "/vendor/analytics", label: "Analytics", show: showVendorAnalytics, color: "vendor" },
     { href: "/vendor/reviews", label: "Reviews", show: showVendorReviews, color: "vendor" },
     { href: "/vendor/bank-accounts", label: "Bank Accounts", show: showVendorFinance, color: "vendor" },
+    { href: "/vendor/refunds", label: "Refunds", show: showVendorFinance, color: "vendor" },
     { href: "/vendor/payouts", label: "Payouts", show: showVendorFinance, color: "vendor" },
     { href: "/vendor/settings", label: "Vendor Settings", show: showVendorSettings, color: "vendor" },
     // Admin links

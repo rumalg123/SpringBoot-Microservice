@@ -456,6 +456,15 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
         if ("/payments/me/initiate".equals(path) && method == HttpMethod.POST) {
             return true;
         }
+        if ("/payments/me/refunds".equals(path) && method == HttpMethod.POST) {
+            return true;
+        }
+        if (path.startsWith("/payments/vendor/me/refunds/") && path.endsWith("/respond") && method == HttpMethod.POST) {
+            return true;
+        }
+        if (path.startsWith("/admin/payments/refunds/") && path.endsWith("/finalize") && method == HttpMethod.POST) {
+            return true;
+        }
         if (("/customers/me/addresses".equals(path) || path.startsWith("/customers/me/addresses/"))
                 && (method == HttpMethod.POST || method == HttpMethod.PUT || method == HttpMethod.DELETE)) {
             return true;

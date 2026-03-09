@@ -2,6 +2,7 @@ package com.rumal.payment_service.client;
 
 import com.rumal.payment_service.dto.OrderSummary;
 import com.rumal.payment_service.dto.VendorOrderSummary;
+import com.rumal.payment_service.dto.VendorOrderStatusHistoryEntry;
 import com.rumal.payment_service.exception.ResourceNotFoundException;
 import com.rumal.payment_service.exception.ServiceUnavailableException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
@@ -15,11 +16,13 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -128,12 +131,19 @@ public class OrderClient {
     @CircuitBreaker(name = "orderService", fallbackMethod = "getVendorOrderFallback")
     public VendorOrderSummary getVendorOrder(UUID orderId, UUID vendorOrderId) {
         try {
-            return restClient
+            VendorOrderSummary vendorOrder = restClient
                     .get()
-                    .uri("http://order-service/orders/{orderId}/vendor-orders/{vendorOrderId}", orderId, vendorOrderId)
+                    .uri("http://order-service/orders/vendor-orders/{vendorOrderId}", vendorOrderId)
                     .header("X-Internal-Auth", internalSharedSecret)
                     .retrieve()
                     .body(VendorOrderSummary.class);
+            if (vendorOrder == null) {
+                throw new ResourceNotFoundException("Vendor order not found: " + vendorOrderId);
+            }
+            if (vendorOrder.orderId() != null && !vendorOrder.orderId().equals(orderId)) {
+                throw new ResourceNotFoundException("Vendor order not found under order: " + orderId);
+            }
+            return vendorOrder;
         } catch (HttpClientErrorException ex) {
             if (ex.getStatusCode() == HttpStatus.NOT_FOUND) {
                 throw new ResourceNotFoundException("Vendor order not found: " + vendorOrderId);
@@ -147,26 +157,73 @@ public class OrderClient {
     @Retry(name = "orderService")
     @CircuitBreaker(name = "orderService", fallbackMethod = "updateVendorOrderStatusFallback")
     public void updateVendorOrderStatus(UUID orderId, UUID vendorOrderId, String status, String reason) {
+        updateVendorOrderStatus(orderId, vendorOrderId, status, reason, null, null, null);
+    }
+
+    @Retry(name = "orderService")
+    @CircuitBreaker(name = "orderService", fallbackMethod = "updateVendorOrderStatusWithRefundFallback")
+    public void updateVendorOrderStatus(
+            UUID orderId,
+            UUID vendorOrderId,
+            String status,
+            String reason,
+            String refundReason,
+            BigDecimal refundAmount,
+            Integer refundedQuantity
+    ) {
         try {
-            Map<String, String> body = new LinkedHashMap<>();
+            Map<String, Object> body = new LinkedHashMap<>();
             body.put("status", status);
             if (reason != null) {
                 body.put("reason", reason);
             }
+            if (refundReason != null) {
+                body.put("refundReason", refundReason);
+            }
+            if (refundAmount != null) {
+                body.put("refundAmount", refundAmount);
+            }
+            if (refundedQuantity != null) {
+                body.put("refundedQuantity", refundedQuantity);
+            }
 
             restClient
                     .patch()
-                    .uri("http://order-service/orders/{orderId}/vendor-orders/{vendorOrderId}/status", orderId, vendorOrderId)
+                    .uri("http://order-service/orders/vendor-orders/{vendorOrderId}/status", vendorOrderId)
                     .header("X-Internal-Auth", internalSharedSecret)
                     .header("Idempotency-Key", buildIdempotencyKey(
                             "update-vendor-order-status",
                             vendorOrderId,
                             String.valueOf(orderId) + "|" + status + "|" + String.valueOf(reason)
+                                    + "|" + String.valueOf(refundReason)
+                                    + "|" + String.valueOf(refundAmount)
+                                    + "|" + String.valueOf(refundedQuantity)
                     ))
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(body)
                     .retrieve()
                     .toBodilessEntity();
+        } catch (HttpClientErrorException ex) {
+            if (ex.getStatusCode() == HttpStatus.NOT_FOUND) {
+                throw new ResourceNotFoundException("Vendor order not found: " + vendorOrderId);
+            }
+            throw ex;
+        } catch (RestClientException ex) {
+            throw new ServiceUnavailableException("Order service unavailable: " + ex.getMessage(), ex);
+        }
+    }
+
+    @Retry(name = "orderService")
+    @CircuitBreaker(name = "orderService", fallbackMethod = "getVendorOrderStatusHistoryFallback")
+    public List<VendorOrderStatusHistoryEntry> getVendorOrderStatusHistory(UUID vendorOrderId) {
+        try {
+            List<VendorOrderStatusHistoryEntry> history = restClient
+                    .get()
+                    .uri("http://order-service/orders/vendor-orders/{vendorOrderId}/status-history", vendorOrderId)
+                    .header("X-Internal-Auth", internalSharedSecret)
+                    .retrieve()
+                    .body(new org.springframework.core.ParameterizedTypeReference<List<VendorOrderStatusHistoryEntry>>() {});
+            return history == null ? List.of() : history;
         } catch (HttpClientErrorException ex) {
             if (ex.getStatusCode() == HttpStatus.NOT_FOUND) {
                 throw new ResourceNotFoundException("Vendor order not found: " + vendorOrderId);
@@ -184,7 +241,7 @@ public class OrderClient {
         try {
             return restClient
                     .get()
-                    .uri("http://order-service/vendor-orders/{vendorOrderId}", vendorOrderId)
+                    .uri("http://order-service/orders/vendor-orders/{vendorOrderId}", vendorOrderId)
                     .header("X-Internal-Auth", internalSharedSecret)
                     .retrieve()
                     .body(VendorOrderSummary.class);
@@ -233,6 +290,27 @@ public class OrderClient {
     public void updateVendorOrderStatusFallback(UUID orderId, UUID vendorOrderId, String status, String reason, Throwable ex) {
         if (ex instanceof ResourceNotFoundException rnfe) throw rnfe;
         throw new ServiceUnavailableException("Order service unavailable for vendor order status update. Try again later.", ex);
+    }
+
+    @SuppressWarnings("unused")
+    public void updateVendorOrderStatusWithRefundFallback(
+            UUID orderId,
+            UUID vendorOrderId,
+            String status,
+            String reason,
+            String refundReason,
+            BigDecimal refundAmount,
+            Integer refundedQuantity,
+            Throwable ex
+    ) {
+        if (ex instanceof ResourceNotFoundException rnfe) throw rnfe;
+        throw new ServiceUnavailableException("Order service unavailable for vendor order status update. Try again later.", ex);
+    }
+
+    @SuppressWarnings("unused")
+    public List<VendorOrderStatusHistoryEntry> getVendorOrderStatusHistoryFallback(UUID vendorOrderId, Throwable ex) {
+        if (ex instanceof ResourceNotFoundException rnfe) throw rnfe;
+        throw new ServiceUnavailableException("Order service unavailable for vendor order " + vendorOrderId + " history. Try again later.", ex);
     }
 
     private String buildIdempotencyKey(String action, UUID targetId, String payload) {

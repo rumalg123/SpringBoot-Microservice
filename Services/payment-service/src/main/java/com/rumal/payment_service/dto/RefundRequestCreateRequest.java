@@ -11,5 +11,5 @@ public record RefundRequestCreateRequest(
         @NotNull UUID orderId,
         @NotNull UUID vendorOrderId,
         @NotNull @DecimalMin("0.01") BigDecimal refundAmount,
-        @NotBlank @Size(max = 1000) String reason
+        @NotBlank @Size(min = 10, max = 1000) String reason
 ) {}

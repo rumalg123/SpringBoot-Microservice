@@ -2,6 +2,7 @@ package com.rumal.payment_service.controller;
 
 import com.rumal.payment_service.dto.RefundRequestCreateRequest;
 import com.rumal.payment_service.dto.RefundRequestResponse;
+import com.rumal.payment_service.entity.RefundStatus;
 import com.rumal.payment_service.exception.UnauthorizedException;
 import com.rumal.payment_service.security.InternalRequestVerifier;
 import com.rumal.payment_service.service.RefundService;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
@@ -47,12 +49,15 @@ public class RefundController {
             @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Email-Verified", required = false) String emailVerified,
+            @RequestParam(required = false) UUID orderId,
+            @RequestParam(required = false) UUID vendorOrderId,
+            @RequestParam(required = false) RefundStatus status,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         internalRequestVerifier.verify(internalAuth);
         verifyEmailVerified(emailVerified);
         String keycloakId = requireUserSub(userSub);
-        return refundService.listRefundsForCustomer(keycloakId, pageable);
+        return refundService.listRefundsForCustomer(keycloakId, orderId, vendorOrderId, status, pageable);
     }
 
     @GetMapping("/{refundId}")

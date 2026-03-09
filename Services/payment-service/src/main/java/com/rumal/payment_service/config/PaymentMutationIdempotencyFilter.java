@@ -37,6 +37,18 @@ public class PaymentMutationIdempotencyFilter extends AbstractRedisServletIdempo
 
     @Override
     protected boolean isProtectedMutationPath(String path, String method) {
-        return "POST".equalsIgnoreCase(method) && "/payments/me/initiate".equals(path);
+        if (!"POST".equalsIgnoreCase(method)) {
+            return false;
+        }
+        if ("/payments/me/initiate".equals(path)) {
+            return true;
+        }
+        if ("/payments/me/refunds".equals(path)) {
+            return true;
+        }
+        if (path.startsWith("/payments/vendor/me/refunds/") && path.endsWith("/respond")) {
+            return true;
+        }
+        return path.startsWith("/admin/payments/refunds/") && path.endsWith("/finalize");
     }
 }

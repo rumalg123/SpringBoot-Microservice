@@ -39,13 +39,15 @@ public class AdminRefundController {
             @RequestHeader(value = "X-User-Sub", required = false) String userSub,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @RequestParam(required = false) UUID vendorId,
+            @RequestParam(required = false) UUID orderId,
+            @RequestParam(required = false) UUID vendorOrderId,
             @RequestParam(required = false) RefundStatus status,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         internalRequestVerifier.verify(internalAuth);
         var scope = paymentAccessScopeService.resolveScope(requireUserSub(userSub), userRoles, internalAuth);
         paymentAccessScopeService.assertCanReadAdminPayments(scope);
-        return refundService.listAllRefunds(vendorId, status, pageable);
+        return refundService.listAllRefunds(vendorId, orderId, vendorOrderId, status, pageable);
     }
 
     @GetMapping("/{id}")

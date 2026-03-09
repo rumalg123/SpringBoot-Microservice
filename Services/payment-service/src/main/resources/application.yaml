@@ -203,6 +203,7 @@ payment:
     ttl: ${PAYMENT_EXPIRY_TTL:30m}
     check-interval: ${PAYMENT_EXPIRY_CHECK_INTERVAL:PT5M}
   refund:
-    vendor-response-days: ${REFUND_VENDOR_RESPONSE_DAYS:7}
+    vendor-response-days: ${REFUND_VENDOR_RESPONSE_DAYS:3}
+    customer-window-days: ${REFUND_CUSTOMER_WINDOW_DAYS:30}
     escalation-check-interval: ${REFUND_ESCALATION_CHECK_INTERVAL:PT1H}
 

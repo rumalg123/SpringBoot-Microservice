@@ -12,6 +12,12 @@ export const queryKeys = {
     me: () => [...queryKeys.orders.all, "me"] as const,
     detail: (id: string) => [...queryKeys.orders.all, "detail", id] as const,
     payment: (orderId: string) => [...queryKeys.orders.all, "payment", orderId] as const,
+    vendorOrders: (orderId: string) => [...queryKeys.orders.all, "vendorOrders", orderId] as const,
+  },
+  refunds: {
+    all: ["refunds"] as const,
+    me: (params: Record<string, unknown>) => [...queryKeys.refunds.all, "me", params] as const,
+    vendor: (params: Record<string, unknown>) => [...queryKeys.refunds.all, "vendor", params] as const,
   },
   customer: {
     all: ["customer"] as const,

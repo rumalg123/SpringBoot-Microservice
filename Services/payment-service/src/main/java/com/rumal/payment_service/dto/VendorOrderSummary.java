@@ -5,6 +5,7 @@ import java.util.UUID;
 
 public record VendorOrderSummary(
         UUID id,
+        UUID orderId,
         UUID vendorId,
         BigDecimal orderTotal,
         BigDecimal platformFee,

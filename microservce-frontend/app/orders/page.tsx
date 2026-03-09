@@ -14,8 +14,10 @@ import { API_BASE, ORDER_STATUS_COLORS as STATUS_COLORS } from "../../lib/consta
 import OrderHistoryCard from "../components/orders/OrderHistoryCard";
 import QuickPurchaseForm from "../components/orders/QuickPurchaseForm";
 import OrderDetailPanel from "../components/orders/OrderDetailPanel";
-import { useOrders, useOrderDetail, useOrderPayment, usePlaceOrder, useCancelOrder } from "../../lib/hooks/queries/useOrders";
+import OrderRefundPanel from "../components/orders/OrderRefundPanel";
+import { useOrders, useOrderDetail, useOrderPayment, useOrderVendorOrders, usePlaceOrder, useCancelOrder } from "../../lib/hooks/queries/useOrders";
 import { useAddresses } from "../../lib/hooks/queries/useAddresses";
+import { useCreateRefundRequest, useCustomerRefunds } from "../../lib/hooks/queries/useRefunds";
 
 type ProductPageResponse = { content: ProductSummary[] };
 const INVENTORY_NOT_READY_FRAGMENT = "inventory reservation is not ready yet";
@@ -66,9 +68,12 @@ export default function OrdersPage() {
     || selectedDetail?.paymentGatewayRef
   );
   const { data: paymentInfo } = useOrderPayment(apiClient, effectiveSelectedId || null, shouldFetchPaymentInfo);
+  const { data: vendorOrders = [] } = useOrderVendorOrders(apiClient, effectiveSelectedId || null);
+  const { data: refunds = [] } = useCustomerRefunds(apiClient, { orderId: effectiveSelectedId || null });
 
   const placeOrderMutation = usePlaceOrder(apiClient);
   const cancelOrderMutation = useCancelOrder(apiClient);
+  const createRefundMutation = useCreateRefundRequest(apiClient);
 
   const loadProducts = useCallback(async () => {
     const apiBase = API_BASE;
@@ -203,6 +208,17 @@ export default function OrdersPage() {
         },
       },
     );
+  };
+
+  const createRefund = (payload: { orderId: string; vendorOrderId: string; refundAmount: number; reason: string }) => {
+    createRefundMutation.mutate(payload, {
+      onSuccess: () => {
+        toast.success("Refund request submitted");
+      },
+      onError: (err) => {
+        toast.error(err instanceof Error ? err.message : "Failed to submit refund request");
+      },
+    });
   };
 
   if (sessionStatus === "loading" || sessionStatus === "idle") {
@@ -385,17 +401,27 @@ export default function OrdersPage() {
               )}
 
               {selectedDetail && (
-                <OrderDetailPanel
-                  detail={selectedDetail}
-                  statusColors={STATUS_COLORS}
-                  onPayNow={(id) => { void payNow(id); }}
-                  payingOrderId={payingOrderId}
-                  onCancelOrder={(id) => { void cancelOrder(id); }}
-                  cancellingOrderId={cancellingOrderId}
-                  cancelReason={cancelReason}
-                  onCancelReasonChange={setCancelReason}
-                  paymentInfo={paymentInfo ?? null}
-                />
+                <div className="flex flex-col gap-4">
+                  <OrderDetailPanel
+                    detail={selectedDetail}
+                    statusColors={STATUS_COLORS}
+                    onPayNow={(id) => { void payNow(id); }}
+                    payingOrderId={payingOrderId}
+                    onCancelOrder={(id) => { void cancelOrder(id); }}
+                    cancellingOrderId={cancellingOrderId}
+                    cancelReason={cancelReason}
+                    onCancelReasonChange={setCancelReason}
+                    paymentInfo={paymentInfo ?? null}
+                  />
+                  <OrderRefundPanel
+                    orderId={selectedDetail.id}
+                    vendorOrders={vendorOrders}
+                    refunds={refunds}
+                    statusColors={STATUS_COLORS}
+                    creating={createRefundMutation.isPending}
+                    onCreateRefund={createRefund}
+                  />
+                </div>
               )}
             </section>
           </div>

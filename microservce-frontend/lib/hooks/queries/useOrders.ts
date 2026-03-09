@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { AxiosInstance } from "axios";
-import type { Order, OrderDetail } from "../../types/order";
+import type { Order, OrderDetail, VendorOrder } from "../../types/order";
 import { queryKeys } from "./keys";
 
 type PagedOrder = { content?: Order[] } | Order[];
@@ -48,6 +48,19 @@ export function useOrderPayment(
       }
     },
     enabled: !!apiClient && !!orderId && shouldFetch,
+  });
+}
+
+export function useOrderVendorOrders(apiClient: AxiosInstance | null, orderId: string | null) {
+  const normalizedOrderId = (orderId ?? "").trim();
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(normalizedOrderId);
+  return useQuery({
+    queryKey: queryKeys.orders.vendorOrders(normalizedOrderId),
+    queryFn: async () => {
+      const res = await apiClient!.get<VendorOrder[]>(`/orders/me/${normalizedOrderId}/vendor-orders`);
+      return res.data;
+    },
+    enabled: !!apiClient && isUuid,
   });
 }
 

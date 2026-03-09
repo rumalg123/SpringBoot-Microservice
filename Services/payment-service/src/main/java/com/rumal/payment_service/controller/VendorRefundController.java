@@ -40,6 +40,8 @@ public class VendorRefundController {
             @RequestHeader(value = "X-User-Email-Verified", required = false) String emailVerified,
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
             @RequestParam(required = false) UUID vendorId,
+            @RequestParam(required = false) UUID orderId,
+            @RequestParam(required = false) UUID vendorOrderId,
             @RequestParam(required = false) RefundStatus status,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
@@ -47,7 +49,7 @@ public class VendorRefundController {
         verifyEmailVerified(emailVerified);
         var scope = paymentAccessScopeService.resolveScope(requireUserSub(userSub), userRoles, internalAuth);
         UUID resolvedVendorId = paymentAccessScopeService.resolveVendorIdForVendorFinanceRead(scope, vendorId);
-        return refundService.listRefundsForVendor(resolvedVendorId, status, pageable);
+        return refundService.listRefundsForVendor(resolvedVendorId, orderId, vendorOrderId, status, pageable);
     }
 
     @GetMapping("/{refundId}")

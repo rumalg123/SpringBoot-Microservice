@@ -30,17 +30,43 @@ public interface RefundRequestRepository extends JpaRepository<RefundRequest, UU
     Optional<RefundRequest> findByVendorOrderIdAndStatusNotInForUpdate(@Param("vendorOrderId") UUID vendorOrderId, @Param("terminalStatuses") List<RefundStatus> terminalStatuses);
 
     @EntityGraph(attributePaths = "payment")
-    Page<RefundRequest> findByCustomerKeycloakId(String customerKeycloakId, Pageable pageable);
+    @Query("SELECT r FROM RefundRequest r WHERE r.customerKeycloakId = :customerKeycloakId "
+            + "AND (:orderId IS NULL OR r.orderId = :orderId) "
+            + "AND (:vendorOrderId IS NULL OR r.vendorOrderId = :vendorOrderId) "
+            + "AND (:status IS NULL OR r.status = :status)")
+    Page<RefundRequest> findByCustomerFiltered(
+            @Param("customerKeycloakId") String customerKeycloakId,
+            @Param("orderId") UUID orderId,
+            @Param("vendorOrderId") UUID vendorOrderId,
+            @Param("status") RefundStatus status,
+            Pageable pageable
+    );
 
     @EntityGraph(attributePaths = "payment")
-    @Query("SELECT r FROM RefundRequest r WHERE r.vendorId = :vendorId " +
-            "AND (:status IS NULL OR r.status = :status)")
-    Page<RefundRequest> findByVendorFiltered(UUID vendorId, RefundStatus status, Pageable pageable);
+    @Query("SELECT r FROM RefundRequest r WHERE r.vendorId = :vendorId "
+            + "AND (:orderId IS NULL OR r.orderId = :orderId) "
+            + "AND (:vendorOrderId IS NULL OR r.vendorOrderId = :vendorOrderId) "
+            + "AND (:status IS NULL OR r.status = :status)")
+    Page<RefundRequest> findByVendorFiltered(
+            @Param("vendorId") UUID vendorId,
+            @Param("orderId") UUID orderId,
+            @Param("vendorOrderId") UUID vendorOrderId,
+            @Param("status") RefundStatus status,
+            Pageable pageable
+    );
 
     @EntityGraph(attributePaths = "payment")
-    @Query("SELECT r FROM RefundRequest r WHERE (:vendorId IS NULL OR r.vendorId = :vendorId) " +
-            "AND (:status IS NULL OR r.status = :status)")
-    Page<RefundRequest> findAllFiltered(UUID vendorId, RefundStatus status, Pageable pageable);
+    @Query("SELECT r FROM RefundRequest r WHERE (:vendorId IS NULL OR r.vendorId = :vendorId) "
+            + "AND (:orderId IS NULL OR r.orderId = :orderId) "
+            + "AND (:vendorOrderId IS NULL OR r.vendorOrderId = :vendorOrderId) "
+            + "AND (:status IS NULL OR r.status = :status)")
+    Page<RefundRequest> findAllFiltered(
+            @Param("vendorId") UUID vendorId,
+            @Param("orderId") UUID orderId,
+            @Param("vendorOrderId") UUID vendorOrderId,
+            @Param("status") RefundStatus status,
+            Pageable pageable
+    );
 
     Page<RefundRequest> findByStatusAndVendorResponseDeadlineBefore(RefundStatus status, Instant deadline, Pageable pageable);
 

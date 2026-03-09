@@ -1401,8 +1401,8 @@ public class OrderService {
             case SHIPPED -> EnumSet.of(OrderStatus.DELIVERED, OrderStatus.RETURN_REQUESTED);
             case DELIVERED -> EnumSet.of(OrderStatus.RETURN_REQUESTED, OrderStatus.CLOSED);
             case RETURN_REQUESTED -> EnumSet.of(OrderStatus.REFUND_PENDING, OrderStatus.RETURN_REJECTED, OrderStatus.CLOSED);
-            case RETURN_REJECTED -> EnumSet.of(OrderStatus.CLOSED);
-            case REFUND_PENDING -> EnumSet.of(OrderStatus.REFUNDED, OrderStatus.CLOSED);
+            case RETURN_REJECTED -> EnumSet.of(OrderStatus.RETURN_REQUESTED, OrderStatus.CLOSED);
+            case REFUND_PENDING -> EnumSet.of(OrderStatus.RETURN_REQUESTED, OrderStatus.REFUNDED, OrderStatus.CLOSED);
             case REFUNDED, CANCELLED, CLOSED -> EnumSet.noneOf(OrderStatus.class);
         };
         if (!allowed.contains(next)) {
