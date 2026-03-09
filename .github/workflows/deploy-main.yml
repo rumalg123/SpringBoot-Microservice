@@ -24,6 +24,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
       - name: Detect changed paths
         id: detect
         shell: bash
@@ -63,30 +66,232 @@ jobs:
             {"name":"Search-Service","path":"Services/search-service","key":"Search-Service","compose":"search-service"}
           ]'
 
+          # Reverse dependency graph for deploy expansion
+          DEPENDENTS_JSON='{
+            "discovery-server": ["customer-service","order-service","cart-service","wishlist-service","product-service","poster-service","vendor-service","access-service","promotion-service","review-service","inventory-service","admin-service","personalization-service","analytics-service","search-service","payment-service","api-gateway","microservice-frontend"],
+            "redis": ["customer-service","order-service","cart-service","wishlist-service","product-service","poster-service","vendor-service","access-service","promotion-service","review-service","inventory-service","personalization-service","analytics-service","search-service","payment-service","api-gateway","microservice-frontend"],
+            "elasticsearch": ["search-service"],
+            "access-service": ["promotion-service","admin-service","api-gateway","microservice-frontend"],
+            "vendor-service": ["promotion-service","order-service","cart-service"],
+            "promotion-service": ["order-service","cart-service"],
+            "api-gateway": ["microservice-frontend"]
+          }'
+
+          FULL_APP_SERVICES=(
+            discovery-server
+            customer-service
+            order-service
+            cart-service
+            wishlist-service
+            product-service
+            poster-service
+            vendor-service
+            access-service
+            promotion-service
+            review-service
+            inventory-service
+            admin-service
+            personalization-service
+            analytics-service
+            search-service
+            payment-service
+            api-gateway
+            microservice-frontend
+          )
+
           BACKEND_MATRIX='[]'
           DEPLOY_SERVICES=()
+          FRONTEND_CHANGED=false
 
+          add_service() {
+            local svc="$1"
+            for existing in "${DEPLOY_SERVICES[@]:-}"; do
+              if [ "$existing" = "$svc" ]; then
+                return 0
+              fi
+            done
+            DEPLOY_SERVICES+=("$svc")
+          }
+
+          add_backend_row_if_missing() {
+            local row="$1"
+            local service_path
+            service_path=$(echo "$row" | jq -r '.path')
+
+            if ! echo "$BACKEND_MATRIX" | jq -e --arg path "$service_path" '.[] | select(.path == $path)' >/dev/null; then
+              BACKEND_MATRIX=$(echo "$BACKEND_MATRIX" | jq --argjson row "$row" '. + [$row]')
+            fi
+          }
+
+          add_backend_by_compose() {
+            local compose_name="$1"
+            local row
+            row=$(echo "$SERVICES_JSON" | jq -c --arg compose "$compose_name" '.[] | select(.compose == $compose)')
+            if [ -n "$row" ]; then
+              add_backend_row_if_missing "$row"
+            fi
+          }
+
+          expand_dependents() {
+            local svc="$1"
+            local child
+
+            while IFS= read -r child; do
+              [ -z "$child" ] && continue
+
+              local already=false
+              for existing in "${DEPLOY_SERVICES[@]:-}"; do
+                if [ "$existing" = "$child" ]; then
+                  already=true
+                  break
+                fi
+              done
+
+              if [ "$already" = false ]; then
+                DEPLOY_SERVICES+=("$child")
+                add_backend_by_compose "$child"
+                if [ "$child" = "microservice-frontend" ]; then
+                  FRONTEND_CHANGED=true
+                fi
+                expand_dependents "$child"
+              fi
+            done < <(echo "$DEPENDENTS_JSON" | jq -r --arg svc "$svc" '.[$svc][]?')
+          }
+
+          # Direct backend code changes
           while IFS= read -r file; do
             [ -z "$file" ] && continue
 
-            for row in $(echo "$SERVICES_JSON" | jq -c '.[]'); do
+            while IFS= read -r row; do
+              [ -z "$row" ] && continue
+
               SERVICE_PATH=$(echo "$row" | jq -r '.path')
               COMPOSE_NAME=$(echo "$row" | jq -r '.compose')
 
               if [[ "$file" == "$SERVICE_PATH/"* ]]; then
-                if ! echo "$BACKEND_MATRIX" | jq -e --arg path "$SERVICE_PATH" '.[] | select(.path == $path)' >/dev/null; then
-                  BACKEND_MATRIX=$(echo "$BACKEND_MATRIX" | jq --argjson row "$row" '. + [$row]')
-                  DEPLOY_SERVICES+=("$COMPOSE_NAME")
-                fi
+                add_backend_row_if_missing "$row"
+                add_service "$COMPOSE_NAME"
               fi
-            done
+            done < <(echo "$SERVICES_JSON" | jq -c '.[]')
           done <<< "$CHANGED_FILES"
 
-          FRONTEND_CHANGED=false
+          # Frontend code changes
           if echo "$CHANGED_FILES" | grep -q '^microservce-frontend/'; then
             FRONTEND_CHANGED=true
-            DEPLOY_SERVICES+=("microservice-frontend")
+            add_service "microservice-frontend"
           fi
+
+          # Shared / broad redeploy triggers
+          if echo "$CHANGED_FILES" | grep -q '^docker-compose\.yml$'; then
+            for svc in "${FULL_APP_SERVICES[@]}"; do
+              add_service "$svc"
+            done
+            FRONTEND_CHANGED=true
+          fi
+
+          if echo "$CHANGED_FILES" | grep -q '^env/common\.env$'; then
+            for svc in "${FULL_APP_SERVICES[@]}"; do
+              add_service "$svc"
+            done
+            FRONTEND_CHANGED=true
+          fi
+
+          # Targeted env triggers
+          if echo "$CHANGED_FILES" | grep -q '^env/frontend\.env$'; then
+            FRONTEND_CHANGED=true
+            add_service "microservice-frontend"
+          fi
+
+          if echo "$CHANGED_FILES" | grep -q '^env/eureka\.env$'; then
+            add_service "discovery-server"
+            add_backend_by_compose "discovery-server"
+          fi
+
+          if echo "$CHANGED_FILES" | grep -q '^env/customer-service\.env$'; then
+            add_service "customer-service"
+            add_backend_by_compose "customer-service"
+          fi
+
+          if echo "$CHANGED_FILES" | grep -q '^env/order-service\.env$'; then
+            add_service "order-service"
+            add_backend_by_compose "order-service"
+          fi
+
+          if echo "$CHANGED_FILES" | grep -q '^env/cart-service\.env$'; then
+            add_service "cart-service"
+            add_backend_by_compose "cart-service"
+          fi
+
+          if echo "$CHANGED_FILES" | grep -q '^env/wishlist-service\.env$'; then
+            add_service "wishlist-service"
+            add_backend_by_compose "wishlist-service"
+          fi
+
+          if echo "$CHANGED_FILES" | grep -q '^env/product-service\.env$'; then
+            add_service "product-service"
+            add_backend_by_compose "product-service"
+          fi
+
+          if echo "$CHANGED_FILES" | grep -q '^env/poster-service\.env$'; then
+            add_service "poster-service"
+            add_backend_by_compose "poster-service"
+          fi
+
+          if echo "$CHANGED_FILES" | grep -q '^env/vendor-service\.env$'; then
+            add_service "vendor-service"
+            add_backend_by_compose "vendor-service"
+          fi
+
+          if echo "$CHANGED_FILES" | grep -q '^env/access-service\.env$'; then
+            add_service "access-service"
+            add_backend_by_compose "access-service"
+          fi
+
+          if echo "$CHANGED_FILES" | grep -q '^env/promotion-service\.env$'; then
+            add_service "promotion-service"
+            add_backend_by_compose "promotion-service"
+          fi
+
+          if echo "$CHANGED_FILES" | grep -q '^env/review-service\.env$'; then
+            add_service "review-service"
+            add_backend_by_compose "review-service"
+          fi
+
+          if echo "$CHANGED_FILES" | grep -q '^env/inventory-service\.env$'; then
+            add_service "inventory-service"
+            add_backend_by_compose "inventory-service"
+          fi
+
+          if echo "$CHANGED_FILES" | grep -q '^env/admin-service\.env$'; then
+            add_service "admin-service"
+            add_backend_by_compose "admin-service"
+          fi
+
+          if echo "$CHANGED_FILES" | grep -q '^env/personalization-service\.env$'; then
+            add_service "personalization-service"
+            add_backend_by_compose "personalization-service"
+          fi
+
+          if echo "$CHANGED_FILES" | grep -q '^env/analytics-service\.env$'; then
+            add_service "analytics-service"
+            add_backend_by_compose "analytics-service"
+          fi
+
+          if echo "$CHANGED_FILES" | grep -q '^env/search-service\.env$'; then
+            add_service "search-service"
+            add_backend_by_compose "search-service"
+          fi
+
+          if echo "$CHANGED_FILES" | grep -q '^env/payment-service\.env$'; then
+            add_service "payment-service"
+            add_backend_by_compose "payment-service"
+          fi
+
+          # Expand downstream dependents recursively
+          INITIAL_SERVICES=("${DEPLOY_SERVICES[@]:-}")
+          for svc in "${INITIAL_SERVICES[@]:-}"; do
+            [ -n "$svc" ] && expand_dependents "$svc"
+          done
 
           BACKEND_CHANGED=false
           if [ "$(echo "$BACKEND_MATRIX" | jq 'length')" -gt 0 ]; then
@@ -99,6 +304,12 @@ jobs:
           echo "backend_changed=$BACKEND_CHANGED" >> "$GITHUB_OUTPUT"
           echo "frontend_changed=$FRONTEND_CHANGED" >> "$GITHUB_OUTPUT"
           echo "deploy_services=$DEPLOY_SERVICES_STR" >> "$GITHUB_OUTPUT"
+
+          echo "Final backend matrix:"
+          echo "$BACKEND_MATRIX" | jq .
+
+          echo "Final deploy services:"
+          echo "$DEPLOY_SERVICES_STR"
 
   scan-backend:
     name: Scan changed backend services
