@@ -1,10 +1,15 @@
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { CSRF_COOKIE_NAME, CSRF_HEADER_NAME } from "../csrf";
+import {
+  createBffSession,
+  deleteBffSession,
+  readBffSession,
+  SessionStoreError,
+  updateBffSession,
+} from "./bffSessionStore";
 
-const ACCESS_TOKEN_COOKIE = "rs_access_token";
-const REFRESH_TOKEN_COOKIE = "rs_refresh_token";
-const ID_TOKEN_COOKIE = "rs_id_token";
+const SESSION_COOKIE = "rs_bff_session";
 const GUEST_CART_ID_COOKIE = "rs_guest_cart_id";
 const GUEST_CART_SIGNATURE_COOKIE = "rs_guest_cart_sig";
 const OAUTH_STATE_COOKIE = "rs_oauth_state";
@@ -93,6 +98,8 @@ export class SessionSyncError extends Error {
   }
 }
 
+export { SessionStoreError };
+
 function isProduction(): boolean {
   return process.env.NODE_ENV === "production";
 }
@@ -126,6 +133,14 @@ function deleteCookieMutation(name: string): CookieMutation {
   };
 }
 
+function buildSessionCookieMutation(sessionId: string, ttlSeconds: number): CookieMutation {
+  return buildCookieMutation(SESSION_COOKIE, sessionId, ttlSeconds, true);
+}
+
+function readSessionId(request: NextRequest): string {
+  return (request.cookies.get(SESSION_COOKIE)?.value || "").trim();
+}
+
 function applyCookieMutation(response: NextResponse, mutation: CookieMutation): void {
   response.cookies.set({
     name: mutation.name,
@@ -146,9 +161,7 @@ export function applyCookieMutations(response: NextResponse, mutations: CookieMu
 
 export function clearAuthCookieMutations(): CookieMutation[] {
   return [
-    deleteCookieMutation(ACCESS_TOKEN_COOKIE),
-    deleteCookieMutation(REFRESH_TOKEN_COOKIE),
-    deleteCookieMutation(ID_TOKEN_COOKIE),
+    deleteCookieMutation(SESSION_COOKIE),
     deleteCookieMutation(CSRF_COOKIE_NAME),
     deleteCookieMutation(OAUTH_STATE_COOKIE),
     deleteCookieMutation(OAUTH_VERIFIER_COOKIE),
@@ -443,36 +456,26 @@ function decodeJwtPayload(token: string | null): JwtPayload | null {
   }
 }
 
-function buildTokenCookieMutations(tokenResponse: TokenResponse): CookieMutation[] {
+function toStoredTokens(tokenResponse: TokenResponse, fallback?: StoredTokens | null): StoredTokens {
   const accessToken = (tokenResponse.access_token || "").trim();
-  const refreshToken = (tokenResponse.refresh_token || "").trim();
-  const idToken = (tokenResponse.id_token || "").trim();
-  const accessExpiresIn = Number(tokenResponse.expires_in || 0);
-  const refreshExpiresIn = Number(tokenResponse.refresh_expires_in || 0);
-
-  if (!accessToken || !Number.isFinite(accessExpiresIn) || accessExpiresIn <= 0) {
+  const refreshToken = (tokenResponse.refresh_token || "").trim() || fallback?.refreshToken || null;
+  const idToken = (tokenResponse.id_token || "").trim() || fallback?.idToken || null;
+  const accessClaims = decodeJwtPayload(accessToken);
+  if (!accessToken || !accessClaims || typeof accessClaims.exp !== "number") {
     throw new Error("Token response is missing a valid access token");
   }
 
-  const mutations: CookieMutation[] = [
-    buildCookieMutation(ACCESS_TOKEN_COOKIE, accessToken, accessExpiresIn, true),
-  ];
-
-  if (refreshToken && Number.isFinite(refreshExpiresIn) && refreshExpiresIn > 0) {
-    mutations.push(buildCookieMutation(REFRESH_TOKEN_COOKIE, refreshToken, refreshExpiresIn, true));
-  } else if (refreshToken) {
-    mutations.push(buildCookieMutation(REFRESH_TOKEN_COOKIE, refreshToken, 24 * 60 * 60, true));
-  } else {
-    mutations.push(deleteCookieMutation(REFRESH_TOKEN_COOKIE));
-  }
-
-  if (idToken) {
-    mutations.push(buildCookieMutation(ID_TOKEN_COOKIE, idToken, accessExpiresIn, true));
-  } else {
-    mutations.push(deleteCookieMutation(ID_TOKEN_COOKIE));
-  }
-
-  return mutations;
+  const refreshClaims = decodeJwtPayload(refreshToken);
+  return {
+    accessToken,
+    refreshToken,
+    idToken,
+    accessExpiresAtEpochSeconds: accessClaims.exp,
+    refreshExpiresAtEpochSeconds: refreshClaims && typeof refreshClaims.exp === "number"
+      ? refreshClaims.exp
+      : fallback?.refreshExpiresAtEpochSeconds ?? null,
+    claims: accessClaims,
+  };
 }
 
 async function requestToken(form: URLSearchParams): Promise<TokenResponse> {
@@ -499,26 +502,24 @@ async function requestToken(form: URLSearchParams): Promise<TokenResponse> {
   return (await response.json()) as TokenResponse;
 }
 
-function readTokensFromCookies(request: NextRequest): StoredTokens | null {
-  const accessToken = request.cookies.get(ACCESS_TOKEN_COOKIE)?.value?.trim() || "";
-  if (!accessToken) {
-    return null;
+async function readStoredTokens(request: NextRequest): Promise<{ sessionId: string; storedTokens: StoredTokens | null }> {
+  const sessionId = readSessionId(request);
+  if (!sessionId) {
+    return { sessionId: "", storedTokens: null };
   }
-
-  const claims = decodeJwtPayload(accessToken);
-  if (!claims || typeof claims.exp !== "number") {
-    return null;
-  }
-
-  const refreshToken = request.cookies.get(REFRESH_TOKEN_COOKIE)?.value?.trim() || null;
-  const refreshClaims = decodeJwtPayload(refreshToken);
+  const storedTokens = await readBffSession(sessionId);
   return {
-    accessToken,
-    refreshToken,
-    idToken: request.cookies.get(ID_TOKEN_COOKIE)?.value?.trim() || null,
-    accessExpiresAtEpochSeconds: claims.exp,
-    refreshExpiresAtEpochSeconds: refreshClaims && typeof refreshClaims.exp === "number" ? refreshClaims.exp : null,
-    claims,
+    sessionId,
+    storedTokens: storedTokens
+      ? {
+          accessToken: storedTokens.accessToken,
+          refreshToken: storedTokens.refreshToken,
+          idToken: storedTokens.idToken,
+          accessExpiresAtEpochSeconds: storedTokens.accessExpiresAtEpochSeconds,
+          refreshExpiresAtEpochSeconds: storedTokens.refreshExpiresAtEpochSeconds,
+          claims: storedTokens.claims as JwtPayload,
+        }
+      : null,
   };
 }
 
@@ -622,7 +623,8 @@ export async function resolveSession(
 ): Promise<{ session: SessionPayload; accessToken: string | null; cookieMutations: CookieMutation[] }> {
   const cookieMutations: CookieMutation[] = [];
   let refreshedTokens = false;
-  let storedTokens = readTokensFromCookies(request);
+  const { sessionId, storedTokens: initialTokens } = await readStoredTokens(request);
+  let storedTokens = initialTokens;
 
   if (!storedTokens) {
     return {
@@ -641,18 +643,11 @@ export async function resolveSession(
     try {
       const refreshed = await refreshTokens(storedTokens);
       refreshedTokens = true;
-      cookieMutations.push(...buildTokenCookieMutations(refreshed));
-      storedTokens = {
-        accessToken: (refreshed.access_token || "").trim(),
-        refreshToken: (refreshed.refresh_token || "").trim() || storedTokens.refreshToken,
-        idToken: (refreshed.id_token || "").trim() || storedTokens.idToken,
-        accessExpiresAtEpochSeconds: Math.floor(Date.now() / 1000) + Number(refreshed.expires_in || 0),
-        refreshExpiresAtEpochSeconds: refreshed.refresh_expires_in
-          ? Math.floor(Date.now() / 1000) + Number(refreshed.refresh_expires_in)
-          : storedTokens.refreshExpiresAtEpochSeconds,
-        claims: decodeJwtPayload((refreshed.access_token || "").trim()) || storedTokens.claims,
-      };
+      storedTokens = toStoredTokens(refreshed, storedTokens);
+      const ttlSeconds = await updateBffSession(sessionId, storedTokens);
+      cookieMutations.push(buildSessionCookieMutation(sessionId, ttlSeconds));
     } catch {
+      await deleteBffSession(sessionId);
       return {
         session: {
           authenticated: false,
@@ -674,6 +669,7 @@ export async function resolveSession(
       cookieMutations.push(gatewaySyncCookieMutation());
     } catch (error) {
       if (error instanceof SessionSyncError && (error.status === 401 || error.status === 403)) {
+        await deleteBffSession(sessionId);
         return {
           session: {
             authenticated: false,
@@ -707,9 +703,7 @@ export function assertValidCsrf(request: NextRequest): void {
     return;
   }
 
-  const hasAuthCookies = Boolean(
-    request.cookies.get(ACCESS_TOKEN_COOKIE)?.value || request.cookies.get(REFRESH_TOKEN_COOKIE)?.value
-  );
+  const hasAuthCookies = Boolean(request.cookies.get(SESSION_COOKIE)?.value);
   if (!hasAuthCookies) {
     return;
   }
@@ -801,7 +795,7 @@ export async function exchangeCallback(request: NextRequest): Promise<{ redirect
   }
 
   const verifier = derivePkceVerifier(decodedState.nonce, currentFingerprint);
-  let returnTo = normalizeReturnTo(request, cookieReturnTo || "/");
+  const returnTo = normalizeReturnTo(request, cookieReturnTo || "/");
 
   try {
     const form = new URLSearchParams({
@@ -812,18 +806,24 @@ export async function exchangeCallback(request: NextRequest): Promise<{ redirect
       code_verifier: verifier,
     });
     const tokenResponse = await requestToken(form);
+    const storedTokens = toStoredTokens(tokenResponse);
+    const { sessionId, ttlSeconds } = await createBffSession({
+      accessToken: storedTokens.accessToken,
+      refreshToken: storedTokens.refreshToken,
+      idToken: storedTokens.idToken,
+      accessExpiresAtEpochSeconds: storedTokens.accessExpiresAtEpochSeconds,
+      refreshExpiresAtEpochSeconds: storedTokens.refreshExpiresAtEpochSeconds,
+      claims: storedTokens.claims,
+    });
     const cookieMutations = [
-      ...buildTokenCookieMutations(tokenResponse),
+      buildSessionCookieMutation(sessionId, ttlSeconds),
       ...clearFlowCookies,
       buildCookieMutation(CSRF_COOKIE_NAME, createCsrfToken(), 24 * 60 * 60, false),
     ];
-    const accessToken = (tokenResponse.access_token || "").trim();
-    if (accessToken) {
-      await syncGatewaySession(accessToken);
-      cookieMutations.push(gatewaySyncCookieMutation());
-      if (await mergeGuestCart(accessToken, request)) {
-        cookieMutations.push(...clearGuestCartCookieMutations());
-      }
+    await syncGatewaySession(storedTokens.accessToken);
+    cookieMutations.push(gatewaySyncCookieMutation());
+    if (await mergeGuestCart(storedTokens.accessToken, request)) {
+      cookieMutations.push(...clearGuestCartCookieMutations());
     }
     return {
       redirectTo: returnTo,
@@ -838,7 +838,7 @@ export async function exchangeCallback(request: NextRequest): Promise<{ redirect
 }
 
 export async function buildLogoutRedirect(request: NextRequest): Promise<{ redirectUrl: string; cookieMutations: CookieMutation[] }> {
-  const storedTokens = readTokensFromCookies(request);
+  const { sessionId, storedTokens } = await readStoredTokens(request);
   const returnTo = normalizeReturnTo(request, request.nextUrl.searchParams.get("returnTo"));
 
   if (storedTokens?.accessToken) {
@@ -863,6 +863,8 @@ export async function buildLogoutRedirect(request: NextRequest): Promise<{ redir
   if (storedTokens?.idToken) {
     params.set("id_token_hint", storedTokens.idToken);
   }
+
+  await deleteBffSession(sessionId);
 
   return {
     redirectUrl: `${logoutEndpoint()}?${params.toString()}`,

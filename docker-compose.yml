@@ -358,6 +358,7 @@ services:
     ports:
       - "8086:3000"
     env_file:
+      - ./env/common.env
       - ./env/frontend.env
     command: /bin/sh -c "mkdir -p /logs && node server.js 2>&1 | tee -a /logs/microservice-frontend.log"
     environment:

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { applyCookieMutations, resolveSession, SessionSyncError } from "@/lib/server/bffAuth";
+import { applyCookieMutations, resolveSession, SessionStoreError, SessionSyncError } from "@/lib/server/bffAuth";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
@@ -12,6 +12,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json(
         { message: error.message },
         { status: error.status >= 500 ? 503 : error.status }
+      );
+    }
+    if (error instanceof SessionStoreError) {
+      return NextResponse.json(
+        { message: error.message },
+        { status: 503 }
       );
     }
     throw error;
