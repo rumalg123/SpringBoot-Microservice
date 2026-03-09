@@ -315,51 +315,45 @@ function derivePkceVerifier(nonce: string, fingerprint: string): string {
     .digest("base64url");
 }
 
-function encodeOauthStateToken(payload: OauthStatePayload): string {
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv("aes-256-gcm", getOauthStateKey(), iv);
-  const plaintext = Buffer.from(JSON.stringify(payload), "utf8");
-  const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
-  const authTag = cipher.getAuthTag();
-  const packed = Buffer.concat([Buffer.from([OAUTH_STATE_VERSION]), iv, authTag, ciphertext]);
-  return packed.toString("base64url");
+function signOauthState(payload: string): string {
+  return crypto
+    .createHmac("sha256", getOauthStateKey())
+    .update(payload, "utf8")
+    .digest("base64url")
+    .slice(0, 22);
 }
 
-function decodeOauthStateToken(token: string): OauthStatePayload | null {
+function encodeOauthStateToken(payload: OauthStatePayload): string {
+  const issuedAt = payload.issuedAtEpochSeconds.toString(36);
+  const body = `${payload.version}.${payload.nonce}.${issuedAt}`;
+  return `${body}.${signOauthState(body)}`;
+}
+
+function decodeOauthStateToken(token: string, currentFingerprint: string): OauthStatePayload | null {
   const normalized = token.trim();
   if (!normalized) {
     return null;
   }
-  try {
-    const packed = Buffer.from(normalized, "base64url");
-    if (packed.length <= 1 + 12 + 16 || packed[0] !== OAUTH_STATE_VERSION) {
-      return null;
-    }
-    const iv = packed.subarray(1, 13);
-    const authTag = packed.subarray(13, 29);
-    const ciphertext = packed.subarray(29);
-    const decipher = crypto.createDecipheriv("aes-256-gcm", getOauthStateKey(), iv);
-    decipher.setAuthTag(authTag);
-    const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString("utf8");
-    const parsed = JSON.parse(plaintext) as Partial<OauthStatePayload>;
-    if (parsed.version !== OAUTH_STATE_VERSION) {
-      return null;
-    }
-    if (typeof parsed.nonce !== "string") {
-      return null;
-    }
-    if (typeof parsed.fingerprint !== "string" || typeof parsed.issuedAtEpochSeconds !== "number") {
-      return null;
-    }
-    return {
-      version: parsed.version,
-      nonce: parsed.nonce,
-      fingerprint: parsed.fingerprint,
-      issuedAtEpochSeconds: parsed.issuedAtEpochSeconds,
-    };
-  } catch {
+  const parts = normalized.split(".");
+  if (parts.length !== 4) {
     return null;
   }
+  const [versionRaw, nonce, issuedAtRaw, signature] = parts;
+  const body = `${versionRaw}.${nonce}.${issuedAtRaw}`;
+  if (!safeEqualText(signature, signOauthState(body))) {
+    return null;
+  }
+  const version = Number.parseInt(versionRaw, 10);
+  const issuedAtEpochSeconds = Number.parseInt(issuedAtRaw, 36);
+  if (version !== OAUTH_STATE_VERSION || !nonce || !Number.isFinite(issuedAtEpochSeconds) || issuedAtEpochSeconds <= 0) {
+    return null;
+  }
+  return {
+    version,
+    nonce,
+    fingerprint: currentFingerprint,
+    issuedAtEpochSeconds,
+  };
 }
 
 function isRecentOauthState(payload: OauthStatePayload): boolean {
@@ -766,7 +760,6 @@ export async function buildAuthorizationRedirect(
     redirectUrl: `${endpoint}?${params.toString()}`,
     cookieMutations: [
       buildCookieMutation(OAUTH_STATE_COOKIE, state, OAUTH_STATE_TTL_SECONDS, true),
-      buildCookieMutation(OAUTH_VERIFIER_COOKIE, verifier, OAUTH_STATE_TTL_SECONDS, true),
       buildCookieMutation(OAUTH_RETURN_TO_COOKIE, returnTo, OAUTH_STATE_TTL_SECONDS, true),
     ],
   };
@@ -776,7 +769,6 @@ export async function exchangeCallback(request: NextRequest): Promise<{ redirect
   const code = (request.nextUrl.searchParams.get("code") || "").trim();
   const state = (request.nextUrl.searchParams.get("state") || "").trim();
   const expectedState = (request.cookies.get(OAUTH_STATE_COOKIE)?.value || "").trim();
-  const cookieVerifier = (request.cookies.get(OAUTH_VERIFIER_COOKIE)?.value || "").trim();
   const cookieReturnTo = (request.cookies.get(OAUTH_RETURN_TO_COOKIE)?.value || "").trim();
   const clearFlowCookies = [
     deleteCookieMutation(OAUTH_STATE_COOKIE),
@@ -792,26 +784,24 @@ export async function exchangeCallback(request: NextRequest): Promise<{ redirect
     };
   }
 
-  let verifier = cookieVerifier;
-  let returnTo = normalizeReturnTo(request, cookieReturnTo || "/");
-  const hasCookieStateMatch = Boolean(expectedState)
-    && Boolean(cookieVerifier)
-    && safeEqualText(state, expectedState);
-
-  if (!hasCookieStateMatch) {
-    const decodedState = decodeOauthStateToken(state);
-    const currentFingerprint = buildOauthBrowserFingerprint(request);
-    if (!decodedState
-      || !isRecentOauthState(decodedState)
-      || !safeEqualText(decodedState.fingerprint, currentFingerprint)) {
-      return {
-        redirectTo: `${resolveAppOrigin(request)}/?authError=invalid_callback`,
-        cookieMutations: [...clearAuthCookieMutations(), ...clearFlowCookies],
-      };
-    }
-    verifier = derivePkceVerifier(decodedState.nonce, currentFingerprint);
-    returnTo = normalizeReturnTo(request, cookieReturnTo || "/");
+  const currentFingerprint = buildOauthBrowserFingerprint(request);
+  const decodedState = decodeOauthStateToken(state, currentFingerprint);
+  if (!decodedState || !isRecentOauthState(decodedState)) {
+    return {
+      redirectTo: `${resolveAppOrigin(request)}/?authError=invalid_callback`,
+      cookieMutations: [...clearAuthCookieMutations(), ...clearFlowCookies],
+    };
   }
+
+  if (expectedState && !safeEqualText(state, expectedState)) {
+    return {
+      redirectTo: `${resolveAppOrigin(request)}/?authError=invalid_callback`,
+      cookieMutations: [...clearAuthCookieMutations(), ...clearFlowCookies],
+    };
+  }
+
+  const verifier = derivePkceVerifier(decodedState.nonce, currentFingerprint);
+  let returnTo = normalizeReturnTo(request, cookieReturnTo || "/");
 
   try {
     const form = new URLSearchParams({
