@@ -9,6 +9,12 @@ spring:
       host: ${REDIS_HOST:redis}
       port: ${REDIS_PORT:6379}
       timeout: ${REDIS_TIMEOUT:2s}
+  cloud:
+    loadbalancer:
+      cache:
+        enabled: true
+        caffeine:
+          spec: ${LOADBALANCER_CACHE_CAFFEINE_SPEC:initialCapacity=32,maximumSize=256,expireAfterWrite=2m}
 
 eureka:
   client:
