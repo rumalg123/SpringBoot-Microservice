@@ -20,9 +20,11 @@ import java.util.UUID;
 public class CoPurchase {
 
     @Id
+    @Column(name = "product_id_a", nullable = false)
     private UUID productIdA;
 
     @Id
+    @Column(name = "product_id_b", nullable = false)
     private UUID productIdB;
 
     @Column(nullable = false)

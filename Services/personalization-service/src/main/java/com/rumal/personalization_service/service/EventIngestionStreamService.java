@@ -136,6 +136,7 @@ public class EventIngestionStreamService {
                 if (!isBusyGroup(ex)) {
                     throw new ServiceUnavailableException("Failed to initialize personalization event stream", ex);
                 }
+                log.debug("Personalization event stream group {} already exists for {}", streamGroup, streamKey);
             } finally {
                 if (bootstrapRecordId != null) {
                     try {
@@ -293,7 +294,17 @@ public class EventIngestionStreamService {
     }
 
     private boolean isBusyGroup(Exception ex) {
-        String message = ex.getMessage();
+        Throwable current = ex;
+        while (current != null) {
+            if (containsBusyGroupMessage(current.getMessage()) || current.getClass().getSimpleName().contains("RedisBusyException")) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
+    private boolean containsBusyGroupMessage(String message) {
         if (!StringUtils.hasText(message)) {
             return false;
         }
