@@ -10,6 +10,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
+import java.security.NoSuchAlgorithmException;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 
@@ -103,9 +104,7 @@ public class InternalRequestVerifier {
             } else {
                 body = request.getInputStream().readAllBytes();
             }
-            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(body);
-            return HexFormat.of().formatHex(hash);
+            return sha256Hex(body);
         } catch (Exception e) {
             return "";
         }
@@ -127,10 +126,7 @@ public class InternalRequestVerifier {
         String bodyHash = "";
         if (body != null && body.length > 0
                 && ("POST".equals(method) || "PUT".equals(method) || "PATCH".equals(method))) {
-            try {
-                java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
-                bodyHash = HexFormat.of().formatHex(digest.digest(body));
-            } catch (Exception ignored) {}
+            bodyHash = sha256Hex(body);
         }
         String payload = timestamp + ":" + method + ":" + path + ":" + bodyHash;
         try {
@@ -146,6 +142,15 @@ public class InternalRequestVerifier {
     // Keep backward-compatible overload
     public static String sign(String secret, String method, String path) {
         return sign(secret, method, path, null);
+    }
+
+    private static String sha256Hex(byte[] body) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(body == null ? new byte[0] : body));
+        } catch (NoSuchAlgorithmException ex) {
+            return "";
+        }
     }
 }
 

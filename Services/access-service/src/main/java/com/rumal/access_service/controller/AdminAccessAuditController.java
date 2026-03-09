@@ -1,5 +1,6 @@
 package com.rumal.access_service.controller;
 
+import com.rumal.access_service.dto.AccessAuditQuery;
 import com.rumal.access_service.dto.AccessChangeAuditPageResponse;
 import com.rumal.access_service.exception.UnauthorizedException;
 import com.rumal.access_service.security.InternalRequestVerifier;
@@ -44,7 +45,17 @@ public class AdminAccessAuditController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         UUID effectiveVendorId = resolveEffectiveVendorId(userRoles, callerVendorId, vendorId);
-        return accessService.listAccessAudit(targetType, targetId, effectiveVendorId, action, actorQuery, from, to, page, size, limit);
+        return accessService.listAccessAudit(new AccessAuditQuery()
+                .targetType(targetType)
+                .targetId(targetId)
+                .vendorId(effectiveVendorId)
+                .action(action)
+                .actorQuery(actorQuery)
+                .from(from)
+                .to(to)
+                .page(page)
+                .size(size)
+                .limit(limit));
     }
 
     private UUID resolveEffectiveVendorId(String userRoles, UUID callerVendorId, UUID requestedVendorId) {

@@ -40,6 +40,8 @@ import java.util.stream.Collectors;
 public class AccessExpiryProcessor {
 
     private static final Logger log = LoggerFactory.getLogger(AccessExpiryProcessor.class);
+    private static final String SCHEDULED_EXPIRY_SOURCE = "SCHEDULED_EXPIRY";
+    private static final String SYSTEM_ACTOR_TYPE = "SYSTEM";
 
     private final PlatformStaffAccessRepository platformStaffAccessRepository;
     private final VendorStaffAccessRepository vendorStaffAccessRepository;
@@ -139,7 +141,7 @@ public class AccessExpiryProcessor {
     }
 
     private void recordPlatformExpiryAudit(PlatformStaffAccess staff) {
-        AccessAuditRequestContext context = accessAuditRequestContextResolver.resolve(null, null, "SCHEDULED_EXPIRY");
+        AccessAuditRequestContext context = accessAuditRequestContextResolver.resolve(null, null, SCHEDULED_EXPIRY_SOURCE);
         accessAuditOutboxRepository.save(AccessAuditOutboxEvent.builder()
                 .targetType("PLATFORM_STAFF")
                 .targetId(staff.getId())
@@ -153,8 +155,8 @@ public class AccessExpiryProcessor {
                 .actorSub(null)
                 .actorTenantId(context.actorTenantId())
                 .actorRoles(null)
-                .actorType("SYSTEM")
-                .changeSource("SCHEDULED_EXPIRY")
+                .actorType(SYSTEM_ACTOR_TYPE)
+                .changeSource(SCHEDULED_EXPIRY_SOURCE)
                 .reason("Automated expiry")
                 .changeSet(accessAuditPayloadSanitizer.buildChangeSet(null, Map.of(
                         "active", false,
@@ -169,7 +171,7 @@ public class AccessExpiryProcessor {
     }
 
     private void recordVendorExpiryAudit(VendorStaffAccess staff) {
-        AccessAuditRequestContext context = accessAuditRequestContextResolver.resolve(null, null, "SCHEDULED_EXPIRY");
+        AccessAuditRequestContext context = accessAuditRequestContextResolver.resolve(null, null, SCHEDULED_EXPIRY_SOURCE);
         accessAuditOutboxRepository.save(AccessAuditOutboxEvent.builder()
                 .targetType("VENDOR_STAFF")
                 .targetId(staff.getId())
@@ -183,8 +185,8 @@ public class AccessExpiryProcessor {
                 .actorSub(null)
                 .actorTenantId(context.actorTenantId())
                 .actorRoles(null)
-                .actorType("SYSTEM")
-                .changeSource("SCHEDULED_EXPIRY")
+                .actorType(SYSTEM_ACTOR_TYPE)
+                .changeSource(SCHEDULED_EXPIRY_SOURCE)
                 .reason("Automated expiry")
                 .changeSet(accessAuditPayloadSanitizer.buildChangeSet(null, Map.of(
                         "active", false,

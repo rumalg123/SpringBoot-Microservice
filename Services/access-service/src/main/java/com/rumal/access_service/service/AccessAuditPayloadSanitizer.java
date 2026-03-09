@@ -60,40 +60,60 @@ public class AccessAuditPayloadSanitizer {
             return null;
         }
         if (value instanceof Map<?, ?> map) {
-            Map<String, Object> sanitized = new LinkedHashMap<>();
-            for (Map.Entry<?, ?> entry : map.entrySet()) {
-                String childKey = entry.getKey() == null ? "null" : String.valueOf(entry.getKey());
-                sanitized.put(childKey, sanitizeNode(entry.getValue(), childKey));
-            }
-            return sanitized;
+            return sanitizeMap(map);
         }
         if (value instanceof Collection<?> collection) {
-            List<Object> sanitized = new ArrayList<>(collection.size());
-            for (Object item : collection) {
-                sanitized.add(sanitizeNode(item, key));
-            }
-            return sanitized;
+            return sanitizeCollection(collection, key);
         }
         if (value.getClass().isArray()) {
-            int length = Array.getLength(value);
-            List<Object> sanitized = new ArrayList<>(length);
-            for (int i = 0; i < length; i++) {
-                sanitized.add(sanitizeNode(Array.get(value, i), key));
-            }
-            return sanitized;
+            return sanitizeArray(value, key);
         }
         if (value instanceof CharSequence sequence) {
-            String stringValue = sequence.toString().trim();
-            String normalizedKey = key == null ? "" : key.trim().toLowerCase(Locale.ROOT);
-            if (normalizedKey.contains("email")) {
-                return sanitizeEmail(stringValue);
-            }
-            if (normalizedKey.contains("token") || normalizedKey.contains("secret") || normalizedKey.contains("password")) {
-                return "[REDACTED]";
-            }
-            return stringValue;
+            return sanitizeText(sequence, key);
         }
         return value;
+    }
+
+    private Map<String, Object> sanitizeMap(Map<?, ?> map) {
+        Map<String, Object> sanitized = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            String childKey = entry.getKey() == null ? "null" : String.valueOf(entry.getKey());
+            sanitized.put(childKey, sanitizeNode(entry.getValue(), childKey));
+        }
+        return sanitized;
+    }
+
+    private List<Object> sanitizeCollection(Collection<?> collection, String key) {
+        List<Object> sanitized = new ArrayList<>(collection.size());
+        for (Object item : collection) {
+            sanitized.add(sanitizeNode(item, key));
+        }
+        return sanitized;
+    }
+
+    private List<Object> sanitizeArray(Object value, String key) {
+        int length = Array.getLength(value);
+        List<Object> sanitized = new ArrayList<>(length);
+        for (int i = 0; i < length; i++) {
+            sanitized.add(sanitizeNode(Array.get(value, i), key));
+        }
+        return sanitized;
+    }
+
+    private Object sanitizeText(CharSequence sequence, String key) {
+        String stringValue = sequence.toString().trim();
+        String normalizedKey = normalizeKey(key);
+        if (normalizedKey.contains("email")) {
+            return sanitizeEmail(stringValue);
+        }
+        if (normalizedKey.contains("token") || normalizedKey.contains("secret") || normalizedKey.contains("password")) {
+            return "[REDACTED]";
+        }
+        return stringValue;
+    }
+
+    private String normalizeKey(String key) {
+        return key == null ? "" : key.trim().toLowerCase(Locale.ROOT);
     }
 
     private Object buildDiff(Object beforeValue, Object afterValue) {

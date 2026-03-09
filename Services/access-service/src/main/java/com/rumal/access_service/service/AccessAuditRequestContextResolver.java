@@ -10,19 +10,28 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 @Service
 public class AccessAuditRequestContextResolver {
 
+    private static final String ACTOR_TYPE_USER = "USER";
+    private static final String SYSTEM_SOURCE = "SYSTEM";
+    private static final String ADMIN_API_SOURCE = "ADMIN_API";
+
     public AccessAuditRequestContext resolve(String actorSubOverride, String actorRolesOverride, String changeSourceOverride) {
         HttpServletRequest request = currentRequest();
         String actorSub = firstNonBlank(actorSubOverride, header(request, "X-User-Sub"));
         String actorTenantId = trimToNull(firstNonBlank(header(request, "X-Actor-Tenant-Id"), header(request, "X-Caller-Vendor-Id")));
         String actorRoles = trimToNull(firstNonBlank(actorRolesOverride, header(request, "X-User-Roles")));
-        String actorType = StringUtils.hasText(actorSub) ? "USER" : "SYSTEM";
-        String changeSource = StringUtils.hasText(changeSourceOverride)
-                ? changeSourceOverride.trim()
-                : (request != null ? "ADMIN_API" : "SYSTEM");
+        String actorType = StringUtils.hasText(actorSub) ? ACTOR_TYPE_USER : SYSTEM_SOURCE;
+        String changeSource = resolveChangeSource(changeSourceOverride, request);
         String clientIp = normalizeIp(firstNonBlank(header(request, "X-Audit-Client-Ip"), header(request, "X-Forwarded-For"), request == null ? null : request.getRemoteAddr()));
         String userAgent = truncate(trimToNull(firstNonBlank(header(request, "X-Audit-User-Agent"), header(request, "User-Agent"))), 512);
         String requestId = truncate(trimToNull(header(request, "X-Request-Id")), 100);
         return new AccessAuditRequestContext(actorSub, actorTenantId, actorRoles, actorType, changeSource, clientIp, userAgent, requestId);
+    }
+
+    private String resolveChangeSource(String changeSourceOverride, HttpServletRequest request) {
+        if (StringUtils.hasText(changeSourceOverride)) {
+            return changeSourceOverride.trim();
+        }
+        return request != null ? ADMIN_API_SOURCE : SYSTEM_SOURCE;
     }
 
     private HttpServletRequest currentRequest() {

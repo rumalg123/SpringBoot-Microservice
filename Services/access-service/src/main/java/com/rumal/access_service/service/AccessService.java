@@ -1,6 +1,7 @@
 package com.rumal.access_service.service;
 
 import com.rumal.access_service.dto.AccessChangeAuditPageResponse;
+import com.rumal.access_service.dto.AccessAuditQuery;
 import com.rumal.access_service.dto.ActiveSessionResponse;
 import com.rumal.access_service.dto.ApiKeyResponse;
 import com.rumal.access_service.dto.CreateApiKeyRequest;
@@ -22,18 +23,7 @@ import java.util.List;
 import java.util.UUID;
 
 public interface AccessService {
-    AccessChangeAuditPageResponse listAccessAudit(
-            String targetType,
-            UUID targetId,
-            UUID vendorId,
-            String action,
-            String actorQuery,
-            String from,
-            String to,
-            Integer page,
-            Integer size,
-            Integer limit
-    );
+    AccessChangeAuditPageResponse listAccessAudit(AccessAuditQuery query);
 
     Page<PlatformStaffAccessResponse> listPlatformStaff(Pageable pageable);
     Page<PlatformStaffAccessResponse> listDeletedPlatformStaff(Pageable pageable);

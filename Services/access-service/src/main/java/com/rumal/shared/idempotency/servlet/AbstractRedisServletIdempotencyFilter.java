@@ -12,7 +12,6 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.lang.NonNull;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.util.StringUtils;
@@ -34,6 +33,13 @@ import java.util.regex.Pattern;
 public abstract class AbstractRedisServletIdempotencyFilter extends OncePerRequestFilter {
     private static final String PENDING_PREFIX = "PENDING|";
     private static final String DONE_PREFIX = "DONE|";
+    private static final String REQUEST_HASH = "requestHash";
+    private static final String STATUS = "status";
+    private static final String CONTENT_TYPE = "contentType";
+    private static final String BODY_BASE64 = "bodyBase64";
+    private static final String CREATED_AT = "createdAt";
+    private static final String PAYLOAD_MISMATCH_MESSAGE = "Same idempotency key cannot be used with a different request payload";
+    private static final String REQUEST_STILL_PROCESSING_MESSAGE = "Request with the same idempotency key is still processing";
     private static final int DEFAULT_MAX_CACHED_REQUEST_BODY_BYTES = 256 * 1024;
     private static final int DEFAULT_MAX_CACHED_RESPONSE_BODY_BYTES = 512 * 1024;
     private static final Pattern IDEM_KEY_PATTERN = Pattern.compile("^[a-zA-Z0-9\\-_]{1,128}$");
@@ -63,7 +69,7 @@ public abstract class AbstractRedisServletIdempotencyFilter extends OncePerReque
     }
 
     @Override
-    protected boolean shouldNotFilter(@NonNull HttpServletRequest request) {
+    protected boolean shouldNotFilter(HttpServletRequest request) {
         if (!isFilterEnabled()) {
             return true;
         }
@@ -76,88 +82,148 @@ public abstract class AbstractRedisServletIdempotencyFilter extends OncePerReque
     }
 
     @Override
-    protected void doFilterInternal(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response, @NonNull FilterChain filterChain)
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         String rawIdemKey = request.getHeader(keyHeaderName);
-        if (!StringUtils.hasText(rawIdemKey)) {
-            writeMissingKey(response);
+        if (handleMissingKey(rawIdemKey, response)) {
             return;
         }
-        if (isOversizedRequestBody(request)) {
-            response.setHeader("X-Idempotent-Bypass", "request-body-too-large");
-            filterChain.doFilter(request, response);
+        if (bypassOversizedRequestBody(request, response, filterChain)) {
             return;
         }
 
         CachedBodyHttpServletRequest wrappedRequest = new CachedBodyHttpServletRequest(request);
         String idemKey = rawIdemKey.trim();
-        if (!IDEM_KEY_PATTERN.matcher(idemKey).matches()) {
-            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-            response.setContentType("application/json");
-            response.getWriter().write("{\"error\":\"Invalid Idempotency-Key format\"}");
+        if (handleInvalidKey(idemKey, response)) {
             return;
         }
         String reqHash = buildRequestHash(wrappedRequest);
         String redisKey = buildRedisKey(wrappedRequest, idemKey);
 
         try {
-            String current = get(redisKey);
-            if (StringUtils.hasText(current)) {
-                if (current.startsWith(DONE_PREFIX)) {
-                    replay(response, current.substring(DONE_PREFIX.length()), reqHash);
-                    return;
-                }
-                if (current.startsWith(PENDING_PREFIX)) {
-                    if (isPendingHashMismatch(current.substring(PENDING_PREFIX.length()), reqHash)) {
-                        writeConflict(response, "Same idempotency key cannot be used with a different request payload");
-                        return;
-                    }
-                    writeConflict(response, "Request with the same idempotency key is still processing");
-                    return;
-                }
-            }
-
-            if (!acquire(redisKey, reqHash)) {
-                String existing = get(redisKey);
-                if (StringUtils.hasText(existing) && existing.startsWith(DONE_PREFIX)) {
-                    replay(response, existing.substring(DONE_PREFIX.length()), reqHash);
-                    return;
-                }
-                if (StringUtils.hasText(existing)
-                        && existing.startsWith(PENDING_PREFIX)
-                        && isPendingHashMismatch(existing.substring(PENDING_PREFIX.length()), reqHash)) {
-                    writeConflict(response, "Same idempotency key cannot be used with a different request payload");
-                    return;
-                }
-                writeConflict(response, "Request with the same idempotency key is still processing");
+            if (handleExistingState(response, redisKey, reqHash)) {
                 return;
             }
-
-            ContentCachingResponseWrapper wrappedResponse = new ContentCachingResponseWrapper(response);
-            try {
-                filterChain.doFilter(wrappedRequest, wrappedResponse);
-                int status = wrappedResponse.getStatus();
-                if (status >= 500) {
-                    safeDelete(redisKey);
-                    wrappedResponse.copyBodyToResponse();
-                    return;
-                }
-                if (isOversizedResponseBody(wrappedResponse)) {
-                    safeDelete(redisKey);
-                    wrappedResponse.setHeader("X-Idempotent-Bypass", "response-body-too-large");
-                    wrappedResponse.copyBodyToResponse();
-                    return;
-                }
-                storeDone(redisKey, reqHash, wrappedResponse);
-                wrappedResponse.copyBodyToResponse();
-            } catch (Exception ex) {
-                safeDelete(redisKey);
-                throw ex;
+            if (!acquireOrRespondConflict(response, redisKey, reqHash)) {
+                return;
             }
+            processRequest(wrappedRequest, response, filterChain, redisKey, reqHash);
         } catch (IdempotencyStateUnavailableException ex) {
             safeDelete(redisKey);
             writeUnavailable(response);
         }
+    }
+
+    private boolean handleMissingKey(String rawIdemKey, HttpServletResponse response) throws IOException {
+        if (StringUtils.hasText(rawIdemKey)) {
+            return false;
+        }
+        writeMissingKey(response);
+        return true;
+    }
+
+    private boolean bypassOversizedRequestBody(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain
+    ) throws ServletException, IOException {
+        if (!isOversizedRequestBody(request)) {
+            return false;
+        }
+        response.setHeader("X-Idempotent-Bypass", "request-body-too-large");
+        filterChain.doFilter(request, response);
+        return true;
+    }
+
+    private boolean handleInvalidKey(String idemKey, HttpServletResponse response) throws IOException {
+        if (IDEM_KEY_PATTERN.matcher(idemKey).matches()) {
+            return false;
+        }
+        response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.getWriter().write("{\"error\":\"Invalid Idempotency-Key format\"}");
+        return true;
+    }
+
+    private boolean handleExistingState(HttpServletResponse response, String redisKey, String reqHash) throws IOException {
+        String current = get(redisKey);
+        if (!StringUtils.hasText(current)) {
+            return false;
+        }
+        return replayExistingState(response, current, reqHash);
+    }
+
+    private boolean replayExistingState(HttpServletResponse response, String state, String reqHash) throws IOException {
+        if (state.startsWith(DONE_PREFIX)) {
+            replay(response, state.substring(DONE_PREFIX.length()), reqHash);
+            return true;
+        }
+        if (!state.startsWith(PENDING_PREFIX)) {
+            return false;
+        }
+        if (isPendingHashMismatch(state.substring(PENDING_PREFIX.length()), reqHash)) {
+            writePayloadMismatch(response);
+            return true;
+        }
+        writeConflict(response, REQUEST_STILL_PROCESSING_MESSAGE);
+        return true;
+    }
+
+    private boolean acquireOrRespondConflict(HttpServletResponse response, String redisKey, String reqHash) throws IOException {
+        if (acquire(redisKey, reqHash)) {
+            return true;
+        }
+        String existing = get(redisKey);
+        if (StringUtils.hasText(existing) && existing.startsWith(DONE_PREFIX)) {
+            replay(response, existing.substring(DONE_PREFIX.length()), reqHash);
+            return false;
+        }
+        if (isPendingMismatch(existing, reqHash)) {
+            writePayloadMismatch(response);
+            return false;
+        }
+        writeConflict(response, REQUEST_STILL_PROCESSING_MESSAGE);
+        return false;
+    }
+
+    private boolean isPendingMismatch(String existing, String reqHash) {
+        return StringUtils.hasText(existing)
+                && existing.startsWith(PENDING_PREFIX)
+                && isPendingHashMismatch(existing.substring(PENDING_PREFIX.length()), reqHash);
+    }
+
+    private void processRequest(
+            CachedBodyHttpServletRequest wrappedRequest,
+            HttpServletResponse response,
+            FilterChain filterChain,
+            String redisKey,
+            String reqHash
+    ) throws ServletException, IOException {
+        ContentCachingResponseWrapper wrappedResponse = new ContentCachingResponseWrapper(response);
+        try {
+            filterChain.doFilter(wrappedRequest, wrappedResponse);
+            finalizeResponse(redisKey, reqHash, wrappedResponse);
+        } catch (Exception ex) {
+            safeDelete(redisKey);
+            throw ex;
+        }
+    }
+
+    private void finalizeResponse(String redisKey, String reqHash, ContentCachingResponseWrapper wrappedResponse) throws IOException {
+        int status = wrappedResponse.getStatus();
+        if (status >= 500) {
+            safeDelete(redisKey);
+            wrappedResponse.copyBodyToResponse();
+            return;
+        }
+        if (isOversizedResponseBody(wrappedResponse)) {
+            safeDelete(redisKey);
+            wrappedResponse.setHeader("X-Idempotent-Bypass", "response-body-too-large");
+            wrappedResponse.copyBodyToResponse();
+            return;
+        }
+        storeDone(redisKey, reqHash, wrappedResponse);
+        wrappedResponse.copyBodyToResponse();
     }
 
     protected abstract boolean isFilterEnabled();
@@ -241,7 +307,7 @@ public abstract class AbstractRedisServletIdempotencyFilter extends OncePerReque
             return Boolean.TRUE.equals(ok);
         } catch (Exception ex) {
             log.warn("{} Redis acquire failed (fail-closed) for key {}", logName(), key, ex);
-            throw new IdempotencyStateUnavailableException(ex);
+            throw new IdempotencyStateUnavailableException("Redis acquire failed for key " + key, ex);
         }
     }
 
@@ -250,21 +316,21 @@ public abstract class AbstractRedisServletIdempotencyFilter extends OncePerReque
             return redisTemplate.opsForValue().get(key);
         } catch (Exception ex) {
             log.warn("{} Redis lookup failed (fail-closed) for key {}", logName(), key, ex);
-            throw new IdempotencyStateUnavailableException(ex);
+            throw new IdempotencyStateUnavailableException("Redis lookup failed for key " + key, ex);
         }
     }
 
     private void storeDone(String key, String reqHash, ContentCachingResponseWrapper response) {
         try {
             Map<String, Object> payload = new LinkedHashMap<>();
-            payload.put("requestHash", reqHash);
-            payload.put("status", response.getStatus());
-            payload.put("contentType", response.getContentType());
-            payload.put("bodyBase64", Base64.getEncoder().encodeToString(response.getContentAsByteArray()));
+            payload.put(REQUEST_HASH, reqHash);
+            payload.put(STATUS, response.getStatus());
+            payload.put(CONTENT_TYPE, response.getContentType());
+            payload.put(BODY_BASE64, Base64.getEncoder().encodeToString(response.getContentAsByteArray()));
             redisTemplate.opsForValue().set(key, DONE_PREFIX + objectMapper.writeValueAsString(payload), responseTtl);
         } catch (Exception ex) {
             log.warn("{} Redis completion write failed (fail-closed) for key {}", logName(), key, ex);
-            throw new IdempotencyStateUnavailableException(ex);
+            throw new IdempotencyStateUnavailableException("Redis completion write failed for key " + key, ex);
         }
     }
 
@@ -272,16 +338,16 @@ public abstract class AbstractRedisServletIdempotencyFilter extends OncePerReque
         try {
             @SuppressWarnings("unchecked")
             Map<String, Object> payload = objectMapper.readValue(json, Map.class);
-            String storedHash = (String) payload.get("requestHash");
+            String storedHash = (String) payload.get(REQUEST_HASH);
             if (StringUtils.hasText(storedHash) && !storedHash.equals(reqHash)) {
-                writeConflict(response, "Same idempotency key cannot be used with a different request payload");
+                writePayloadMismatch(response);
                 return;
             }
-            response.setStatus(((Number) payload.getOrDefault("status", 200)).intValue());
-            String contentType = (String) payload.get("contentType");
+            response.setStatus(((Number) payload.getOrDefault(STATUS, 200)).intValue());
+            String contentType = (String) payload.get(CONTENT_TYPE);
             response.setContentType(StringUtils.hasText(contentType) ? contentType : MediaType.APPLICATION_JSON_VALUE);
             response.setHeader("X-Idempotent-Replay", "true");
-            byte[] body = Base64.getDecoder().decode((String) payload.getOrDefault("bodyBase64", ""));
+            byte[] body = Base64.getDecoder().decode((String) payload.getOrDefault(BODY_BASE64, ""));
             response.getOutputStream().write(body);
         } catch (Exception ex) {
             writeConflict(response, "Unable to replay idempotent response. Retry with a new key.");
@@ -290,12 +356,12 @@ public abstract class AbstractRedisServletIdempotencyFilter extends OncePerReque
 
     private String pendingPayload(String reqHash) {
         Map<String, Object> m = new LinkedHashMap<>();
-        m.put("requestHash", reqHash);
-        m.put("createdAt", System.currentTimeMillis());
+        m.put(REQUEST_HASH, reqHash);
+        m.put(CREATED_AT, System.currentTimeMillis());
         try {
             return objectMapper.writeValueAsString(m);
         } catch (JsonProcessingException ex) {
-            return "{\"requestHash\":\"" + escape(reqHash) + "\"}";
+            return "{\"" + REQUEST_HASH + "\":\"" + escape(reqHash) + "\"}";
         }
     }
 
@@ -303,7 +369,7 @@ public abstract class AbstractRedisServletIdempotencyFilter extends OncePerReque
         try {
             @SuppressWarnings("unchecked")
             Map<String, Object> payload = objectMapper.readValue(json, Map.class);
-            Object stored = payload.get("requestHash");
+            Object stored = payload.get(REQUEST_HASH);
             return stored != null && !reqHash.equals(String.valueOf(stored));
         } catch (Exception ex) {
             return false;
@@ -322,6 +388,10 @@ public abstract class AbstractRedisServletIdempotencyFilter extends OncePerReque
         response.setStatus(HttpStatus.CONFLICT.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.getOutputStream().write(("{\"error\":\"" + escape(message) + "\"}").getBytes(StandardCharsets.UTF_8));
+    }
+
+    private void writePayloadMismatch(HttpServletResponse response) throws IOException {
+        writeConflict(response, PAYLOAD_MISMATCH_MESSAGE);
     }
 
     private void writeMissingKey(HttpServletResponse response) throws IOException {
@@ -363,8 +433,8 @@ public abstract class AbstractRedisServletIdempotencyFilter extends OncePerReque
     }
 
     private static final class IdempotencyStateUnavailableException extends RuntimeException {
-        private IdempotencyStateUnavailableException(Throwable cause) {
-            super(cause);
+        private IdempotencyStateUnavailableException(String message, Throwable cause) {
+            super(message, cause);
         }
     }
 
