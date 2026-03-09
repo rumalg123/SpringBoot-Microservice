@@ -17,6 +17,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -26,6 +28,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -43,7 +46,7 @@ class PromotionQuoteServiceTest {
 
     private PromotionQuoteService service;
 
-    private final Instant pricingAt = Instant.parse("2026-02-23T10:00:00Z");
+    private final Instant pricingAt = Instant.now();
     private final UUID vendorId = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private final UUID productId = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private final UUID categoryId = UUID.fromString("33333333-3333-3333-3333-333333333333");
@@ -81,7 +84,7 @@ class PromotionQuoteServiceTest {
                 true,
                 false
         );
-        when(promotionCampaignRepository.findAll()).thenReturn(List.of(higherPriorityRegular, exclusive));
+        stubActivePromotions(higherPriorityRegular, exclusive);
 
         PromotionQuoteResponse quote = service.quote(singleLineOrderRequest("100.00", 1, "0.00"));
 
@@ -122,7 +125,7 @@ class PromotionQuoteServiceTest {
                 false
         );
 
-        when(promotionCampaignRepository.findAll()).thenReturn(List.of(cartPromo, linePromo));
+        stubActivePromotions(cartPromo, linePromo);
 
         PromotionQuoteResponse quote = service.quote(singleLineOrderRequest("100.00", 1, "0.00"));
 
@@ -156,7 +159,7 @@ class PromotionQuoteServiceTest {
                 true,
                 false
         );
-        when(promotionCampaignRepository.findAll()).thenReturn(List.of(nonStackable, laterPromo));
+        stubActivePromotions(nonStackable, laterPromo);
 
         PromotionQuoteResponse quote = service.quote(singleLineOrderRequest("100.00", 1, "0.00"));
 
@@ -194,7 +197,7 @@ class PromotionQuoteServiceTest {
                 false
         );
 
-        when(promotionCampaignRepository.findAll()).thenReturn(List.of(linePromo, nonStackableCart));
+        stubActivePromotions(linePromo, nonStackableCart);
 
         PromotionQuoteResponse quote = service.quote(singleLineOrderRequest("100.00", 1, "0.00"));
 
@@ -223,7 +226,7 @@ class PromotionQuoteServiceTest {
         bogo.setBuyQuantity(2);
         bogo.setGetQuantity(1);
 
-        when(promotionCampaignRepository.findAll()).thenReturn(List.of(bogo));
+        stubActivePromotions(bogo);
 
         PromotionQuoteResponse quote = service.quote(new PromotionQuoteRequest(
                 List.of(
@@ -267,7 +270,7 @@ class PromotionQuoteServiceTest {
                 new PromotionSpendTier(new BigDecimal("200.00"), new BigDecimal("30.00"))
         ));
 
-        when(promotionCampaignRepository.findAll()).thenReturn(List.of(tiered));
+        stubActivePromotions(tiered);
 
         PromotionQuoteResponse quote = service.quote(singleLineOrderRequest("120.00", 1, "0.00"));
 
@@ -297,7 +300,7 @@ class PromotionQuoteServiceTest {
                 new PromotionSpendTier(new BigDecimal("100.00"), new BigDecimal("10.00"))
         ));
 
-        when(promotionCampaignRepository.findAll()).thenReturn(List.of(tiered));
+        stubActivePromotions(tiered);
 
         PromotionQuoteResponse quote = service.quote(singleLineOrderRequest("80.00", 1, "0.00"));
 
@@ -322,7 +325,7 @@ class PromotionQuoteServiceTest {
         );
         bundle.setTargetProductIds(Set.of(productId, productId2));
 
-        when(promotionCampaignRepository.findAll()).thenReturn(List.of(bundle));
+        stubActivePromotions(bundle);
 
         PromotionQuoteResponse quote = service.quote(new PromotionQuoteRequest(
                 List.of(
@@ -363,7 +366,7 @@ class PromotionQuoteServiceTest {
         );
         bundle.setTargetProductIds(Set.of(productId, productId2));
 
-        when(promotionCampaignRepository.findAll()).thenReturn(List.of(bundle));
+        stubActivePromotions(bundle);
 
         PromotionQuoteResponse quote = service.quote(new PromotionQuoteRequest(
                 List.of(
@@ -401,7 +404,7 @@ class PromotionQuoteServiceTest {
         promo.setBudgetAmount(new BigDecimal("20.00"));
         promo.setBurnedBudgetAmount(new BigDecimal("20.00"));
 
-        when(promotionCampaignRepository.findAll()).thenReturn(List.of(promo));
+        stubActivePromotions(promo);
 
         PromotionQuoteResponse quote = service.quote(singleLineOrderRequest("100.00", 1, "0.00"));
 
@@ -428,7 +431,7 @@ class PromotionQuoteServiceTest {
         linePromo.setBudgetAmount(new BigDecimal("5.00"));
         linePromo.setBurnedBudgetAmount(BigDecimal.ZERO);
 
-        when(promotionCampaignRepository.findAll()).thenReturn(List.of(linePromo));
+        stubActivePromotions(linePromo);
 
         PromotionQuoteResponse quote = service.quote(singleLineOrderRequest("100.00", 1, "0.00"));
 
@@ -493,5 +496,17 @@ class PromotionQuoteServiceTest {
         promotion.setEndsAt(pricingAt.plusSeconds(3600));
         promotion.setCreatedAt(pricingAt.minusSeconds(priority));
         return promotion;
+    }
+
+    private void stubActivePromotions(PromotionCampaign... promotions) {
+        List<PromotionCampaign> content = List.of(promotions);
+        when(promotionCampaignRepository.findActiveByScope(any(), any(), any(), any()))
+                .thenAnswer(invocation -> {
+                    PageRequest pageable = invocation.getArgument(3);
+                    if (pageable.getPageNumber() == 0) {
+                        return new PageImpl<>(content, pageable, content.size());
+                    }
+                    return new PageImpl<>(List.of(), pageable, content.size());
+                });
     }
 }
