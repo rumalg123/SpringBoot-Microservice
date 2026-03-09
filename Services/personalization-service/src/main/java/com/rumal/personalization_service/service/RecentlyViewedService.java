@@ -80,7 +80,7 @@ public class RecentlyViewedService {
                 }
                 if (!validEntries.isEmpty()) {
                     redisTemplate.opsForZSet().add(userKey, validEntries);
-                    redisTemplate.opsForZSet().removeRange(userKey, 0, -((long) maxItems + 1L));
+                    redisTemplate.opsForZSet().removeRange(userKey, 0, -(maxItems + 1L));
                 }
             }
             redisTemplate.delete(anonKey);
