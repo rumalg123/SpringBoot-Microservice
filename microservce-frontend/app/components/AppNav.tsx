@@ -11,6 +11,7 @@ import ProductSearchBar from "./search/ProductSearchBar";
 type Props = {
   email?: string;
   isSuperAdmin?: boolean;
+  isPlatformStaff?: boolean;
   isVendorAdmin?: boolean;
   isVendorStaff?: boolean;
   canViewAdmin?: boolean;
@@ -61,6 +62,7 @@ function NavLink({ href, label, color, isActive }: { href: string; label: string
 export default function AppNav({
   email,
   isSuperAdmin = false,
+  isPlatformStaff = false,
   isVendorAdmin = false,
   isVendorStaff = false,
   canViewAdmin = false,
@@ -114,24 +116,29 @@ export default function AppNav({
   };
 
   const canAccessVendorPortal = isVendorAdmin || isVendorStaff;
-  const showAdminOrders = canManageAdminOrders ?? canViewAdmin;
-  const showAdminPayments = canManageAdminPayments ?? isSuperAdmin;
-  const showAdminProducts = canManageAdminProducts ?? canViewAdmin;
-  const showAdminVendors = canManageAdminVendors ?? isSuperAdmin;
-  const showAdminPosters = canManageAdminPosters ?? canViewAdmin;
-  const showAdminPromotions = canManageAdminPromotions ?? canViewAdmin;
-  const showAdminReviews = canManageAdminReviews ?? isSuperAdmin;
-  const showAdminCategories = canManageAdminCategories ?? isSuperAdmin;
-  const showAdminInventory = canManageAdminInventory ?? showAdminProducts;
+  const canAccessAdminPortal = isSuperAdmin || isPlatformStaff;
+  const showAdminOrders = canAccessAdminPortal && (canManageAdminOrders ?? canViewAdmin);
+  const showAdminPayments = canAccessAdminPortal && (canManageAdminPayments ?? isSuperAdmin);
+  const showAdminProducts = canAccessAdminPortal && (canManageAdminProducts ?? canViewAdmin);
+  const showAdminVendors = canAccessAdminPortal && (canManageAdminVendors ?? isSuperAdmin);
+  const showAdminPosters = canAccessAdminPortal && (canManageAdminPosters ?? canViewAdmin);
+  const showAdminPromotions = canAccessAdminPortal && (canManageAdminPromotions ?? canViewAdmin);
+  const showAdminReviews = canAccessAdminPortal && (canManageAdminReviews ?? isSuperAdmin);
+  const showAdminCategories = canAccessAdminPortal && (canManageAdminCategories ?? isSuperAdmin);
+  const showAdminInventory = canAccessAdminPortal && (canManageAdminInventory ?? showAdminProducts);
   const showVendorStaffAdmin = isSuperAdmin || isVendorAdmin;
-  const showVendorOrders = canAccessVendorPortal && showAdminOrders;
-  const showVendorProducts = canAccessVendorPortal && showAdminProducts;
-  const showVendorInventory = canAccessVendorPortal && showAdminInventory;
-  const showVendorPromotions = canAccessVendorPortal && showAdminPromotions;
+  const vendorOrdersEnabled = canManageAdminOrders ?? (isVendorAdmin || isVendorStaff);
+  const vendorProductsEnabled = canManageAdminProducts ?? (isVendorAdmin || isVendorStaff);
+  const vendorInventoryEnabled = canManageAdminInventory ?? canManageAdminProducts ?? (isVendorAdmin || isVendorStaff);
+  const vendorPromotionsEnabled = canManageAdminPromotions ?? (isVendorAdmin || isVendorStaff);
+  const showVendorOrders = canAccessVendorPortal && vendorOrdersEnabled;
+  const showVendorProducts = canAccessVendorPortal && vendorProductsEnabled;
+  const showVendorInventory = canAccessVendorPortal && vendorInventoryEnabled;
+  const showVendorPromotions = canAccessVendorPortal && vendorPromotionsEnabled;
   const showVendorAnalytics = canAccessVendorPortal && (canViewVendorAnalytics ?? isVendorAdmin);
   const showVendorFinance = canAccessVendorPortal && (canViewVendorFinance ?? isVendorAdmin);
   const showVendorSettings = canAccessVendorPortal && (canManageVendorSettings ?? isVendorAdmin);
-  const showVendorReviews = canAccessVendorPortal && showAdminProducts;
+  const showVendorReviews = canAccessVendorPortal && showVendorProducts;
   const isAuthenticated = emailVerified !== null;
 
   const navItems: NavItem[] = useMemo(() => [

@@ -14,6 +14,7 @@ export default function ConnectedAppNav() {
     <AppNav
       email={(session.profile?.email as string) || ""}
       isSuperAdmin={session.isSuperAdmin}
+      isPlatformStaff={session.isPlatformStaff}
       isVendorAdmin={session.isVendorAdmin}
       isVendorStaff={session.isVendorStaff}
       canViewAdmin={session.canViewAdmin}

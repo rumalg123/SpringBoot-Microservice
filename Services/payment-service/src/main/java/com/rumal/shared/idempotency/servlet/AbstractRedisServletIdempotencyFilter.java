@@ -4,8 +4,11 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.ReadListener;
+import jakarta.servlet.ServletInputStream;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpServletRequestWrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -13,10 +16,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
-import org.springframework.web.util.ContentCachingRequestWrapper;
 import org.springframework.web.util.ContentCachingResponseWrapper;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Duration;
@@ -83,7 +88,7 @@ public abstract class AbstractRedisServletIdempotencyFilter extends OncePerReque
             return;
         }
 
-        ContentCachingRequestWrapper wrappedRequest = new ContentCachingRequestWrapper(request, maxCachedRequestBodyBytes());
+        CachedBodyRequestWrapper wrappedRequest = new CachedBodyRequestWrapper(request, maxCachedRequestBodyBytes());
         String idemKey = rawIdemKey.trim();
         if (!IDEM_KEY_PATTERN.matcher(idemKey).matches()) {
             response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
@@ -198,11 +203,8 @@ public abstract class AbstractRedisServletIdempotencyFilter extends OncePerReque
         return keyPrefix + scope + "::" + encoded;
     }
 
-    private String buildRequestHash(ContentCachingRequestWrapper request) throws IOException {
-        byte[] body = request.getContentAsByteArray();
-        if (body.length == 0) {
-            body = request.getInputStream().readAllBytes();
-        }
+    private String buildRequestHash(CachedBodyRequestWrapper request) {
+        byte[] body = request.getCachedBody();
         String method = request.getMethod();
         String path = normalizePath(request);
         String query = request.getQueryString();
@@ -367,6 +369,54 @@ public abstract class AbstractRedisServletIdempotencyFilter extends OncePerReque
     private static final class IdempotencyStateUnavailableException extends RuntimeException {
         private IdempotencyStateUnavailableException(Throwable cause) {
             super(cause);
+        }
+    }
+
+    private static final class CachedBodyRequestWrapper extends HttpServletRequestWrapper {
+        private final byte[] body;
+
+        private CachedBodyRequestWrapper(HttpServletRequest request, int maxBytes) throws IOException {
+            super(request);
+            byte[] bytes = request.getInputStream().readAllBytes();
+            if (maxBytes > 0 && bytes.length > maxBytes) {
+                throw new IOException("Request body exceeds idempotency cache limit");
+            }
+            this.body = bytes;
+        }
+
+        private byte[] getCachedBody() {
+            return body;
+        }
+
+        @Override
+        public ServletInputStream getInputStream() {
+            ByteArrayInputStream inputStream = new ByteArrayInputStream(body);
+            return new ServletInputStream() {
+                @Override
+                public int read() {
+                    return inputStream.read();
+                }
+
+                @Override
+                public boolean isFinished() {
+                    return inputStream.available() == 0;
+                }
+
+                @Override
+                public boolean isReady() {
+                    return true;
+                }
+
+                @Override
+                public void setReadListener(ReadListener readListener) {
+                    // Servlet container async IO is not used here.
+                }
+            };
+        }
+
+        @Override
+        public BufferedReader getReader() {
+            return new BufferedReader(new InputStreamReader(getInputStream(), StandardCharsets.UTF_8));
         }
     }
 }
