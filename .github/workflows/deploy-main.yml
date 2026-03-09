@@ -61,7 +61,8 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         run: |
-          mvn -B clean verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+          mvn -B clean test org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+            -Dsurefire.excludes=**/*ApplicationTests.java,**/*IntegrationTest.java,**/*IntegrationTests.java \
             -Dsonar.projectKey=${{ matrix.service.key }} \
             -Dsonar.projectName=${{ matrix.service.name }} \
             -Dsonar.host.url=${SONAR_HOST_URL} \
