@@ -9,31 +9,106 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  detect-changes:
+    name: Detect changed services
+    runs-on: ubuntu-latest
+    outputs:
+      backend_matrix: ${{ steps.detect.outputs.backend_matrix }}
+      backend_changed: ${{ steps.detect.outputs.backend_changed }}
+      frontend_changed: ${{ steps.detect.outputs.frontend_changed }}
+      deploy_services: ${{ steps.detect.outputs.deploy_services }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed paths
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BEFORE="${{ github.event.before }}"
+          AFTER="${{ github.sha }}"
+
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            BEFORE="$(git rev-parse HEAD~1 || true)"
+          fi
+
+          CHANGED_FILES="$(git diff --name-only "$BEFORE" "$AFTER" || true)"
+
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          SERVICES_JSON='[
+            {"name":"Discovery-Server","path":"Services/discovery-server","key":"Discovery-Server","compose":"discovery-server"},
+            {"name":"API-Gateway","path":"Services/api-gateway","key":"API-Gateway","compose":"api-gateway"},
+            {"name":"Customer-Service","path":"Services/customer-service","key":"Customer-Service","compose":"customer-service"},
+            {"name":"Order-Service","path":"Services/order-service","key":"Order-Service","compose":"order-service"},
+            {"name":"Cart-Service","path":"Services/cart-service","key":"Cart-Service","compose":"cart-service"},
+            {"name":"Wishlist-Service","path":"Services/wishlist-service","key":"Wishlist-Service","compose":"wishlist-service"},
+            {"name":"Admin-Service","path":"Services/admin-service","key":"Admin-Service","compose":"admin-service"},
+            {"name":"Product-Service","path":"Services/product-service","key":"Product-Service","compose":"product-service"},
+            {"name":"Poster-Service","path":"Services/poster-service","key":"Poster-Service","compose":"poster-service"},
+            {"name":"Vendor-Service","path":"Services/vendor-service","key":"Vendor-Service","compose":"vendor-service"},
+            {"name":"Payment-Service","path":"Services/payment-service","key":"Payment-Service","compose":"payment-service"},
+            {"name":"Access-Service","path":"Services/access-service","key":"Access-Service","compose":"access-service"},
+            {"name":"Analytics-Service","path":"Services/analytics-service","key":"Analytics-Service","compose":"analytics-service"},
+            {"name":"Inventory-Service","path":"Services/inventory-service","key":"Inventory-Service","compose":"inventory-service"},
+            {"name":"Personalization-Service","path":"Services/personalization-service","key":"Personalization-Service","compose":"personalization-service"},
+            {"name":"Promotion-Service","path":"Services/promotion-service","key":"Promotion-Service","compose":"promotion-service"},
+            {"name":"Review-Service","path":"Services/review-service","key":"Review-Service","compose":"review-service"},
+            {"name":"Search-Service","path":"Services/search-service","key":"Search-Service","compose":"search-service"}
+          ]'
+
+          BACKEND_MATRIX='[]'
+          DEPLOY_SERVICES=()
+
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+
+            for row in $(echo "$SERVICES_JSON" | jq -c '.[]'); do
+              SERVICE_PATH=$(echo "$row" | jq -r '.path')
+              COMPOSE_NAME=$(echo "$row" | jq -r '.compose')
+
+              if [[ "$file" == "$SERVICE_PATH/"* ]]; then
+                if ! echo "$BACKEND_MATRIX" | jq -e --arg path "$SERVICE_PATH" '.[] | select(.path == $path)' >/dev/null; then
+                  BACKEND_MATRIX=$(echo "$BACKEND_MATRIX" | jq --argjson row "$row" '. + [$row]')
+                  DEPLOY_SERVICES+=("$COMPOSE_NAME")
+                fi
+              fi
+            done
+          done <<< "$CHANGED_FILES"
+
+          FRONTEND_CHANGED=false
+          if echo "$CHANGED_FILES" | grep -q '^microservce-frontend/'; then
+            FRONTEND_CHANGED=true
+            DEPLOY_SERVICES+=("microservice-frontend")
+          fi
+
+          BACKEND_CHANGED=false
+          if [ "$(echo "$BACKEND_MATRIX" | jq 'length')" -gt 0 ]; then
+            BACKEND_CHANGED=true
+          fi
+
+          DEPLOY_SERVICES_STR="$(printf '%s\n' "${DEPLOY_SERVICES[@]:-}" | awk 'NF' | sort -u | xargs)"
+
+          echo "backend_matrix=$BACKEND_MATRIX" >> "$GITHUB_OUTPUT"
+          echo "backend_changed=$BACKEND_CHANGED" >> "$GITHUB_OUTPUT"
+          echo "frontend_changed=$FRONTEND_CHANGED" >> "$GITHUB_OUTPUT"
+          echo "deploy_services=$DEPLOY_SERVICES_STR" >> "$GITHUB_OUTPUT"
+
   scan-backend:
-    name: Scan backend services
+    name: Scan changed backend services
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend_changed == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        service:
-          - { name: Discovery-Server, path: Services/discovery-server, key: Discovery-Server }
-          - { name: API-Gateway, path: Services/api-gateway, key: API-Gateway }
-          - { name: Customer-Service, path: Services/customer-service, key: Customer-Service }
-          - { name: Order-Service, path: Services/order-service, key: Order-Service }
-          - { name: Cart-Service, path: Services/cart-service, key: Cart-Service }
-          - { name: Wishlist-Service, path: Services/wishlist-service, key: Wishlist-Service }
-          - { name: Admin-Service, path: Services/admin-service, key: Admin-Service }
-          - { name: Product-Service, path: Services/product-service, key: Product-Service }
-          - { name: Poster-Service, path: Services/poster-service, key: Poster-Service }
-          - { name: Vendor-Service, path: Services/vendor-service, key: Vendor-Service }
-          - { name: Payment-Service, path: Services/payment-service, key: Payment-Service }
-          - { name: Access-Service, path: Services/access-service, key: Access-Service }
-          - { name: Analytics-Service, path: Services/analytics-service, key: Analytics-Service }
-          - { name: Inventory-Service, path: Services/inventory-service, key: Inventory-Service }
-          - { name: Personalization-Service, path: Services/personalization-service, key: Personalization-Service }
-          - { name: Promotion-Service, path: Services/promotion-service, key: Promotion-Service }
-          - { name: Review-Service, path: Services/review-service, key: Review-Service }
-          - { name: Search-Service, path: Services/search-service, key: Search-Service }
+        service: ${{ fromJSON(needs.detect-changes.outputs.backend_matrix) }}
 
     steps:
       - name: Checkout
@@ -47,6 +122,9 @@ jobs:
           distribution: temurin
           java-version: 21
           cache: maven
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
 
       - name: Cache Sonar packages
         uses: actions/cache@v4
@@ -69,8 +147,68 @@ jobs:
             -Dsonar.token=${SONAR_TOKEN} \
             -Dsonar.projectBaseDir=$PWD
 
+      - name: Wait for Sonar Quality Gate
+        working-directory: ${{ matrix.service.path }}
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          REPORT_FILE="target/sonar/report-task.txt"
+
+          if [ ! -f "$REPORT_FILE" ]; then
+            echo "Sonar report-task.txt not found"
+            exit 1
+          fi
+
+          CE_TASK_URL=$(grep '^ceTaskUrl=' "$REPORT_FILE" | cut -d'=' -f2-)
+
+          if [ -z "$CE_TASK_URL" ]; then
+            echo "ceTaskUrl not found in report-task.txt"
+            exit 1
+          fi
+
+          ANALYSIS_ID=""
+          for i in {1..60}; do
+            RESPONSE=$(curl -s -u "${SONAR_TOKEN}:" "$CE_TASK_URL")
+            STATUS=$(echo "$RESPONSE" | jq -r '.task.status')
+            ANALYSIS_ID=$(echo "$RESPONSE" | jq -r '.task.analysisId // empty')
+
+            echo "CE task status: $STATUS"
+
+            if [ "$STATUS" = "SUCCESS" ]; then
+              break
+            elif [ "$STATUS" = "FAILED" ] || [ "$STATUS" = "CANCELED" ]; then
+              echo "Sonar CE task failed"
+              exit 1
+            fi
+
+            sleep 5
+          done
+
+          if [ -z "$ANALYSIS_ID" ]; then
+            echo "No analysisId returned from Sonar"
+            exit 1
+          fi
+
+          QG_RESPONSE=$(curl -s -u "${SONAR_TOKEN}:" \
+            "${SONAR_HOST_URL}/api/qualitygates/project_status?analysisId=${ANALYSIS_ID}")
+
+          QG_STATUS=$(echo "$QG_RESPONSE" | jq -r '.projectStatus.status')
+
+          echo "Quality Gate status: $QG_STATUS"
+
+          if [ "$QG_STATUS" != "OK" ]; then
+            echo "Quality Gate failed"
+            exit 1
+          fi
+
   scan-frontend:
     name: Scan frontend
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend_changed == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -85,6 +223,9 @@ jobs:
           node-version: 20
           cache: npm
           cache-dependency-path: microservce-frontend/package-lock.json
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
 
       - name: Cache Sonar packages
         uses: actions/cache@v4
@@ -114,14 +255,79 @@ jobs:
             -Dsonar.sources=.
             -Dsonar.exclusions=.next/**,node_modules/**,coverage/**
 
+      - name: Wait for frontend Sonar Quality Gate
+        working-directory: microservce-frontend
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          REPORT_FILE=".scannerwork/report-task.txt"
+
+          if [ ! -f "$REPORT_FILE" ]; then
+            echo "Sonar report-task.txt not found"
+            exit 1
+          fi
+
+          CE_TASK_URL=$(grep '^ceTaskUrl=' "$REPORT_FILE" | cut -d'=' -f2-)
+
+          if [ -z "$CE_TASK_URL" ]; then
+            echo "ceTaskUrl not found in report-task.txt"
+            exit 1
+          fi
+
+          ANALYSIS_ID=""
+          for i in {1..60}; do
+            RESPONSE=$(curl -s -u "${SONAR_TOKEN}:" "$CE_TASK_URL")
+            STATUS=$(echo "$RESPONSE" | jq -r '.task.status')
+            ANALYSIS_ID=$(echo "$RESPONSE" | jq -r '.task.analysisId // empty')
+
+            echo "CE task status: $STATUS"
+
+            if [ "$STATUS" = "SUCCESS" ]; then
+              break
+            elif [ "$STATUS" = "FAILED" ] || [ "$STATUS" = "CANCELED" ]; then
+              echo "Sonar CE task failed"
+              exit 1
+            fi
+
+            sleep 5
+          done
+
+          if [ -z "$ANALYSIS_ID" ]; then
+            echo "No analysisId returned from Sonar"
+            exit 1
+          fi
+
+          QG_RESPONSE=$(curl -s -u "${SONAR_TOKEN}:" \
+            "${SONAR_HOST_URL}/api/qualitygates/project_status?analysisId=${ANALYSIS_ID}")
+
+          QG_STATUS=$(echo "$QG_RESPONSE" | jq -r '.projectStatus.status')
+
+          echo "Quality Gate status: $QG_STATUS"
+
+          if [ "$QG_STATUS" != "OK" ]; then
+            echo "Quality Gate failed"
+            exit 1
+          fi
+
   deploy:
     name: Deploy
     needs:
+      - detect-changes
       - scan-backend
       - scan-frontend
+    if: |
+      always() &&
+      needs.detect-changes.result == 'success' &&
+      (needs.scan-backend.result == 'success' || needs.scan-backend.result == 'skipped') &&
+      (needs.scan-frontend.result == 'success' || needs.scan-frontend.result == 'skipped')
     runs-on: [self-hosted, Linux, ARM64, java21, microservice]
 
     steps:
-      - name: Deploy
+      - name: Deploy changed services
         run: |
-          /home/ubuntu/deploy_microservice_backend/deploy.sh
+          echo "Changed deploy services: ${{ needs.detect-changes.outputs.deploy_services }}"
+          /home/ubuntu/deploy_microservice_backend/deploy.sh ${{ needs.detect-changes.outputs.deploy_services }}
