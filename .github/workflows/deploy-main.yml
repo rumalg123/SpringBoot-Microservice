@@ -297,16 +297,20 @@ jobs:
           if [ "$(echo "$BACKEND_MATRIX" | jq 'length')" -gt 0 ]; then
             BACKEND_CHANGED=true
           fi
-
+          
+          BACKEND_MATRIX_COMPACT="$(echo "$BACKEND_MATRIX" | jq -c '.')"
           DEPLOY_SERVICES_STR="$(printf '%s\n' "${DEPLOY_SERVICES[@]:-}" | awk 'NF' | sort -u | xargs)"
-
-          echo "backend_matrix=$BACKEND_MATRIX" >> "$GITHUB_OUTPUT"
+          
+          echo "backend_matrix=$BACKEND_MATRIX_COMPACT" >> "$GITHUB_OUTPUT"
           echo "backend_changed=$BACKEND_CHANGED" >> "$GITHUB_OUTPUT"
           echo "frontend_changed=$FRONTEND_CHANGED" >> "$GITHUB_OUTPUT"
           echo "deploy_services=$DEPLOY_SERVICES_STR" >> "$GITHUB_OUTPUT"
-
+          
           echo "Final backend matrix:"
           echo "$BACKEND_MATRIX" | jq .
+          
+          echo "Final backend matrix compact:"
+          echo "$BACKEND_MATRIX_COMPACT"
 
           echo "Final deploy services:"
           echo "$DEPLOY_SERVICES_STR"
