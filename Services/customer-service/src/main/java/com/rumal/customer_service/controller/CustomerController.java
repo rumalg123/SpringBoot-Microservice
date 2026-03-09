@@ -10,7 +10,6 @@ import com.rumal.customer_service.dto.CustomerAddressResponse;
 import com.rumal.customer_service.dto.CustomerResponse;
 import com.rumal.customer_service.dto.LinkedAccountsResponse;
 import com.rumal.customer_service.dto.RegisterIdentityCustomerRequest;
-import com.rumal.customer_service.dto.RegisterCustomerRequest;
 import com.rumal.customer_service.dto.UpdateCommunicationPreferencesRequest;
 import com.rumal.customer_service.dto.UpdateCustomerProfileRequest;
 import com.rumal.customer_service.exception.UnauthorizedException;
@@ -44,12 +43,6 @@ public class CustomerController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         return customerService.create(request);
-    }
-
-    @PostMapping("/register")
-    @ResponseStatus(HttpStatus.CREATED)
-    public CustomerResponse register(@Valid @RequestBody RegisterCustomerRequest request) {
-        return customerService.register(request);
     }
 
     @PostMapping("/register-identity")

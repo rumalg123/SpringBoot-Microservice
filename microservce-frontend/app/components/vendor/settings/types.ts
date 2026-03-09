@@ -12,8 +12,6 @@ export type VendorProfile = {
   supportEmail: string;
   contactPhone: string;
   contactPersonName: string;
-  logoImage: string;
-  bannerImage: string;
   websiteUrl: string;
   description: string;
   returnPolicy: string;
@@ -51,8 +49,6 @@ export const EMPTY_VENDOR: VendorProfile = {
   supportEmail: "",
   contactPhone: "",
   contactPersonName: "",
-  logoImage: "",
-  bannerImage: "",
   websiteUrl: "",
   description: "",
   returnPolicy: "",

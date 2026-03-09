@@ -17,8 +17,6 @@ public record UpdateVendorSelfServiceRequest(
         @Email @Size(max = 180) String supportEmail,
         @Size(max = 40) String contactPhone,
         @Size(max = 120) String contactPersonName,
-        @Size(max = 260) String logoImage,
-        @Size(max = 260) String bannerImage,
         @Size(max = 255) String websiteUrl,
         @Size(max = 5000) String description,
         // Gap 51: Policies

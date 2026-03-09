@@ -1,3 +1,5 @@
+"use client";
+
 export async function uploadFileToPresignedUrl(uploadUrl: string, file: File, contentType: string): Promise<void> {
   const response = await fetch(uploadUrl, {
     method: "PUT",

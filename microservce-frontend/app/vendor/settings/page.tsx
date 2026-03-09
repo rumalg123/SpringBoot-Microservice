@@ -16,7 +16,6 @@ import {
   EMPTY_VENDOR,
   EMPTY_PAYOUT,
 } from "../../components/vendor/settings/types";
-import { uploadFileToPresignedUrl } from "../../../lib/directUpload";
 
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
@@ -40,7 +39,6 @@ export default function VendorSettingsPage() {
   /* actions */
   const [verificationDocUrl, setVerificationDocUrl] = useState("");
   const [verificationNotes, setVerificationNotes] = useState("");
-  const [uploadingMedia, setUploadingMedia] = useState<"LOGO" | "BANNER" | null>(null);
 
   const canManageSettings = session.isVendorAdmin || session.canManageVendorSettings;
   const ready = session.status === "ready" && !!session.apiClient && canManageSettings;
@@ -62,8 +60,6 @@ export default function VendorSettingsPage() {
         supportEmail: (d.supportEmail as string) || "",
         contactPhone: (d.contactPhone as string) || "",
         contactPersonName: (d.contactPersonName as string) || "",
-        logoImage: (d.logoImage as string) || "",
-        bannerImage: (d.bannerImage as string) || "",
         websiteUrl: (d.websiteUrl as string) || "",
         description: (d.description as string) || "",
         returnPolicy: (d.returnPolicy as string) || "",
@@ -132,8 +128,6 @@ export default function VendorSettingsPage() {
         supportEmail: vendor.supportEmail,
         contactPhone: vendor.contactPhone,
         contactPersonName: vendor.contactPersonName,
-        logoImage: vendor.logoImage,
-        bannerImage: vendor.bannerImage,
         websiteUrl: vendor.websiteUrl,
         description: vendor.description,
         returnPolicy: vendor.returnPolicy,
@@ -225,41 +219,6 @@ export default function VendorSettingsPage() {
   const requestingVerification = requestVerificationMutation.isPending;
   const togglingOrders = toggleOrdersMutation.isPending;
 
-  const uploadVendorMedia = async (assetType: "LOGO" | "BANNER", file: File) => {
-    if (!session.apiClient) return;
-    const contentType = (file.type || "").trim().toLowerCase();
-    if (!contentType.startsWith("image/")) {
-      toast.error("Please choose a valid image file");
-      return;
-    }
-
-    setUploadingMedia(assetType);
-    try {
-      const res = await session.apiClient.post("/vendors/me/media/presign", {
-        files: [
-          {
-            assetType,
-            fileName: file.name,
-            contentType,
-            sizeBytes: file.size,
-          },
-        ],
-      });
-      const upload = ((res.data as { uploads?: Array<{ key?: string; uploadUrl?: string; contentType?: string }> }).uploads || [])[0];
-      if (!upload?.key || !upload.uploadUrl || !upload.contentType) {
-        throw new Error("Could not prepare media upload");
-      }
-      await uploadFileToPresignedUrl(upload.uploadUrl, file, upload.contentType);
-      profileField(assetType === "LOGO" ? "logoImage" : "bannerImage", upload.key);
-      toast.success(assetType === "LOGO" ? "Logo uploaded" : "Banner uploaded");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Upload failed";
-      toast.error(message);
-    } finally {
-      setUploadingMedia(null);
-    }
-  };
-
   /* ---------------------------------------------------------------- */
   /*  Field helpers                                                    */
   /* ---------------------------------------------------------------- */
@@ -339,9 +298,7 @@ export default function VendorSettingsPage() {
           vendor={vendor}
           loadingProfile={loadingProfile}
           savingProfile={savingProfile}
-          uploadingMedia={uploadingMedia}
           onFieldChange={profileField}
-          onUploadMedia={uploadVendorMedia}
           onSave={() => saveProfileMutation.mutate()}
         />
       )}

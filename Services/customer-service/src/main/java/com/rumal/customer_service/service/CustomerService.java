@@ -10,7 +10,6 @@ import com.rumal.customer_service.dto.CustomerAddressResponse;
 import com.rumal.customer_service.dto.CustomerResponse;
 import com.rumal.customer_service.dto.LinkedAccountsResponse;
 import com.rumal.customer_service.dto.RegisterIdentityCustomerRequest;
-import com.rumal.customer_service.dto.RegisterCustomerRequest;
 import com.rumal.customer_service.dto.UpdateCommunicationPreferencesRequest;
 import com.rumal.customer_service.dto.UpdateCustomerProfileRequest;
 import org.springframework.data.domain.Page;
@@ -24,7 +23,6 @@ public interface CustomerService {
     CustomerResponse getByKeycloakId(String keycloakId);
 
     CustomerResponse create(CreateCustomerRequest request);
-    CustomerResponse register(RegisterCustomerRequest request);
     CustomerResponse registerIdentity(String keycloakId, String email, RegisterIdentityCustomerRequest request);
     CustomerResponse updateProfile(String keycloakId, UpdateCustomerProfileRequest request, String ipAddress);
     CustomerResponse deactivateAccount(String keycloakId);

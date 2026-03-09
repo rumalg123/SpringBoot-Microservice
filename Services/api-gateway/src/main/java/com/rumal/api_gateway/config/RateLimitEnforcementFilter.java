@@ -32,7 +32,6 @@ import java.util.Map;
 public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
     private static final Logger log = LoggerFactory.getLogger(RateLimitEnforcementFilter.class);
 
-    private final RedisRateLimiter registerRateLimiter;
     private final RedisRateLimiter registerIdentityRateLimiter;
     private final RedisRateLimiter authLogoutRateLimiter;
     private final RedisRateLimiter authResendVerificationRateLimiter;
@@ -79,7 +78,6 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
     private final boolean failOpenOnRateLimiterError;
 
     public RateLimitEnforcementFilter(
-            @Qualifier("registerRateLimiter") RedisRateLimiter registerRateLimiter,
             @Qualifier("registerIdentityRateLimiter") RedisRateLimiter registerIdentityRateLimiter,
             @Qualifier("authLogoutRateLimiter") RedisRateLimiter authLogoutRateLimiter,
             @Qualifier("authResendVerificationRateLimiter") RedisRateLimiter authResendVerificationRateLimiter,
@@ -125,7 +123,6 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
             ObjectMapper objectMapper,
             @Value("${rate-limit.fail-open-on-error:true}") boolean failOpenOnRateLimiterError
     ) {
-        this.registerRateLimiter = registerRateLimiter;
         this.registerIdentityRateLimiter = registerIdentityRateLimiter;
         this.authLogoutRateLimiter = authLogoutRateLimiter;
         this.authResendVerificationRateLimiter = authResendVerificationRateLimiter;
@@ -256,7 +253,7 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
         }
         if (path.startsWith("/orders") || path.startsWith("/cart/me/checkout")
                 || path.startsWith("/payments") || path.startsWith("/webhooks")
-                || "/customers/register".equals(path) || "/customers/register-identity".equals(path)
+                || "/customers/register-identity".equals(path)
                 || path.startsWith("/auth") || path.startsWith("/personalization/events")
                 || path.startsWith("/analytics/") || path.startsWith("/admin/orders/export")) {
             return false;
@@ -283,9 +280,6 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
     }
 
     private Policy resolvePolicy(String path, @Nullable HttpMethod method) {
-        if ("/customers/register".equals(path) && method == HttpMethod.POST) {
-            return new Policy("register", registerRateLimiter, ipKeyResolver);
-        }
         if ("/customers/register-identity".equals(path) && method == HttpMethod.POST) {
             return new Policy("register-identity", registerIdentityRateLimiter, userOrIpKeyResolver);
         }

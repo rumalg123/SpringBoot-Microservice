@@ -1,7 +1,6 @@
 "use client";
 
 import { VendorProfile } from "./types";
-import { resolveVendorMediaUrl } from "../../../../lib/vendorMedia";
 
 /* ------------------------------------------------------------------ */
 /*  Props                                                              */
@@ -11,9 +10,7 @@ export interface VendorProfileTabProps {
   vendor: VendorProfile;
   loadingProfile: boolean;
   savingProfile: boolean;
-  uploadingMedia: "LOGO" | "BANNER" | null;
   onFieldChange: (key: keyof VendorProfile, value: string | number | boolean | "") => void;
-  onUploadMedia: (assetType: "LOGO" | "BANNER", file: File) => Promise<void>;
   onSave: () => void;
 }
 
@@ -25,9 +22,7 @@ export default function VendorProfileTab({
   vendor,
   loadingProfile,
   savingProfile,
-  uploadingMedia,
   onFieldChange,
-  onUploadMedia,
   onSave,
 }: VendorProfileTabProps) {
   /* ---- local render helpers ---- */
@@ -114,96 +109,8 @@ export default function VendorProfileTab({
 
         <div className="bg-[rgba(255,255,255,0.03)] border border-line rounded-lg p-6 mb-6">
           <h3 className="text-lg font-bold text-ink mb-5">
-            Branding
+            Storefront
           </h3>
-          <div className="mb-5">
-            <label className="block text-[0.78rem] font-semibold text-muted mb-2">Logo</label>
-            {resolveVendorMediaUrl(vendor.logoImage) ? (
-              <img
-                src={resolveVendorMediaUrl(vendor.logoImage) || undefined}
-                alt="Vendor logo preview"
-                className="mb-3 h-20 w-20 rounded-full border border-line object-cover bg-bg"
-              />
-            ) : (
-              <div className="mb-3 flex h-20 w-20 items-center justify-center rounded-full border border-dashed border-line text-[0.72rem] text-muted">
-                No logo
-              </div>
-            )}
-            <div className="flex flex-wrap items-center gap-3">
-              <label className="btn-outline cursor-pointer rounded-md px-4 py-2 text-[0.82rem] font-semibold">
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  className="hidden"
-                  disabled={uploadingMedia !== null}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    e.currentTarget.value = "";
-                    if (!file) return;
-                    void onUploadMedia("LOGO", file);
-                  }}
-                />
-                {uploadingMedia === "LOGO" ? "Uploading..." : "Upload Logo"}
-              </label>
-              {vendor.logoImage && (
-                <button
-                  type="button"
-                  className="btn-outline rounded-md px-4 py-2 text-[0.82rem] font-semibold"
-                  onClick={() => onFieldChange("logoImage", "")}
-                  disabled={uploadingMedia !== null}
-                >
-                  Remove
-                </button>
-              )}
-            </div>
-            {vendor.logoImage && (
-              <p className="mt-2 mb-0 break-all text-[0.74rem] text-muted">{vendor.logoImage}</p>
-            )}
-          </div>
-          <div className="mb-4">
-            <label className="block text-[0.78rem] font-semibold text-muted mb-2">Banner</label>
-            {resolveVendorMediaUrl(vendor.bannerImage) ? (
-              <img
-                src={resolveVendorMediaUrl(vendor.bannerImage) || undefined}
-                alt="Vendor banner preview"
-                className="mb-3 h-32 w-full rounded-lg border border-line object-cover bg-bg"
-              />
-            ) : (
-              <div className="mb-3 flex h-32 w-full items-center justify-center rounded-lg border border-dashed border-line text-[0.72rem] text-muted">
-                No banner
-              </div>
-            )}
-            <div className="flex flex-wrap items-center gap-3">
-              <label className="btn-outline cursor-pointer rounded-md px-4 py-2 text-[0.82rem] font-semibold">
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  className="hidden"
-                  disabled={uploadingMedia !== null}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    e.currentTarget.value = "";
-                    if (!file) return;
-                    void onUploadMedia("BANNER", file);
-                  }}
-                />
-                {uploadingMedia === "BANNER" ? "Uploading..." : "Upload Banner"}
-              </label>
-              {vendor.bannerImage && (
-                <button
-                  type="button"
-                  className="btn-outline rounded-md px-4 py-2 text-[0.82rem] font-semibold"
-                  onClick={() => onFieldChange("bannerImage", "")}
-                  disabled={uploadingMedia !== null}
-                >
-                  Remove
-                </button>
-              )}
-            </div>
-            {vendor.bannerImage && (
-              <p className="mt-2 mb-0 break-all text-[0.74rem] text-muted">{vendor.bannerImage}</p>
-            )}
-          </div>
           {renderInput("Website URL", vendor.websiteUrl, (v) => onFieldChange("websiteUrl", v), {
             placeholder: "https://...",
           })}

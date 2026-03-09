@@ -173,12 +173,9 @@ export default function AppNav({
     { href: "/admin/posters", label: "Admin Posters", show: showAdminPosters, color: "admin" },
     { href: "/admin/reviews", label: "Reviews", show: showAdminReviews, color: "admin" },
     { href: "/admin/payments", label: "Payments", show: showAdminPayments, color: "admin" },
-    { href: "/admin/api-keys", label: "API Keys", show: isSuperAdmin, color: "admin" },
     { href: "/admin/sessions", label: "Sessions", show: isSuperAdmin, color: "admin" },
-    { href: "/admin/settings", label: "Settings", show: isSuperAdmin, color: "admin" },
     { href: "/admin/promotions", label: "Promotions", show: showAdminPromotions, color: "admin" },
     { href: "/admin/inventory", label: "Inventory", show: showAdminInventory, color: "admin" },
-    { href: "/admin/permission-groups", label: "Permissions", show: isSuperAdmin, color: "admin" },
     { href: "/admin/access-audit", label: "Access Audit", show: isSuperAdmin, color: "admin" },
   ], [isSuperAdmin, canAccessVendorPortal, canViewAdmin, showAdminOrders, showAdminPayments, showAdminProducts, showAdminVendors, showAdminPosters, showAdminPromotions, showAdminReviews, showAdminCategories, showAdminInventory, showVendorStaffAdmin, showVendorOrders, showVendorProducts, showVendorInventory, showVendorPromotions, showVendorAnalytics, showVendorReviews, showVendorFinance, showVendorSettings]);
 

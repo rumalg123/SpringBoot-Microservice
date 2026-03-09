@@ -40,8 +40,7 @@ public class CustomerMutationIdempotencyFilter extends AbstractRedisServletIdemp
     @Override
     protected boolean isProtectedMutationPath(String path, String method) {
         if ("POST".equalsIgnoreCase(method)) {
-            return "/customers/register".equals(path)
-                    || "/customers/register-identity".equals(path)
+            return "/customers/register-identity".equals(path)
                     || "/customers/me/addresses".equals(path)
                     || "/customers/me/deactivate".equals(path)
                     || path.matches("/customers/me/addresses/[^/]+/default-shipping")

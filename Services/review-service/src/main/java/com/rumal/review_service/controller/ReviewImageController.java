@@ -1,9 +1,11 @@
 package com.rumal.review_service.controller;
 
+import com.rumal.review_service.dto.DeleteReviewImagesRequest;
 import com.rumal.review_service.dto.ReviewImageUploadResponse;
 import com.rumal.review_service.exception.UnauthorizedException;
 import com.rumal.review_service.security.InternalRequestVerifier;
 import com.rumal.review_service.service.ReviewImageStorageService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -35,6 +37,22 @@ public class ReviewImageController {
         }
         List<String> keys = reviewImageStorageService.uploadImages(files);
         return new ReviewImageUploadResponse(keys);
+    }
+
+    @DeleteMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteImages(
+            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
+            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
+            @RequestHeader(value = "X-User-Email-Verified", required = false) String emailVerified,
+            @Valid @RequestBody DeleteReviewImagesRequest request
+    ) {
+        internalRequestVerifier.verify(internalAuth);
+        verifyEmailVerified(emailVerified);
+        if (userSub == null || userSub.isBlank()) {
+            throw new UnauthorizedException("Authentication required");
+        }
+        reviewImageStorageService.deleteImages(request.keys());
     }
 
     private void verifyEmailVerified(String emailVerified) {

@@ -28,7 +28,6 @@ public class AnalyticsCacheWarmupService {
             adminAnalyticsService.getInventoryHealth();
             adminAnalyticsService.getPromotionRoi();
             adminAnalyticsService.getReviewAnalytics();
-            adminAnalyticsService.getLegacyDashboardSummary();
         } catch (Exception ex) {
             log.warn("Analytics cache warmup failed", ex);
         }

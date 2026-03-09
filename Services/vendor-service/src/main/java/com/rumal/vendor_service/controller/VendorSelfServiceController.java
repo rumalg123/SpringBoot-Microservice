@@ -3,13 +3,10 @@ package com.rumal.vendor_service.controller;
 import com.rumal.vendor_service.dto.RequestVerificationRequest;
 import com.rumal.vendor_service.dto.UpdateVendorSelfServiceRequest;
 import com.rumal.vendor_service.dto.UpsertVendorPayoutConfigRequest;
-import com.rumal.vendor_service.dto.VendorMediaPrepareUploadRequest;
-import com.rumal.vendor_service.dto.VendorMediaPrepareUploadResponse;
 import com.rumal.vendor_service.dto.VendorPayoutConfigResponse;
 import com.rumal.vendor_service.dto.VendorResponse;
 import com.rumal.vendor_service.exception.UnauthorizedException;
 import com.rumal.vendor_service.security.InternalRequestVerifier;
-import com.rumal.vendor_service.service.VendorMediaStorageService;
 import com.rumal.vendor_service.service.VendorService;
 import com.rumal.vendor_service.service.VendorSelfAccessScopeService;
 import jakarta.validation.Valid;
@@ -33,7 +30,6 @@ public class VendorSelfServiceController {
     private final VendorService vendorService;
     private final InternalRequestVerifier internalRequestVerifier;
     private final VendorSelfAccessScopeService vendorSelfAccessScopeService;
-    private final VendorMediaStorageService vendorMediaStorageService;
 
     @GetMapping
     public VendorResponse getMyVendor(
@@ -58,19 +54,6 @@ public class VendorSelfServiceController {
         verifyAuth(internalAuth, userSub);
         UUID resolvedVendorId = vendorSelfAccessScopeService.resolveVendorIdForSettingsManage(userSub, userRoles, internalAuth, vendorId);
         return vendorService.updateVendorSelfService(userSub, resolvedVendorId, request);
-    }
-
-    @PostMapping("/media/presign")
-    public VendorMediaPrepareUploadResponse prepareVendorMediaUploads(
-            @RequestHeader(value = "X-User-Sub", required = false) String userSub,
-            @RequestHeader(value = "X-User-Roles", required = false) String userRoles,
-            @RequestHeader(value = "X-Internal-Auth", required = false) String internalAuth,
-            @RequestParam(required = false) UUID vendorId,
-            @Valid @RequestBody VendorMediaPrepareUploadRequest request
-    ) {
-        verifyAuth(internalAuth, userSub);
-        UUID resolvedVendorId = vendorSelfAccessScopeService.resolveVendorIdForSettingsManage(userSub, userRoles, internalAuth, vendorId);
-        return vendorMediaStorageService.prepareUploads(resolvedVendorId, request);
     }
 
     @GetMapping("/payout-config")

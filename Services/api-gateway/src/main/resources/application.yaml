@@ -66,7 +66,7 @@ spring:
             - id: customer-register
               uri: lb://customer-service
               predicates:
-                - Path=/customers/register,/customers/register-identity
+                - Path=/customers/register-identity
               filters:
                 - name: CircuitBreaker
                   args:
@@ -166,28 +166,10 @@ spring:
                   args:
                     name: analyticsService
                     fallbackUri: forward:/fallback/unavailable
-            - id: admin-dashboard
-              uri: lb://analytics-service
-              predicates:
-                - Path=/admin/dashboard,/admin/dashboard/**
-              filters:
-                - name: CircuitBreaker
-                  args:
-                    name: analyticsService
-                    fallbackUri: forward:/fallback/unavailable
             - id: admin-audit-log
               uri: lb://admin-service
               predicates:
                 - Path=/admin/audit-log,/admin/audit-log/**
-              filters:
-                - name: CircuitBreaker
-                  args:
-                    name: adminService
-                    fallbackUri: forward:/fallback/unavailable
-            - id: admin-system
-              uri: lb://admin-service
-              predicates:
-                - Path=/admin/system,/admin/system/**
               filters:
                 - name: CircuitBreaker
                   args:
@@ -289,15 +271,6 @@ spring:
                   args:
                     name: adminService
                     fallbackUri: forward:/fallback/unavailable
-            - id: admin-api-keys
-              uri: lb://access-service
-              predicates:
-                - Path=/admin/api-keys,/admin/api-keys/**
-              filters:
-                - name: CircuitBreaker
-                  args:
-                    name: accessService
-                    fallbackUri: forward:/fallback/unavailable
             - id: admin-sessions
               uri: lb://access-service
               predicates:
@@ -311,15 +284,6 @@ spring:
               uri: lb://access-service
               predicates:
                 - Path=/me/sessions,/me/sessions/**
-              filters:
-                - name: CircuitBreaker
-                  args:
-                    name: accessService
-                    fallbackUri: forward:/fallback/unavailable
-            - id: admin-permission-groups
-              uri: lb://access-service
-              predicates:
-                - Path=/admin/permission-groups,/admin/permission-groups/**
               filters:
                 - name: CircuitBreaker
                   args:

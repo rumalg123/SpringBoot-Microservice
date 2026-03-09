@@ -9,7 +9,6 @@ import com.rumal.vendor_service.dto.UpdateVendorSelfServiceRequest;
 import com.rumal.vendor_service.dto.UpsertVendorPayoutConfigRequest;
 import com.rumal.vendor_service.dto.UpsertVendorRequest;
 import com.rumal.vendor_service.dto.UpsertVendorUserRequest;
-import com.rumal.vendor_service.dto.VendorMediaAssetType;
 import com.rumal.vendor_service.dto.VendorAccessMembershipResponse;
 import com.rumal.vendor_service.dto.VendorLifecycleAuditResponse;
 import com.rumal.vendor_service.dto.VendorDeletionEligibilityResponse;
@@ -84,7 +83,6 @@ public class VendorServiceImpl implements VendorService {
     private final VendorPayoutConfigRepository vendorPayoutConfigRepository;
     private final OrderLifecycleClient orderLifecycleClient;
     private final ProductCatalogAdminClient productCatalogAdminClient;
-    private final VendorMediaStorageService vendorMediaStorageService;
     private final TransactionTemplate transactionTemplate;
     private final VendorAuditRequestContextResolver vendorAuditRequestContextResolver;
     private final VendorAuditPayloadSanitizer vendorAuditPayloadSanitizer;
@@ -579,8 +577,6 @@ public class VendorServiceImpl implements VendorService {
         vendor.setSupportEmail(normalizeEmailOptional(request.supportEmail()));
         vendor.setContactPhone(trimToNull(request.contactPhone()));
         vendor.setContactPersonName(trimToNull(request.contactPersonName()));
-        vendor.setLogoImage(resolveVendorMediaReference(vendor.getId(), vendor.getLogoImage(), request.logoImage(), VendorMediaAssetType.LOGO));
-        vendor.setBannerImage(resolveVendorMediaReference(vendor.getId(), vendor.getBannerImage(), request.bannerImage(), VendorMediaAssetType.BANNER));
         vendor.setWebsiteUrl(trimToNull(request.websiteUrl()));
         vendor.setDescription(trimToNull(request.description()));
         vendor.setCommissionRate(request.commissionRate());
@@ -1112,8 +1108,6 @@ public class VendorServiceImpl implements VendorService {
         vendor.setSupportEmail(normalizeEmailOptional(request.supportEmail()));
         vendor.setContactPhone(trimToNull(request.contactPhone()));
         vendor.setContactPersonName(trimToNull(request.contactPersonName()));
-        vendor.setLogoImage(trimToNull(request.logoImage()));
-        vendor.setBannerImage(trimToNull(request.bannerImage()));
         vendor.setWebsiteUrl(trimToNull(request.websiteUrl()));
         vendor.setDescription(trimToNull(request.description()));
 
@@ -1148,28 +1142,6 @@ public class VendorServiceImpl implements VendorService {
         config.setBankRoutingCode(trimToNull(request.bankRoutingCode()));
         config.setBankAccountNumberMasked(trimToNull(request.bankAccountNumberMasked()));
         config.setTaxId(trimToNull(request.taxId()));
-    }
-
-    private String resolveVendorMediaReference(UUID vendorId, String currentValue, String requestedValue, VendorMediaAssetType assetType) {
-        String normalized = trimToNull(requestedValue);
-        if (!StringUtils.hasText(normalized)) {
-            return null;
-        }
-        if (isLegacyExternalMediaReference(normalized)) {
-            if (normalized.equals(currentValue)) {
-                return normalized;
-            }
-            throw new ValidationException("Direct external media URLs are no longer allowed. Upload the asset through the managed media flow.");
-        }
-        if (vendorId == null) {
-            return normalized;
-        }
-        return vendorMediaStorageService.assertVendorMediaReady(vendorId, assetType, normalized);
-    }
-
-    private boolean isLegacyExternalMediaReference(String value) {
-        String normalized = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
-        return normalized.startsWith("http://") || normalized.startsWith("https://");
     }
 
     private VendorPayoutConfigResponse toPayoutConfigResponse(VendorPayoutConfig c) {

@@ -1,7 +1,6 @@
 package com.rumal.customer_service.service;
 
 import com.rumal.customer_service.auth.KeycloakManagementService;
-import com.rumal.customer_service.auth.KeycloakUserExistsException;
 import com.rumal.customer_service.dto.CommunicationPreferencesResponse;
 import com.rumal.customer_service.dto.CreateCustomerRequest;
 import com.rumal.customer_service.dto.CustomerActivityLogResponse;
@@ -10,7 +9,6 @@ import com.rumal.customer_service.dto.CustomerAddressResponse;
 import com.rumal.customer_service.dto.CustomerResponse;
 import com.rumal.customer_service.dto.LinkedAccountsResponse;
 import com.rumal.customer_service.dto.RegisterIdentityCustomerRequest;
-import com.rumal.customer_service.dto.RegisterCustomerRequest;
 import com.rumal.customer_service.dto.UpdateCommunicationPreferencesRequest;
 import com.rumal.customer_service.dto.UpdateCustomerProfileRequest;
 import com.rumal.customer_service.entity.CommunicationPreferences;
@@ -26,7 +24,6 @@ import com.rumal.customer_service.repo.CustomerActivityLogRepository;
 import com.rumal.customer_service.repo.CustomerAddressRepository;
 import com.rumal.customer_service.repo.CustomerRepository;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
@@ -45,7 +42,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 10)
@@ -97,67 +93,6 @@ public class CustomerServiceImpl implements CustomerService {
         );
 
         return toResponse(saved);
-    }
-
-    @Override
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public CustomerResponse register(RegisterCustomerRequest request) {
-        String email = request.email().trim().toLowerCase();
-
-        if (customerRepository.existsByEmail(email)) {
-            throw new DuplicateResourceException("Customer already exists with email: " + email);
-        }
-
-        String keycloakId;
-        boolean keycloakUserCreated = false;
-        try {
-            keycloakId = keycloakManagementService.createUser(email, request.password(), request.name().trim());
-            keycloakUserCreated = true;
-        } catch (KeycloakUserExistsException ex) {
-            keycloakId = keycloakManagementService.getUserIdByEmail(email);
-        }
-        final String resolvedKeycloakId = keycloakId;
-        final boolean createdKeycloakUser = keycloakUserCreated;
-
-        try {
-            return transactionTemplate.execute(status -> {
-                try {
-                    Customer saved = customerRepository.save(
-                            Customer.builder()
-                                    .name(request.name().trim())
-                                    .email(email)
-                                    .keycloakId(resolvedKeycloakId)
-                                    .build()
-                    );
-                    return toResponse(saved);
-                } catch (DataIntegrityViolationException ex) {
-                    Customer existing = customerRepository.findByKeycloakId(resolvedKeycloakId)
-                            .or(() -> customerRepository.findByEmail(email))
-                            .orElse(null);
-                    if (existing != null) {
-                        return toResponse(existing);
-                    }
-                    throw new DuplicateResourceException("Customer already exists with email: " + email);
-                }
-            });
-        } catch (Exception e) {
-            Customer existing = customerRepository.findByKeycloakId(resolvedKeycloakId)
-                    .or(() -> customerRepository.findByEmail(email))
-                    .orElse(null);
-            if (existing != null) {
-                return toResponse(existing);
-            }
-
-            if (createdKeycloakUser) {
-                try {
-                    keycloakManagementService.deleteUser(resolvedKeycloakId);
-                } catch (Exception cleanupEx) {
-                    log.error("Failed to cleanup orphaned Keycloak user {} after DB failure: {}",
-                            resolvedKeycloakId, cleanupEx.getMessage());
-                }
-            }
-            throw e;
-        }
     }
 
     @Override

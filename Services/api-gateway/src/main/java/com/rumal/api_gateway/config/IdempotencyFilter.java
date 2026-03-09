@@ -441,9 +441,6 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
         if ("/auth/resend-verification".equals(path) && method == HttpMethod.POST) {
             return true;
         }
-        if ("/customers/register".equals(path) && method == HttpMethod.POST) {
-            return true;
-        }
         if ("/customers/register-identity".equals(path) && method == HttpMethod.POST) {
             return true;
         }
