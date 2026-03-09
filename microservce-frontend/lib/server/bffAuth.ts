@@ -65,8 +65,6 @@ type GuestCartCookies = {
 type OauthStatePayload = {
   version: number;
   nonce: string;
-  verifier: string;
-  returnTo: string;
   fingerprint: string;
   issuedAtEpochSeconds: number;
 };
@@ -261,11 +259,7 @@ function normalizeReturnTo(request: NextRequest, returnTo: string | null): strin
   }
 }
 
-function createPkceVerifier(): string {
-  return crypto.randomBytes(32).toString("base64url");
-}
-
-function createState(): string {
+function createStateNonce(): string {
   return crypto.randomBytes(24).toString("base64url");
 }
 
@@ -314,6 +308,13 @@ function getOauthStateKey(): Buffer {
     .digest();
 }
 
+function derivePkceVerifier(nonce: string, fingerprint: string): string {
+  return crypto
+    .createHmac("sha256", getOauthStateKey())
+    .update(`pkce:${nonce}:${fingerprint}`, "utf8")
+    .digest("base64url");
+}
+
 function encodeOauthStateToken(payload: OauthStatePayload): string {
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv("aes-256-gcm", getOauthStateKey(), iv);
@@ -344,7 +345,7 @@ function decodeOauthStateToken(token: string): OauthStatePayload | null {
     if (parsed.version !== OAUTH_STATE_VERSION) {
       return null;
     }
-    if (typeof parsed.nonce !== "string" || typeof parsed.verifier !== "string" || typeof parsed.returnTo !== "string") {
+    if (typeof parsed.nonce !== "string") {
       return null;
     }
     if (typeof parsed.fingerprint !== "string" || typeof parsed.issuedAtEpochSeconds !== "number") {
@@ -353,8 +354,6 @@ function decodeOauthStateToken(token: string): OauthStatePayload | null {
     return {
       version: parsed.version,
       nonce: parsed.nonce,
-      verifier: parsed.verifier,
-      returnTo: parsed.returnTo,
       fingerprint: parsed.fingerprint,
       issuedAtEpochSeconds: parsed.issuedAtEpochSeconds,
     };
@@ -737,14 +736,14 @@ export async function buildAuthorizationRedirect(
   request: NextRequest,
   mode: "login" | "signup" | "change-password"
 ): Promise<{ redirectUrl: string; cookieMutations: CookieMutation[] }> {
-  const verifier = createPkceVerifier();
+  const nonce = createStateNonce();
   const returnTo = normalizeReturnTo(request, request.nextUrl.searchParams.get("returnTo"));
+  const fingerprint = buildOauthBrowserFingerprint(request);
+  const verifier = derivePkceVerifier(nonce, fingerprint);
   const state = encodeOauthStateToken({
     version: OAUTH_STATE_VERSION,
-    nonce: createState(),
-    verifier,
-    returnTo,
-    fingerprint: buildOauthBrowserFingerprint(request),
+    nonce,
+    fingerprint,
     issuedAtEpochSeconds: Math.floor(Date.now() / 1000),
   });
   const redirectUri = `${resolveAppOrigin(request)}/api/auth/callback`;
@@ -810,8 +809,8 @@ export async function exchangeCallback(request: NextRequest): Promise<{ redirect
         cookieMutations: [...clearAuthCookieMutations(), ...clearFlowCookies],
       };
     }
-    verifier = decodedState.verifier;
-    returnTo = normalizeReturnTo(request, decodedState.returnTo);
+    verifier = derivePkceVerifier(decodedState.nonce, currentFingerprint);
+    returnTo = normalizeReturnTo(request, cookieReturnTo || "/");
   }
 
   try {
