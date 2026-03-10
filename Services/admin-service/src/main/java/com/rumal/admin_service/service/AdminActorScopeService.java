@@ -444,31 +444,75 @@ public class AdminActorScopeService {
                 || vendorStaffCanManageProducts;
 
         return new CapabilityFlags(
-                superAdmin
-                        || vendorAdmin
-                        || (vendorStaff && vendorStaffCanManageOrders)
-                        || hasAnyPermission(platformPermissions, PLATFORM_ORDERS_READ, PLATFORM_ORDERS_MANAGE),
-                superAdmin
-                        || vendorAdmin
-                        || (vendorStaff && vendorStaffCanManageProducts)
-                        || platformPermissions.contains(PLATFORM_PRODUCTS_MANAGE),
-                superAdmin || platformPermissions.contains(PLATFORM_CATEGORIES_MANAGE),
-                superAdmin || platformPermissions.contains(PLATFORM_POSTERS_MANAGE),
-                superAdmin || platformPermissions.contains(PLATFORM_VENDORS_MANAGE),
-                superAdmin
-                        || vendorAdmin
-                        || (vendorStaff && vendorStaffCanManageInventory)
-                        || hasAnyPermission(platformPermissions, PLATFORM_INVENTORY_MANAGE, PLATFORM_PRODUCTS_MANAGE),
-                superAdmin
-                        || vendorAdmin
-                        || (vendorStaff && vendorStaffCanManagePromotions)
-                        || platformPermissions.contains(PLATFORM_PROMOTIONS_MANAGE),
-                superAdmin || platformPermissions.contains(PLATFORM_REVIEWS_MANAGE)
+                canManageOrders(superAdmin, vendorAdmin, vendorStaff, vendorStaffCanManageOrders, platformPermissions),
+                canManageProducts(superAdmin, vendorAdmin, vendorStaff, vendorStaffCanManageProducts, platformPermissions),
+                hasPlatformAccess(superAdmin, platformPermissions, PLATFORM_CATEGORIES_MANAGE),
+                hasPlatformAccess(superAdmin, platformPermissions, PLATFORM_POSTERS_MANAGE),
+                hasPlatformAccess(superAdmin, platformPermissions, PLATFORM_VENDORS_MANAGE),
+                canManageInventory(superAdmin, vendorAdmin, vendorStaff, vendorStaffCanManageInventory, platformPermissions),
+                canManagePromotions(superAdmin, vendorAdmin, vendorStaff, vendorStaffCanManagePromotions, platformPermissions),
+                hasPlatformAccess(superAdmin, platformPermissions, PLATFORM_REVIEWS_MANAGE)
         );
     }
 
     private boolean hasAnyPermission(Set<String> permissions, String firstPermission, String secondPermission) {
         return permissions.contains(firstPermission) || permissions.contains(secondPermission);
+    }
+
+    private boolean canManageOrders(
+            boolean superAdmin,
+            boolean vendorAdmin,
+            boolean vendorStaff,
+            boolean vendorStaffCanManageOrders,
+            Set<String> platformPermissions
+    ) {
+        return superAdmin
+                || vendorAdmin
+                || (vendorStaff && vendorStaffCanManageOrders)
+                || hasAnyPermission(platformPermissions, PLATFORM_ORDERS_READ, PLATFORM_ORDERS_MANAGE);
+    }
+
+    private boolean canManageProducts(
+            boolean superAdmin,
+            boolean vendorAdmin,
+            boolean vendorStaff,
+            boolean vendorStaffCanManageProducts,
+            Set<String> platformPermissions
+    ) {
+        return superAdmin
+                || vendorAdmin
+                || (vendorStaff && vendorStaffCanManageProducts)
+                || platformPermissions.contains(PLATFORM_PRODUCTS_MANAGE);
+    }
+
+    private boolean canManageInventory(
+            boolean superAdmin,
+            boolean vendorAdmin,
+            boolean vendorStaff,
+            boolean vendorStaffCanManageInventory,
+            Set<String> platformPermissions
+    ) {
+        return superAdmin
+                || vendorAdmin
+                || (vendorStaff && vendorStaffCanManageInventory)
+                || hasAnyPermission(platformPermissions, PLATFORM_INVENTORY_MANAGE, PLATFORM_PRODUCTS_MANAGE);
+    }
+
+    private boolean canManagePromotions(
+            boolean superAdmin,
+            boolean vendorAdmin,
+            boolean vendorStaff,
+            boolean vendorStaffCanManagePromotions,
+            Set<String> platformPermissions
+    ) {
+        return superAdmin
+                || vendorAdmin
+                || (vendorStaff && vendorStaffCanManagePromotions)
+                || platformPermissions.contains(PLATFORM_PROMOTIONS_MANAGE);
+    }
+
+    private boolean hasPlatformAccess(boolean superAdmin, Set<String> platformPermissions, String requiredPermission) {
+        return superAdmin || platformPermissions.contains(requiredPermission);
     }
 
     private Set<UUID> resolveVendorIdsForUser(String keycloakUserId, String internalAuth) {

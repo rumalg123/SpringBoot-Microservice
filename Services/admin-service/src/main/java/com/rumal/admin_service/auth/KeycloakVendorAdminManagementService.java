@@ -264,13 +264,12 @@ public class KeycloakVendorAdminManagementService {
     private List<KeycloakUserSearchResult> buildSearchResults(Collection<UserRepresentation> users, int safeLimit) {
         List<KeycloakUserSearchResult> results = new ArrayList<>();
         for (UserRepresentation user : users) {
-            KeycloakUserSearchResult result = toSearchResult(user);
-            if (result == null) {
-                continue;
-            }
-            results.add(result);
             if (results.size() >= safeLimit) {
                 break;
+            }
+            KeycloakUserSearchResult result = toSearchResult(user);
+            if (result != null) {
+                results.add(result);
             }
         }
         return List.copyOf(results);
