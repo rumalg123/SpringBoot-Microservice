@@ -184,7 +184,7 @@ public class AdminVendorStaffController {
         int synced = adminVendorService.reconcileVendorStaffMemberships(scopedVendorId, internalAuth, userSub, userRoles);
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("success", true);
-        response.put("vendorId", scopedVendorId);
+        response.put(VENDOR_ID_FIELD, scopedVendorId);
         response.put("syncedCount", synced);
         return response;
     }

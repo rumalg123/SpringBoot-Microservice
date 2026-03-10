@@ -27,11 +27,12 @@ public class AccessClient {
             new ParameterizedTypeReference<>() {};
     private static final ParameterizedTypeReference<Map<String, Object>> MAP_TYPE =
             new ParameterizedTypeReference<>() {};
+    private static final char PATH_SEPARATOR = '/';
     private static final String INTERNAL_AUTH_HEADER = "X-Internal-Auth";
     private static final String PLATFORM_STAFF_PATH = "/admin/platform-staff";
-    private static final String PLATFORM_STAFF_PATH_PREFIX = PLATFORM_STAFF_PATH + "/";
+    private static final String PLATFORM_STAFF_PATH_PREFIX = PLATFORM_STAFF_PATH + PATH_SEPARATOR;
     private static final String VENDOR_STAFF_PATH = "/admin/vendor-staff";
-    private static final String VENDOR_STAFF_PATH_PREFIX = VENDOR_STAFF_PATH + "/";
+    private static final String VENDOR_STAFF_PATH_PREFIX = VENDOR_STAFF_PATH + PATH_SEPARATOR;
     private static final String RESTORE_SUFFIX = "/restore";
 
     private final RestClient restClient;
@@ -285,10 +286,6 @@ public class AccessClient {
         });
     }
 
-    private Map<String, Object> jsonRequest(String method, String path, Map<String, Object> request, String internalAuth) {
-        return jsonRequest(method, path, request, internalAuth, actorHeaders(null, null, null, null));
-    }
-
     private Map<String, Object> jsonRequest(String method, String path, Map<String, Object> request, String internalAuth, ActorHeaders actorHeaders) {
         return runAccessCall(() -> {
             RestClient rc = restClient;
@@ -317,10 +314,6 @@ public class AccessClient {
         });
     }
 
-    private void deleteNoContent(String path, String internalAuth) {
-        deleteNoContent(path, internalAuth, actorHeaders(null, null, null, null));
-    }
-
     private void deleteNoContent(String path, String internalAuth, ActorHeaders actorHeaders) {
         runAccessVoid(() -> {
             RestClient rc = restClient;
@@ -335,10 +328,6 @@ public class AccessClient {
                 throw new ServiceUnavailableException("Access service unavailable. Try again later.", ex);
             }
         });
-    }
-
-    private Map<String, Object> postNoBody(String path, String internalAuth) {
-        return postNoBody(path, internalAuth, actorHeaders(null, null, null, null));
     }
 
     private Map<String, Object> postNoBody(String path, String internalAuth, ActorHeaders actorHeaders) {

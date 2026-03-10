@@ -166,17 +166,6 @@ public class AdminAuditService {
         return value.trim();
     }
 
-    private String truncate(String value, int maxLength) {
-        if (!StringUtils.hasText(value)) {
-            return null;
-        }
-        String normalized = value.trim();
-        if (normalized.length() <= maxLength) {
-            return normalized;
-        }
-        return normalized.substring(0, maxLength);
-    }
-
     public record MutationLogEntry(
             String actorKeycloakId,
             String actorRoles,

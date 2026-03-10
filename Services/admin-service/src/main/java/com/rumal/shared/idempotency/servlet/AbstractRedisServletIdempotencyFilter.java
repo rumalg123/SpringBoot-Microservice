@@ -132,8 +132,8 @@ public abstract class AbstractRedisServletIdempotencyFilter extends OncePerReque
         if (!isOversizedRequestBody(request)) {
             return false;
         }
-            response.setHeader("X-Idempotent-Bypass", "request-body-too-large");
-            filterChain.doFilter(request, response);
+        response.setHeader("X-Idempotent-Bypass", "request-body-too-large");
+        filterChain.doFilter(request, response);
         return true;
     }
 
@@ -287,8 +287,7 @@ public abstract class AbstractRedisServletIdempotencyFilter extends OncePerReque
             Boolean ok = redisTemplate.opsForValue().setIfAbsent(key, PENDING_PREFIX + pendingPayload(reqHash), pendingTtl);
             return Boolean.TRUE.equals(ok);
         } catch (Exception ex) {
-            log.warn("{} Redis acquire failed (fail-closed) for key {}", logName(), key, ex);
-            throw new IdempotencyStateUnavailableException("Redis acquire failed for key " + key, ex);
+            throw stateUnavailable("Redis acquire failed", key, ex);
         }
     }
 
@@ -296,8 +295,7 @@ public abstract class AbstractRedisServletIdempotencyFilter extends OncePerReque
         try {
             return redisTemplate.opsForValue().get(key);
         } catch (Exception ex) {
-            log.warn("{} Redis lookup failed (fail-closed) for key {}", logName(), key, ex);
-            throw new IdempotencyStateUnavailableException("Redis lookup failed for key " + key, ex);
+            throw stateUnavailable("Redis lookup failed", key, ex);
         }
     }
 
@@ -310,8 +308,7 @@ public abstract class AbstractRedisServletIdempotencyFilter extends OncePerReque
             payload.put("bodyBase64", Base64.getEncoder().encodeToString(response.getContentAsByteArray()));
             redisTemplate.opsForValue().set(key, DONE_PREFIX + objectMapper.writeValueAsString(payload), responseTtl);
         } catch (Exception ex) {
-            log.warn("{} Redis completion write failed (fail-closed) for key {}", logName(), key, ex);
-            throw new IdempotencyStateUnavailableException("Redis completion write failed for key " + key, ex);
+            throw stateUnavailable("Redis completion write failed", key, ex);
         }
     }
 
@@ -363,6 +360,10 @@ public abstract class AbstractRedisServletIdempotencyFilter extends OncePerReque
         } catch (Exception ex) {
             log.debug("{} Redis delete cleanup failed for key {}", logName(), key, ex);
         }
+    }
+
+    private IdempotencyStateUnavailableException stateUnavailable(String operation, String key, Exception ex) {
+        return new IdempotencyStateUnavailableException(logName() + " " + operation + " for key " + key, ex);
     }
 
     private void writeConflict(HttpServletResponse response, String message) throws IOException {

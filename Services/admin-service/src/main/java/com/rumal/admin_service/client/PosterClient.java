@@ -23,8 +23,9 @@ public class PosterClient {
 
     private static final ParameterizedTypeReference<Map<String, Object>> MAP_TYPE =
             new ParameterizedTypeReference<>() {};
+    private static final char PATH_SEPARATOR = '/';
     private static final String POSTERS_PATH = "/admin/posters";
-    private static final String POSTER_PATH_PREFIX = POSTERS_PATH + "/";
+    private static final String POSTER_PATH_PREFIX = POSTERS_PATH + PATH_SEPARATOR;
     private static final String INTERNAL_AUTH_HEADER = "X-Internal-Auth";
 
     @Qualifier("loadBalancedRestClientBuilder")

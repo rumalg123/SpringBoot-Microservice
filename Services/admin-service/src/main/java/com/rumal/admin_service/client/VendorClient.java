@@ -28,8 +28,9 @@ public class VendorClient {
             new ParameterizedTypeReference<>() {};
     private static final ParameterizedTypeReference<Map<String, Object>> MAP_TYPE =
             new ParameterizedTypeReference<>() {};
+    private static final char PATH_SEPARATOR = '/';
     private static final String VENDORS_PATH = "/admin/vendors";
-    private static final String VENDOR_PATH_PREFIX = VENDORS_PATH + "/";
+    private static final String VENDOR_PATH_PREFIX = VENDORS_PATH + PATH_SEPARATOR;
     private static final String USERS_SUFFIX = "/users";
     private static final String STOP_ORDERS_SUFFIX = "/stop-orders";
     private static final String RESUME_ORDERS_SUFFIX = "/resume-orders";
@@ -208,7 +209,7 @@ public class VendorClient {
     }
 
     public List<Map<String, Object>> listVendorUsersInternal(UUID vendorId, String internalAuth) {
-        return getList("/internal/vendors/access/" + vendorId + "/users", internalAuth);
+        return getList("/internal/vendors/access/" + vendorId + USERS_SUFFIX, internalAuth);
     }
 
     public List<Map<String, Object>> listVendorUsers(UUID vendorId, String internalAuth, String userSub, String userRoles) {

@@ -441,11 +441,7 @@ public class AdminVendorService {
         boolean desiredActive = isTruthy(vendorStaffRow.get(ACTIVE_FIELD));
         String incomingEmail = stringOrNull(vendorStaffRow.get(EMAIL_FIELD));
         String incomingDisplayName = stringOrNull(vendorStaffRow.get(DISPLAY_NAME_FIELD));
-
-        List<Map<String, Object>> memberships = vendorClient.listVendorUsers(vendorId, internalAuth, userSub, userRoles);
-        Map<String, Object> existing = findMembershipByKeycloakUserId(memberships, keycloakUserId);
-        Map<String, Object> ensuredExisting = ensureVendorStaffMembership(
-                existing,
+        VendorStaffMembershipSyncContext syncContext = new VendorStaffMembershipSyncContext(
                 vendorId,
                 keycloakUserId,
                 desiredActive,
@@ -455,6 +451,10 @@ public class AdminVendorService {
                 userSub,
                 userRoles
         );
+
+        List<Map<String, Object>> memberships = vendorClient.listVendorUsers(vendorId, internalAuth, userSub, userRoles);
+        Map<String, Object> existing = findMembershipByKeycloakUserId(memberships, keycloakUserId);
+        Map<String, Object> ensuredExisting = ensureVendorStaffMembership(existing, syncContext);
         if (ensuredExisting.isEmpty()) {
             return;
         }
@@ -462,21 +462,30 @@ public class AdminVendorService {
             return;
         }
 
-        String effectiveEmail = StringUtils.hasText(incomingEmail) ? incomingEmail : stringOrNull(ensuredExisting.get(EMAIL_FIELD));
+        String effectiveEmail = StringUtils.hasText(syncContext.incomingEmail())
+                ? syncContext.incomingEmail()
+                : stringOrNull(ensuredExisting.get(EMAIL_FIELD));
         if (!StringUtils.hasText(effectiveEmail)) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Vendor membership email cannot be resolved for vendor staff sync");
         }
-        String effectiveDisplayName = StringUtils.hasText(incomingDisplayName)
-                ? incomingDisplayName
+        String effectiveDisplayName = StringUtils.hasText(syncContext.incomingDisplayName())
+                ? syncContext.incomingDisplayName()
                 : stringOrNull(ensuredExisting.get(DISPLAY_NAME_FIELD));
         UUID membershipId = parseUuid(ensuredExisting.get("id"), MEMBERSHIP_ID_FIELD_NAME);
         Map<String, Object> payload = buildVendorManagerMembershipPayload(
-                keycloakUserId,
+                syncContext.keycloakUserId(),
                 effectiveEmail,
                 effectiveDisplayName,
-                desiredActive
+                syncContext.desiredActive()
         );
-        vendorClient.updateVendorUser(vendorId, membershipId, payload, internalAuth, userSub, userRoles);
+        vendorClient.updateVendorUser(
+                syncContext.vendorId(),
+                membershipId,
+                payload,
+                syncContext.internalAuth(),
+                syncContext.userSub(),
+                syncContext.userRoles()
+        );
     }
 
     private Map<String, Object> buildVendorManagerMembershipPayload(
@@ -657,40 +666,44 @@ public class AdminVendorService {
 
     private Map<String, Object> ensureVendorStaffMembership(
             Map<String, Object> existing,
-            UUID vendorId,
-            String keycloakUserId,
-            boolean desiredActive,
-            String incomingEmail,
-            String incomingDisplayName,
-            String internalAuth,
-            String userSub,
-            String userRoles
+            VendorStaffMembershipSyncContext syncContext
     ) {
         if (!existing.isEmpty()) {
             return existing;
         }
-        if (!desiredActive) {
+        if (!syncContext.desiredActive()) {
             return Map.of();
         }
-        if (!StringUtils.hasText(incomingEmail)) {
+        if (!StringUtils.hasText(syncContext.incomingEmail())) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Access service response is missing vendor staff email");
         }
         Map<String, Object> payload = buildVendorManagerMembershipPayload(
-                keycloakUserId,
-                incomingEmail,
-                incomingDisplayName,
+                syncContext.keycloakUserId(),
+                syncContext.incomingEmail(),
+                syncContext.incomingDisplayName(),
                 true
         );
         try {
-            vendorClient.addVendorUser(vendorId, payload, internalAuth, userSub, userRoles);
+            vendorClient.addVendorUser(
+                    syncContext.vendorId(),
+                    payload,
+                    syncContext.internalAuth(),
+                    syncContext.userSub(),
+                    syncContext.userRoles()
+            );
             return Map.of();
         } catch (DownstreamHttpException ex) {
             if (ex.getStatusCode().value() != 409) {
                 throw ex;
             }
             Map<String, Object> recovered = findMembershipByKeycloakUserId(
-                    vendorClient.listVendorUsers(vendorId, internalAuth, userSub, userRoles),
-                    keycloakUserId
+                    vendorClient.listVendorUsers(
+                            syncContext.vendorId(),
+                            syncContext.internalAuth(),
+                            syncContext.userSub(),
+                            syncContext.userRoles()
+                    ),
+                    syncContext.keycloakUserId()
             );
             if (recovered.isEmpty()) {
                 throw ex;
@@ -700,7 +713,7 @@ public class AdminVendorService {
     }
 
     private boolean isOwnerMembership(Map<String, Object> membership) {
-        return OWNER_ROLE.equals(stringValue(membership.get("role")).trim().toUpperCase());
+        return OWNER_ROLE.equalsIgnoreCase(stringValue(membership.get("role")).trim());
     }
 
     private String resolveDisplayName(String requestedDisplayName, String firstName, String lastName, String fallbackEmail) {
@@ -724,5 +737,17 @@ public class AdminVendorService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, fieldName + " exceeds max length " + maxLength);
         }
         return normalized;
+    }
+
+    private record VendorStaffMembershipSyncContext(
+            UUID vendorId,
+            String keycloakUserId,
+            boolean desiredActive,
+            String incomingEmail,
+            String incomingDisplayName,
+            String internalAuth,
+            String userSub,
+            String userRoles
+    ) {
     }
 }

@@ -159,44 +159,9 @@ public class KeycloakVendorAdminManagementService {
     }
 
     public List<KeycloakUserSearchResult> searchUsers(String query, int limit) {
-        String normalizedQuery = query == null ? "" : query.trim();
-        if (normalizedQuery.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "q is required");
-        }
-
+        String normalizedQuery = normalizeSearchQuery(query);
         int safeLimit = Math.clamp(limit, 1, 200);
-
-        return runKeycloakCall(() -> {
-            try {
-                Keycloak keycloak = getOrCreateAdminClient();
-                var realmResource = keycloak.realm(realm);
-                var usersResource = realmResource.users();
-
-                Map<String, UserRepresentation> unique = new LinkedHashMap<>();
-                collectUsers(unique, usersResource.search(normalizedQuery, 0, safeLimit), safeLimit);
-                if (normalizedQuery.contains("@")) {
-                    collectUsers(unique, usersResource.searchByEmail(normalizedQuery, false), safeLimit);
-                }
-
-                List<KeycloakUserSearchResult> results = new ArrayList<>();
-                for (UserRepresentation user : unique.values()) {
-                    KeycloakUserSearchResult result = toSearchResult(user);
-                    if (result != null) {
-                        results.add(result);
-                        if (results.size() >= safeLimit) {
-                            break;
-                        }
-                    }
-                }
-                return List.copyOf(results);
-            } catch (ResponseStatusException ex) {
-                throw ex;
-            } catch (WebApplicationException ex) {
-                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak user search failed: " + ex.getMessage(), ex);
-            } catch (Exception ex) {
-                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak user search failed", ex);
-            }
-        });
+        return runKeycloakCall(() -> executeUserSearch(normalizedQuery, safeLimit));
     }
 
     public void logoutUserSessions(String keycloakUserId) {
@@ -254,6 +219,61 @@ public class KeycloakVendorAdminManagementService {
             action.run();
             return null;
         });
+    }
+
+    private String normalizeSearchQuery(String query) {
+        String normalizedQuery = query == null ? "" : query.trim();
+        if (normalizedQuery.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "q is required");
+        }
+        return normalizedQuery;
+    }
+
+    private List<KeycloakUserSearchResult> executeUserSearch(String normalizedQuery, int safeLimit) {
+        try {
+            return searchUsersInternal(normalizedQuery, safeLimit);
+        } catch (ResponseStatusException ex) {
+            throw ex;
+        } catch (WebApplicationException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak user search failed: " + ex.getMessage(), ex);
+        } catch (Exception ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak user search failed", ex);
+        }
+    }
+
+    private List<KeycloakUserSearchResult> searchUsersInternal(String normalizedQuery, int safeLimit) {
+        Keycloak keycloak = getOrCreateAdminClient();
+        var usersResource = keycloak.realm(realm).users();
+        Map<String, UserRepresentation> unique = collectUniqueSearchUsers(usersResource, normalizedQuery, safeLimit);
+        return buildSearchResults(unique.values(), safeLimit);
+    }
+
+    private Map<String, UserRepresentation> collectUniqueSearchUsers(
+            org.keycloak.admin.client.resource.UsersResource usersResource,
+            String normalizedQuery,
+            int safeLimit
+    ) {
+        Map<String, UserRepresentation> unique = new LinkedHashMap<>();
+        collectUsers(unique, usersResource.search(normalizedQuery, 0, safeLimit), safeLimit);
+        if (normalizedQuery.contains("@")) {
+            collectUsers(unique, usersResource.searchByEmail(normalizedQuery, false), safeLimit);
+        }
+        return unique;
+    }
+
+    private List<KeycloakUserSearchResult> buildSearchResults(Collection<UserRepresentation> users, int safeLimit) {
+        List<KeycloakUserSearchResult> results = new ArrayList<>();
+        for (UserRepresentation user : users) {
+            KeycloakUserSearchResult result = toSearchResult(user);
+            if (result == null) {
+                continue;
+            }
+            results.add(result);
+            if (results.size() >= safeLimit) {
+                break;
+            }
+        }
+        return List.copyOf(results);
     }
 
     private ResolvedKeycloakUser resolveVendorAdminUser(

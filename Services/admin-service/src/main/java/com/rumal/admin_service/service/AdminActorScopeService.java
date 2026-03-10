@@ -403,27 +403,13 @@ public class AdminActorScopeService {
                 internalAuth
         );
         Set<String> vendorPermissions = extractActiveVendorPermissionCodes(vendorStaffAccess);
-
-        boolean vendorStaffCanManageOrders = vendorPermissions.contains(VENDOR_ORDERS_READ) || vendorPermissions.contains(VENDOR_ORDERS_MANAGE);
-        boolean vendorStaffCanManageProducts = vendorPermissions.contains(VENDOR_PRODUCTS_MANAGE);
-        boolean vendorStaffCanManagePromotions = vendorPermissions.contains(VENDOR_PROMOTIONS_MANAGE);
-        boolean vendorStaffCanManageInventory = vendorPermissions.contains(VENDOR_INVENTORY_MANAGE) || vendorStaffCanManageProducts;
-
-        boolean canManageOrders = superAdmin || vendorAdmin || (vendorStaff && vendorStaffCanManageOrders)
-                || platformPermissions.contains(PLATFORM_ORDERS_READ)
-                || platformPermissions.contains(PLATFORM_ORDERS_MANAGE);
-        boolean canManageProducts = superAdmin || vendorAdmin || (vendorStaff && vendorStaffCanManageProducts)
-                || platformPermissions.contains(PLATFORM_PRODUCTS_MANAGE);
-        boolean canManageCategories = superAdmin || platformPermissions.contains(PLATFORM_CATEGORIES_MANAGE);
-        boolean canManagePosters = superAdmin || platformPermissions.contains(PLATFORM_POSTERS_MANAGE);
-        boolean canManageInventory = superAdmin || vendorAdmin || (vendorStaff && vendorStaffCanManageInventory)
-                || platformPermissions.contains(PLATFORM_INVENTORY_MANAGE)
-                || platformPermissions.contains(PLATFORM_PRODUCTS_MANAGE);
-        boolean canManagePromotions = superAdmin || vendorAdmin || (vendorStaff && vendorStaffCanManagePromotions)
-                || platformPermissions.contains(PLATFORM_PROMOTIONS_MANAGE);
-        boolean canManageReviews = superAdmin || platformPermissions.contains(PLATFORM_REVIEWS_MANAGE);
-
-        boolean canManageVendors = superAdmin || platformPermissions.contains(PLATFORM_VENDORS_MANAGE);
+        CapabilityFlags capabilityFlags = resolveCapabilityFlags(
+                superAdmin,
+                vendorAdmin,
+                vendorStaff,
+                platformPermissions,
+                vendorPermissions
+        );
 
         return new AdminCapabilitiesResponse(
                 superAdmin,
@@ -433,15 +419,56 @@ public class AdminActorScopeService {
                 platformPermissions,
                 vendorMemberships,
                 vendorStaffAccess,
-                canManageOrders,
-                canManageProducts,
-                canManageCategories,
-                canManagePosters,
-                canManageVendors,
-                canManageInventory,
-                canManagePromotions,
-                canManageReviews
+                capabilityFlags.canManageOrders(),
+                capabilityFlags.canManageProducts(),
+                capabilityFlags.canManageCategories(),
+                capabilityFlags.canManagePosters(),
+                capabilityFlags.canManageVendors(),
+                capabilityFlags.canManageInventory(),
+                capabilityFlags.canManagePromotions(),
+                capabilityFlags.canManageReviews()
         );
+    }
+
+    private CapabilityFlags resolveCapabilityFlags(
+            boolean superAdmin,
+            boolean vendorAdmin,
+            boolean vendorStaff,
+            Set<String> platformPermissions,
+            Set<String> vendorPermissions
+    ) {
+        boolean vendorStaffCanManageOrders = hasAnyPermission(vendorPermissions, VENDOR_ORDERS_READ, VENDOR_ORDERS_MANAGE);
+        boolean vendorStaffCanManageProducts = vendorPermissions.contains(VENDOR_PRODUCTS_MANAGE);
+        boolean vendorStaffCanManagePromotions = vendorPermissions.contains(VENDOR_PROMOTIONS_MANAGE);
+        boolean vendorStaffCanManageInventory = vendorPermissions.contains(VENDOR_INVENTORY_MANAGE)
+                || vendorStaffCanManageProducts;
+
+        return new CapabilityFlags(
+                superAdmin
+                        || vendorAdmin
+                        || (vendorStaff && vendorStaffCanManageOrders)
+                        || hasAnyPermission(platformPermissions, PLATFORM_ORDERS_READ, PLATFORM_ORDERS_MANAGE),
+                superAdmin
+                        || vendorAdmin
+                        || (vendorStaff && vendorStaffCanManageProducts)
+                        || platformPermissions.contains(PLATFORM_PRODUCTS_MANAGE),
+                superAdmin || platformPermissions.contains(PLATFORM_CATEGORIES_MANAGE),
+                superAdmin || platformPermissions.contains(PLATFORM_POSTERS_MANAGE),
+                superAdmin || platformPermissions.contains(PLATFORM_VENDORS_MANAGE),
+                superAdmin
+                        || vendorAdmin
+                        || (vendorStaff && vendorStaffCanManageInventory)
+                        || hasAnyPermission(platformPermissions, PLATFORM_INVENTORY_MANAGE, PLATFORM_PRODUCTS_MANAGE),
+                superAdmin
+                        || vendorAdmin
+                        || (vendorStaff && vendorStaffCanManagePromotions)
+                        || platformPermissions.contains(PLATFORM_PROMOTIONS_MANAGE),
+                superAdmin || platformPermissions.contains(PLATFORM_REVIEWS_MANAGE)
+        );
+    }
+
+    private boolean hasAnyPermission(Set<String> permissions, String firstPermission, String secondPermission) {
+        return permissions.contains(firstPermission) || permissions.contains(secondPermission);
     }
 
     private Set<UUID> resolveVendorIdsForUser(String keycloakUserId, String internalAuth) {
@@ -527,7 +554,7 @@ public class AdminActorScopeService {
         }
         Map<String, Object> access = adminAccessService.getPlatformAccessByKeycloakUser(userSub.trim(), internalAuth);
         Object activeRaw = access.get("active");
-        boolean active = activeRaw instanceof Boolean && (Boolean) activeRaw;
+        boolean active = activeRaw instanceof Boolean activeValue && activeValue;
         if (!active) {
             return Set.of();
         }
@@ -681,5 +708,17 @@ public class AdminActorScopeService {
             }
         }
         return Set.copyOf(values);
+    }
+
+    private record CapabilityFlags(
+            boolean canManageOrders,
+            boolean canManageProducts,
+            boolean canManageCategories,
+            boolean canManagePosters,
+            boolean canManageVendors,
+            boolean canManageInventory,
+            boolean canManagePromotions,
+            boolean canManageReviews
+    ) {
     }
 }
