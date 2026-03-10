@@ -1,5 +1,6 @@
 package com.rumal.admin_service.controller;
 
+import com.rumal.admin_service.dto.AccessAuditQuery;
 import com.rumal.admin_service.exception.UnauthorizedException;
 import com.rumal.admin_service.security.InternalRequestVerifier;
 import com.rumal.admin_service.service.AdminAccessService;
@@ -40,23 +41,21 @@ public class AdminAccessAuditController {
             @RequestParam(required = false) Integer limit
     ) {
         internalRequestVerifier.verify(internalAuth);
+        AccessAuditQuery query = new AccessAuditQuery(
+                targetType,
+                targetId,
+                vendorId,
+                action,
+                actorQuery,
+                from,
+                to,
+                page,
+                size,
+                limit
+        );
 
         if (adminActorScopeService.hasRole(userRoles, "super_admin")) {
-            return adminAccessService.listAccessAudit(
-                    targetType,
-                    targetId,
-                    vendorId,
-                    action,
-                    actorQuery,
-                    from,
-                    to,
-                    page,
-                    size,
-                    limit,
-                    internalAuth,
-                    userRoles,
-                    null
-            );
+            return adminAccessService.listAccessAudit(query, internalAuth, userRoles, null);
         }
 
         if (!adminActorScopeService.hasRole(userRoles, "vendor_admin")) {
@@ -85,16 +84,18 @@ public class AdminAccessAuditController {
         }
         adminActorScopeService.assertCanManageVendorStaffVendor(userSub, userRoles, effectiveVendorId, internalAuth);
         return adminAccessService.listAccessAudit(
-                "VENDOR_STAFF",
-                targetId,
-                effectiveVendorId,
-                action,
-                actorQuery,
-                from,
-                to,
-                page,
-                size,
-                limit,
+                new AccessAuditQuery(
+                        "VENDOR_STAFF",
+                        targetId,
+                        effectiveVendorId,
+                        action,
+                        actorQuery,
+                        from,
+                        to,
+                        page,
+                        size,
+                        limit
+                ),
                 internalAuth,
                 userRoles,
                 effectiveVendorId

@@ -23,25 +23,25 @@ public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(UnauthorizedException.class)
-    public ResponseEntity<?> unauthorized(UnauthorizedException ex) {
+    public ResponseEntity<ApiError> unauthorized(UnauthorizedException ex) {
         log.warn("Unauthorized admin request: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error(HttpStatus.UNAUTHORIZED, ex.getMessage()));
     }
 
     @ExceptionHandler(ServiceUnavailableException.class)
-    public ResponseEntity<?> serviceUnavailable(ServiceUnavailableException ex) {
+    public ResponseEntity<ApiError> serviceUnavailable(ServiceUnavailableException ex) {
         log.warn("Downstream service unavailable: {}", ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(error(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage()));
     }
 
     @ExceptionHandler(DownstreamHttpException.class)
-    public ResponseEntity<?> downstreamHttp(DownstreamHttpException ex) {
+    public ResponseEntity<ApiError> downstreamHttp(DownstreamHttpException ex) {
         log.warn("Downstream HTTP error {}: {}", ex.getStatusCode().value(), ex.getMessage(), ex);
         return ResponseEntity.status(ex.getStatusCode()).body(error(ex.getStatusCode(), ex.getMessage()));
     }
 
     @ExceptionHandler(ResponseStatusException.class)
-    public ResponseEntity<?> responseStatus(ResponseStatusException ex) {
+    public ResponseEntity<ApiError> responseStatus(ResponseStatusException ex) {
         String message = ex.getReason() == null ? "Request failed" : ex.getReason();
         if (ex.getStatusCode().is4xxClientError()) {
             log.warn("Request failed with {}: {}", ex.getStatusCode().value(), message, ex);
@@ -52,7 +52,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<?> handleValidation(MethodArgumentNotValidException ex) {
+    public ResponseEntity<ApiError> handleValidation(MethodArgumentNotValidException ex) {
         log.warn("Admin request argument validation failed: {}", ex.getMessage());
         Map<String, String> fieldErrors = new LinkedHashMap<>();
         for (FieldError fe : ex.getBindingResult().getFieldErrors()) {
@@ -62,21 +62,22 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(OptimisticLockingFailureException.class)
-    public ResponseEntity<?> optimisticLockConflict(OptimisticLockingFailureException ex) {
+    public ResponseEntity<ApiError> optimisticLockConflict(OptimisticLockingFailureException ex) {
         log.warn("Optimistic lock conflict: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.CONFLICT).body(error(HttpStatus.CONFLICT, "Resource was modified by another request. Please retry."));
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
-    public ResponseEntity<?> dataIntegrityViolation(DataIntegrityViolationException ex) {
+    public ResponseEntity<ApiError> dataIntegrityViolation(DataIntegrityViolationException ex) {
         log.warn("Data integrity violation: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.CONFLICT).body(error(HttpStatus.CONFLICT, "Resource already exists or data conflict. Please retry."));
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<?> handleUnexpected(Exception ex) {
+    public ResponseEntity<ApiError> handleUnexpected(Exception ex) {
         log.error("Unexpected error", ex);
-        return ResponseEntity.status(500).body(error(HttpStatus.INTERNAL_SERVER_ERROR, "Unexpected error"));
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(error(HttpStatus.INTERNAL_SERVER_ERROR, "Unexpected error"));
     }
 
     private ApiError error(HttpStatusCode statusCode, String message) {

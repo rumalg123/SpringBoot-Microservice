@@ -22,6 +22,7 @@ public class AdminAuditPayloadSanitizer {
 
     private static final int MAX_DETAILS_LENGTH = 2000;
     private static final int MAX_JSON_LENGTH = 12000;
+    private static final String REDACTED_VALUE = "[REDACTED]";
     private static final Set<String> REDACTED_KEY_PARTS = Set.of(
             "password",
             "passwd",
@@ -56,7 +57,7 @@ public class AdminAuditPayloadSanitizer {
         }
         String normalized = details.trim();
         if (looksLikeToken(normalized)) {
-            normalized = "[REDACTED]";
+            normalized = REDACTED_VALUE;
         }
         if (normalized.length() <= MAX_DETAILS_LENGTH) {
             return normalized;
@@ -128,7 +129,7 @@ public class AdminAuditPayloadSanitizer {
 
         for (String token : REDACTED_KEY_PARTS) {
             if (normalizedKey.contains(token)) {
-                return "[REDACTED]";
+                return REDACTED_VALUE;
             }
         }
 
@@ -139,7 +140,7 @@ public class AdminAuditPayloadSanitizer {
         }
 
         if (looksLikeToken(normalized)) {
-            return "[REDACTED]";
+            return REDACTED_VALUE;
         }
         return normalized;
     }

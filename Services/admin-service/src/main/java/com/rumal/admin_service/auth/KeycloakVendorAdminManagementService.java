@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 @Service
@@ -71,42 +72,20 @@ public class KeycloakVendorAdminManagementService {
             try {
                 Keycloak keycloak = getOrCreateAdminClient();
                 var realmResource = keycloak.realm(realm);
-                UserRepresentation user = null;
-                boolean created = false;
-
-                if (StringUtils.hasText(requestedKeycloakUserId)) {
-                    try {
-                        user = realmResource.users().get(requestedKeycloakUserId.trim()).toRepresentation();
-                    } catch (NotFoundException ex) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Keycloak user not found: " + requestedKeycloakUserId);
-                    }
-                    if (user == null || !StringUtils.hasText(user.getId())) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Keycloak user not found: " + requestedKeycloakUserId);
-                    }
-                    String existingEmail = resolveEmail(user);
-                    if (StringUtils.hasText(existingEmail) && !normalizedEmail.equalsIgnoreCase(existingEmail)) {
-                        throw new ResponseStatusException(
-                                HttpStatus.BAD_REQUEST,
-                                "Provided email does not match Keycloak user email for id " + requestedKeycloakUserId
-                        );
-                    }
-                } else {
-                    user = findUserByEmail(realmResource.users().searchByEmail(normalizedEmail, true), normalizedEmail);
-                    if (user == null && createIfMissing) {
-                        user = createUser(realmResource, normalizedEmail, firstName, lastName);
-                        created = true;
-                    }
-                    if (user == null) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Keycloak user not found for email: " + normalizedEmail);
-                    }
-                }
+                ResolvedKeycloakUser resolvedUser = resolveVendorAdminUser(
+                        realmResource,
+                        requestedKeycloakUserId,
+                        normalizedEmail,
+                        firstName,
+                        lastName,
+                        createIfMissing
+                );
+                UserRepresentation user = resolvedUser.user();
+                boolean created = resolvedUser.created();
 
                 updateNamesIfProvided(realmResource, user, firstName, lastName);
                 assignRealmRoleIfMissing(realmResource, user.getId(), vendorAdminRoleName);
-                boolean actionEmailSent = false;
-                if (created) {
-                    actionEmailSent = sendRequiredActionsEmail(realmResource, user.getId());
-                }
+                boolean actionEmailSent = created && sendRequiredActionsEmail(realmResource, user.getId());
 
                 UserRepresentation refreshed = realmResource.users().get(user.getId()).toRepresentation();
                 return new KeycloakManagedUser(
@@ -136,8 +115,6 @@ public class KeycloakVendorAdminManagementService {
                 getOrCreateAdminClient().realm(realm).users().delete(keycloakUserId.trim());
             } catch (NotFoundException ignored) {
                 // Already removed or never committed in Keycloak.
-            } catch (WebApplicationException ex) {
-                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak user deletion failed", ex);
             } catch (Exception ex) {
                 throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak user deletion failed", ex);
             }
@@ -187,7 +164,7 @@ public class KeycloakVendorAdminManagementService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "q is required");
         }
 
-        int safeLimit = Math.max(1, Math.min(limit, 200));
+        int safeLimit = Math.clamp(limit, 1, 200);
 
         return runKeycloakCall(() -> {
             try {
@@ -203,21 +180,12 @@ public class KeycloakVendorAdminManagementService {
 
                 List<KeycloakUserSearchResult> results = new ArrayList<>();
                 for (UserRepresentation user : unique.values()) {
-                    if (!StringUtils.hasText(user.getId())) {
-                        continue;
-                    }
-                    results.add(new KeycloakUserSearchResult(
-                            user.getId(),
-                            resolveEmail(user),
-                            normalizeOptional(user.getUsername()),
-                            normalizeOptional(user.getFirstName()),
-                            normalizeOptional(user.getLastName()),
-                            composeDisplayName(user),
-                            Boolean.TRUE.equals(user.isEnabled()),
-                            Boolean.TRUE.equals(user.isEmailVerified())
-                    ));
-                    if (results.size() >= safeLimit) {
-                        break;
+                    KeycloakUserSearchResult result = toSearchResult(user);
+                    if (result != null) {
+                        results.add(result);
+                        if (results.size() >= safeLimit) {
+                            break;
+                        }
                     }
                 }
                 return List.copyOf(results);
@@ -237,14 +205,7 @@ public class KeycloakVendorAdminManagementService {
         }
         runKeycloakVoid(() -> {
             try {
-                Keycloak keycloak = getOrCreateAdminClient();
-                try {
-                    keycloak.realm(realm).users().get(keycloakUserId.trim()).logout();
-                } catch (NotFoundException ignored) {
-                    // User already removed in Keycloak; nothing to revoke.
-                }
-            } catch (WebApplicationException ex) {
-                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak session logout failed", ex);
+                logoutUserIfPresent(getOrCreateAdminClient().realm(realm).users(), keycloakUserId.trim());
             } catch (Exception ex) {
                 throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak session logout failed", ex);
             }
@@ -266,17 +227,10 @@ public class KeycloakVendorAdminManagementService {
         }
         runKeycloakVoid(() -> {
             try {
-                Keycloak keycloak = getOrCreateAdminClient();
-                var users = keycloak.realm(realm).users();
+                var users = getOrCreateAdminClient().realm(realm).users();
                 for (String id : unique) {
-                    try {
-                        users.get(id).logout();
-                    } catch (NotFoundException ignored) {
-                        // Ignore orphaned/local stale rows.
-                    }
+                    logoutUserIfPresent(users, id);
                 }
-            } catch (WebApplicationException ex) {
-                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak session logout failed", ex);
             } catch (Exception ex) {
                 throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Keycloak session logout failed", ex);
             }
@@ -300,6 +254,54 @@ public class KeycloakVendorAdminManagementService {
             action.run();
             return null;
         });
+    }
+
+    private ResolvedKeycloakUser resolveVendorAdminUser(
+            org.keycloak.admin.client.resource.RealmResource realmResource,
+            String requestedKeycloakUserId,
+            String normalizedEmail,
+            String firstName,
+            String lastName,
+            boolean createIfMissing
+    ) {
+        if (StringUtils.hasText(requestedKeycloakUserId)) {
+            UserRepresentation requestedUser = fetchRequestedUser(realmResource, requestedKeycloakUserId);
+            validateRequestedUserEmail(requestedUser, normalizedEmail, requestedKeycloakUserId);
+            return new ResolvedKeycloakUser(requestedUser, false);
+        }
+        UserRepresentation resolvedUser = findUserByEmail(realmResource.users().searchByEmail(normalizedEmail, true), normalizedEmail);
+        if (resolvedUser == null && createIfMissing) {
+            return new ResolvedKeycloakUser(createUser(realmResource, normalizedEmail, firstName, lastName), true);
+        }
+        if (resolvedUser == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Keycloak user not found for email: " + normalizedEmail);
+        }
+        return new ResolvedKeycloakUser(resolvedUser, false);
+    }
+
+    private UserRepresentation fetchRequestedUser(
+            org.keycloak.admin.client.resource.RealmResource realmResource,
+            String requestedKeycloakUserId
+    ) {
+        try {
+            UserRepresentation user = realmResource.users().get(requestedKeycloakUserId.trim()).toRepresentation();
+            if (user != null && StringUtils.hasText(user.getId())) {
+                return user;
+            }
+        } catch (NotFoundException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Keycloak user not found: " + requestedKeycloakUserId);
+        }
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Keycloak user not found: " + requestedKeycloakUserId);
+    }
+
+    private void validateRequestedUserEmail(UserRepresentation user, String normalizedEmail, String requestedKeycloakUserId) {
+        String existingEmail = resolveEmail(user);
+        if (StringUtils.hasText(existingEmail) && !normalizedEmail.equalsIgnoreCase(existingEmail)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Provided email does not match Keycloak user email for id " + requestedKeycloakUserId
+            );
+        }
     }
 
     private UserRepresentation createUser(
@@ -392,6 +394,30 @@ public class KeycloakVendorAdminManagementService {
         }
     }
 
+    private KeycloakUserSearchResult toSearchResult(UserRepresentation user) {
+        if (user == null || !StringUtils.hasText(user.getId())) {
+            return null;
+        }
+        return new KeycloakUserSearchResult(
+                user.getId(),
+                resolveEmail(user),
+                normalizeOptional(user.getUsername()),
+                normalizeOptional(user.getFirstName()),
+                normalizeOptional(user.getLastName()),
+                composeDisplayName(user),
+                Boolean.TRUE.equals(user.isEnabled()),
+                Boolean.TRUE.equals(user.isEmailVerified())
+        );
+    }
+
+    private void logoutUserIfPresent(org.keycloak.admin.client.resource.UsersResource users, String keycloakUserId) {
+        try {
+            users.get(keycloakUserId).logout();
+        } catch (NotFoundException ignored) {
+            // Ignore users already removed in Keycloak or stale local references.
+        }
+    }
+
     private boolean sendRequiredActionsEmail(org.keycloak.admin.client.resource.RealmResource realmResource, String userId) {
         try {
             realmResource.users()
@@ -455,24 +481,26 @@ public class KeycloakVendorAdminManagementService {
         return normalizeOptional(user == null ? null : user.getUsername());
     }
 
-    private volatile Keycloak sharedAdminClient;
+    private final AtomicReference<Keycloak> sharedAdminClient = new AtomicReference<>();
 
     private Keycloak getOrCreateAdminClient() {
-        Keycloak client = sharedAdminClient;
+        Keycloak client = sharedAdminClient.get();
         if (client != null) {
             return client;
         }
-        synchronized (this) {
-            if (sharedAdminClient == null) {
-                sharedAdminClient = KeycloakBuilder.builder()
+        synchronized (sharedAdminClient) {
+            client = sharedAdminClient.get();
+            if (client == null) {
+                client = KeycloakBuilder.builder()
                         .serverUrl(serverUrl)
                         .realm(adminRealm)
                         .clientId(clientId)
                         .clientSecret(clientSecret)
                         .grantType(OAuth2Constants.CLIENT_CREDENTIALS)
                         .build();
+                sharedAdminClient.set(client);
             }
-            return sharedAdminClient;
+            return client;
         }
     }
 
@@ -523,5 +551,8 @@ public class KeycloakVendorAdminManagementService {
             boolean enabled,
             boolean emailVerified
     ) {
+    }
+
+    private record ResolvedKeycloakUser(UserRepresentation user, boolean created) {
     }
 }

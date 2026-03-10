@@ -55,7 +55,9 @@ public class InternalRequestBodyCachingFilter implements Filter {
                 @Override public int read() { return bais.read(); }
                 @Override public boolean isFinished() { return bais.available() == 0; }
                 @Override public boolean isReady() { return true; }
-                @Override public void setReadListener(ReadListener listener) {}
+                @Override public void setReadListener(ReadListener listener) {
+                    // Async IO is not used for this in-memory wrapper.
+                }
             };
         }
 

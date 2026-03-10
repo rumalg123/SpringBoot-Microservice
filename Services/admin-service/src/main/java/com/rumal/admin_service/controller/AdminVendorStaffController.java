@@ -30,6 +30,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AdminVendorStaffController {
 
+    private static final String VENDOR_ID_FIELD = "vendorId";
+
     private final AdminAccessService adminAccessService;
     private final AdminVendorService adminVendorService;
     private final AdminActorScopeService adminActorScopeService;
@@ -61,7 +63,7 @@ public class AdminVendorStaffController {
             return rows;
         }
         return rows.stream()
-                .filter(row -> scopedVendorId.equals(parseUuid(row.get("vendorId"))))
+                .filter(row -> scopedVendorId.equals(parseUuid(row.get(VENDOR_ID_FIELD))))
                 .toList();
     }
 
@@ -75,7 +77,7 @@ public class AdminVendorStaffController {
             @RequestBody @NotNull Map<String, Object> request
     ) {
         internalRequestVerifier.verify(internalAuth);
-        UUID vendorId = parseUuid(request.get("vendorId"));
+        UUID vendorId = parseUuid(request.get(VENDOR_ID_FIELD));
         UUID scopedVendorId = adminActorScopeService.resolveScopedVendorIdForVendorStaffManagement(userSub, userRoles, vendorId, internalAuth);
         Map<String, Object> created = adminAccessService.createVendorStaff(withVendorId(request, scopedVendorId), internalAuth, userSub, userRoles, actionReason);
         adminVendorService.syncVendorStaffMembershipTransition(null, created, internalAuth, userSub, userRoles);
@@ -93,7 +95,7 @@ public class AdminVendorStaffController {
         internalRequestVerifier.verify(internalAuth);
         UUID scopedVendorId = adminActorScopeService.resolveScopedVendorIdForVendorStaffManagement(userSub, userRoles, vendorId, internalAuth);
         Map<String, Object> row = adminAccessService.getVendorStaffById(id, internalAuth, userRoles, scopedVendorId);
-        UUID rowVendorId = parseUuid(row.get("vendorId"));
+        UUID rowVendorId = parseUuid(row.get(VENDOR_ID_FIELD));
         if (rowVendorId != null) {
             adminActorScopeService.assertCanManageVendorStaffVendor(userSub, userRoles, rowVendorId, internalAuth);
         }
@@ -111,13 +113,13 @@ public class AdminVendorStaffController {
             @RequestBody @NotNull Map<String, Object> request
     ) {
         internalRequestVerifier.verify(internalAuth);
-        UUID requestedVendorId = parseUuid(request.get("vendorId"));
+        UUID requestedVendorId = parseUuid(request.get(VENDOR_ID_FIELD));
         if (requestedVendorId == null) {
             requestedVendorId = vendorId;
         }
         UUID scopedVendorId = adminActorScopeService.resolveScopedVendorIdForVendorStaffManagement(userSub, userRoles, requestedVendorId, internalAuth);
         Map<String, Object> existing = adminAccessService.getVendorStaffById(id, internalAuth, userRoles, scopedVendorId);
-        UUID existingVendorId = parseUuid(existing.get("vendorId"));
+        UUID existingVendorId = parseUuid(existing.get(VENDOR_ID_FIELD));
         UUID effectiveVendorId = requestedVendorId != null ? requestedVendorId : existingVendorId;
         if (effectiveVendorId != null) {
             adminActorScopeService.assertCanManageVendorStaffVendor(userSub, userRoles, effectiveVendorId, internalAuth);
@@ -141,7 +143,7 @@ public class AdminVendorStaffController {
         internalRequestVerifier.verify(internalAuth);
         UUID scopedVendorId = adminActorScopeService.resolveScopedVendorIdForVendorStaffManagement(userSub, userRoles, vendorId, internalAuth);
         Map<String, Object> existing = adminAccessService.getVendorStaffById(id, internalAuth, userRoles, scopedVendorId);
-        UUID existingVendorId = parseUuid(existing.get("vendorId"));
+        UUID existingVendorId = parseUuid(existing.get(VENDOR_ID_FIELD));
         if (existingVendorId != null) {
             adminActorScopeService.assertCanManageVendorStaffVendor(userSub, userRoles, existingVendorId, internalAuth);
         }
@@ -161,7 +163,7 @@ public class AdminVendorStaffController {
         internalRequestVerifier.verify(internalAuth);
         UUID scopedVendorId = adminActorScopeService.resolveScopedVendorIdForVendorStaffManagement(userSub, userRoles, vendorId, internalAuth);
         Map<String, Object> existing = adminAccessService.getVendorStaffById(id, internalAuth, userRoles, scopedVendorId);
-        UUID existingVendorId = parseUuid(existing.get("vendorId"));
+        UUID existingVendorId = parseUuid(existing.get(VENDOR_ID_FIELD));
         if (existingVendorId != null) {
             adminActorScopeService.assertCanManageVendorStaffVendor(userSub, userRoles, existingVendorId, internalAuth);
         }
@@ -200,7 +202,7 @@ public class AdminVendorStaffController {
 
     private Map<String, Object> withVendorId(Map<String, Object> request, UUID vendorId) {
         Map<String, Object> copy = new LinkedHashMap<>(request == null ? Map.of() : request);
-        copy.put("vendorId", vendorId);
+        copy.put(VENDOR_ID_FIELD, vendorId);
         return copy;
     }
 }

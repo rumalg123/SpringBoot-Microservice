@@ -36,7 +36,7 @@ public class AdminKeycloakUserController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         adminActorScopeService.assertCanSearchKeycloakUsers(userRoles);
-        int safeLimit = Math.max(1, Math.min(limit, 20));
+        int safeLimit = Math.clamp(limit, 1, 20);
 
         boolean isSuperAdmin = adminActorScopeService.hasRole(userRoles, "super_admin");
         if (isSuperAdmin) {
@@ -50,8 +50,7 @@ public class AdminKeycloakUserController {
 
         Set<String> linkedKeycloakUserIds = adminVendorService.listLinkedKeycloakUserIdsForVendorAdmin(
                 requireUserSub(userSub),
-                internalAuth,
-                userRoles
+                internalAuth
         );
         if (linkedKeycloakUserIds.isEmpty()) {
             return List.of();

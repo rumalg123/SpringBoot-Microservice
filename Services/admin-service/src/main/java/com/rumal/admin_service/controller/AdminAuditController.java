@@ -40,6 +40,17 @@ public class AdminAuditController {
         if (!adminActorScopeService.hasRole(userRoles, "super_admin")) {
             throw new com.rumal.admin_service.exception.UnauthorizedException("Only super_admin can view audit logs");
         }
-        return auditService.listAuditLogs(actorKeycloakId, action, resourceType, resourceId, from, to, page, size);
+        return auditService.listAuditLogs(
+                new AdminAuditService.AuditLogQuery(
+                        actorKeycloakId,
+                        action,
+                        resourceType,
+                        resourceId,
+                        from,
+                        to,
+                        page,
+                        size
+                )
+        );
     }
 }

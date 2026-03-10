@@ -3,6 +3,7 @@ package com.rumal.admin_service.client;
 import com.rumal.admin_service.dto.CreateOrderExportRequest;
 import com.rumal.admin_service.dto.OrderResponse;
 import com.rumal.admin_service.dto.OrderExportJobResponse;
+import com.rumal.admin_service.dto.OrderListRequest;
 import com.rumal.admin_service.dto.OrderStatusAuditResponse;
 import com.rumal.admin_service.dto.PageResponse;
 import com.rumal.admin_service.dto.UpdateOrderNoteRequest;
@@ -29,6 +30,7 @@ import java.net.URI;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -46,6 +48,8 @@ public class OrderClient {
             new ParameterizedTypeReference<>() {};
     private static final ParameterizedTypeReference<List<VendorOrderStatusAuditResponse>> VENDOR_ORDER_STATUS_AUDIT_LIST_TYPE =
             new ParameterizedTypeReference<>() {};
+    private static final String INTERNAL_AUTH_HEADER = "X-Internal-Auth";
+    private static final String VENDOR_ID_FIELD = "vendorId";
 
     private final RestClient restClient;
     private final ObjectMapper objectMapper;
@@ -64,17 +68,13 @@ public class OrderClient {
         this.retryRegistry = retryRegistry;
     }
 
-    public PageResponse<OrderResponse> listOrders(
-            UUID customerId, String customerEmail, UUID vendorId,
-            String status, Instant createdAfter, Instant createdBefore,
-            int page, int size, List<String> sort, String internalAuth
-    ) {
+    public PageResponse<OrderResponse> listOrders(OrderListRequest request, String internalAuth) {
         return runOrderCall(() -> {
             RestClient rc = restClient;
             try {
                 Map<String, Object> rawResponse = rc.get()
-                        .uri(uriBuilder -> buildListOrdersUri(uriBuilder, customerId, customerEmail, vendorId, status, createdAfter, createdBefore, page, size, sort))
-                        .header("X-Internal-Auth", internalAuth)
+                        .uri(uriBuilder -> buildListOrdersUri(uriBuilder, request))
+                        .header(INTERNAL_AUTH_HEADER, internalAuth)
                         .retrieve()
                         .body(MAP_TYPE);
 
@@ -103,16 +103,17 @@ public class OrderClient {
         return runOrderCall(() -> {
             RestClient rc = restClient;
             try {
-                RestClient.RequestBodySpec req = rc.patch()
-                        .uri("http://order-service/orders/{id}/status", orderId)
-                        .header("X-Internal-Auth", internalAuth);
-                if (userSub != null && !userSub.isBlank()) {
-                    req = req.header("X-User-Sub", userSub);
-                }
-                if (userRoles != null && !userRoles.isBlank()) {
-                    req = req.header("X-User-Roles", userRoles);
-                }
-                return ((RestClient.RequestBodySpec) ClientRequestUtils.applyIdempotencyHeader(req, idempotencyKey))
+                RestClient.RequestBodySpec req = applyIdempotencyHeader(
+                        applyActorHeaders(
+                                rc.patch()
+                                        .uri("http://order-service/orders/{id}/status", orderId)
+                                        .header(INTERNAL_AUTH_HEADER, internalAuth),
+                                userSub,
+                                userRoles
+                        ),
+                        idempotencyKey
+                );
+                return req
                         .body(new UpdateOrderStatusRequest(status))
                         .retrieve()
                         .body(OrderResponse.class);
@@ -128,10 +129,13 @@ public class OrderClient {
         return runOrderCall(() -> {
             RestClient rc = restClient;
             try {
-                RestClient.RequestBodySpec req = rc.patch()
-                        .uri("http://order-service/orders/{id}/note", orderId)
-                        .header("X-Internal-Auth", internalAuth);
-                return ((RestClient.RequestBodySpec) ClientRequestUtils.applyIdempotencyHeader(req, idempotencyKey))
+                RestClient.RequestBodySpec req = applyIdempotencyHeader(
+                        rc.patch()
+                                .uri("http://order-service/orders/{id}/note", orderId)
+                                .header(INTERNAL_AUTH_HEADER, internalAuth),
+                        idempotencyKey
+                );
+                return req
                         .body(body)
                         .retrieve()
                         .body(OrderResponse.class);
@@ -149,7 +153,7 @@ public class OrderClient {
             try {
                 List<OrderStatusAuditResponse> rows = rc.get()
                         .uri("http://order-service/orders/{id}/status-history", orderId)
-                        .header("X-Internal-Auth", internalAuth)
+                        .header(INTERNAL_AUTH_HEADER, internalAuth)
                         .retrieve()
                         .body(ORDER_STATUS_AUDIT_LIST_TYPE);
                 return rows == null ? List.of() : rows;
@@ -165,7 +169,7 @@ public class OrderClient {
             try {
                 List<VendorOrderResponse> rows = rc.get()
                         .uri("http://order-service/orders/{id}/vendor-orders", orderId)
-                        .header("X-Internal-Auth", internalAuth)
+                        .header(INTERNAL_AUTH_HEADER, internalAuth)
                         .retrieve()
                         .body(VENDOR_ORDER_LIST_TYPE);
                 return rows == null ? List.of() : rows;
@@ -181,7 +185,7 @@ public class OrderClient {
             try {
                 return rc.get()
                         .uri("http://order-service/orders/vendor-orders/{id}", vendorOrderId)
-                        .header("X-Internal-Auth", internalAuth)
+                        .header(INTERNAL_AUTH_HEADER, internalAuth)
                         .retrieve()
                         .body(VendorOrderResponse.class);
             } catch (RestClientException ex) {
@@ -205,16 +209,17 @@ public class OrderClient {
         return runOrderCall(() -> {
             RestClient rc = restClient;
             try {
-                RestClient.RequestBodySpec req = rc.patch()
-                        .uri("http://order-service/orders/vendor-orders/{id}/status", vendorOrderId)
-                        .header("X-Internal-Auth", internalAuth);
-                if (userSub != null && !userSub.isBlank()) {
-                    req = req.header("X-User-Sub", userSub);
-                }
-                if (userRoles != null && !userRoles.isBlank()) {
-                    req = req.header("X-User-Roles", userRoles);
-                }
-                return ((RestClient.RequestBodySpec) ClientRequestUtils.applyIdempotencyHeader(req, idempotencyKey))
+                RestClient.RequestBodySpec req = applyIdempotencyHeader(
+                        applyActorHeaders(
+                                rc.patch()
+                                        .uri("http://order-service/orders/vendor-orders/{id}/status", vendorOrderId)
+                                        .header(INTERNAL_AUTH_HEADER, internalAuth),
+                                userSub,
+                                userRoles
+                        ),
+                        idempotencyKey
+                );
+                return req
                         .body(new UpdateOrderStatusRequest(status))
                         .retrieve()
                         .body(VendorOrderResponse.class);
@@ -232,7 +237,7 @@ public class OrderClient {
             try {
                 List<VendorOrderStatusAuditResponse> rows = rc.get()
                         .uri("http://order-service/orders/vendor-orders/{id}/status-history", vendorOrderId)
-                        .header("X-Internal-Auth", internalAuth)
+                        .header(INTERNAL_AUTH_HEADER, internalAuth)
                         .retrieve()
                         .body(VENDOR_ORDER_STATUS_AUDIT_LIST_TYPE);
                 return rows == null ? List.of() : rows;
@@ -251,32 +256,18 @@ public class OrderClient {
         return runOrderCall(() -> {
             RestClient rc = restClient;
             try {
-                Map<String, Object> payload = new java.util.LinkedHashMap<>();
+                Map<String, Object> payload = new LinkedHashMap<>();
                 payload.put("format", request.format());
-                if (request.status() != null) {
-                    payload.put("status", request.status());
-                }
-                if (request.customerEmail() != null) {
-                    payload.put("customerEmail", request.customerEmail());
-                }
-                if (request.createdAfter() != null) {
-                    payload.put("createdAfter", request.createdAfter());
-                }
-                if (request.createdBefore() != null) {
-                    payload.put("createdBefore", request.createdBefore());
-                }
-                if (request.vendorId() != null) {
-                    payload.put("vendorId", request.vendorId());
-                }
-                if (userSub != null && !userSub.isBlank()) {
-                    payload.put("requestedBy", userSub);
-                }
-                if (userRoles != null && !userRoles.isBlank()) {
-                    payload.put("requestedRoles", userRoles);
-                }
+                putIfNotNull(payload, "status", request.status());
+                putIfNotNull(payload, "customerEmail", request.customerEmail());
+                putIfNotNull(payload, "createdAfter", request.createdAfter());
+                putIfNotNull(payload, "createdBefore", request.createdBefore());
+                putIfNotNull(payload, VENDOR_ID_FIELD, request.vendorId());
+                putIfHasText(payload, "requestedBy", userSub);
+                putIfHasText(payload, "requestedRoles", userRoles);
                 return rc.post()
                         .uri("http://order-service/orders/exports")
-                        .header("X-Internal-Auth", internalAuth)
+                        .header(INTERNAL_AUTH_HEADER, internalAuth)
                         .body(payload)
                         .retrieve()
                         .body(OrderExportJobResponse.class);
@@ -292,7 +283,7 @@ public class OrderClient {
             try {
                 return rc.get()
                         .uri("http://order-service/orders/exports/{id}", jobId)
-                        .header("X-Internal-Auth", internalAuth)
+                        .header(INTERNAL_AUTH_HEADER, internalAuth)
                         .retrieve()
                         .body(OrderExportJobResponse.class);
             } catch (RestClientException ex) {
@@ -307,7 +298,7 @@ public class OrderClient {
             try {
                 return rc.get()
                         .uri("http://order-service/orders/exports/{id}/download", jobId)
-                        .header("X-Internal-Auth", internalAuth)
+                        .header(INTERNAL_AUTH_HEADER, internalAuth)
                         .retrieve()
                         .toEntity(byte[].class);
             } catch (RestClientException ex) {
@@ -322,7 +313,7 @@ public class OrderClient {
             try {
                 Map<String, Object> raw = rc.get()
                         .uri("http://order-service/orders/{id}/details", orderId)
-                        .header("X-Internal-Auth", internalAuth)
+                        .header(INTERNAL_AUTH_HEADER, internalAuth)
                         .retrieve()
                         .body(MAP_TYPE);
                 if (raw == null) {
@@ -334,17 +325,9 @@ public class OrderClient {
                 }
                 Set<UUID> vendorIds = new LinkedHashSet<>();
                 for (Object itemObj : items) {
-                    if (!(itemObj instanceof Map<?, ?> itemMap)) {
-                        continue;
-                    }
-                    Object rawVendorId = itemMap.get("vendorId");
-                    if (rawVendorId == null) {
-                        continue;
-                    }
-                    try {
-                        vendorIds.add(UUID.fromString(String.valueOf(rawVendorId)));
-                    } catch (IllegalArgumentException ignored) {
-                        // ignore malformed vendor id
+                    UUID vendorId = extractVendorId(itemObj);
+                    if (vendorId != null) {
+                        vendorIds.add(vendorId);
                     }
                 }
                 return Set.copyOf(vendorIds);
@@ -391,46 +374,96 @@ public class OrderClient {
         return fallback;
     }
 
-    private URI buildListOrdersUri(
-            UriBuilder uriBuilder, UUID customerId, String customerEmail, UUID vendorId,
-            String status, Instant createdAfter, Instant createdBefore,
-            int page, int size, List<String> sort
-    ) {
+    private URI buildListOrdersUri(UriBuilder uriBuilder, OrderListRequest request) {
         UriBuilder builder = uriBuilder
                 .scheme("http")
                 .host("order-service")
                 .path("/orders")
-                .queryParam("page", Math.max(page, 0))
-                .queryParam("size", Math.max(size, 1));
+                .queryParam("page", Math.max(request.page(), 0))
+                .queryParam("size", Math.max(request.size(), 1));
 
-        if (customerId != null) {
-            builder = builder.queryParam("customerId", customerId);
-        }
-        if (customerEmail != null && !customerEmail.isBlank()) {
-            builder = builder.queryParam("customerEmail", customerEmail.trim());
-        }
-        if (vendorId != null) {
-            builder = builder.queryParam("vendorId", vendorId);
-        }
-        if (status != null && !status.isBlank()) {
-            builder = builder.queryParam("status", status);
-        }
-        if (createdAfter != null) {
-            builder = builder.queryParam("createdAfter", createdAfter.toString());
-        }
-        if (createdBefore != null) {
-            builder = builder.queryParam("createdBefore", createdBefore.toString());
-        }
-
-        if (sort != null && !sort.isEmpty()) {
-            for (String sortValue : sort) {
-                if (sortValue != null && !sortValue.isBlank()) {
-                    builder = builder.queryParam("sort", sortValue);
-                }
-            }
-        }
+        builder = queryParamIfNotNull(builder, "customerId", request.customerId());
+        builder = queryParamIfHasText(builder, "customerEmail", request.customerEmail());
+        builder = queryParamIfNotNull(builder, VENDOR_ID_FIELD, request.vendorId());
+        builder = queryParamIfHasText(builder, "status", request.status());
+        builder = queryParamIfNotNull(builder, "createdAfter", request.createdAfter());
+        builder = queryParamIfNotNull(builder, "createdBefore", request.createdBefore());
+        builder = querySortParams(builder, request.sort());
 
         return builder.build();
+    }
+
+    private RestClient.RequestBodySpec applyActorHeaders(RestClient.RequestBodySpec requestSpec, String userSub, String userRoles) {
+        RestClient.RequestBodySpec next = requestSpec;
+        if (StringUtils.hasText(userSub)) {
+            next = next.header("X-User-Sub", userSub);
+        }
+        if (StringUtils.hasText(userRoles)) {
+            next = next.header("X-User-Roles", userRoles);
+        }
+        return next;
+    }
+
+    private RestClient.RequestBodySpec applyIdempotencyHeader(RestClient.RequestBodySpec requestSpec, String idempotencyKey) {
+        String resolvedKey = ClientRequestUtils.resolveIdempotencyKey(idempotencyKey);
+        if (!StringUtils.hasText(resolvedKey)) {
+            return requestSpec;
+        }
+        return requestSpec.header(ClientRequestUtils.IDEMPOTENCY_HEADER, resolvedKey);
+    }
+
+    private void putIfNotNull(Map<String, Object> payload, String key, Object value) {
+        if (value != null) {
+            payload.put(key, value);
+        }
+    }
+
+    private void putIfHasText(Map<String, Object> payload, String key, String value) {
+        if (StringUtils.hasText(value)) {
+            payload.put(key, value.trim());
+        }
+    }
+
+    private UUID extractVendorId(Object itemObj) {
+        if (!(itemObj instanceof Map<?, ?> itemMap)) {
+            return null;
+        }
+        Object rawVendorId = itemMap.get(VENDOR_ID_FIELD);
+        if (rawVendorId == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(String.valueOf(rawVendorId));
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
+    }
+
+    private UriBuilder queryParamIfNotNull(UriBuilder builder, String name, Object value) {
+        if (value == null) {
+            return builder;
+        }
+        return builder.queryParam(name, value);
+    }
+
+    private UriBuilder queryParamIfHasText(UriBuilder builder, String name, String value) {
+        if (!StringUtils.hasText(value)) {
+            return builder;
+        }
+        return builder.queryParam(name, value.trim());
+    }
+
+    private UriBuilder querySortParams(UriBuilder builder, List<String> sort) {
+        if (sort == null || sort.isEmpty()) {
+            return builder;
+        }
+        UriBuilder next = builder;
+        for (String sortValue : sort) {
+            if (StringUtils.hasText(sortValue)) {
+                next = next.queryParam("sort", sortValue.trim());
+            }
+        }
+        return next;
     }
 
     private DownstreamHttpException toDownstreamHttpException(RestClientResponseException ex) {

@@ -31,6 +31,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AdminVendorController {
 
+    private static final String VENDOR_RESOURCE_TYPE = "VENDOR";
+
     private final AdminVendorService adminVendorService;
     private final InternalRequestVerifier internalRequestVerifier;
     private final AdminActorScopeService actorScopeService;
@@ -106,7 +108,7 @@ public class AdminVendorController {
         internalRequestVerifier.verify(internalAuth);
         actorScopeService.assertCanManageVendors(userSub, userRoles, internalAuth);
         Map<String, Object> result = adminVendorService.create(request, internalAuth, userSub, userRoles);
-        auditService.log(userSub, userRoles, "CREATE_VENDOR", "VENDOR", String.valueOf(result.get("id")), null, null);
+        auditService.log(userSub, userRoles, "CREATE_VENDOR", VENDOR_RESOURCE_TYPE, String.valueOf(result.get("id")), null, null);
         return result;
     }
 
@@ -121,7 +123,7 @@ public class AdminVendorController {
         internalRequestVerifier.verify(internalAuth);
         actorScopeService.assertCanManageVendors(userSub, userRoles, internalAuth);
         Map<String, Object> result = adminVendorService.update(id, request, internalAuth, userSub, userRoles);
-        auditService.log(userSub, userRoles, "UPDATE_VENDOR", "VENDOR", id.toString(), null, null);
+        auditService.log(userSub, userRoles, "UPDATE_VENDOR", VENDOR_RESOURCE_TYPE, id.toString(), null, null);
         return result;
     }
 
@@ -153,7 +155,7 @@ public class AdminVendorController {
         internalRequestVerifier.verify(internalAuth);
         actorScopeService.assertCanManageVendors(userSub, userRoles, internalAuth);
         Map<String, Object> result = adminVendorService.requestDelete(id, request, internalAuth, userSub, userRoles, idempotencyKey);
-        auditService.log(userSub, userRoles, "REQUEST_DELETE_VENDOR", "VENDOR", id.toString(), null, null);
+        auditService.log(userSub, userRoles, "REQUEST_DELETE_VENDOR", VENDOR_RESOURCE_TYPE, id.toString(), null, null);
         return result;
     }
 
@@ -170,7 +172,7 @@ public class AdminVendorController {
         internalRequestVerifier.verify(internalAuth);
         actorScopeService.assertCanManageVendors(userSub, userRoles, internalAuth);
         adminVendorService.confirmDelete(id, request, internalAuth, userSub, userRoles, idempotencyKey);
-        auditService.log(userSub, userRoles, "CONFIRM_DELETE_VENDOR", "VENDOR", id.toString(), null, null);
+        auditService.log(userSub, userRoles, "CONFIRM_DELETE_VENDOR", VENDOR_RESOURCE_TYPE, id.toString(), null, null);
     }
 
     @PostMapping("/{id}/stop-orders")
@@ -185,7 +187,7 @@ public class AdminVendorController {
         internalRequestVerifier.verify(internalAuth);
         actorScopeService.assertCanManageVendors(userSub, userRoles, internalAuth);
         Map<String, Object> result = adminVendorService.stopReceivingOrders(id, request, internalAuth, userSub, userRoles, idempotencyKey);
-        auditService.log(userSub, userRoles, "STOP_VENDOR_ORDERS", "VENDOR", id.toString(), null, null);
+        auditService.log(userSub, userRoles, "STOP_VENDOR_ORDERS", VENDOR_RESOURCE_TYPE, id.toString(), null, null);
         return result;
     }
 
@@ -201,7 +203,7 @@ public class AdminVendorController {
         internalRequestVerifier.verify(internalAuth);
         actorScopeService.assertCanManageVendors(userSub, userRoles, internalAuth);
         Map<String, Object> result = adminVendorService.resumeReceivingOrders(id, request, internalAuth, userSub, userRoles, idempotencyKey);
-        auditService.log(userSub, userRoles, "RESUME_VENDOR_ORDERS", "VENDOR", id.toString(), null, null);
+        auditService.log(userSub, userRoles, "RESUME_VENDOR_ORDERS", VENDOR_RESOURCE_TYPE, id.toString(), null, null);
         return result;
     }
 
@@ -217,7 +219,7 @@ public class AdminVendorController {
         internalRequestVerifier.verify(internalAuth);
         actorScopeService.assertCanManageVendors(userSub, userRoles, internalAuth);
         Map<String, Object> result = adminVendorService.approveVerification(id, request, internalAuth, userSub, userRoles, idempotencyKey);
-        auditService.log(userSub, userRoles, "APPROVE_VENDOR_VERIFICATION", "VENDOR", id.toString(), null, null);
+        auditService.log(userSub, userRoles, "APPROVE_VENDOR_VERIFICATION", VENDOR_RESOURCE_TYPE, id.toString(), null, null);
         return result;
     }
 
@@ -233,7 +235,7 @@ public class AdminVendorController {
         internalRequestVerifier.verify(internalAuth);
         actorScopeService.assertCanManageVendors(userSub, userRoles, internalAuth);
         Map<String, Object> result = adminVendorService.rejectVerification(id, request, internalAuth, userSub, userRoles, idempotencyKey);
-        auditService.log(userSub, userRoles, "REJECT_VENDOR_VERIFICATION", "VENDOR", id.toString(), null, null);
+        auditService.log(userSub, userRoles, "REJECT_VENDOR_VERIFICATION", VENDOR_RESOURCE_TYPE, id.toString(), null, null);
         return result;
     }
 
@@ -249,7 +251,7 @@ public class AdminVendorController {
         internalRequestVerifier.verify(internalAuth);
         actorScopeService.assertCanManageVendors(userSub, userRoles, internalAuth);
         Map<String, Object> result = adminVendorService.restore(id, request, internalAuth, userSub, userRoles, idempotencyKey);
-        auditService.log(userSub, userRoles, "RESTORE_VENDOR", "VENDOR", id.toString(), null, null);
+        auditService.log(userSub, userRoles, "RESTORE_VENDOR", VENDOR_RESOURCE_TYPE, id.toString(), null, null);
         return result;
     }
 

@@ -18,6 +18,12 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AdminActorScopeService {
 
+    private static final String ROLE_SUPER_ADMIN = "super_admin";
+    private static final String ROLE_PLATFORM_STAFF = "platform_staff";
+    private static final String ROLE_VENDOR_STAFF = "vendor_staff";
+    private static final String ROLE_VENDOR_ADMIN = "vendor_admin";
+    private static final String VENDOR_ID_FIELD = "vendorId";
+    private static final String PERMISSIONS_FIELD = "permissions";
     public static final String PLATFORM_PRODUCTS_MANAGE = "platform.products.manage";
     public static final String PLATFORM_CATEGORIES_MANAGE = "platform.categories.manage";
     public static final String PLATFORM_ORDERS_READ = "platform.orders.read";
@@ -46,20 +52,20 @@ public class AdminActorScopeService {
             String internalAuth
     ) {
         Set<String> roles = parseRoles(userRolesHeader);
-        if (roles.contains("super_admin")) {
+        if (roles.contains(ROLE_SUPER_ADMIN)) {
             return requestedVendorId;
         }
-        if (roles.contains("platform_staff")) {
+        if (roles.contains(ROLE_PLATFORM_STAFF)) {
             Set<String> platformPermissions = resolvePlatformPermissionsForUser(userSub, internalAuth);
             if (!platformPermissions.contains(PLATFORM_ORDERS_READ) && !platformPermissions.contains(PLATFORM_ORDERS_MANAGE)) {
                 throw new UnauthorizedException("platform_staff does not have order access permission");
             }
             return requestedVendorId;
         }
-        if (roles.contains("vendor_staff")) {
+        if (roles.contains(ROLE_VENDOR_STAFF)) {
             return resolveVendorScopedIdForVendorStaff(userSub, requestedVendorId, internalAuth);
         }
-        if (!roles.contains("vendor_admin")) {
+        if (!roles.contains(ROLE_VENDOR_ADMIN)) {
             throw new UnauthorizedException("Caller does not have admin order access");
         }
         if (!StringUtils.hasText(userSub)) {
@@ -84,10 +90,10 @@ public class AdminActorScopeService {
 
     public void assertCanManagePosters(String userSub, String userRolesHeader, String internalAuth) {
         Set<String> roles = parseRoles(userRolesHeader);
-        if (roles.contains("super_admin")) {
+        if (roles.contains(ROLE_SUPER_ADMIN)) {
             return;
         }
-        if (!roles.contains("platform_staff")) {
+        if (!roles.contains(ROLE_PLATFORM_STAFF)) {
             throw new UnauthorizedException("Caller does not have poster admin access");
         }
         Set<String> platformPermissions = resolvePlatformPermissionsForUser(userSub, internalAuth);
@@ -98,10 +104,10 @@ public class AdminActorScopeService {
 
     public void assertCanReadVendors(String userSub, String userRolesHeader, String internalAuth) {
         Set<String> roles = parseRoles(userRolesHeader);
-        if (roles.contains("super_admin")) {
+        if (roles.contains(ROLE_SUPER_ADMIN)) {
             return;
         }
-        if (!roles.contains("platform_staff")) {
+        if (!roles.contains(ROLE_PLATFORM_STAFF)) {
             throw new UnauthorizedException("Caller does not have vendor read access");
         }
         Set<String> platformPermissions = resolvePlatformPermissionsForUser(userSub, internalAuth);
@@ -113,10 +119,10 @@ public class AdminActorScopeService {
 
     public void assertCanManageVendors(String userSub, String userRolesHeader, String internalAuth) {
         Set<String> roles = parseRoles(userRolesHeader);
-        if (roles.contains("super_admin")) {
+        if (roles.contains(ROLE_SUPER_ADMIN)) {
             return;
         }
-        if (!roles.contains("platform_staff")) {
+        if (!roles.contains(ROLE_PLATFORM_STAFF)) {
             throw new UnauthorizedException("Caller does not have vendor management access");
         }
         Set<String> platformPermissions = resolvePlatformPermissionsForUser(userSub, internalAuth);
@@ -127,7 +133,7 @@ public class AdminActorScopeService {
 
     public void assertCanSearchKeycloakUsers(String userRolesHeader) {
         Set<String> roles = parseRoles(userRolesHeader);
-        if (roles.contains("super_admin") || roles.contains("vendor_admin")) {
+        if (roles.contains(ROLE_SUPER_ADMIN) || roles.contains(ROLE_VENDOR_ADMIN)) {
             return;
         }
         throw new UnauthorizedException("Caller does not have Keycloak user search access");
@@ -137,7 +143,7 @@ public class AdminActorScopeService {
         return parseRoles(userRolesHeader).contains(role == null ? "" : role.trim().toLowerCase(Locale.ROOT));
     }
 
-    public void assertHasRole(String userSub, String userRolesHeader, String... requiredRoles) {
+    public void assertHasRole(String userRolesHeader, String... requiredRoles) {
         Set<String> roles = parseRoles(userRolesHeader);
         for (String required : requiredRoles) {
             if (roles.contains(required.trim().toLowerCase(Locale.ROOT))) {
@@ -149,10 +155,10 @@ public class AdminActorScopeService {
 
     public void assertCanReadOrders(String userSub, String userRolesHeader, String internalAuth) {
         Set<String> roles = parseRoles(userRolesHeader);
-        if (roles.contains("super_admin")) {
+        if (roles.contains(ROLE_SUPER_ADMIN)) {
             return;
         }
-        if (!roles.contains("platform_staff")) {
+        if (!roles.contains(ROLE_PLATFORM_STAFF)) {
             throw new UnauthorizedException("Caller does not have order read access");
         }
         Set<String> platformPermissions = resolvePlatformPermissionsForUser(userSub, internalAuth);
@@ -168,10 +174,10 @@ public class AdminActorScopeService {
             String internalAuth
     ) {
         Set<String> roles = parseRoles(userRolesHeader);
-        if (roles.contains("super_admin")) {
+        if (roles.contains(ROLE_SUPER_ADMIN)) {
             return;
         }
-        if (roles.contains("platform_staff")) {
+        if (roles.contains(ROLE_PLATFORM_STAFF)) {
             assertCanReadOrders(userSub, userRolesHeader, internalAuth);
             return;
         }
@@ -183,10 +189,10 @@ public class AdminActorScopeService {
 
     public void assertCanManageOrders(String userSub, String userRolesHeader, String internalAuth) {
         Set<String> roles = parseRoles(userRolesHeader);
-        if (roles.contains("super_admin")) {
+        if (roles.contains(ROLE_SUPER_ADMIN)) {
             return;
         }
-        if (!roles.contains("platform_staff")) {
+        if (!roles.contains(ROLE_PLATFORM_STAFF)) {
             throw new UnauthorizedException("Caller does not have order management access");
         }
         Set<String> platformPermissions = resolvePlatformPermissionsForUser(userSub, internalAuth);
@@ -197,10 +203,10 @@ public class AdminActorScopeService {
 
     public void assertCanUpdateOrderStatus(String userSub, String userRolesHeader, UUID orderId, String internalAuth) {
         Set<String> roles = parseRoles(userRolesHeader);
-        if (roles.contains("super_admin")) {
+        if (roles.contains(ROLE_SUPER_ADMIN)) {
             return;
         }
-        if (roles.contains("platform_staff")) {
+        if (roles.contains(ROLE_PLATFORM_STAFF)) {
             assertCanManageOrders(userSub, userRolesHeader, internalAuth);
             return;
         }
@@ -217,14 +223,14 @@ public class AdminActorScopeService {
         }
         UUID orderVendorId = orderVendorIds.iterator().next();
 
-        if (roles.contains("vendor_admin")) {
+        if (roles.contains(ROLE_VENDOR_ADMIN)) {
             Set<UUID> vendorIds = resolveVendorIdsForUser(userSub.trim(), internalAuth);
             if (!vendorIds.contains(orderVendorId)) {
                 throw new UnauthorizedException("vendor_admin cannot update status of another vendor's order");
             }
             return;
         }
-        if (roles.contains("vendor_staff")) {
+        if (roles.contains(ROLE_VENDOR_STAFF)) {
             Set<UUID> vendorIds = resolveVendorIdsForVendorStaffWithManagePermission(userSub.trim(), internalAuth);
             if (!vendorIds.contains(orderVendorId)) {
                 throw new UnauthorizedException("vendor_staff does not have order management permission for this vendor");
@@ -236,10 +242,10 @@ public class AdminActorScopeService {
 
     public void assertCanReadOrderHistory(String userSub, String userRolesHeader, UUID orderId, String internalAuth) {
         Set<String> roles = parseRoles(userRolesHeader);
-        if (roles.contains("super_admin")) {
+        if (roles.contains(ROLE_SUPER_ADMIN)) {
             return;
         }
-        if (roles.contains("platform_staff")) {
+        if (roles.contains(ROLE_PLATFORM_STAFF)) {
             Set<String> platformPermissions = resolvePlatformPermissionsForUser(userSub, internalAuth);
             if (!platformPermissions.contains(PLATFORM_ORDERS_READ) && !platformPermissions.contains(PLATFORM_ORDERS_MANAGE)) {
                 throw new UnauthorizedException("platform_staff does not have order access permission");
@@ -259,14 +265,14 @@ public class AdminActorScopeService {
         }
         UUID orderVendorId = orderVendorIds.iterator().next();
 
-        if (roles.contains("vendor_admin")) {
+        if (roles.contains(ROLE_VENDOR_ADMIN)) {
             Set<UUID> vendorIds = resolveVendorIdsForUser(userSub.trim(), internalAuth);
             if (!vendorIds.contains(orderVendorId)) {
                 throw new UnauthorizedException("vendor_admin cannot access another vendor's order history");
             }
             return;
         }
-        if (roles.contains("vendor_staff")) {
+        if (roles.contains(ROLE_VENDOR_STAFF)) {
             Set<UUID> vendorIds = resolveVendorIdsForVendorStaffWithOrderReadPermission(userSub.trim(), internalAuth);
             if (!vendorIds.contains(orderVendorId)) {
                 throw new UnauthorizedException("vendor_staff does not have order access for this vendor");
@@ -278,10 +284,10 @@ public class AdminActorScopeService {
 
     public void assertCanUpdateVendorOrderStatus(String userSub, String userRolesHeader, UUID vendorOrderId, String internalAuth) {
         Set<String> roles = parseRoles(userRolesHeader);
-        if (roles.contains("super_admin")) {
+        if (roles.contains(ROLE_SUPER_ADMIN)) {
             return;
         }
-        if (roles.contains("platform_staff")) {
+        if (roles.contains(ROLE_PLATFORM_STAFF)) {
             assertCanManageOrders(userSub, userRolesHeader, internalAuth);
             return;
         }
@@ -289,14 +295,14 @@ public class AdminActorScopeService {
             throw new UnauthorizedException("Missing authenticated user subject");
         }
         UUID vendorId = resolveVendorIdForVendorOrder(vendorOrderId, internalAuth);
-        if (roles.contains("vendor_admin")) {
+        if (roles.contains(ROLE_VENDOR_ADMIN)) {
             Set<UUID> vendorIds = resolveVendorIdsForUser(userSub.trim(), internalAuth);
             if (!vendorIds.contains(vendorId)) {
                 throw new UnauthorizedException("vendor_admin cannot update another vendor's sub-order");
             }
             return;
         }
-        if (roles.contains("vendor_staff")) {
+        if (roles.contains(ROLE_VENDOR_STAFF)) {
             Set<UUID> vendorIds = resolveVendorIdsForVendorStaffWithManagePermission(userSub.trim(), internalAuth);
             if (!vendorIds.contains(vendorId)) {
                 throw new UnauthorizedException("vendor_staff does not have order management permission for this vendor");
@@ -308,10 +314,10 @@ public class AdminActorScopeService {
 
     public void assertCanReadVendorOrderHistory(String userSub, String userRolesHeader, UUID vendorOrderId, String internalAuth) {
         Set<String> roles = parseRoles(userRolesHeader);
-        if (roles.contains("super_admin")) {
+        if (roles.contains(ROLE_SUPER_ADMIN)) {
             return;
         }
-        if (roles.contains("platform_staff")) {
+        if (roles.contains(ROLE_PLATFORM_STAFF)) {
             Set<String> platformPermissions = resolvePlatformPermissionsForUser(userSub, internalAuth);
             if (!platformPermissions.contains(PLATFORM_ORDERS_READ) && !platformPermissions.contains(PLATFORM_ORDERS_MANAGE)) {
                 throw new UnauthorizedException("platform_staff does not have order access permission");
@@ -322,14 +328,14 @@ public class AdminActorScopeService {
             throw new UnauthorizedException("Missing authenticated user subject");
         }
         UUID vendorId = resolveVendorIdForVendorOrder(vendorOrderId, internalAuth);
-        if (roles.contains("vendor_admin")) {
+        if (roles.contains(ROLE_VENDOR_ADMIN)) {
             Set<UUID> vendorIds = resolveVendorIdsForUser(userSub.trim(), internalAuth);
             if (!vendorIds.contains(vendorId)) {
                 throw new UnauthorizedException("vendor_admin cannot access another vendor's sub-order history");
             }
             return;
         }
-        if (roles.contains("vendor_staff")) {
+        if (roles.contains(ROLE_VENDOR_STAFF)) {
             Set<UUID> vendorIds = resolveVendorIdsForVendorStaffWithOrderReadPermission(userSub.trim(), internalAuth);
             if (!vendorIds.contains(vendorId)) {
                 throw new UnauthorizedException("vendor_staff does not have order access for this vendor");
@@ -341,10 +347,10 @@ public class AdminActorScopeService {
 
     public UUID resolveScopedVendorIdForVendorStaffManagement(String userSub, String userRolesHeader, UUID requestedVendorId, String internalAuth) {
         Set<String> roles = parseRoles(userRolesHeader);
-        if (roles.contains("super_admin")) {
+        if (roles.contains(ROLE_SUPER_ADMIN)) {
             return requestedVendorId;
         }
-        if (!roles.contains("vendor_admin")) {
+        if (!roles.contains(ROLE_VENDOR_ADMIN)) {
             throw new UnauthorizedException("Caller does not have vendor staff management access");
         }
         if (!StringUtils.hasText(userSub)) {
@@ -372,21 +378,30 @@ public class AdminActorScopeService {
 
     public AdminCapabilitiesResponse describeCapabilities(String userSub, String userRolesHeader, String internalAuth) {
         Set<String> roles = parseRoles(userRolesHeader);
-        boolean superAdmin = roles.contains("super_admin");
-        boolean platformStaff = roles.contains("platform_staff");
-        boolean vendorAdmin = roles.contains("vendor_admin");
-        boolean vendorStaff = roles.contains("vendor_staff");
+        boolean superAdmin = roles.contains(ROLE_SUPER_ADMIN);
+        boolean platformStaff = roles.contains(ROLE_PLATFORM_STAFF);
+        boolean vendorAdmin = roles.contains(ROLE_VENDOR_ADMIN);
+        boolean vendorStaff = roles.contains(ROLE_VENDOR_STAFF);
+        String normalizedUserSub = StringUtils.hasText(userSub) ? userSub.trim() : null;
 
-        Set<String> platformPermissions = superAdmin
-                ? Set.of(PLATFORM_PRODUCTS_MANAGE, PLATFORM_CATEGORIES_MANAGE, PLATFORM_ORDERS_READ, PLATFORM_ORDERS_MANAGE, PLATFORM_POSTERS_MANAGE, PLATFORM_PROMOTIONS_MANAGE, PLATFORM_REVIEWS_MANAGE)
-                : (platformStaff ? resolvePlatformPermissionsForUser(userSub, internalAuth) : Set.of());
-
-        List<Map<String, Object>> vendorMemberships = (superAdmin || vendorAdmin) && StringUtils.hasText(userSub)
-                ? adminVendorService.listAccessibleVendorMembershipsByKeycloakUser(userSub.trim(), internalAuth)
-                : List.of();
-        List<Map<String, Object>> vendorStaffAccess = (superAdmin || vendorStaff) && StringUtils.hasText(userSub)
-                ? adminAccessService.listVendorStaffAccessByKeycloakUser(userSub.trim(), internalAuth)
-                : List.of();
+        Set<String> platformPermissions = resolveCapabilitiesPlatformPermissions(
+                superAdmin,
+                platformStaff,
+                normalizedUserSub,
+                internalAuth
+        );
+        List<Map<String, Object>> vendorMemberships = loadVendorMemberships(
+                superAdmin,
+                vendorAdmin,
+                normalizedUserSub,
+                internalAuth
+        );
+        List<Map<String, Object>> vendorStaffAccess = loadVendorStaffAccess(
+                superAdmin,
+                vendorStaff,
+                normalizedUserSub,
+                internalAuth
+        );
         Set<String> vendorPermissions = extractActiveVendorPermissionCodes(vendorStaffAccess);
 
         boolean vendorStaffCanManageOrders = vendorPermissions.contains(VENDOR_ORDERS_READ) || vendorPermissions.contains(VENDOR_ORDERS_MANAGE);
@@ -433,7 +448,7 @@ public class AdminActorScopeService {
         List<Map<String, Object>> memberships = adminVendorService.listAccessibleVendorMembershipsByKeycloakUser(keycloakUserId, internalAuth);
         Set<UUID> vendorIds = new LinkedHashSet<>();
         for (Map<String, Object> membership : memberships) {
-            Object rawVendorId = membership.get("vendorId");
+            Object rawVendorId = membership.get(VENDOR_ID_FIELD);
             if (!(rawVendorId instanceof String raw)) {
                 continue;
             }
@@ -453,19 +468,9 @@ public class AdminActorScopeService {
         List<Map<String, Object>> accessRows = adminAccessService.listVendorStaffAccessByKeycloakUser(userSub.trim(), internalAuth);
         Set<UUID> allowedVendorIds = new LinkedHashSet<>();
         for (Map<String, Object> row : accessRows) {
-            Set<String> permissions = parseStringSet(row.get("permissions"));
-            boolean canReadOrders = permissions.contains(VENDOR_ORDERS_READ) || permissions.contains(VENDOR_ORDERS_MANAGE);
-            if (!canReadOrders) {
-                continue;
-            }
-            Object rawVendorId = row.get("vendorId");
-            if (rawVendorId == null) {
-                continue;
-            }
-            try {
-                allowedVendorIds.add(UUID.fromString(String.valueOf(rawVendorId)));
-            } catch (IllegalArgumentException ignored) {
-                // ignore malformed downstream rows
+            UUID vendorId = extractVendorIdForOrderReadableAccess(row);
+            if (vendorId != null) {
+                allowedVendorIds.add(vendorId);
             }
         }
 
@@ -488,18 +493,9 @@ public class AdminActorScopeService {
         List<Map<String, Object>> accessRows = adminAccessService.listVendorStaffAccessByKeycloakUser(userSub, internalAuth);
         Set<UUID> allowedVendorIds = new LinkedHashSet<>();
         for (Map<String, Object> row : accessRows) {
-            Set<String> permissions = parseStringSet(row.get("permissions"));
-            if (!permissions.contains(VENDOR_ORDERS_MANAGE)) {
-                continue;
-            }
-            Object rawVendorId = row.get("vendorId");
-            if (rawVendorId == null) {
-                continue;
-            }
-            try {
-                allowedVendorIds.add(UUID.fromString(String.valueOf(rawVendorId)));
-            } catch (IllegalArgumentException ignored) {
-                // ignore malformed downstream rows
+            UUID vendorId = extractVendorIdForPermission(row, VENDOR_ORDERS_MANAGE);
+            if (vendorId != null) {
+                allowedVendorIds.add(vendorId);
             }
         }
         return Set.copyOf(allowedVendorIds);
@@ -509,18 +505,9 @@ public class AdminActorScopeService {
         List<Map<String, Object>> accessRows = adminAccessService.listVendorStaffAccessByKeycloakUser(userSub, internalAuth);
         Set<UUID> allowedVendorIds = new LinkedHashSet<>();
         for (Map<String, Object> row : accessRows) {
-            Set<String> permissions = parseStringSet(row.get("permissions"));
-            if (!permissions.contains(VENDOR_ORDERS_READ) && !permissions.contains(VENDOR_ORDERS_MANAGE)) {
-                continue;
-            }
-            Object rawVendorId = row.get("vendorId");
-            if (rawVendorId == null) {
-                continue;
-            }
-            try {
-                allowedVendorIds.add(UUID.fromString(String.valueOf(rawVendorId)));
-            } catch (IllegalArgumentException ignored) {
-                // ignore malformed downstream rows
+            UUID vendorId = extractVendorIdForOrderReadableAccess(row);
+            if (vendorId != null) {
+                allowedVendorIds.add(vendorId);
             }
         }
         return Set.copyOf(allowedVendorIds);
@@ -540,10 +527,11 @@ public class AdminActorScopeService {
         }
         Map<String, Object> access = adminAccessService.getPlatformAccessByKeycloakUser(userSub.trim(), internalAuth);
         Object activeRaw = access.get("active");
-        if (!(activeRaw instanceof Boolean active) || !active) {
+        boolean active = activeRaw instanceof Boolean && (Boolean) activeRaw;
+        if (!active) {
             return Set.of();
         }
-        return parseStringSet(access.get("permissions"));
+        return parseStringSet(access.get(PERMISSIONS_FIELD));
     }
 
     private Set<String> parseRoles(String rolesHeader) {
@@ -584,13 +572,88 @@ public class AdminActorScopeService {
             if (row == null || !isTruthy(row.get("active"))) {
                 continue;
             }
-            for (String permission : parseStringSet(row.get("permissions"))) {
+            for (String permission : parseStringSet(row.get(PERMISSIONS_FIELD))) {
                 if (StringUtils.hasText(permission)) {
                     permissions.add(permission.trim().toLowerCase(Locale.ROOT));
                 }
             }
         }
         return Set.copyOf(permissions);
+    }
+
+    private Set<String> resolveCapabilitiesPlatformPermissions(
+            boolean superAdmin,
+            boolean platformStaff,
+            String userSub,
+            String internalAuth
+    ) {
+        if (superAdmin) {
+            return Set.of(
+                    PLATFORM_PRODUCTS_MANAGE,
+                    PLATFORM_CATEGORIES_MANAGE,
+                    PLATFORM_ORDERS_READ,
+                    PLATFORM_ORDERS_MANAGE,
+                    PLATFORM_POSTERS_MANAGE,
+                    PLATFORM_PROMOTIONS_MANAGE,
+                    PLATFORM_REVIEWS_MANAGE
+            );
+        }
+        if (platformStaff) {
+            return resolvePlatformPermissionsForUser(userSub, internalAuth);
+        }
+        return Set.of();
+    }
+
+    private List<Map<String, Object>> loadVendorMemberships(
+            boolean superAdmin,
+            boolean vendorAdmin,
+            String userSub,
+            String internalAuth
+    ) {
+        if ((superAdmin || vendorAdmin) && StringUtils.hasText(userSub)) {
+            return adminVendorService.listAccessibleVendorMembershipsByKeycloakUser(userSub, internalAuth);
+        }
+        return List.of();
+    }
+
+    private List<Map<String, Object>> loadVendorStaffAccess(
+            boolean superAdmin,
+            boolean vendorStaff,
+            String userSub,
+            String internalAuth
+    ) {
+        if ((superAdmin || vendorStaff) && StringUtils.hasText(userSub)) {
+            return adminAccessService.listVendorStaffAccessByKeycloakUser(userSub, internalAuth);
+        }
+        return List.of();
+    }
+
+    private UUID extractVendorIdForOrderReadableAccess(Map<String, Object> row) {
+        Set<String> permissions = parseStringSet(row.get(PERMISSIONS_FIELD));
+        if (!permissions.contains(VENDOR_ORDERS_READ) && !permissions.contains(VENDOR_ORDERS_MANAGE)) {
+            return null;
+        }
+        return parseVendorIdSafely(row);
+    }
+
+    private UUID extractVendorIdForPermission(Map<String, Object> row, String requiredPermission) {
+        Set<String> permissions = parseStringSet(row.get(PERMISSIONS_FIELD));
+        if (!permissions.contains(requiredPermission)) {
+            return null;
+        }
+        return parseVendorIdSafely(row);
+    }
+
+    private UUID parseVendorIdSafely(Map<String, Object> row) {
+        Object rawVendorId = row.get(VENDOR_ID_FIELD);
+        if (rawVendorId == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(String.valueOf(rawVendorId));
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 
     private boolean isTruthy(Object value) {

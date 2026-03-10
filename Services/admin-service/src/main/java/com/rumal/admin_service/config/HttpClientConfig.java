@@ -13,7 +13,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.util.StringUtils;
-import org.springframework.web.context.request.RequestAttributes;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.client.RestClient;
@@ -94,15 +93,10 @@ public class HttpClientConfig {
     }
 
     private void propagateAuditHeaders(org.springframework.http.HttpRequest request) {
-        RequestAttributes requestAttributes = RequestContextHolder.getRequestAttributes();
-        if (!(requestAttributes instanceof ServletRequestAttributes servletRequestAttributes)) {
+        if (!(RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes servletRequestAttributes)) {
             return;
         }
-
         HttpServletRequest currentRequest = servletRequestAttributes.getRequest();
-        if (currentRequest == null) {
-            return;
-        }
 
         for (String headerName : FORWARDED_AUDIT_HEADERS) {
             String value = currentRequest.getHeader(headerName);
@@ -124,7 +118,7 @@ public class HttpClientConfig {
         }
 
         String timestamp = String.valueOf(System.currentTimeMillis());
-        String method = request.getMethod() == null ? "GET" : request.getMethod().name();
+        String method = request.getMethod().name();
         String path = request.getURI().getRawPath();
         String bodyHash = computeBodyHash(method, body);
 

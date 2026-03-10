@@ -3,6 +3,7 @@ package com.rumal.admin_service.service;
 import com.rumal.admin_service.client.OrderClient;
 import com.rumal.admin_service.dto.BulkOperationResult;
 import com.rumal.admin_service.dto.CreateOrderExportRequest;
+import com.rumal.admin_service.dto.OrderListRequest;
 import com.rumal.admin_service.dto.OrderResponse;
 import com.rumal.admin_service.dto.OrderExportJobResponse;
 import com.rumal.admin_service.dto.OrderStatusAuditResponse;
@@ -35,20 +36,16 @@ public class AdminOrderService {
     @Cacheable(
             cacheNames = "adminOrders",
             key = "@adminOrderCacheVersionService.adminOrdersVersion() + '::' + "
-                    + "(#customerId == null ? 'ALL' : #customerId.toString()) + '::' + "
-                    + "(#customerEmail == null ? 'NO_EMAIL' : #customerEmail) + '::' + "
-                    + "(#vendorId == null ? 'NO_VENDOR' : #vendorId.toString()) + '::' + "
-                    + "(#status == null ? 'ALL_STATUS' : #status) + '::' + "
-                    + "(#createdAfter == null ? 'NO_AFTER' : #createdAfter.toString()) + '::' + "
-                    + "(#createdBefore == null ? 'NO_BEFORE' : #createdBefore.toString()) + '::' + "
-                    + "#page + '::' + #size + '::' + #sort.toString()"
+                    + "(#request.customerId() == null ? 'ALL' : #request.customerId().toString()) + '::' + "
+                    + "(#request.customerEmail() == null ? 'NO_EMAIL' : #request.customerEmail()) + '::' + "
+                    + "(#request.vendorId() == null ? 'NO_VENDOR' : #request.vendorId().toString()) + '::' + "
+                    + "(#request.status() == null ? 'ALL_STATUS' : #request.status()) + '::' + "
+                    + "(#request.createdAfter() == null ? 'NO_AFTER' : #request.createdAfter().toString()) + '::' + "
+                    + "(#request.createdBefore() == null ? 'NO_BEFORE' : #request.createdBefore().toString()) + '::' + "
+                    + "#request.page() + '::' + #request.size() + '::' + #request.sort().toString()"
     )
-    public PageResponse<OrderResponse> listOrders(
-            UUID customerId, String customerEmail, UUID vendorId,
-            String status, Instant createdAfter, Instant createdBefore,
-            int page, int size, List<String> sort, String internalAuth
-    ) {
-        return orderClient.listOrders(customerId, customerEmail, vendorId, status, createdAfter, createdBefore, page, size, sort, internalAuth);
+    public PageResponse<OrderResponse> listOrders(OrderListRequest request, String internalAuth) {
+        return orderClient.listOrders(request, internalAuth);
     }
 
     public OrderResponse updateOrderStatus(UUID orderId, String status, String internalAuth) {

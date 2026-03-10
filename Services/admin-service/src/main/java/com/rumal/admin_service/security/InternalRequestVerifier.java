@@ -130,7 +130,9 @@ public class InternalRequestVerifier {
             try {
                 java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
                 bodyHash = HexFormat.of().formatHex(digest.digest(body));
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+                // Fall back to an empty body hash when SHA-256 is unavailable.
+            }
         }
         String payload = timestamp + ":" + method + ":" + path + ":" + bodyHash;
         try {

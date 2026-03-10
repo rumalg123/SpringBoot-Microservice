@@ -2,6 +2,7 @@ package com.rumal.admin_service.service;
 
 import com.rumal.admin_service.auth.KeycloakVendorAdminManagementService;
 import com.rumal.admin_service.client.AccessClient;
+import com.rumal.admin_service.dto.AccessAuditQuery;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -17,6 +18,8 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class AdminAccessService {
+
+    private static final String KEYCLOAK_USER_ID_FIELD = "keycloakUserId";
 
     private final AccessClient accessClient;
     private final KeycloakVendorAdminManagementService keycloakVendorAdminManagementService;
@@ -75,7 +78,7 @@ public class AdminAccessService {
                 actionReason
         );
         if (!isTruthy(updated.get("active"))) {
-            revokeKeycloakSessions(extractString(updated.get("keycloakUserId")));
+            revokeKeycloakSessions(extractString(updated.get(KEYCLOAK_USER_ID_FIELD)));
         }
         return updated;
     }
@@ -87,7 +90,7 @@ public class AdminAccessService {
     public void deletePlatformStaff(UUID id, String internalAuth, String userSub, String userRoles, String actionReason) {
         Map<String, Object> existing = accessClient.getPlatformStaffById(id, internalAuth, userSub, userRoles);
         accessClient.deletePlatformStaff(id, internalAuth, userSub, userRoles, actionReason);
-        revokeKeycloakSessions(extractString(existing.get("keycloakUserId")));
+        revokeKeycloakSessions(extractString(existing.get(KEYCLOAK_USER_ID_FIELD)));
     }
 
     public Map<String, Object> restorePlatformStaff(UUID id, String internalAuth) {
@@ -115,35 +118,12 @@ public class AdminAccessService {
     }
 
     public Map<String, Object> listAccessAudit(
-            String targetType,
-            UUID targetId,
-            UUID vendorId,
-            String action,
-            String actorQuery,
-            String from,
-            String to,
-            Integer page,
-            Integer size,
-            Integer limit,
+            AccessAuditQuery query,
             String internalAuth,
             String userRoles,
             UUID callerVendorId
     ) {
-        return accessClient.listAccessAudit(
-                targetType,
-                targetId,
-                vendorId,
-                action,
-                actorQuery,
-                from,
-                to,
-                page,
-                size,
-                limit,
-                internalAuth,
-                userRoles,
-                callerVendorId
-        );
+        return accessClient.listAccessAudit(query, internalAuth, userRoles, callerVendorId);
     }
 
     public Map<String, Object> getVendorStaffById(UUID id, String internalAuth) {
@@ -176,7 +156,7 @@ public class AdminAccessService {
                 actionReason
         );
         if (!isTruthy(updated.get("active"))) {
-            revokeKeycloakSessions(extractString(updated.get("keycloakUserId")));
+            revokeKeycloakSessions(extractString(updated.get(KEYCLOAK_USER_ID_FIELD)));
         }
         return updated;
     }
@@ -199,7 +179,7 @@ public class AdminAccessService {
     ) {
         Map<String, Object> existing = accessClient.getVendorStaffById(id, internalAuth, userRoles, callerVendorId);
         accessClient.deleteVendorStaff(id, internalAuth, userSub, userRoles, actionReason, callerVendorId);
-        revokeKeycloakSessions(extractString(existing.get("keycloakUserId")));
+        revokeKeycloakSessions(extractString(existing.get(KEYCLOAK_USER_ID_FIELD)));
     }
 
     public Map<String, Object> restoreVendorStaff(UUID id, String internalAuth) {
@@ -249,7 +229,7 @@ public class AdminAccessService {
     private Map<String, Object> prepareStaffUpsertPayload(Map<String, Object> request) {
         Map<String, Object> payload = new LinkedHashMap<>(request == null ? Map.of() : request);
         String email = normalizeRequiredEmail(payload.get("email"));
-        String requestedKeycloakUserId = extractString(payload.get("keycloakUserId"));
+        String requestedKeycloakUserId = extractString(payload.get(KEYCLOAK_USER_ID_FIELD));
         String resolvedKeycloakUserId = keycloakVendorAdminManagementService.resolveUserIdByEmail(email);
         if (StringUtils.hasText(requestedKeycloakUserId)
                 && !requestedKeycloakUserId.equalsIgnoreCase(resolvedKeycloakUserId)) {
@@ -259,7 +239,7 @@ public class AdminAccessService {
             );
         }
         payload.put("email", email);
-        payload.put("keycloakUserId", resolvedKeycloakUserId);
+        payload.put(KEYCLOAK_USER_ID_FIELD, resolvedKeycloakUserId);
         return payload;
     }
 

@@ -26,6 +26,16 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AdminVendorService {
 
+    private static final String KEYCLOAK_USER_ID_FIELD = "keycloakUserId";
+    private static final String VENDOR_ID_FIELD = "vendorId";
+    private static final String ACTIVE_FIELD = "active";
+    private static final String EMAIL_FIELD = "email";
+    private static final String DISPLAY_NAME_FIELD = "displayName";
+    private static final String MEMBERSHIP_ID_FIELD_NAME = "vendor membership id";
+    private static final String MANAGER_ROLE = "MANAGER";
+    private static final String OWNER_ROLE = "OWNER";
+    private static final String VENDOR_ADMIN_ROLE = "vendor_admin";
+
     private final VendorClient vendorClient;
     private final AccessClient accessClient;
     private final KeycloakVendorAdminManagementService keycloakVendorAdminManagementService;
@@ -173,43 +183,17 @@ public class AdminVendorService {
         return vendorClient.listAccessibleVendorMembershipsByKeycloakUser(keycloakUserId, internalAuth);
     }
 
-    public Set<String> listLinkedKeycloakUserIdsForVendorAdmin(String keycloakUserId, String internalAuth, String userRoles) {
-        String normalizedUserSub = normalizeRequired(keycloakUserId, "keycloakUserId", 120);
-        Set<UUID> vendorIds = new LinkedHashSet<>();
-        for (Map<String, Object> membership : vendorClient.listAccessibleVendorMembershipsByKeycloakUser(normalizedUserSub, internalAuth)) {
-            if (membership == null) {
-                continue;
-            }
-            UUID vendorId = tryParseUuid(membership.get("vendorId"));
-            if (vendorId != null) {
-                vendorIds.add(vendorId);
-            }
-        }
-
+    public Set<String> listLinkedKeycloakUserIdsForVendorAdmin(String keycloakUserId, String internalAuth) {
+        String normalizedUserSub = normalizeRequired(keycloakUserId, KEYCLOAK_USER_ID_FIELD, 120);
+        Set<UUID> vendorIds = resolveLinkedVendorIds(normalizedUserSub, internalAuth);
         if (vendorIds.isEmpty()) {
             return Set.of();
         }
 
         Set<String> linkedKeycloakUserIds = new LinkedHashSet<>();
         for (UUID vendorId : vendorIds) {
-            for (Map<String, Object> vendorUser : vendorClient.listVendorUsersInternal(vendorId, internalAuth)) {
-                if (vendorUser == null || !isTruthy(vendorUser.get("active"))) {
-                    continue;
-                }
-                String linkedUserId = stringOrNull(vendorUser.get("keycloakUserId"));
-                if (StringUtils.hasText(linkedUserId)) {
-                    linkedKeycloakUserIds.add(linkedUserId.trim().toLowerCase(Locale.ROOT));
-                }
-            }
-            for (Map<String, Object> vendorStaff : accessClient.listVendorStaff(vendorId, internalAuth, "vendor_admin", vendorId)) {
-                if (vendorStaff == null || !isTruthy(vendorStaff.get("active")) || isTruthy(vendorStaff.get("deleted"))) {
-                    continue;
-                }
-                String linkedUserId = stringOrNull(vendorStaff.get("keycloakUserId"));
-                if (StringUtils.hasText(linkedUserId)) {
-                    linkedKeycloakUserIds.add(linkedUserId.trim().toLowerCase(Locale.ROOT));
-                }
-            }
+            linkedKeycloakUserIds.addAll(collectActiveVendorUserIds(vendorId, internalAuth));
+            linkedKeycloakUserIds.addAll(collectActiveVendorStaffIds(vendorId, internalAuth));
         }
 
         return Set.copyOf(linkedKeycloakUserIds);
@@ -240,20 +224,18 @@ public class AdminVendorService {
 
         if (beforeRow != null && afterRow == null) {
             Map<String, Object> deactivate = new LinkedHashMap<>(beforeRow);
-            deactivate.put("active", false);
+            deactivate.put(ACTIVE_FIELD, false);
             syncVendorStaffMembership(deactivate, internalAuth, userSub, userRoles);
             return;
         }
 
-        if (beforeRow != null && afterRow != null && !isSameVendorPrincipal(beforeRow, afterRow)) {
+        if (beforeRow != null && !isSameVendorPrincipal(beforeRow, afterRow)) {
             Map<String, Object> deactivateOld = new LinkedHashMap<>(beforeRow);
-            deactivateOld.put("active", false);
+            deactivateOld.put(ACTIVE_FIELD, false);
             syncVendorStaffMembership(deactivateOld, internalAuth, userSub, userRoles);
         }
 
-        if (afterRow != null) {
-            syncVendorStaffMembership(afterRow, internalAuth, userSub, userRoles);
-        }
+        syncVendorStaffMembership(afterRow, internalAuth, userSub, userRoles);
     }
 
     public Map<String, Object> addVendorUser(UUID vendorId, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
@@ -285,8 +267,8 @@ public class AdminVendorService {
             String idempotencyKey
     ) {
         Map<String, Object> updated = vendorClient.updateVendorUser(vendorId, membershipId, request, internalAuth, userSub, userRoles, idempotencyKey);
-        if (!isTruthy(updated.get("active"))) {
-            String keycloakUserId = stringOrNull(updated.get("keycloakUserId"));
+        if (!isTruthy(updated.get(ACTIVE_FIELD))) {
+            String keycloakUserId = stringOrNull(updated.get(KEYCLOAK_USER_ID_FIELD));
             if (StringUtils.hasText(keycloakUserId)) {
                 keycloakVendorAdminManagementService.logoutUserSessions(keycloakUserId);
             }
@@ -310,7 +292,7 @@ public class AdminVendorService {
         for (Map<String, Object> row : vendorClient.listVendorUsers(vendorId, internalAuth, userSub, userRoles)) {
             UUID rowId = tryParseUuid(row.get("id"));
             if (membershipId.equals(rowId)) {
-                keycloakUserId = stringOrNull(row.get("keycloakUserId"));
+                keycloakUserId = stringOrNull(row.get(KEYCLOAK_USER_ID_FIELD));
                 break;
             }
         }
@@ -344,11 +326,11 @@ public class AdminVendorService {
         String displayName = resolveDisplayName(request.displayName(), managedUser.firstName(), managedUser.lastName(), managedUser.email());
 
         Map<String, Object> membershipRequest = Map.of(
-                "keycloakUserId", managedUser.id(),
-                "email", managedUser.email(),
-                "displayName", displayName,
+                KEYCLOAK_USER_ID_FIELD, managedUser.id(),
+                EMAIL_FIELD, managedUser.email(),
+                DISPLAY_NAME_FIELD, displayName,
                 "role", role,
-                "active", true
+                ACTIVE_FIELD, true
         );
 
         Map<String, Object> membership;
@@ -356,7 +338,7 @@ public class AdminVendorService {
             membership = upsertVendorMembership(vendorId, managedUser.id(), membershipRequest, internalAuth, userSub, userRoles, idempotencyKey);
         } catch (RuntimeException ex) {
             Map<String, Object> recoveredMembership = tryFindVendorMembership(vendorId, managedUser.id(), internalAuth, userSub, userRoles);
-            if (recoveredMembership != null) {
+            if (!recoveredMembership.isEmpty()) {
                 log.warn("Recovered vendor onboarding for user {} after downstream failure: {}", managedUser.id(), ex.getMessage());
                 membership = recoveredMembership;
             } else {
@@ -409,7 +391,7 @@ public class AdminVendorService {
             return findMembershipByKeycloakUserId(memberships, keycloakUserId);
         } catch (RuntimeException ex) {
             log.warn("Failed to verify vendor membership recovery for user {}: {}", keycloakUserId, ex.getMessage());
-            return null;
+            return Map.of();
         }
     }
 
@@ -423,23 +405,17 @@ public class AdminVendorService {
             String idempotencyKey
     ) {
         List<Map<String, Object>> memberships = vendorClient.listVendorUsers(vendorId, internalAuth, userSub, userRoles);
-        Map<String, Object> existing = memberships.stream()
-                .filter(m -> keycloakUserId.equalsIgnoreCase(stringValue(m.get("keycloakUserId"))))
-                .findFirst()
-                .orElse(null);
+        Map<String, Object> existing = findMembershipByKeycloakUserId(memberships, keycloakUserId);
 
-        if (existing == null) {
+        if (existing.isEmpty()) {
             try {
                 return vendorClient.addVendorUser(vendorId, membershipRequest, internalAuth, userSub, userRoles, idempotencyKey);
             } catch (DownstreamHttpException ex) {
                 if (ex.getStatusCode().value() == 409) {
                     memberships = vendorClient.listVendorUsers(vendorId, internalAuth, userSub, userRoles);
-                    existing = memberships.stream()
-                            .filter(m -> keycloakUserId.equalsIgnoreCase(stringValue(m.get("keycloakUserId"))))
-                            .findFirst()
-                            .orElse(null);
-                    if (existing != null) {
-                        UUID membershipId = parseUuid(existing.get("id"), "vendor membership id");
+                    existing = findMembershipByKeycloakUserId(memberships, keycloakUserId);
+                    if (!existing.isEmpty()) {
+                        UUID membershipId = parseUuid(existing.get("id"), MEMBERSHIP_ID_FIELD_NAME);
                         return vendorClient.updateVendorUser(vendorId, membershipId, membershipRequest, internalAuth, userSub, userRoles, idempotencyKey);
                     }
                 }
@@ -447,7 +423,7 @@ public class AdminVendorService {
             }
         }
 
-        UUID membershipId = parseUuid(existing.get("id"), "vendor membership id");
+        UUID membershipId = parseUuid(existing.get("id"), MEMBERSHIP_ID_FIELD_NAME);
         return vendorClient.updateVendorUser(vendorId, membershipId, membershipRequest, internalAuth, userSub, userRoles, idempotencyKey);
     }
 
@@ -457,59 +433,43 @@ public class AdminVendorService {
             String userSub,
             String userRoles
     ) {
-        UUID vendorId = parseUuid(vendorStaffRow.get("vendorId"), "vendorId");
-        String keycloakUserId = stringOrNull(vendorStaffRow.get("keycloakUserId"));
+        UUID vendorId = parseUuid(vendorStaffRow.get(VENDOR_ID_FIELD), VENDOR_ID_FIELD);
+        String keycloakUserId = stringOrNull(vendorStaffRow.get(KEYCLOAK_USER_ID_FIELD));
         if (!StringUtils.hasText(keycloakUserId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Access service response is missing vendor staff keycloakUserId");
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Access service response is missing vendor staff " + KEYCLOAK_USER_ID_FIELD);
         }
-        boolean desiredActive = isTruthy(vendorStaffRow.get("active"));
-        String incomingEmail = stringOrNull(vendorStaffRow.get("email"));
-        String incomingDisplayName = stringOrNull(vendorStaffRow.get("displayName"));
+        boolean desiredActive = isTruthy(vendorStaffRow.get(ACTIVE_FIELD));
+        String incomingEmail = stringOrNull(vendorStaffRow.get(EMAIL_FIELD));
+        String incomingDisplayName = stringOrNull(vendorStaffRow.get(DISPLAY_NAME_FIELD));
 
         List<Map<String, Object>> memberships = vendorClient.listVendorUsers(vendorId, internalAuth, userSub, userRoles);
         Map<String, Object> existing = findMembershipByKeycloakUserId(memberships, keycloakUserId);
-
-        if (existing == null) {
-            if (!desiredActive) {
-                return;
-            }
-            if (!StringUtils.hasText(incomingEmail)) {
-                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Access service response is missing vendor staff email");
-            }
-            Map<String, Object> payload = buildVendorManagerMembershipPayload(
-                    keycloakUserId,
-                    incomingEmail,
-                    incomingDisplayName,
-                    true
-            );
-            try {
-                vendorClient.addVendorUser(vendorId, payload, internalAuth, userSub, userRoles);
-                return;
-            } catch (DownstreamHttpException ex) {
-                if (ex.getStatusCode().value() != 409) {
-                    throw ex;
-                }
-                memberships = vendorClient.listVendorUsers(vendorId, internalAuth, userSub, userRoles);
-                existing = findMembershipByKeycloakUserId(memberships, keycloakUserId);
-                if (existing == null) {
-                    throw ex;
-                }
-            }
+        Map<String, Object> ensuredExisting = ensureVendorStaffMembership(
+                existing,
+                vendorId,
+                keycloakUserId,
+                desiredActive,
+                incomingEmail,
+                incomingDisplayName,
+                internalAuth,
+                userSub,
+                userRoles
+        );
+        if (ensuredExisting.isEmpty()) {
+            return;
         }
-
-        String existingRole = stringValue(existing.get("role")).trim().toUpperCase();
-        if ("OWNER".equals(existingRole)) {
+        if (isOwnerMembership(ensuredExisting)) {
             return;
         }
 
-        String effectiveEmail = StringUtils.hasText(incomingEmail) ? incomingEmail : stringOrNull(existing.get("email"));
+        String effectiveEmail = StringUtils.hasText(incomingEmail) ? incomingEmail : stringOrNull(ensuredExisting.get(EMAIL_FIELD));
         if (!StringUtils.hasText(effectiveEmail)) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Vendor membership email cannot be resolved for vendor staff sync");
         }
         String effectiveDisplayName = StringUtils.hasText(incomingDisplayName)
                 ? incomingDisplayName
-                : stringOrNull(existing.get("displayName"));
-        UUID membershipId = parseUuid(existing.get("id"), "vendor membership id");
+                : stringOrNull(ensuredExisting.get(DISPLAY_NAME_FIELD));
+        UUID membershipId = parseUuid(ensuredExisting.get("id"), MEMBERSHIP_ID_FIELD_NAME);
         Map<String, Object> payload = buildVendorManagerMembershipPayload(
                 keycloakUserId,
                 effectiveEmail,
@@ -526,27 +486,27 @@ public class AdminVendorService {
             boolean active
     ) {
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("keycloakUserId", keycloakUserId);
-        payload.put("email", email);
-        payload.put("displayName", displayName);
-        payload.put("role", "MANAGER");
-        payload.put("active", active);
+        payload.put(KEYCLOAK_USER_ID_FIELD, keycloakUserId);
+        payload.put(EMAIL_FIELD, email);
+        payload.put(DISPLAY_NAME_FIELD, displayName);
+        payload.put("role", MANAGER_ROLE);
+        payload.put(ACTIVE_FIELD, active);
         return payload;
     }
 
     private Map<String, Object> findMembershipByKeycloakUserId(List<Map<String, Object>> memberships, String keycloakUserId) {
         if (memberships == null || memberships.isEmpty()) {
-            return null;
+            return Map.of();
         }
         for (Map<String, Object> membership : memberships) {
             if (membership == null) {
                 continue;
             }
-            if (keycloakUserId.equalsIgnoreCase(stringValue(membership.get("keycloakUserId")).trim())) {
+            if (keycloakUserId.equalsIgnoreCase(stringValue(membership.get(KEYCLOAK_USER_ID_FIELD)).trim())) {
                 return membership;
             }
         }
-        return null;
+        return Map.of();
     }
 
     private UUID parseUuid(Object value, String fieldName) {
@@ -583,10 +543,10 @@ public class AdminVendorService {
     }
 
     private boolean isSameVendorPrincipal(Map<String, Object> left, Map<String, Object> right) {
-        UUID leftVendorId = tryParseUuid(left.get("vendorId"));
-        UUID rightVendorId = tryParseUuid(right.get("vendorId"));
-        String leftUserId = stringOrNull(left.get("keycloakUserId"));
-        String rightUserId = stringOrNull(right.get("keycloakUserId"));
+        UUID leftVendorId = tryParseUuid(left.get(VENDOR_ID_FIELD));
+        UUID rightVendorId = tryParseUuid(right.get(VENDOR_ID_FIELD));
+        String leftUserId = stringOrNull(left.get(KEYCLOAK_USER_ID_FIELD));
+        String rightUserId = stringOrNull(right.get(KEYCLOAK_USER_ID_FIELD));
         if (leftVendorId == null || rightVendorId == null) {
             return false;
         }
@@ -617,7 +577,7 @@ public class AdminVendorService {
         if (vendor == null) {
             return false;
         }
-        return isTruthy(vendor.get("active"))
+        return isTruthy(vendor.get(ACTIVE_FIELD))
                 && !isTruthy(vendor.get("deleted"))
                 && equalsIgnoreCase(vendor.get("status"), "ACTIVE");
     }
@@ -625,13 +585,13 @@ public class AdminVendorService {
     private void revokeSessionsForVendorPrincipals(UUID vendorId, String internalAuth, String userSub, String userRoles) {
         Set<String> ids = new LinkedHashSet<>();
         for (Map<String, Object> row : vendorClient.listVendorUsers(vendorId, internalAuth, userSub, userRoles)) {
-            String keycloakUserId = stringOrNull(row.get("keycloakUserId"));
+            String keycloakUserId = stringOrNull(row.get(KEYCLOAK_USER_ID_FIELD));
             if (StringUtils.hasText(keycloakUserId)) {
                 ids.add(keycloakUserId);
             }
         }
         for (Map<String, Object> row : accessClient.listVendorStaff(vendorId, internalAuth, userRoles, vendorId)) {
-            String keycloakUserId = stringOrNull(row.get("keycloakUserId"));
+            String keycloakUserId = stringOrNull(row.get(KEYCLOAK_USER_ID_FIELD));
             if (StringUtils.hasText(keycloakUserId)) {
                 ids.add(keycloakUserId);
             }
@@ -641,13 +601,106 @@ public class AdminVendorService {
 
     private String normalizeVendorUserRole(String requestedRole) {
         if (!StringUtils.hasText(requestedRole)) {
-            return "MANAGER";
+            return MANAGER_ROLE;
         }
         String normalized = requestedRole.trim().toUpperCase();
         return switch (normalized) {
-            case "OWNER", "MANAGER" -> normalized;
+            case OWNER_ROLE, MANAGER_ROLE -> normalized;
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "vendorUserRole must be OWNER or MANAGER");
         };
+    }
+
+    private Set<UUID> resolveLinkedVendorIds(String normalizedUserSub, String internalAuth) {
+        Set<UUID> vendorIds = new LinkedHashSet<>();
+        for (Map<String, Object> membership : vendorClient.listAccessibleVendorMembershipsByKeycloakUser(normalizedUserSub, internalAuth)) {
+            if (membership == null) {
+                continue;
+            }
+            UUID vendorId = tryParseUuid(membership.get(VENDOR_ID_FIELD));
+            if (vendorId != null) {
+                vendorIds.add(vendorId);
+            }
+        }
+        return Set.copyOf(vendorIds);
+    }
+
+    private Set<String> collectActiveVendorUserIds(UUID vendorId, String internalAuth) {
+        Set<String> linkedIds = new LinkedHashSet<>();
+        for (Map<String, Object> vendorUser : vendorClient.listVendorUsersInternal(vendorId, internalAuth)) {
+            addNormalizedUserId(linkedIds, vendorUser, ACTIVE_FIELD, false);
+        }
+        return linkedIds;
+    }
+
+    private Set<String> collectActiveVendorStaffIds(UUID vendorId, String internalAuth) {
+        Set<String> linkedIds = new LinkedHashSet<>();
+        for (Map<String, Object> vendorStaff : accessClient.listVendorStaff(vendorId, internalAuth, VENDOR_ADMIN_ROLE, vendorId)) {
+            addNormalizedUserId(linkedIds, vendorStaff, ACTIVE_FIELD, true);
+        }
+        return linkedIds;
+    }
+
+    private void addNormalizedUserId(
+            Set<String> linkedIds,
+            Map<String, Object> row,
+            String activeField,
+            boolean skipDeleted
+    ) {
+        if (row == null || !isTruthy(row.get(activeField)) || (skipDeleted && isTruthy(row.get("deleted")))) {
+            return;
+        }
+        String linkedUserId = stringOrNull(row.get(KEYCLOAK_USER_ID_FIELD));
+        if (StringUtils.hasText(linkedUserId)) {
+            linkedIds.add(linkedUserId.trim().toLowerCase(Locale.ROOT));
+        }
+    }
+
+    private Map<String, Object> ensureVendorStaffMembership(
+            Map<String, Object> existing,
+            UUID vendorId,
+            String keycloakUserId,
+            boolean desiredActive,
+            String incomingEmail,
+            String incomingDisplayName,
+            String internalAuth,
+            String userSub,
+            String userRoles
+    ) {
+        if (!existing.isEmpty()) {
+            return existing;
+        }
+        if (!desiredActive) {
+            return Map.of();
+        }
+        if (!StringUtils.hasText(incomingEmail)) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Access service response is missing vendor staff email");
+        }
+        Map<String, Object> payload = buildVendorManagerMembershipPayload(
+                keycloakUserId,
+                incomingEmail,
+                incomingDisplayName,
+                true
+        );
+        try {
+            vendorClient.addVendorUser(vendorId, payload, internalAuth, userSub, userRoles);
+            return Map.of();
+        } catch (DownstreamHttpException ex) {
+            if (ex.getStatusCode().value() != 409) {
+                throw ex;
+            }
+            Map<String, Object> recovered = findMembershipByKeycloakUserId(
+                    vendorClient.listVendorUsers(vendorId, internalAuth, userSub, userRoles),
+                    keycloakUserId
+            );
+            if (recovered.isEmpty()) {
+                throw ex;
+            }
+            return recovered;
+        }
+    }
+
+    private boolean isOwnerMembership(Map<String, Object> membership) {
+        return OWNER_ROLE.equals(stringValue(membership.get("role")).trim().toUpperCase());
     }
 
     private String resolveDisplayName(String requestedDisplayName, String firstName, String lastName, String fallbackEmail) {

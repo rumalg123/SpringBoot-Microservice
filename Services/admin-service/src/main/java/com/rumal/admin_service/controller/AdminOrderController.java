@@ -5,6 +5,7 @@ import com.rumal.admin_service.dto.BulkUpdateOrderStatusRequest;
 import com.rumal.admin_service.dto.CreateOrderExportRequest;
 import com.rumal.admin_service.dto.OrderResponse;
 import com.rumal.admin_service.dto.OrderExportJobResponse;
+import com.rumal.admin_service.dto.OrderListRequest;
 import com.rumal.admin_service.dto.OrderStatusAuditResponse;
 import com.rumal.admin_service.dto.PageResponse;
 import com.rumal.admin_service.dto.UpdateOrderNoteRequest;
@@ -39,6 +40,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AdminOrderController {
 
+    private static final String STATUS_DETAILS_PREFIX = "status=";
+
     private final AdminOrderService adminOrderService;
     private final AdminActorScopeService adminActorScopeService;
     private final InternalRequestVerifier internalRequestVerifier;
@@ -61,7 +64,18 @@ public class AdminOrderController {
     ) {
         internalRequestVerifier.verify(internalAuth);
         UUID scopedVendorId = adminActorScopeService.resolveScopedVendorIdForOrderAccess(userSub, userRoles, vendorId, internalAuth);
-        return adminOrderService.listOrders(customerId, customerEmail, scopedVendorId, status, createdAfter, createdBefore, page, size, sort, internalAuth);
+        OrderListRequest request = new OrderListRequest(
+                customerId,
+                customerEmail,
+                scopedVendorId,
+                status,
+                createdAfter,
+                createdBefore,
+                page,
+                size,
+                sort
+        );
+        return adminOrderService.listOrders(request, internalAuth);
     }
 
     @PatchMapping("/{orderId}/status")
@@ -77,7 +91,7 @@ public class AdminOrderController {
         internalRequestVerifier.verify(internalAuth);
         adminActorScopeService.assertCanUpdateOrderStatus(userSub, userRoles, orderId, internalAuth);
         OrderResponse response = adminOrderService.updateOrderStatus(orderId, request.status(), internalAuth, userSub, userRoles, idempotencyKey);
-        auditService.log(userSub, userRoles, "UPDATE_ORDER_STATUS", "ORDER", orderId.toString(), "status=" + request.status(), extractClientIp(httpRequest));
+        auditService.log(userSub, userRoles, "UPDATE_ORDER_STATUS", "ORDER", orderId.toString(), STATUS_DETAILS_PREFIX + request.status(), extractClientIp(httpRequest));
         return response;
     }
 
@@ -132,7 +146,7 @@ public class AdminOrderController {
         internalRequestVerifier.verify(internalAuth);
         adminActorScopeService.assertCanUpdateVendorOrderStatus(userSub, userRoles, vendorOrderId, internalAuth);
         VendorOrderResponse response = adminOrderService.updateVendorOrderStatus(vendorOrderId, request.status(), internalAuth, userSub, userRoles, idempotencyKey);
-        auditService.log(userSub, userRoles, "UPDATE_VENDOR_ORDER_STATUS", "VENDOR_ORDER", vendorOrderId.toString(), "status=" + request.status(), extractClientIp(httpRequest));
+        auditService.log(userSub, userRoles, "UPDATE_VENDOR_ORDER_STATUS", "VENDOR_ORDER", vendorOrderId.toString(), STATUS_DETAILS_PREFIX + request.status(), extractClientIp(httpRequest));
         return response;
     }
 
@@ -149,7 +163,9 @@ public class AdminOrderController {
         BulkOperationResult result = adminOrderService.bulkUpdateOrderStatus(
                 request.orderIds(), request.status(), internalAuth, userSub, userRoles);
         auditService.log(userSub, userRoles, "BULK_UPDATE_ORDER_STATUS", "ORDER",
-                request.orderIds().size() + " orders", "status=" + request.status() + " succeeded=" + result.succeeded() + " failed=" + result.failed(), extractClientIp(httpRequest));
+                request.orderIds().size() + " orders",
+                STATUS_DETAILS_PREFIX + request.status() + " succeeded=" + result.succeeded() + " failed=" + result.failed(),
+                extractClientIp(httpRequest));
         return result;
     }
 

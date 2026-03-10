@@ -28,6 +28,14 @@ public class VendorClient {
             new ParameterizedTypeReference<>() {};
     private static final ParameterizedTypeReference<Map<String, Object>> MAP_TYPE =
             new ParameterizedTypeReference<>() {};
+    private static final String VENDORS_PATH = "/admin/vendors";
+    private static final String VENDOR_PATH_PREFIX = VENDORS_PATH + "/";
+    private static final String USERS_SUFFIX = "/users";
+    private static final String STOP_ORDERS_SUFFIX = "/stop-orders";
+    private static final String RESUME_ORDERS_SUFFIX = "/resume-orders";
+    private static final String INTERNAL_AUTH_HEADER = "X-Internal-Auth";
+    private static final String MESSAGE_FIELD = "message";
+    private static final String ERROR_FIELD = "error";
 
     @Qualifier("loadBalancedRestClientBuilder")
     private final RestClient restClient;
@@ -52,7 +60,7 @@ public class VendorClient {
     }
 
     public List<Map<String, Object>> listAll(String internalAuth, String userSub, String userRoles) {
-        return getPagedContentList("/admin/vendors", internalAuth, userSub, userRoles);
+        return getPagedContentList(VENDORS_PATH, internalAuth, userSub, userRoles);
     }
 
     public List<Map<String, Object>> listDeleted(String internalAuth) {
@@ -60,7 +68,7 @@ public class VendorClient {
     }
 
     public List<Map<String, Object>> listDeleted(String internalAuth, String userSub, String userRoles) {
-        return getPagedContentList("/admin/vendors/deleted", internalAuth, userSub, userRoles);
+        return getPagedContentList(VENDORS_PATH + "/deleted", internalAuth, userSub, userRoles);
     }
 
     public Map<String, Object> getById(UUID id, String internalAuth) {
@@ -68,7 +76,7 @@ public class VendorClient {
     }
 
     public Map<String, Object> getById(UUID id, String internalAuth, String userSub, String userRoles) {
-        return getMap("/admin/vendors/" + id, internalAuth, userSub, userRoles);
+        return getMap(vendorPath(id), internalAuth, userSub, userRoles);
     }
 
     public Map<String, Object> getDeletionEligibility(UUID id, String internalAuth) {
@@ -76,23 +84,23 @@ public class VendorClient {
     }
 
     public Map<String, Object> getDeletionEligibility(UUID id, String internalAuth, String userSub, String userRoles) {
-        return getMap("/admin/vendors/" + id + "/deletion-eligibility", internalAuth, userSub, userRoles);
+        return getMap(vendorPath(id) + "/deletion-eligibility", internalAuth, userSub, userRoles);
     }
 
     public Map<String, Object> create(Map<String, Object> request, String internalAuth) {
-        return jsonRequest("POST", "/admin/vendors", request, internalAuth);
+        return jsonRequest("POST", VENDORS_PATH, request, internalAuth);
     }
 
     public Map<String, Object> create(Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
-        return jsonRequest("POST", "/admin/vendors", request, internalAuth, userSub, userRoles);
+        return jsonRequest("POST", VENDORS_PATH, request, internalAuth, userSub, userRoles);
     }
 
     public Map<String, Object> update(UUID id, Map<String, Object> request, String internalAuth) {
-        return jsonRequest("PUT", "/admin/vendors/" + id, request, internalAuth);
+        return jsonRequest("PUT", vendorPath(id), request, internalAuth);
     }
 
     public Map<String, Object> update(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
-        return jsonRequest("PUT", "/admin/vendors/" + id, request, internalAuth, userSub, userRoles);
+        return jsonRequest("PUT", vendorPath(id), request, internalAuth, userSub, userRoles);
     }
 
     public void delete(UUID id, String internalAuth) {
@@ -104,22 +112,20 @@ public class VendorClient {
             RestClient rc = restClient;
             try {
                 applyActorHeaders(rc.delete()
-                        .uri(buildUri("/admin/vendors/" + id))
-                        .header("X-Internal-Auth", internalAuth), userSub, userRoles)
+                        .uri(buildUri(vendorPath(id)))
+                        .header(INTERNAL_AUTH_HEADER, internalAuth), userSub, userRoles)
                         .retrieve()
                         .toBodilessEntity();
             } catch (RestClientResponseException ex) {
                 throw toDownstreamHttpException(ex);
-            } catch (RestClientException ex) {
-                throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
-            } catch (IllegalStateException ex) {
+            } catch (RestClientException | IllegalStateException ex) {
                 throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
             }
         });
     }
 
     public Map<String, Object> stopReceivingOrders(UUID id, String internalAuth) {
-        return postNoBody("/admin/vendors/" + id + "/stop-orders", internalAuth);
+        return postNoBody(vendorPath(id) + STOP_ORDERS_SUFFIX, internalAuth);
     }
 
     public Map<String, Object> stopReceivingOrders(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
@@ -128,12 +134,12 @@ public class VendorClient {
 
     public Map<String, Object> stopReceivingOrders(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles, String idempotencyKey) {
         return request == null
-                ? postNoBody("/admin/vendors/" + id + "/stop-orders", internalAuth, userSub, userRoles, idempotencyKey)
-                : jsonPost("/admin/vendors/" + id + "/stop-orders", request, internalAuth, userSub, userRoles, idempotencyKey);
+                ? postNoBody(vendorPath(id) + STOP_ORDERS_SUFFIX, internalAuth, userSub, userRoles, idempotencyKey)
+                : jsonRequest("POST", vendorPath(id) + STOP_ORDERS_SUFFIX, request, internalAuth, userSub, userRoles, idempotencyKey);
     }
 
     public Map<String, Object> resumeReceivingOrders(UUID id, String internalAuth) {
-        return postNoBody("/admin/vendors/" + id + "/resume-orders", internalAuth);
+        return postNoBody(vendorPath(id) + RESUME_ORDERS_SUFFIX, internalAuth);
     }
 
     public Map<String, Object> resumeReceivingOrders(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
@@ -142,20 +148,20 @@ public class VendorClient {
 
     public Map<String, Object> resumeReceivingOrders(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles, String idempotencyKey) {
         return request == null
-                ? postNoBody("/admin/vendors/" + id + "/resume-orders", internalAuth, userSub, userRoles, idempotencyKey)
-                : jsonPost("/admin/vendors/" + id + "/resume-orders", request, internalAuth, userSub, userRoles, idempotencyKey);
+                ? postNoBody(vendorPath(id) + RESUME_ORDERS_SUFFIX, internalAuth, userSub, userRoles, idempotencyKey)
+                : jsonRequest("POST", vendorPath(id) + RESUME_ORDERS_SUFFIX, request, internalAuth, userSub, userRoles, idempotencyKey);
     }
 
     public Map<String, Object> approveVerification(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles, String idempotencyKey) {
         return request == null
-                ? postNoBody("/admin/vendors/" + id + "/verify", internalAuth, userSub, userRoles, idempotencyKey)
-                : jsonPost("/admin/vendors/" + id + "/verify", request, internalAuth, userSub, userRoles, idempotencyKey);
+                ? postNoBody(vendorPath(id) + "/verify", internalAuth, userSub, userRoles, idempotencyKey)
+                : jsonRequest("POST", vendorPath(id) + "/verify", request, internalAuth, userSub, userRoles, idempotencyKey);
     }
 
     public Map<String, Object> rejectVerification(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles, String idempotencyKey) {
         return request == null
-                ? postNoBody("/admin/vendors/" + id + "/reject-verification", internalAuth, userSub, userRoles, idempotencyKey)
-                : jsonPost("/admin/vendors/" + id + "/reject-verification", request, internalAuth, userSub, userRoles, idempotencyKey);
+                ? postNoBody(vendorPath(id) + "/reject-verification", internalAuth, userSub, userRoles, idempotencyKey)
+                : jsonRequest("POST", vendorPath(id) + "/reject-verification", request, internalAuth, userSub, userRoles, idempotencyKey);
     }
 
     public Map<String, Object> restore(UUID id, String internalAuth) {
@@ -170,9 +176,9 @@ public class VendorClient {
         return runVendorCall(() -> {
             RestClient rc = restClient;
             try {
-                RestClient.RequestBodySpec spec = rc.post().uri(buildUri("/admin/vendors/" + id + "/restore"));
+                RestClient.RequestBodySpec spec = rc.post().uri(buildUri(vendorPath(id) + "/restore"));
                 RestClient.RequestHeadersSpec<?> headersSpec = applyIdempotencyHeader(
-                        applyActorHeaders(spec.header("X-Internal-Auth", internalAuth), userSub, userRoles),
+                        applyActorHeaders(spec.header(INTERNAL_AUTH_HEADER, internalAuth), userSub, userRoles),
                         idempotencyKey
                 );
                 Map<String, Object> body;
@@ -191,9 +197,7 @@ public class VendorClient {
                 return body;
             } catch (RestClientResponseException ex) {
                 throw toDownstreamHttpException(ex);
-            } catch (RestClientException ex) {
-                throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
-            } catch (IllegalStateException ex) {
+            } catch (RestClientException | IllegalStateException ex) {
                 throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
             }
         });
@@ -208,7 +212,7 @@ public class VendorClient {
     }
 
     public List<Map<String, Object>> listVendorUsers(UUID vendorId, String internalAuth, String userSub, String userRoles) {
-        return getList("/admin/vendors/" + vendorId + "/users", internalAuth, userSub, userRoles);
+        return getList(vendorUsersPath(vendorId), internalAuth, userSub, userRoles);
     }
 
     public Map<String, Object> listLifecycleAudit(UUID vendorId, String internalAuth) {
@@ -216,7 +220,7 @@ public class VendorClient {
     }
 
     public Map<String, Object> listLifecycleAudit(UUID vendorId, String internalAuth, String userSub, String userRoles) {
-        return getMap("/admin/vendors/" + vendorId + "/lifecycle-audit", internalAuth, userSub, userRoles);
+        return getMap(vendorPath(vendorId) + "/lifecycle-audit", internalAuth, userSub, userRoles);
     }
 
     public Map<String, Object> requestDelete(UUID vendorId, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
@@ -225,8 +229,8 @@ public class VendorClient {
 
     public Map<String, Object> requestDelete(UUID vendorId, Map<String, Object> request, String internalAuth, String userSub, String userRoles, String idempotencyKey) {
         return (request == null || request.isEmpty())
-                ? postNoBody("/admin/vendors/" + vendorId + "/delete-request", internalAuth, userSub, userRoles, idempotencyKey)
-                : jsonPost("/admin/vendors/" + vendorId + "/delete-request", request, internalAuth, userSub, userRoles, idempotencyKey);
+                ? postNoBody(vendorPath(vendorId) + "/delete-request", internalAuth, userSub, userRoles, idempotencyKey)
+                : jsonRequest("POST", vendorPath(vendorId) + "/delete-request", request, internalAuth, userSub, userRoles, idempotencyKey);
     }
 
     public void confirmDelete(UUID vendorId, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
@@ -237,9 +241,9 @@ public class VendorClient {
         runVendorVoid(() -> {
             RestClient rc = restClient;
             try {
-                RestClient.RequestBodySpec spec = rc.post().uri(buildUri("/admin/vendors/" + vendorId + "/confirm-delete"));
+                RestClient.RequestBodySpec spec = rc.post().uri(buildUri(vendorPath(vendorId) + "/confirm-delete"));
                 RestClient.RequestHeadersSpec<?> headersSpec = applyIdempotencyHeader(
-                        applyActorHeaders(spec.header("X-Internal-Auth", internalAuth), userSub, userRoles),
+                        applyActorHeaders(spec.header(INTERNAL_AUTH_HEADER, internalAuth), userSub, userRoles),
                         idempotencyKey
                 );
                 if (request == null || request.isEmpty()) {
@@ -253,9 +257,7 @@ public class VendorClient {
                 }
             } catch (RestClientResponseException ex) {
                 throw toDownstreamHttpException(ex);
-            } catch (RestClientException ex) {
-                throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
-            } catch (IllegalStateException ex) {
+            } catch (RestClientException | IllegalStateException ex) {
                 throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
             }
         });
@@ -283,7 +285,7 @@ public class VendorClient {
     ) {
         return jsonRequest(
                 "POST",
-                "/admin/vendors/" + vendorId + "/users",
+                vendorUsersPath(vendorId),
                 request,
                 internalAuth,
                 userSub,
@@ -311,7 +313,7 @@ public class VendorClient {
     ) {
         return jsonRequest(
                 "PUT",
-                "/admin/vendors/" + vendorId + "/users/" + membershipId,
+                vendorUsersPath(vendorId) + "/" + membershipId,
                 request,
                 internalAuth,
                 userSub,
@@ -342,17 +344,15 @@ public class VendorClient {
             try {
                 applyIdempotencyHeader(
                         applyActorHeaders(rc.delete()
-                                .uri(buildUri("/admin/vendors/" + vendorId + "/users/" + membershipId))
-                                .header("X-Internal-Auth", internalAuth), userSub, userRoles),
+                                .uri(buildUri(vendorUsersPath(vendorId) + "/" + membershipId))
+                                .header(INTERNAL_AUTH_HEADER, internalAuth), userSub, userRoles),
                         resolvedIdempotencyKey
                 )
                         .retrieve()
                         .toBodilessEntity();
             } catch (RestClientResponseException ex) {
                 throw toDownstreamHttpException(ex);
-            } catch (RestClientException ex) {
-                throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
-            } catch (IllegalStateException ex) {
+            } catch (RestClientException | IllegalStateException ex) {
                 throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
             }
         });
@@ -386,7 +386,7 @@ public class VendorClient {
             try {
                 List<Map<String, Object>> response = applyActorHeaders(rc.get()
                         .uri(buildUri(path))
-                        .header("X-Internal-Auth", internalAuth), userSub, userRoles)
+                        .header(INTERNAL_AUTH_HEADER, internalAuth), userSub, userRoles)
                         .retrieve()
                         .body(LIST_MAP_TYPE);
                 if (response == null) {
@@ -395,16 +395,10 @@ public class VendorClient {
                 return response;
             } catch (RestClientResponseException ex) {
                 throw toDownstreamHttpException(ex);
-            } catch (RestClientException ex) {
-                throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
-            } catch (IllegalStateException ex) {
+            } catch (RestClientException | IllegalStateException ex) {
                 throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
             }
         });
-    }
-
-    private Map<String, Object> getMap(String path, String internalAuth) {
-        return getMap(path, internalAuth, null, null);
     }
 
     private Map<String, Object> getMap(String path, String internalAuth, String userSub, String userRoles) {
@@ -413,7 +407,7 @@ public class VendorClient {
             try {
                 Map<String, Object> response = applyActorHeaders(rc.get()
                         .uri(buildUri(path))
-                        .header("X-Internal-Auth", internalAuth), userSub, userRoles)
+                        .header(INTERNAL_AUTH_HEADER, internalAuth), userSub, userRoles)
                         .retrieve()
                         .body(MAP_TYPE);
                 if (response == null) {
@@ -422,9 +416,7 @@ public class VendorClient {
                 return response;
             } catch (RestClientResponseException ex) {
                 throw toDownstreamHttpException(ex);
-            } catch (RestClientException ex) {
-                throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
-            } catch (IllegalStateException ex) {
+            } catch (RestClientException | IllegalStateException ex) {
                 throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
             }
         });
@@ -448,7 +440,7 @@ public class VendorClient {
                     default -> throw new IllegalArgumentException("Unsupported method: " + method);
                 };
                 Map<String, Object> response = ((RestClient.RequestBodySpec) applyIdempotencyHeader(
-                                applyActorHeaders(spec.header("X-Internal-Auth", internalAuth), userSub, userRoles),
+                                applyActorHeaders(spec.header(INTERNAL_AUTH_HEADER, internalAuth), userSub, userRoles),
                                 idempotencyKey
                         ))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -461,9 +453,7 @@ public class VendorClient {
                 return response;
             } catch (RestClientResponseException ex) {
                 throw toDownstreamHttpException(ex);
-            } catch (RestClientException ex) {
-                throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
-            } catch (IllegalStateException ex) {
+            } catch (RestClientException | IllegalStateException ex) {
                 throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
             }
         });
@@ -484,7 +474,7 @@ public class VendorClient {
                 Map<String, Object> response = applyIdempotencyHeader(
                                 applyActorHeaders(rc.post()
                                         .uri(buildUri(path))
-                                        .header("X-Internal-Auth", internalAuth), userSub, userRoles),
+                                        .header(INTERNAL_AUTH_HEADER, internalAuth), userSub, userRoles),
                                 idempotencyKey
                         )
                         .retrieve()
@@ -495,20 +485,10 @@ public class VendorClient {
                 return response;
             } catch (RestClientResponseException ex) {
                 throw toDownstreamHttpException(ex);
-            } catch (RestClientException ex) {
-                throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
-            } catch (IllegalStateException ex) {
+            } catch (RestClientException | IllegalStateException ex) {
                 throw new ServiceUnavailableException("Vendor service unavailable. Try again later.", ex);
             }
         });
-    }
-
-    private Map<String, Object> jsonPost(String path, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
-        return jsonPost(path, request, internalAuth, userSub, userRoles, null);
-    }
-
-    private Map<String, Object> jsonPost(String path, Map<String, Object> request, String internalAuth, String userSub, String userRoles, String idempotencyKey) {
-        return jsonRequest("POST", path, request, internalAuth, userSub, userRoles, idempotencyKey);
     }
 
     private RestClient.RequestHeadersSpec<?> applyActorHeaders(RestClient.RequestHeadersSpec<?> spec, String userSub, String userRoles) {
@@ -538,7 +518,11 @@ public class VendorClient {
     }
 
     private RestClient.RequestHeadersSpec<?> applyIdempotencyHeader(RestClient.RequestHeadersSpec<?> spec, String idempotencyKey) {
-        return ClientRequestUtils.applyIdempotencyHeader(spec, idempotencyKey);
+        String resolvedKey = ClientRequestUtils.resolveIdempotencyKey(idempotencyKey);
+        if (!StringUtils.hasText(resolvedKey)) {
+            return spec;
+        }
+        return spec.header(ClientRequestUtils.IDEMPOTENCY_HEADER, resolvedKey);
     }
 
     private String ensureIdempotencyKey(String idempotencyKey) {
@@ -556,14 +540,14 @@ public class VendorClient {
         }
         try {
             JsonNode root = objectMapper.readTree(compactBody);
-            if (root.hasNonNull("message") && root.get("message").isTextual()) {
-                String message = root.get("message").asText().trim();
+            if (root.hasNonNull(MESSAGE_FIELD) && root.get(MESSAGE_FIELD).isTextual()) {
+                String message = root.get(MESSAGE_FIELD).asText().trim();
                 if (StringUtils.hasText(message)) {
                     return message;
                 }
             }
-            if (root.hasNonNull("error") && root.get("error").isTextual()) {
-                String error = root.get("error").asText().trim();
+            if (root.hasNonNull(ERROR_FIELD) && root.get(ERROR_FIELD).isTextual()) {
+                String error = root.get(ERROR_FIELD).asText().trim();
                 if (StringUtils.hasText(error)) {
                     return error;
                 }
@@ -576,6 +560,14 @@ public class VendorClient {
 
     private URI buildUri(String path) {
         return URI.create("http://vendor-service" + path);
+    }
+
+    private String vendorPath(UUID vendorId) {
+        return VENDOR_PATH_PREFIX + vendorId;
+    }
+
+    private String vendorUsersPath(UUID vendorId) {
+        return vendorPath(vendorId) + USERS_SUFFIX;
     }
 
     private <T> T runVendorCall(Supplier<T> action) {

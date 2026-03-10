@@ -28,6 +28,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AdminPosterController {
 
+    private static final String POSTER_RESOURCE_TYPE = "POSTER";
+
     private final AdminPosterService adminPosterService;
     private final AdminActorScopeService adminActorScopeService;
     private final InternalRequestVerifier internalRequestVerifier;
@@ -66,7 +68,7 @@ public class AdminPosterController {
         internalRequestVerifier.verify(internalAuth);
         adminActorScopeService.assertCanManagePosters(userSub, userRoles, internalAuth);
         Map<String, Object> result = adminPosterService.create(request, internalAuth, userSub, userRoles);
-        auditService.log(userSub, userRoles, "CREATE_POSTER", "POSTER", String.valueOf(result.get("id")), null, null);
+        auditService.log(userSub, userRoles, "CREATE_POSTER", POSTER_RESOURCE_TYPE, String.valueOf(result.get("id")), null, null);
         return result;
     }
 
@@ -81,7 +83,7 @@ public class AdminPosterController {
         internalRequestVerifier.verify(internalAuth);
         adminActorScopeService.assertCanManagePosters(userSub, userRoles, internalAuth);
         Map<String, Object> result = adminPosterService.update(id, request, internalAuth, userSub, userRoles);
-        auditService.log(userSub, userRoles, "UPDATE_POSTER", "POSTER", id.toString(), null, null);
+        auditService.log(userSub, userRoles, "UPDATE_POSTER", POSTER_RESOURCE_TYPE, id.toString(), null, null);
         return result;
     }
 
@@ -96,7 +98,7 @@ public class AdminPosterController {
         internalRequestVerifier.verify(internalAuth);
         adminActorScopeService.assertCanManagePosters(userSub, userRoles, internalAuth);
         adminPosterService.delete(id, internalAuth, userSub, userRoles);
-        auditService.log(userSub, userRoles, "DELETE_POSTER", "POSTER", id.toString(), null, null);
+        auditService.log(userSub, userRoles, "DELETE_POSTER", POSTER_RESOURCE_TYPE, id.toString(), null, null);
     }
 
     @PostMapping("/{id}/restore")
@@ -109,7 +111,7 @@ public class AdminPosterController {
         internalRequestVerifier.verify(internalAuth);
         adminActorScopeService.assertCanManagePosters(userSub, userRoles, internalAuth);
         Map<String, Object> result = adminPosterService.restore(id, internalAuth, userSub, userRoles);
-        auditService.log(userSub, userRoles, "RESTORE_POSTER", "POSTER", id.toString(), null, null);
+        auditService.log(userSub, userRoles, "RESTORE_POSTER", POSTER_RESOURCE_TYPE, id.toString(), null, null);
         return result;
     }
 

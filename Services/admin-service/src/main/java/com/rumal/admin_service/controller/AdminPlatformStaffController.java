@@ -27,6 +27,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AdminPlatformStaffController {
 
+    private static final String SUPER_ADMIN_ROLE = "super_admin";
+
     private final AdminAccessService adminAccessService;
     private final InternalRequestVerifier internalRequestVerifier;
     private final AdminActorScopeService adminActorScopeService;
@@ -38,7 +40,7 @@ public class AdminPlatformStaffController {
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles
     ) {
         internalRequestVerifier.verify(internalAuth);
-        adminActorScopeService.assertHasRole(userSub, userRoles, "super_admin");
+        adminActorScopeService.assertHasRole(userRoles, SUPER_ADMIN_ROLE);
         return adminAccessService.listPlatformStaff(internalAuth, userSub, userRoles);
     }
 
@@ -49,7 +51,7 @@ public class AdminPlatformStaffController {
             @RequestHeader(value = "X-User-Roles", required = false) String userRoles
     ) {
         internalRequestVerifier.verify(internalAuth);
-        adminActorScopeService.assertHasRole(userSub, userRoles, "super_admin");
+        adminActorScopeService.assertHasRole(userRoles, SUPER_ADMIN_ROLE);
         return adminAccessService.listDeletedPlatformStaff(internalAuth, userSub, userRoles);
     }
 
@@ -63,7 +65,7 @@ public class AdminPlatformStaffController {
             @RequestBody @NotNull Map<String, Object> request
     ) {
         internalRequestVerifier.verify(internalAuth);
-        adminActorScopeService.assertHasRole(userSub, userRoles, "super_admin");
+        adminActorScopeService.assertHasRole(userRoles, SUPER_ADMIN_ROLE);
         return adminAccessService.createPlatformStaff(request, internalAuth, userSub, userRoles, actionReason);
     }
 
@@ -77,7 +79,7 @@ public class AdminPlatformStaffController {
             @RequestBody @NotNull Map<String, Object> request
     ) {
         internalRequestVerifier.verify(internalAuth);
-        adminActorScopeService.assertHasRole(userSub, userRoles, "super_admin");
+        adminActorScopeService.assertHasRole(userRoles, SUPER_ADMIN_ROLE);
         return adminAccessService.updatePlatformStaff(id, request, internalAuth, userSub, userRoles, actionReason);
     }
 
@@ -91,7 +93,7 @@ public class AdminPlatformStaffController {
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
-        adminActorScopeService.assertHasRole(userSub, userRoles, "super_admin");
+        adminActorScopeService.assertHasRole(userRoles, SUPER_ADMIN_ROLE);
         adminAccessService.deletePlatformStaff(id, internalAuth, userSub, userRoles, actionReason);
     }
 
@@ -104,7 +106,7 @@ public class AdminPlatformStaffController {
             @PathVariable UUID id
     ) {
         internalRequestVerifier.verify(internalAuth);
-        adminActorScopeService.assertHasRole(userSub, userRoles, "super_admin");
+        adminActorScopeService.assertHasRole(userRoles, SUPER_ADMIN_ROLE);
         return adminAccessService.restorePlatformStaff(id, internalAuth, userSub, userRoles, actionReason);
     }
 }

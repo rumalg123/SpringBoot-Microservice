@@ -21,10 +21,11 @@ import java.util.function.Supplier;
 @Component
 public class PosterClient {
 
-    private static final ParameterizedTypeReference<List<Map<String, Object>>> LIST_MAP_TYPE =
-            new ParameterizedTypeReference<>() {};
     private static final ParameterizedTypeReference<Map<String, Object>> MAP_TYPE =
             new ParameterizedTypeReference<>() {};
+    private static final String POSTERS_PATH = "/admin/posters";
+    private static final String POSTER_PATH_PREFIX = POSTERS_PATH + "/";
+    private static final String INTERNAL_AUTH_HEADER = "X-Internal-Auth";
 
     @Qualifier("loadBalancedRestClientBuilder")
     private final RestClient restClient;
@@ -42,19 +43,19 @@ public class PosterClient {
     }
 
     public List<Map<String, Object>> listAll(String internalAuth, String userSub, String userRoles) {
-        return getPagedContentList("/admin/posters", internalAuth, userSub, userRoles);
+        return getPagedContentList(POSTERS_PATH, internalAuth, userSub, userRoles);
     }
 
     public List<Map<String, Object>> listDeleted(String internalAuth, String userSub, String userRoles) {
-        return getPagedContentList("/admin/posters/deleted", internalAuth, userSub, userRoles);
+        return getPagedContentList(POSTERS_PATH + "/deleted", internalAuth, userSub, userRoles);
     }
 
     public Map<String, Object> create(Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
-        return jsonRequest("POST", "/admin/posters", request, internalAuth, userSub, userRoles);
+        return jsonRequest("POST", POSTERS_PATH, request, internalAuth, userSub, userRoles);
     }
 
     public Map<String, Object> update(UUID id, Map<String, Object> request, String internalAuth, String userSub, String userRoles) {
-        return jsonRequest("PUT", "/admin/posters/" + id, request, internalAuth, userSub, userRoles);
+        return jsonRequest("PUT", posterPath(id), request, internalAuth, userSub, userRoles);
     }
 
     public void delete(UUID id, String internalAuth, String userSub, String userRoles) {
@@ -62,8 +63,8 @@ public class PosterClient {
             RestClient rc = restClient;
             try {
                 applyActorHeaders(rc.delete()
-                        .uri(buildUri("/admin/posters/" + id))
-                        .header("X-Internal-Auth", internalAuth), userSub, userRoles)
+                        .uri(buildUri(posterPath(id)))
+                        .header(INTERNAL_AUTH_HEADER, internalAuth), userSub, userRoles)
                         .retrieve()
                         .toBodilessEntity();
             } catch (RestClientResponseException ex) {
@@ -79,8 +80,8 @@ public class PosterClient {
             RestClient rc = restClient;
             try {
                 Map<String, Object> body = applyActorHeaders(rc.post()
-                        .uri(buildUri("/admin/posters/" + id + "/restore"))
-                        .header("X-Internal-Auth", internalAuth), userSub, userRoles)
+                        .uri(buildUri(posterPath(id) + "/restore"))
+                        .header(INTERNAL_AUTH_HEADER, internalAuth), userSub, userRoles)
                         .retrieve()
                         .body(MAP_TYPE);
                 if (body == null) {
@@ -101,7 +102,7 @@ public class PosterClient {
             String userSub,
             String userRoles
     ) {
-        return jsonRequest("POST", "/admin/posters/images/presign", request, internalAuth, userSub, userRoles);
+        return jsonRequest("POST", POSTERS_PATH + "/images/presign", request, internalAuth, userSub, userRoles);
     }
 
     @SuppressWarnings("unchecked")
@@ -128,30 +129,9 @@ public class PosterClient {
             try {
                 Map<String, Object> response = applyActorHeaders(rc.get()
                         .uri(buildUri(path))
-                        .header("X-Internal-Auth", internalAuth), userSub, userRoles)
+                        .header(INTERNAL_AUTH_HEADER, internalAuth), userSub, userRoles)
                         .retrieve()
                         .body(MAP_TYPE);
-                if (response == null) {
-                    throw new ServiceUnavailableException("Poster service returned an empty response", null);
-                }
-                return response;
-            } catch (RestClientResponseException ex) {
-                throw toDownstreamHttpException(ex);
-            } catch (RestClientException ex) {
-                throw new ServiceUnavailableException("Poster service unavailable. Try again later.", ex);
-            }
-        });
-    }
-
-    private List<Map<String, Object>> getList(String path, String internalAuth, String userSub, String userRoles) {
-        return runPosterCall(() -> {
-            RestClient rc = restClient;
-            try {
-                List<Map<String, Object>> response = applyActorHeaders(rc.get()
-                        .uri(buildUri(path))
-                        .header("X-Internal-Auth", internalAuth), userSub, userRoles)
-                        .retrieve()
-                        .body(LIST_MAP_TYPE);
                 if (response == null) {
                     throw new ServiceUnavailableException("Poster service returned an empty response", null);
                 }
@@ -180,7 +160,7 @@ public class PosterClient {
                     case "PUT" -> rc.put().uri(buildUri(path));
                     default -> throw new IllegalArgumentException("Unsupported method: " + method);
                 };
-                spec = applyActorHeaders(spec.header("X-Internal-Auth", internalAuth), userSub, userRoles);
+                spec = applyActorHeaders(spec.header(INTERNAL_AUTH_HEADER, internalAuth), userSub, userRoles);
                 Map<String, Object> response = spec
                         .contentType(MediaType.APPLICATION_JSON)
                         .body(request)
@@ -215,6 +195,10 @@ public class PosterClient {
 
     private URI buildUri(String path) {
         return URI.create("http://poster-service" + path);
+    }
+
+    private String posterPath(UUID id) {
+        return POSTER_PATH_PREFIX + id;
     }
 
     private RestClient.RequestBodySpec applyActorHeaders(
