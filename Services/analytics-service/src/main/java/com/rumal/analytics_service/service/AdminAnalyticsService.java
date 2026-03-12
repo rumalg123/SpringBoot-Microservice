@@ -37,15 +37,15 @@ public class AdminAnalyticsService {
     @Cacheable(cacheNames = "dashboardSummary", key = "#periodDays")
     public AdminDashboardAnalytics getDashboardSummary(int periodDays) {
         var ordersFuture = asyncWithFallback(() -> orderClient.getPlatformSummary(periodDays), null);
-        var customersFuture = asyncWithFallback(() -> customerClient.getPlatformSummary(), null);
-        var productsFuture = asyncWithFallback(() -> productClient.getPlatformSummary(), null);
-        var vendorsFuture = asyncWithFallback(() -> vendorClient.getPlatformSummary(), null);
-        var paymentsFuture = asyncWithFallback(() -> paymentClient.getPlatformSummary(), null);
-        var inventoryFuture = asyncWithFallback(() -> inventoryClient.getPlatformHealth(), null);
-        var promotionsFuture = asyncWithFallback(() -> promotionClient.getPlatformSummary(), null);
-        var reviewsFuture = asyncWithFallback(() -> reviewClient.getPlatformSummary(), null);
-        var wishlistFuture = asyncWithFallback(() -> wishlistClient.getPlatformSummary(), null);
-        var cartFuture = asyncWithFallback(() -> cartClient.getPlatformSummary(), null);
+        var customersFuture = asyncWithFallback(customerClient::getPlatformSummary, null);
+        var productsFuture = asyncWithFallback(productClient::getPlatformSummary, null);
+        var vendorsFuture = asyncWithFallback(vendorClient::getPlatformSummary, null);
+        var paymentsFuture = asyncWithFallback(paymentClient::getPlatformSummary, null);
+        var inventoryFuture = asyncWithFallback(inventoryClient::getPlatformHealth, null);
+        var promotionsFuture = asyncWithFallback(promotionClient::getPlatformSummary, null);
+        var reviewsFuture = asyncWithFallback(reviewClient::getPlatformSummary, null);
+        var wishlistFuture = asyncWithFallback(wishlistClient::getPlatformSummary, null);
+        var cartFuture = asyncWithFallback(cartClient::getPlatformSummary, null);
         var revenueTrendFuture = asyncWithFallback(() -> orderClient.getRevenueTrend(periodDays), List.<DailyRevenueBucket>of());
 
         CompletableFuture.allOf(ordersFuture, customersFuture, productsFuture, vendorsFuture,
@@ -63,7 +63,7 @@ public class AdminAnalyticsService {
     @Cacheable(cacheNames = "revenueSummary", key = "#days")
     public AdminRevenueTrendResponse getRevenueTrend(int days) {
         var trendFuture = asyncWithFallback(() -> orderClient.getRevenueTrend(days), List.<DailyRevenueBucket>of());
-        var statusFuture = asyncWithFallback(() -> orderClient.getStatusBreakdown(), Map.<String, Long>of());
+        var statusFuture = asyncWithFallback(orderClient::getStatusBreakdown, Map.<String, Long>of());
         CompletableFuture.allOf(trendFuture, statusFuture).join();
         return new AdminRevenueTrendResponse(trendFuture.join(), statusFuture.join());
     }
@@ -82,7 +82,7 @@ public class AdminAnalyticsService {
 
     @Cacheable(cacheNames = "customerSegmentation")
     public AdminCustomerSegmentationResponse getCustomerSegmentation() {
-        var summaryFuture = asyncWithFallback(() -> customerClient.getPlatformSummary(), null);
+        var summaryFuture = asyncWithFallback(customerClient::getPlatformSummary, null);
         var growthFuture = asyncWithFallback(() -> customerClient.getGrowthTrend(12), List.<MonthlyGrowthBucket>of());
         CompletableFuture.allOf(summaryFuture, growthFuture).join();
         return new AdminCustomerSegmentationResponse(summaryFuture.join(), growthFuture.join());
@@ -90,7 +90,7 @@ public class AdminAnalyticsService {
 
     @Cacheable(cacheNames = "vendorLeaderboard", key = "#sortBy")
     public AdminVendorLeaderboardResponse getVendorLeaderboard(String sortBy) {
-        var summaryFuture = asyncWithFallback(() -> vendorClient.getPlatformSummary(), null);
+        var summaryFuture = asyncWithFallback(vendorClient::getPlatformSummary, null);
         var leaderboardFuture = asyncWithFallback(() -> vendorClient.getLeaderboard(sortBy, 20), List.<VendorLeaderboardEntry>of());
         CompletableFuture.allOf(summaryFuture, leaderboardFuture).join();
         return new AdminVendorLeaderboardResponse(summaryFuture.join(), leaderboardFuture.join());
@@ -98,7 +98,7 @@ public class AdminAnalyticsService {
 
     @Cacheable(cacheNames = "inventoryHealth")
     public AdminInventoryHealthResponse getInventoryHealth() {
-        var healthFuture = asyncWithFallback(() -> inventoryClient.getPlatformHealth(), null);
+        var healthFuture = asyncWithFallback(inventoryClient::getPlatformHealth, null);
         var alertsFuture = asyncWithFallback(() -> inventoryClient.getLowStockAlerts(50), List.<LowStockAlert>of());
         CompletableFuture.allOf(healthFuture, alertsFuture).join();
         return new AdminInventoryHealthResponse(healthFuture.join(), alertsFuture.join());
@@ -106,7 +106,7 @@ public class AdminAnalyticsService {
 
     @Cacheable(cacheNames = "promotionRoi")
     public AdminPromotionRoiResponse getPromotionRoi() {
-        var summaryFuture = asyncWithFallback(() -> promotionClient.getPlatformSummary(), null);
+        var summaryFuture = asyncWithFallback(promotionClient::getPlatformSummary, null);
         var roiFuture = asyncWithFallback(() -> promotionClient.getPromotionRoi(20), List.<PromotionRoiEntry>of());
         CompletableFuture.allOf(summaryFuture, roiFuture).join();
         return new AdminPromotionRoiResponse(summaryFuture.join(), roiFuture.join());
@@ -114,8 +114,8 @@ public class AdminAnalyticsService {
 
     @Cacheable(cacheNames = "reviewAnalytics")
     public AdminReviewAnalyticsResponse getReviewAnalytics() {
-        var summaryFuture = asyncWithFallback(() -> reviewClient.getPlatformSummary(), null);
-        var distFuture = asyncWithFallback(() -> reviewClient.getRatingDistribution(), Map.<Integer, Long>of());
+        var summaryFuture = asyncWithFallback(reviewClient::getPlatformSummary, null);
+        var distFuture = asyncWithFallback(reviewClient::getRatingDistribution, Map.<Integer, Long>of());
         CompletableFuture.allOf(summaryFuture, distFuture).join();
         return new AdminReviewAnalyticsResponse(summaryFuture.join(), distFuture.join());
     }

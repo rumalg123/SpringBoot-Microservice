@@ -25,6 +25,7 @@ public class CustomerAnalyticsClient {
 
     private static final String BASE_URL = "http://customer-service/internal/customers/analytics";
     private static final String CUSTOMER_LOOKUP_BASE_URL = "http://customer-service/internal/customers/keycloak";
+    private static final String INTERNAL_AUTH_HEADER = "X-Internal-Auth";
 
     private final RestClient restClient;
     private final CircuitBreakerFactory<?, ?> circuitBreakerFactory;
@@ -64,21 +65,7 @@ public class CustomerAnalyticsClient {
         try {
             return restClient.get()
                     .uri(url)
-                    .header("X-Internal-Auth", internalAuth)
-                    .retrieve()
-                    .body(type);
-        } catch (RestClientResponseException ex) {
-            throw new DownstreamHttpException(ex.getStatusCode(), "Customer analytics HTTP error: " + ex.getStatusCode().value(), ex);
-        } catch (RestClientException ex) {
-            throw new ServiceUnavailableException("Customer analytics service unavailable", ex);
-        }
-    }
-
-    private <T> T get(String url, ParameterizedTypeReference<T> type) {
-        try {
-            return restClient.get()
-                    .uri(url)
-                    .header("X-Internal-Auth", internalAuth)
+                    .header(INTERNAL_AUTH_HEADER, internalAuth)
                     .retrieve()
                     .body(type);
         } catch (RestClientResponseException ex) {
@@ -92,7 +79,7 @@ public class CustomerAnalyticsClient {
         try {
             List<T> result = restClient.get()
                     .uri(url)
-                    .header("X-Internal-Auth", internalAuth)
+                    .header(INTERNAL_AUTH_HEADER, internalAuth)
                     .retrieve()
                     .body(type);
             return result == null ? List.of() : result;

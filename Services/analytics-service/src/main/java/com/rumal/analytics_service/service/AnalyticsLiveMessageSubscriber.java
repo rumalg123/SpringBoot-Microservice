@@ -22,15 +22,16 @@ public class AnalyticsLiveMessageSubscriber implements MessageListener {
 
     @Override
     public void onMessage(Message message, byte[] pattern) {
-        if (message == null || message.getBody() == null || message.getBody().length == 0) {
+        byte[] body = message.getBody();
+        if (body.length == 0) {
             return;
         }
 
         try {
-            AnalyticsLiveDashboardMessage payload = objectMapper.readValue(message.getBody(), AnalyticsLiveDashboardMessage.class);
+            AnalyticsLiveDashboardMessage payload = objectMapper.readValue(body, AnalyticsLiveDashboardMessage.class);
             analyticsLiveStreamService.publishRefresh(payload);
         } catch (Exception ex) {
-            String rawPayload = new String(message.getBody(), StandardCharsets.UTF_8);
+            String rawPayload = new String(body, StandardCharsets.UTF_8);
             log.warn("Failed to process analytics live Redis message: {}", rawPayload, ex);
         }
     }

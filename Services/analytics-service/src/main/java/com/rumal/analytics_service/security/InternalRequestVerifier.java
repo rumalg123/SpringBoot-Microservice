@@ -2,24 +2,24 @@ package com.rumal.analytics_service.security;
 
 import com.rumal.analytics_service.exception.UnauthorizedException;
 import jakarta.servlet.http.HttpServletRequest;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
+import java.io.IOException;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
 @Component
 public class InternalRequestVerifier {
 
-    private static final Logger log = LoggerFactory.getLogger(InternalRequestVerifier.class);
     private static final String HMAC_ALGO = "HmacSHA256";
+    private static final String SHA_256_ALGO = "SHA-256";
     private static final long MAX_TIMESTAMP_DRIFT_MS = 60_000;
 
     private final String sharedSecret;
@@ -96,7 +96,7 @@ public class InternalRequestVerifier {
 
     private String computeBodyHash(HttpServletRequest request) {
         String method = request.getMethod();
-        if (!"POST".equals(method) && !"PUT".equals(method) && !"PATCH".equals(method)) {
+        if (!requiresBodyHash(method)) {
             return "";
         }
         try {
@@ -106,10 +106,8 @@ public class InternalRequestVerifier {
             } else {
                 body = request.getInputStream().readAllBytes();
             }
-            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(body);
-            return HexFormat.of().formatHex(hash);
-        } catch (Exception e) {
+            return computeBodyHash(method, body);
+        } catch (IOException ex) {
             return "";
         }
     }
@@ -127,14 +125,7 @@ public class InternalRequestVerifier {
 
     public static String sign(String secret, String method, String path, byte[] body) {
         long timestamp = System.currentTimeMillis();
-        String bodyHash = "";
-        if (body != null && body.length > 0
-                && ("POST".equals(method) || "PUT".equals(method) || "PATCH".equals(method))) {
-            try {
-                java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
-                bodyHash = HexFormat.of().formatHex(digest.digest(body));
-            } catch (Exception ignored) {}
-        }
+        String bodyHash = computeBodyHash(method, body);
         String payload = timestamp + ":" + method + ":" + path + ":" + bodyHash;
         try {
             Mac mac = Mac.getInstance(HMAC_ALGO);
@@ -149,6 +140,22 @@ public class InternalRequestVerifier {
     // Keep backward-compatible overload
     public static String sign(String secret, String method, String path) {
         return sign(secret, method, path, null);
+    }
+
+    private static String computeBodyHash(String method, byte[] body) {
+        if (!requiresBodyHash(method) || body == null || body.length == 0) {
+            return "";
+        }
+        try {
+            MessageDigest digest = MessageDigest.getInstance(SHA_256_ALGO);
+            return HexFormat.of().formatHex(digest.digest(body));
+        } catch (NoSuchAlgorithmException ex) {
+            return "";
+        }
+    }
+
+    private static boolean requiresBodyHash(String method) {
+        return "POST".equals(method) || "PUT".equals(method) || "PATCH".equals(method);
     }
 }
 

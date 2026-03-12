@@ -22,6 +22,12 @@ import java.util.function.Supplier;
 @Component
 public class OrderAnalyticsClient {
 
+    private static final String BASE_URL = "http://order-service/internal/orders/analytics";
+    private static final String PLATFORM_BASE_URL = BASE_URL + "/platform";
+    private static final String VENDOR_BASE_URL = BASE_URL + "/vendors/";
+    private static final String CUSTOMER_BASE_URL = BASE_URL + "/customers/";
+    private static final String INTERNAL_AUTH_HEADER = "X-Internal-Auth";
+
     private final RestClient restClient;
     private final CircuitBreakerFactory<?, ?> circuitBreakerFactory;
     private final RetryRegistry retryRegistry;
@@ -40,46 +46,46 @@ public class OrderAnalyticsClient {
     }
 
     public PlatformOrderSummary getPlatformSummary(int periodDays) {
-        return call(() -> get("http://order-service/internal/orders/analytics/platform/summary?periodDays=" + periodDays, PlatformOrderSummary.class));
+        return call(() -> get(PLATFORM_BASE_URL + "/summary?periodDays=" + periodDays, PlatformOrderSummary.class));
     }
 
     public List<DailyRevenueBucket> getRevenueTrend(int days) {
-        return call(() -> getList("http://order-service/internal/orders/analytics/platform/revenue-trend?days=" + days, new ParameterizedTypeReference<>() {}));
+        return call(() -> getList(PLATFORM_BASE_URL + "/revenue-trend?days=" + days, new ParameterizedTypeReference<>() {}));
     }
 
     public List<TopProductEntry> getTopProducts(int limit) {
-        return call(() -> getList("http://order-service/internal/orders/analytics/platform/top-products?limit=" + limit, new ParameterizedTypeReference<>() {}));
+        return call(() -> getList(PLATFORM_BASE_URL + "/top-products?limit=" + limit, new ParameterizedTypeReference<>() {}));
     }
 
     public Map<String, Long> getStatusBreakdown() {
-        return call(() -> get("http://order-service/internal/orders/analytics/platform/status-breakdown", new ParameterizedTypeReference<Map<String, Long>>() {}));
+        return call(() -> get(PLATFORM_BASE_URL + "/status-breakdown", new ParameterizedTypeReference<Map<String, Long>>() {}));
     }
 
     public VendorOrderSummary getVendorSummary(UUID vendorId, int periodDays) {
-        return call(() -> get("http://order-service/internal/orders/analytics/vendors/" + vendorId + "/summary?periodDays=" + periodDays, VendorOrderSummary.class));
+        return call(() -> get(VENDOR_BASE_URL + vendorId + "/summary?periodDays=" + periodDays, VendorOrderSummary.class));
     }
 
     public List<DailyRevenueBucket> getVendorRevenueTrend(UUID vendorId, int days) {
-        return call(() -> getList("http://order-service/internal/orders/analytics/vendors/" + vendorId + "/revenue-trend?days=" + days, new ParameterizedTypeReference<>() {}));
+        return call(() -> getList(VENDOR_BASE_URL + vendorId + "/revenue-trend?days=" + days, new ParameterizedTypeReference<>() {}));
     }
 
     public List<TopProductEntry> getVendorTopProducts(UUID vendorId, int limit) {
-        return call(() -> getList("http://order-service/internal/orders/analytics/vendors/" + vendorId + "/top-products?limit=" + limit, new ParameterizedTypeReference<>() {}));
+        return call(() -> getList(VENDOR_BASE_URL + vendorId + "/top-products?limit=" + limit, new ParameterizedTypeReference<>() {}));
     }
 
     public CustomerOrderSummary getCustomerSummary(UUID customerId) {
-        return call(() -> get("http://order-service/internal/orders/analytics/customers/" + customerId + "/summary", CustomerOrderSummary.class));
+        return call(() -> get(CUSTOMER_BASE_URL + customerId + "/summary", CustomerOrderSummary.class));
     }
 
     public List<MonthlySpendBucket> getCustomerSpendingTrend(UUID customerId, int months) {
-        return call(() -> getList("http://order-service/internal/orders/analytics/customers/" + customerId + "/spending-trend?months=" + months, new ParameterizedTypeReference<>() {}));
+        return call(() -> getList(CUSTOMER_BASE_URL + customerId + "/spending-trend?months=" + months, new ParameterizedTypeReference<>() {}));
     }
 
     private <T> T get(String url, Class<T> type) {
         try {
             return restClient.get()
                     .uri(url)
-                    .header("X-Internal-Auth", internalAuth)
+                    .header(INTERNAL_AUTH_HEADER, internalAuth)
                     .retrieve()
                     .body(type);
         } catch (RestClientResponseException ex) {
@@ -93,7 +99,7 @@ public class OrderAnalyticsClient {
         try {
             return restClient.get()
                     .uri(url)
-                    .header("X-Internal-Auth", internalAuth)
+                    .header(INTERNAL_AUTH_HEADER, internalAuth)
                     .retrieve()
                     .body(type);
         } catch (RestClientResponseException ex) {
@@ -107,7 +113,7 @@ public class OrderAnalyticsClient {
         try {
             List<T> result = restClient.get()
                     .uri(url)
-                    .header("X-Internal-Auth", internalAuth)
+                    .header(INTERNAL_AUTH_HEADER, internalAuth)
                     .retrieve()
                     .body(type);
             return result == null ? List.of() : result;
