@@ -11,7 +11,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.http.server.reactive.ServerHttpRequestDecorator;
-import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.util.unit.DataSize;
 import org.springframework.web.server.ServerWebExchange;
@@ -39,8 +38,7 @@ public class RequestBodySizeLimitFilter implements GlobalFilter, Ordered {
     }
 
     @Override
-    @NonNull
-    public Mono<Void> filter(@NonNull ServerWebExchange exchange, @NonNull GatewayFilterChain chain) {
+    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         long contentLength = exchange.getRequest().getHeaders().getContentLength();
         if (contentLength > maxBodyBytes) {
             return writePayloadTooLarge(exchange);
@@ -62,7 +60,6 @@ public class RequestBodySizeLimitFilter implements GlobalFilter, Ordered {
         }
 
         @Override
-        @NonNull
         public Flux<DataBuffer> getBody() {
             AtomicLong bytesRead = new AtomicLong(0);
             return super.getBody().doOnNext(buffer -> {

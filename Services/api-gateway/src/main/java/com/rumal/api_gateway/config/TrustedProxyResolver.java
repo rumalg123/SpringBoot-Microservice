@@ -1,5 +1,7 @@
 package com.rumal.api_gateway.config;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
@@ -15,6 +17,7 @@ import java.util.Set;
 @Component
 public class TrustedProxyResolver {
 
+    private static final Logger log = LoggerFactory.getLogger(TrustedProxyResolver.class);
     private final Set<String> trustedProxyExactIps;
     private final List<CidrRange> trustedProxyCidrs;
 
@@ -85,12 +88,21 @@ public class TrustedProxyResolver {
             for (CidrRange cidr : trustedProxyCidrs) {
                 if (cidr.contains(addrBytes)) return true;
             }
-        } catch (UnknownHostException ignored) {
+        } catch (UnknownHostException ex) {
+            log.debug("Treating unresolved remote address as untrusted proxy: {}", remoteIp, ex);
         }
         return false;
     }
 
-    private record CidrRange(byte[] network, int prefixLength) {
+    private static final class CidrRange {
+        private final byte[] network;
+        private final int prefixLength;
+
+        private CidrRange(byte[] network, int prefixLength) {
+            this.network = network.clone();
+            this.prefixLength = prefixLength;
+        }
+
         static CidrRange parse(String cidr) {
             try {
                 String[] parts = cidr.split("/");

@@ -1,10 +1,12 @@
 package com.rumal.api_gateway.config;
 
 import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DataBufferUtils;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpCookie;
 import org.springframework.http.server.reactive.ServerHttpRequest;
@@ -22,6 +24,7 @@ import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
+import java.util.List;
 
 @NullMarked
 @Component
@@ -30,6 +33,24 @@ public class AuthHeaderRelayFilter implements GlobalFilter, Ordered {
     private static final int MAX_USER_AGENT_LENGTH = 512;
     private static final String GUEST_CART_ID_COOKIE = "rs_guest_cart_id";
     private static final String GUEST_CART_SIGNATURE_COOKIE = "rs_guest_cart_sig";
+    private static final String INTERNAL_AUTH_HEADER = "X-Internal-Auth";
+    private static final List<String> STRIPPED_HEADERS = List.of(
+            "X-User-Sub",
+            "X-User-Email",
+            "X-User-Email-Verified",
+            "X-User-Roles",
+            "X-User-Vendor-Id",
+            "X-Caller-Vendor-Id",
+            "X-Actor-Tenant-Id",
+            "X-Audit-Client-Ip",
+            "X-Audit-User-Agent",
+            "X-Guest-Cart-Id",
+            INTERNAL_AUTH_HEADER,
+            "X-Internal-Signature",
+            "X-Internal-Timestamp",
+            "X-Internal-Path",
+            "X-Internal-Body-Hash"
+    );
 
     private final String internalSharedSecret;
     private final String guestCartSigningSecret;
@@ -44,13 +65,9 @@ public class AuthHeaderRelayFilter implements GlobalFilter, Ordered {
             KeycloakRoleClaims keycloakRoleClaims,
             TrustedProxyResolver trustedProxyResolver
     ) {
-        this.internalSharedSecret = internalSharedSecret == null ? "" : internalSharedSecret.trim();
-        this.guestCartSigningSecret = guestCartSigningSecret == null ? "" : guestCartSigningSecret.trim();
-        if (claimsNamespace == null || claimsNamespace.isBlank()) {
-            this.claimsNamespace = "";
-        } else {
-            this.claimsNamespace = claimsNamespace.endsWith("/") ? claimsNamespace : claimsNamespace + "/";
-        }
+        this.internalSharedSecret = internalSharedSecret.trim();
+        this.guestCartSigningSecret = guestCartSigningSecret.trim();
+        this.claimsNamespace = normalizeClaimsNamespace(claimsNamespace);
         this.keycloakRoleClaims = keycloakRoleClaims;
         this.trustedProxyResolver = trustedProxyResolver;
     }
@@ -61,81 +78,12 @@ public class AuthHeaderRelayFilter implements GlobalFilter, Ordered {
             return chain.filter(exchange);
         }
 
-        ServerHttpRequest sanitizedRequest = exchange.getRequest().mutate()
-                .headers(headers -> {
-                    headers.remove("X-User-Sub");
-                    headers.remove("X-User-Email");
-                    headers.remove("X-User-Email-Verified");
-                    headers.remove("X-User-Roles");
-                    headers.remove("X-User-Vendor-Id");
-                    headers.remove("X-Caller-Vendor-Id");
-                    headers.remove("X-Actor-Tenant-Id");
-                    headers.remove("X-Audit-Client-Ip");
-                    headers.remove("X-Audit-User-Agent");
-                    headers.remove("X-Guest-Cart-Id");
-                    headers.remove("X-Internal-Auth");
-                    headers.remove("X-Internal-Signature");
-                    headers.remove("X-Internal-Timestamp");
-                    headers.remove("X-Internal-Path");
-                    headers.remove("X-Internal-Body-Hash");
-                    if (!internalSharedSecret.isBlank()) {
-                        headers.set("X-Internal-Auth", internalSharedSecret);
-                    }
-                })
-                .build();
-        ServerWebExchange sanitizedExchange = exchange.mutate().request(sanitizedRequest).build();
+        ServerWebExchange sanitizedExchange = sanitizeExchange(exchange);
 
         return sanitizedExchange.getPrincipal()
-                .filter(p -> p instanceof JwtAuthenticationToken)
+                .filter(JwtAuthenticationToken.class::isInstance)
                 .cast(JwtAuthenticationToken.class)
-                .map(auth -> {
-                    String subject = auth.getToken().getSubject();
-                    String namespacedEmail = claimsNamespace.isBlank()
-                            ? null
-                            : auth.getToken().getClaimAsString(claimsNamespace + "email");
-                    String fallbackEmail = auth.getToken().getClaimAsString("email");
-                    Boolean emailVerified = auth.getToken().getClaimAsBoolean("email_verified");
-                    if (emailVerified == null && !claimsNamespace.isBlank()) {
-                        emailVerified = auth.getToken().getClaimAsBoolean(claimsNamespace + "email_verified");
-                    }
-                    final String resolvedEmail = (namespacedEmail != null && !namespacedEmail.isBlank())
-                            ? namespacedEmail
-                            : fallbackEmail;
-
-                    ServerHttpRequest.Builder requestBuilder = sanitizedExchange.getRequest().mutate();
-                    if (subject != null && !subject.isBlank()) {
-                        requestBuilder.headers(headers -> headers.set("X-User-Sub", subject));
-                    }
-                    if (resolvedEmail != null && !resolvedEmail.isBlank()) {
-                        requestBuilder.headers(headers -> headers.set("X-User-Email", resolvedEmail));
-                    }
-                    if (emailVerified != null) {
-                        Boolean finalEmailVerified = emailVerified;
-                        requestBuilder.headers(headers ->
-                                headers.set("X-User-Email-Verified", String.valueOf(finalEmailVerified)));
-                    }
-                    String serializedRoles = serializeRoles(auth);
-                    if (!serializedRoles.isBlank()) {
-                        requestBuilder.headers(headers -> headers.set("X-User-Roles", serializedRoles));
-                    }
-                    String tenantId = keycloakRoleClaims.extractTenantId(auth.getToken());
-                    if (StringUtils.hasText(tenantId)) {
-                        requestBuilder.headers(headers -> headers.set("X-Actor-Tenant-Id", tenantId));
-                    }
-                    String clientIp = trustedProxyResolver.resolveClientIp(sanitizedExchange);
-                    if (StringUtils.hasText(clientIp)) {
-                        requestBuilder.headers(headers -> headers.set("X-Audit-Client-Ip", clientIp));
-                    }
-                    String userAgent = sanitizeUserAgent(sanitizedExchange.getRequest().getHeaders().getFirst("User-Agent"));
-                    if (StringUtils.hasText(userAgent)) {
-                        requestBuilder.headers(headers -> headers.set("X-Audit-User-Agent", userAgent));
-                    }
-                    if (!internalSharedSecret.isBlank()) {
-                        requestBuilder.headers(headers -> headers.set("X-Internal-Auth", internalSharedSecret));
-                    }
-
-                    return sanitizedExchange.mutate().request(requestBuilder.build()).build();
-                })
+                .map(auth -> enrichAuthenticatedExchange(sanitizedExchange, auth))
                 .defaultIfEmpty(sanitizedExchange)
                 .map(this::attachGuestCartHeader)
                 .flatMap(ex -> attachHmacSignature(ex, chain));
@@ -161,18 +109,18 @@ public class AuthHeaderRelayFilter implements GlobalFilter, Ordered {
 
     private String resolveSignedGuestCartId(ServerHttpRequest request) {
         if (!StringUtils.hasText(guestCartSigningSecret)) {
-            return null;
+            return "";
         }
         HttpCookie cartIdCookie = request.getCookies().getFirst(GUEST_CART_ID_COOKIE);
         HttpCookie signatureCookie = request.getCookies().getFirst(GUEST_CART_SIGNATURE_COOKIE);
-        String guestCartId = cartIdCookie == null ? null : cartIdCookie.getValue();
-        String signature = signatureCookie == null ? null : signatureCookie.getValue();
+        String guestCartId = cartIdCookie == null ? "" : cartIdCookie.getValue();
+        String signature = signatureCookie == null ? "" : signatureCookie.getValue();
         if (!StringUtils.hasText(guestCartId) || !StringUtils.hasText(signature)) {
-            return null;
+            return "";
         }
         String expectedSignature = computeHmac(guestCartSigningSecret, guestCartId.trim());
         if (!MessageDigest.isEqual(expectedSignature.getBytes(StandardCharsets.UTF_8), signature.trim().getBytes(StandardCharsets.UTF_8))) {
-            return null;
+            return "";
         }
         return guestCartId.trim();
     }
@@ -269,7 +217,7 @@ public class AuthHeaderRelayFilter implements GlobalFilter, Ordered {
 
     private String sanitizeUserAgent(String userAgent) {
         if (!StringUtils.hasText(userAgent)) {
-            return null;
+            return "";
         }
         String normalized = userAgent.trim().replaceAll("[\\r\\n]+", " ");
         if (normalized.length() > MAX_USER_AGENT_LENGTH) {
@@ -280,5 +228,80 @@ public class AuthHeaderRelayFilter implements GlobalFilter, Ordered {
 
     private String serializeRoles(JwtAuthenticationToken auth) {
         return String.join(",", keycloakRoleClaims.extractForwardedRoles(auth.getToken()));
+    }
+
+    private String normalizeClaimsNamespace(String value) {
+        String normalized = value.trim();
+        if (normalized.isBlank()) {
+            return "";
+        }
+        return normalized.endsWith("/") ? normalized : normalized + "/";
+    }
+
+    private ServerWebExchange sanitizeExchange(ServerWebExchange exchange) {
+        ServerHttpRequest sanitizedRequest = exchange.getRequest().mutate()
+                .headers(headers -> {
+                    removeForwardedHeaders(headers);
+                    applyInternalAuthHeader(headers);
+                })
+                .build();
+        return exchange.mutate().request(sanitizedRequest).build();
+    }
+
+    private void removeForwardedHeaders(HttpHeaders headers) {
+        for (String headerName : STRIPPED_HEADERS) {
+            headers.remove(headerName);
+        }
+    }
+
+    private void applyInternalAuthHeader(HttpHeaders headers) {
+        if (!internalSharedSecret.isBlank()) {
+            headers.set(INTERNAL_AUTH_HEADER, internalSharedSecret);
+        }
+    }
+
+    private ServerWebExchange enrichAuthenticatedExchange(
+            ServerWebExchange exchange,
+            JwtAuthenticationToken authentication
+    ) {
+        ServerHttpRequest request = exchange.getRequest().mutate()
+                .headers(headers -> {
+                    putIfHasText(headers, "X-User-Sub", authentication.getToken().getSubject());
+                    putIfHasText(headers, "X-User-Email", resolveEmail(authentication));
+                    putIfHasText(headers, "X-User-Email-Verified", resolveEmailVerified(authentication));
+                    putIfHasText(headers, "X-User-Roles", serializeRoles(authentication));
+                    putIfHasText(headers, "X-Actor-Tenant-Id", keycloakRoleClaims.extractTenantId(authentication.getToken()));
+                    putIfHasText(headers, "X-Audit-Client-Ip", trustedProxyResolver.resolveClientIp(exchange));
+                    putIfHasText(headers, "X-Audit-User-Agent",
+                            sanitizeUserAgent(exchange.getRequest().getHeaders().getFirst(HttpHeaders.USER_AGENT)));
+                    applyInternalAuthHeader(headers);
+                })
+                .build();
+        return exchange.mutate().request(request).build();
+    }
+
+    private void putIfHasText(HttpHeaders headers, String name, @Nullable String value) {
+        if (StringUtils.hasText(value)) {
+            headers.set(name, value.trim());
+        }
+    }
+
+    private String resolveEmail(JwtAuthenticationToken authentication) {
+        String namespacedEmail = claimsNamespace.isBlank()
+                ? ""
+                : authentication.getToken().getClaimAsString(claimsNamespace + "email");
+        if (StringUtils.hasText(namespacedEmail)) {
+            return namespacedEmail.trim();
+        }
+        String fallbackEmail = authentication.getToken().getClaimAsString("email");
+        return StringUtils.hasText(fallbackEmail) ? fallbackEmail.trim() : "";
+    }
+
+    private String resolveEmailVerified(JwtAuthenticationToken authentication) {
+        Boolean emailVerified = authentication.getToken().getClaimAsBoolean("email_verified");
+        if (emailVerified == null && !claimsNamespace.isBlank()) {
+            emailVerified = authentication.getToken().getClaimAsBoolean(claimsNamespace + "email_verified");
+        }
+        return emailVerified == null ? "" : String.valueOf(emailVerified);
     }
 }

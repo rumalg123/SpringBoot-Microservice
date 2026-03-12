@@ -53,7 +53,8 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
 
     private static final Logger log = LoggerFactory.getLogger(IdempotencyFilter.class);
     private static final Pattern IDEM_KEY_PATTERN = Pattern.compile("^[a-zA-Z0-9\\-_]{1,128}$");
-    private static final long MAX_CACHEABLE_RESPONSE_SIZE = 512 * 1024;
+    private static final long MAX_CACHEABLE_RESPONSE_SIZE = 512L * 1024;
+    private static final String IDEMPOTENCY_STATUS_HEADER = "X-Idempotency-Status";
 
     private static final Set<String> EXCLUDED_RESPONSE_HEADERS = Set.of(
             HttpHeaders.CONTENT_LENGTH.toLowerCase(),
@@ -98,15 +99,10 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
-        if (!enabled || !isMutatingRequest(exchange) || shouldSkipBodyBuffering(exchange)) {
-            if (shouldSkipBodyBuffering(exchange) && isMutatingRequest(exchange)) {
-                String idempotencyKey = exchange.getRequest().getHeaders().getFirst(keyHeaderName);
-                if (StringUtils.hasText(idempotencyKey)) {
-                    log.debug("Idempotency skipped for binary/multipart request path={} key={}",
-                            exchange.getRequest().getPath().value(), idempotencyKey);
-                    exchange.getResponse().getHeaders().set("X-Idempotency-Status", "SKIPPED");
-                }
-            }
+        boolean mutatingRequest = isMutatingRequest(exchange);
+        boolean skipBodyBuffering = shouldSkipBodyBuffering(exchange);
+        if (!enabled || !mutatingRequest || skipBodyBuffering) {
+            maybeMarkSkippedRequest(exchange, mutatingRequest, skipBodyBuffering);
             return chain.filter(exchange);
         }
 
@@ -195,7 +191,8 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
 
         return redisTemplate.opsForValue().setIfAbsent(redisKey, pendingJson, pendingTtl)
                 .flatMap(acquired -> {
-                    if (acquired) {
+                    boolean lockAcquired = Boolean.TRUE.equals(acquired);
+                    if (lockAcquired) {
                         return forwardAndCapture(exchange, chain, redisKey, requestHash, requestBody);
                     }
                     return redisTemplate.opsForValue().get(redisKey)
@@ -267,7 +264,7 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
                 .request(decoratedRequest)
                 .response(decoratedResponse)
                 .build();
-        decoratedExchange.getResponse().getHeaders().set("X-Idempotency-Status", "MISS");
+        decoratedExchange.getResponse().getHeaders().set(IDEMPOTENCY_STATUS_HEADER, "MISS");
 
         return chain.filter(decoratedExchange)
                 .onErrorResume(error -> redisTemplate.delete(redisKey).then(Mono.error(error)))
@@ -320,9 +317,10 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
     }
 
     private Mono<Void> writeCachedResponse(ServerWebExchange exchange, IdempotencyEntry entry) {
-        HttpStatusCode statusCode = HttpStatusCode.valueOf(entry.statusCode() == null ? HttpStatus.OK.value() : entry.statusCode());
+        int cachedStatusCode = entry.statusCode() != null ? entry.statusCode() : HttpStatus.OK.value();
+        HttpStatusCode statusCode = HttpStatusCode.valueOf(cachedStatusCode);
         exchange.getResponse().setStatusCode(statusCode);
-        exchange.getResponse().getHeaders().set("X-Idempotency-Status", "HIT");
+        exchange.getResponse().getHeaders().set(IDEMPOTENCY_STATUS_HEADER, "HIT");
 
         entry.headers().forEach((name, values) -> {
             if (!EXCLUDED_RESPONSE_HEADERS.contains(name.toLowerCase())) {
@@ -362,7 +360,7 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
 
         exchange.getResponse().setStatusCode(status);
         exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
-        exchange.getResponse().getHeaders().set("X-Idempotency-Status", idempotencyStatus);
+        exchange.getResponse().getHeaders().set(IDEMPOTENCY_STATUS_HEADER, idempotencyStatus);
         DataBuffer dataBuffer = exchange.getResponse().bufferFactory().wrap(bytes);
         return exchange.getResponse().writeWith(Mono.just(dataBuffer));
     }
@@ -408,14 +406,6 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
                 || method == HttpMethod.DELETE;
     }
 
-    private boolean isMultipartRequest(ServerWebExchange exchange) {
-        MediaType contentType = exchange.getRequest().getHeaders().getContentType();
-        if (contentType == null) {
-            return false;
-        }
-        return MediaType.MULTIPART_FORM_DATA.isCompatibleWith(contentType);
-    }
-
     private boolean shouldSkipBodyBuffering(ServerWebExchange exchange) {
         MediaType contentType = exchange.getRequest().getHeaders().getContentType();
         if (contentType == null) {
@@ -432,68 +422,11 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
         HttpMethod method = exchange.getRequest().getMethod();
         String path = exchange.getRequest().getPath().value();
 
-        if ("/auth/logout".equals(path) && method == HttpMethod.POST) {
-            return true;
-        }
-        if ("/auth/session".equals(path) && method == HttpMethod.POST) {
-            return true;
-        }
-        if ("/auth/resend-verification".equals(path) && method == HttpMethod.POST) {
-            return true;
-        }
-        if ("/customers/register-identity".equals(path) && method == HttpMethod.POST) {
-            return true;
-        }
-        if (path.startsWith("/admin/")) {
-            return true;
-        }
-        if ("/orders/me".equals(path) && method == HttpMethod.POST) {
-            return true;
-        }
-        if (path.startsWith("/orders/me/") && path.endsWith("/cancel") && method == HttpMethod.POST) {
-            return true;
-        }
-        if ("/payments/me/initiate".equals(path) && method == HttpMethod.POST) {
-            return true;
-        }
-        if ("/payments/me/refunds".equals(path) && method == HttpMethod.POST) {
-            return true;
-        }
-        if (path.startsWith("/payments/vendor/me/refunds/") && path.endsWith("/respond") && method == HttpMethod.POST) {
-            return true;
-        }
-        if (path.startsWith("/admin/payments/refunds/") && path.endsWith("/finalize") && method == HttpMethod.POST) {
-            return true;
-        }
-        if (("/customers/me/addresses".equals(path) || path.startsWith("/customers/me/addresses/"))
-                && (method == HttpMethod.POST || method == HttpMethod.PUT || method == HttpMethod.DELETE)) {
-            return true;
-        }
-        if ("/customers/me".equals(path) && method == HttpMethod.PUT) {
-            return true;
-        }
-        if ("/customers/me/deactivate".equals(path) && method == HttpMethod.POST) {
-            return true;
-        }
-        if ("/cart/me/checkout".equals(path) && method == HttpMethod.POST) {
-            return true;
-        }
-        if (("/cart/me".equals(path) || "/cart/me/items".equals(path) || path.startsWith("/cart/me/items/"))
-                && (method == HttpMethod.POST || method == HttpMethod.PUT || method == HttpMethod.DELETE)) {
-            return true;
-        }
-        if (("/wishlist/me".equals(path) || "/wishlist/me/items".equals(path) || path.startsWith("/wishlist/me/items/"))
-                && (method == HttpMethod.POST || method == HttpMethod.PUT || method == HttpMethod.DELETE)) {
-            return true;
-        }
-        if (("/vendors/me/stop-orders".equals(path) || "/vendors/me/resume-orders".equals(path))
-                && method == HttpMethod.POST) {
-            return true;
-        }
-        if ("/vendors/me".equals(path) && method == HttpMethod.PUT) {
-            return true;
-        }
-        return "/vendors/me/payout-config".equals(path) && method == HttpMethod.PUT;
+        return isProtectedAuthOrAdminMutation(path, method)
+                || isProtectedCustomerMutation(path, method)
+                || isProtectedOrderOrPaymentMutation(path, method)
+                || isProtectedCartOrWishlistMutation(path, method)
+                || isProtectedVendorMutation(path, method);
     }
 
     private String buildRedisKey(String scopeKey, String method, String path, String idempotencyKey) {
@@ -508,6 +441,96 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
             return "ip:unknown";
         }
         return scopeKey.trim();
+    }
+
+    private void maybeMarkSkippedRequest(ServerWebExchange exchange, boolean mutatingRequest, boolean skipBodyBuffering) {
+        if (!mutatingRequest || !skipBodyBuffering) {
+            return;
+        }
+        String idempotencyKey = exchange.getRequest().getHeaders().getFirst(keyHeaderName);
+        if (!StringUtils.hasText(idempotencyKey)) {
+            return;
+        }
+        if (log.isDebugEnabled()) {
+            String path = exchange.getRequest().getPath().value();
+            log.debug("Idempotency skipped for binary/multipart request path={} key={}", path, idempotencyKey);
+        }
+        exchange.getResponse().getHeaders().set(IDEMPOTENCY_STATUS_HEADER, "SKIPPED");
+    }
+
+    private boolean isProtectedAuthOrAdminMutation(String path, @Nullable HttpMethod method) {
+        return path.startsWith("/admin/")
+                || matchesPost(path, method, "/auth/logout", "/auth/session",
+                "/auth/resend-verification", "/customers/register-identity");
+    }
+
+    private boolean isProtectedCustomerMutation(String path, @Nullable HttpMethod method) {
+        return matchesWritePath(path, method, "/customers/me/addresses", "/customers/me/addresses/")
+                || matchesMethodAndPath(method, HttpMethod.PUT, path, "/customers/me")
+                || matchesMethodAndPath(method, HttpMethod.POST, path, "/customers/me/deactivate");
+    }
+
+    private boolean isProtectedOrderOrPaymentMutation(String path, @Nullable HttpMethod method) {
+        return matchesMethodAndPath(method, HttpMethod.POST, path, "/orders/me")
+                || (isMethod(method, HttpMethod.POST) && path.startsWith("/orders/me/") && path.endsWith("/cancel"))
+                || matchesPost(path, method, "/payments/me/initiate", "/payments/me/refunds")
+                || (isMethod(method, HttpMethod.POST)
+                && path.startsWith("/payments/vendor/me/refunds/") && path.endsWith("/respond"))
+                || (isMethod(method, HttpMethod.POST)
+                && path.startsWith("/admin/payments/refunds/") && path.endsWith("/finalize"));
+    }
+
+    private boolean isProtectedCartOrWishlistMutation(String path, @Nullable HttpMethod method) {
+        return matchesMethodAndPath(method, HttpMethod.POST, path, "/cart/me/checkout")
+                || matchesWritePath(path, method, "/cart/me", "/cart/me/items", "/cart/me/items/")
+                || matchesWritePath(path, method, "/wishlist/me", "/wishlist/me/items", "/wishlist/me/items/");
+    }
+
+    private boolean isProtectedVendorMutation(String path, @Nullable HttpMethod method) {
+        return matchesPost(path, method, "/vendors/me/stop-orders", "/vendors/me/resume-orders")
+                || matchesMethodAndPath(method, HttpMethod.PUT, path, "/vendors/me")
+                || matchesMethodAndPath(method, HttpMethod.PUT, path, "/vendors/me/payout-config");
+    }
+
+    private boolean matchesWritePath(String path, @Nullable HttpMethod method, String exactPath, String pathPrefix) {
+        return isWriteMethod(method) && (exactPath.equals(path) || path.startsWith(pathPrefix));
+    }
+
+    private boolean matchesWritePath(
+            String path,
+            @Nullable HttpMethod method,
+            String exactPath,
+            String secondaryExactPath,
+            String pathPrefix
+    ) {
+        return isWriteMethod(method)
+                && (exactPath.equals(path) || secondaryExactPath.equals(path) || path.startsWith(pathPrefix));
+    }
+
+    private boolean matchesPost(String path, @Nullable HttpMethod method, String... exactPaths) {
+        for (String exactPath : exactPaths) {
+            if (matchesMethodAndPath(method, HttpMethod.POST, path, exactPath)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean matchesMethodAndPath(
+            @Nullable HttpMethod actualMethod,
+            HttpMethod expectedMethod,
+            String actualPath,
+            String expectedPath
+    ) {
+        return actualMethod == expectedMethod && expectedPath.equals(actualPath);
+    }
+
+    private boolean isWriteMethod(@Nullable HttpMethod method) {
+        return method == HttpMethod.POST || method == HttpMethod.PUT || method == HttpMethod.DELETE;
+    }
+
+    private boolean isMethod(@Nullable HttpMethod actualMethod, HttpMethod expectedMethod) {
+        return actualMethod == expectedMethod;
     }
 
     private String sha256Hex(String value) {

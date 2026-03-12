@@ -113,12 +113,14 @@ public class TokenRevocationService {
 
         return isSubjectRevoked(normalizedSubject)
                 .flatMap(subjectRevoked -> {
-                    if (subjectRevoked) {
+                    boolean subjectAlreadyRevoked = Boolean.TRUE.equals(subjectRevoked);
+                    if (subjectAlreadyRevoked) {
                         return Mono.error(new IllegalStateException("Subject session revocation is still active"));
                     }
                     return isSessionHandleRevoked(normalizedHandle)
                             .flatMap(handleRevoked -> {
-                                if (handleRevoked) {
+                                boolean handleAlreadyRevoked = Boolean.TRUE.equals(handleRevoked);
+                                if (handleAlreadyRevoked) {
                                     return Mono.error(new IllegalStateException("Session handle has been revoked"));
                                 }
                                 return redisTemplate.opsForValue()
@@ -139,7 +141,8 @@ public class TokenRevocationService {
         String normalizedSubject = StringUtils.hasText(subject) ? subject.trim() : "";
         return isSubjectRevoked(normalizedSubject)
                 .flatMap(subjectRevoked -> {
-                    if (subjectRevoked) {
+                    boolean subjectAlreadyRevoked = Boolean.TRUE.equals(subjectRevoked);
+                    if (subjectAlreadyRevoked) {
                         return Mono.just(SessionValidationResult.revoked("subject_revoked"));
                     }
                     if (!StringUtils.hasText(sessionHandle)) {
@@ -149,7 +152,8 @@ public class TokenRevocationService {
                     String expectedFingerprint = buildClientFingerprint(clientIp, userAgent);
                     return isSessionHandleRevoked(normalizedHandle)
                             .flatMap(handleRevoked -> {
-                                if (handleRevoked) {
+                                boolean handleAlreadyRevoked = Boolean.TRUE.equals(handleRevoked);
+                                if (handleAlreadyRevoked) {
                                     return Mono.just(SessionValidationResult.revoked("session_revoked"));
                                 }
                                 return redisTemplate.opsForValue()

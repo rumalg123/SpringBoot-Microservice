@@ -358,7 +358,7 @@ public class RateLimitConfig {
     @Primary
     public KeyResolver userOrIpKeyResolver() {
         return exchange -> exchange.getPrincipal()
-                .filter(p -> p instanceof JwtAuthenticationToken)
+                .filter(JwtAuthenticationToken.class::isInstance)
                 .cast(JwtAuthenticationToken.class)
                 .map(auth -> "sub:" + auth.getToken().getSubject())
                 .switchIfEmpty(reactor.core.publisher.Mono.just("ip:" + trustedProxyResolver.resolveClientIp(exchange)));

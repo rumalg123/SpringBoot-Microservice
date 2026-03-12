@@ -14,6 +14,7 @@ import java.util.Set;
 @Component
 public class KeycloakRoleClaims {
 
+    private static final String ROLES_CLAIM = "roles";
     private static final Set<String> FORWARDED_ROLES = Set.of(
             "super_admin",
             "platform_staff",
@@ -96,10 +97,10 @@ public class KeycloakRoleClaims {
 
     private Set<String> extractNormalizedRoles(Jwt jwt) {
         Set<String> roles = new LinkedHashSet<>();
-        addRoles(roles, jwt.getClaimAsStringList("roles"));
+        addRoles(roles, jwt.getClaimAsStringList(ROLES_CLAIM));
 
         if (!claimsNamespace.isBlank()) {
-            addRoles(roles, jwt.getClaimAsStringList(claimsNamespace + "roles"));
+            addRoles(roles, jwt.getClaimAsStringList(claimsNamespace + ROLES_CLAIM));
         }
 
         addRoles(roles, extractRoles(jwt.getClaim("realm_access")));
@@ -130,7 +131,7 @@ public class KeycloakRoleClaims {
         if (!(claimValue instanceof Map<?, ?> map)) {
             return List.of();
         }
-        Object rolesValue = map.get("roles");
+        Object rolesValue = map.get(ROLES_CLAIM);
         if (!(rolesValue instanceof List<?> rawRoles)) {
             return List.of();
         }

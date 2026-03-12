@@ -26,6 +26,12 @@ import reactor.core.publisher.Mono;
 @EnableWebFluxSecurity
 public class SecurityConfig {
 
+    private static final String ROLE_SUPER_ADMIN = "super_admin";
+    private static final String ROLE_PLATFORM_STAFF = "platform_staff";
+    private static final String ROLE_VENDOR_ADMIN = "vendor_admin";
+    private static final String ROLE_VENDOR_STAFF = "vendor_staff";
+    private static final String ROLE_CUSTOMER = "customer";
+
     private final String issuerUri;
     private final String jwkSetUri;
     private final String audienceConfig;
@@ -134,84 +140,60 @@ public class SecurityConfig {
     }
 
     private Mono<AuthorizationResult> hasSuperAdminAccess(Mono<Authentication> authentication, AuthorizationContext context) {
-        return authentication
-                .filter(Authentication::isAuthenticated)
-                .filter(auth -> auth instanceof JwtAuthenticationToken)
-                .cast(JwtAuthenticationToken.class)
-                .map(JwtAuthenticationToken::getToken)
+        return authenticatedJwt(authentication)
                 .map(jwt -> (AuthorizationResult) new AuthorizationDecision(
-                        keycloakRoleClaims.isEmailVerified(jwt) && keycloakRoleClaims.hasRole(jwt, "super_admin")
+                        keycloakRoleClaims.isEmailVerified(jwt) && keycloakRoleClaims.hasRole(jwt, ROLE_SUPER_ADMIN)
                 ))
                 .defaultIfEmpty(new AuthorizationDecision(false));
     }
 
     private Mono<AuthorizationResult> hasSuperAdminOrVendorAdminAccess(Mono<Authentication> authentication, AuthorizationContext context) {
-        return authentication
-                .filter(Authentication::isAuthenticated)
-                .filter(auth -> auth instanceof JwtAuthenticationToken)
-                .cast(JwtAuthenticationToken.class)
-                .map(JwtAuthenticationToken::getToken)
+        return authenticatedJwt(authentication)
                 .map(jwt -> (AuthorizationResult) new AuthorizationDecision(
                         keycloakRoleClaims.isEmailVerified(jwt)
-                                && (keycloakRoleClaims.hasRole(jwt, "super_admin")
-                                || keycloakRoleClaims.hasRole(jwt, "vendor_admin"))
+                                && (keycloakRoleClaims.hasRole(jwt, ROLE_SUPER_ADMIN)
+                                || keycloakRoleClaims.hasRole(jwt, ROLE_VENDOR_ADMIN))
                 ))
                 .defaultIfEmpty(new AuthorizationDecision(false));
     }
 
     private Mono<AuthorizationResult> hasSuperAdminOrPlatformStaffAccess(Mono<Authentication> authentication, AuthorizationContext context) {
-        return authentication
-                .filter(Authentication::isAuthenticated)
-                .filter(auth -> auth instanceof JwtAuthenticationToken)
-                .cast(JwtAuthenticationToken.class)
-                .map(JwtAuthenticationToken::getToken)
+        return authenticatedJwt(authentication)
                 .map(jwt -> (AuthorizationResult) new AuthorizationDecision(
                         keycloakRoleClaims.isEmailVerified(jwt)
-                                && (keycloakRoleClaims.hasRole(jwt, "super_admin")
-                                || keycloakRoleClaims.hasRole(jwt, "platform_staff"))
+                                && (keycloakRoleClaims.hasRole(jwt, ROLE_SUPER_ADMIN)
+                                || keycloakRoleClaims.hasRole(jwt, ROLE_PLATFORM_STAFF))
                 ))
                 .defaultIfEmpty(new AuthorizationDecision(false));
     }
 
     private Mono<AuthorizationResult> hasAnyScopedAdminAccess(Mono<Authentication> authentication, AuthorizationContext context) {
-        return authentication
-                .filter(Authentication::isAuthenticated)
-                .filter(auth -> auth instanceof JwtAuthenticationToken)
-                .cast(JwtAuthenticationToken.class)
-                .map(JwtAuthenticationToken::getToken)
+        return authenticatedJwt(authentication)
                 .map(jwt -> (AuthorizationResult) new AuthorizationDecision(
                         keycloakRoleClaims.isEmailVerified(jwt)
-                                && (keycloakRoleClaims.hasRole(jwt, "super_admin")
-                                || keycloakRoleClaims.hasRole(jwt, "platform_staff")
-                                || keycloakRoleClaims.hasRole(jwt, "vendor_admin")
-                                || keycloakRoleClaims.hasRole(jwt, "vendor_staff"))
+                                && (keycloakRoleClaims.hasRole(jwt, ROLE_SUPER_ADMIN)
+                                || keycloakRoleClaims.hasRole(jwt, ROLE_PLATFORM_STAFF)
+                                || keycloakRoleClaims.hasRole(jwt, ROLE_VENDOR_ADMIN)
+                                || keycloakRoleClaims.hasRole(jwt, ROLE_VENDOR_STAFF))
                 ))
                 .defaultIfEmpty(new AuthorizationDecision(false));
     }
 
     private Mono<AuthorizationResult> hasVendorAccess(Mono<Authentication> authentication, AuthorizationContext context) {
-        return authentication
-                .filter(Authentication::isAuthenticated)
-                .filter(auth -> auth instanceof JwtAuthenticationToken)
-                .cast(JwtAuthenticationToken.class)
-                .map(JwtAuthenticationToken::getToken)
+        return authenticatedJwt(authentication)
                 .map(jwt -> (AuthorizationResult) new AuthorizationDecision(
                         keycloakRoleClaims.isEmailVerified(jwt)
-                                && (keycloakRoleClaims.hasRole(jwt, "vendor_admin")
-                                || keycloakRoleClaims.hasRole(jwt, "vendor_staff"))
+                                && (keycloakRoleClaims.hasRole(jwt, ROLE_VENDOR_ADMIN)
+                                || keycloakRoleClaims.hasRole(jwt, ROLE_VENDOR_STAFF))
                 ))
                 .defaultIfEmpty(new AuthorizationDecision(false));
     }
 
     private Mono<AuthorizationResult> hasVendorAdminAccess(Mono<Authentication> authentication, AuthorizationContext context) {
-        return authentication
-                .filter(Authentication::isAuthenticated)
-                .filter(auth -> auth instanceof JwtAuthenticationToken)
-                .cast(JwtAuthenticationToken.class)
-                .map(JwtAuthenticationToken::getToken)
+        return authenticatedJwt(authentication)
                 .map(jwt -> (AuthorizationResult) new AuthorizationDecision(
                         keycloakRoleClaims.isEmailVerified(jwt)
-                                && keycloakRoleClaims.hasRole(jwt, "vendor_admin")
+                                && keycloakRoleClaims.hasRole(jwt, ROLE_VENDOR_ADMIN)
                 ))
                 .defaultIfEmpty(new AuthorizationDecision(false));
     }
@@ -224,21 +206,25 @@ public class SecurityConfig {
                     }
                     Jwt jwt = jwtAuthenticationToken.getToken();
                     boolean allowed = keycloakRoleClaims.isEmailVerified(jwt)
-                            && keycloakRoleClaims.hasRole(jwt, "customer");
+                            && keycloakRoleClaims.hasRole(jwt, ROLE_CUSTOMER);
                     return Mono.just((AuthorizationResult) new AuthorizationDecision(allowed));
                 })
                 .defaultIfEmpty(new AuthorizationDecision(true));
     }
 
     private Mono<AuthorizationResult> hasCustomerAccess(Mono<Authentication> authentication, AuthorizationContext context) {
-        return authentication
-                .filter(Authentication::isAuthenticated)
-                .filter(auth -> auth instanceof JwtAuthenticationToken)
-                .cast(JwtAuthenticationToken.class)
-                .map(JwtAuthenticationToken::getToken)
+        return authenticatedJwt(authentication)
                 .map(jwt -> (AuthorizationResult) new AuthorizationDecision(
-                        keycloakRoleClaims.isEmailVerified(jwt) && keycloakRoleClaims.hasRole(jwt, "customer")
+                        keycloakRoleClaims.isEmailVerified(jwt) && keycloakRoleClaims.hasRole(jwt, ROLE_CUSTOMER)
                 ))
                 .defaultIfEmpty(new AuthorizationDecision(false));
+    }
+
+    private Mono<Jwt> authenticatedJwt(Mono<Authentication> authentication) {
+        return authentication
+                .filter(Authentication::isAuthenticated)
+                .filter(JwtAuthenticationToken.class::isInstance)
+                .cast(JwtAuthenticationToken.class)
+                .map(JwtAuthenticationToken::getToken);
     }
 }

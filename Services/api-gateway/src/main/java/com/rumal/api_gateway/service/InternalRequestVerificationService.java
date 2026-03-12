@@ -53,7 +53,7 @@ public class InternalRequestVerificationService {
             throw new ResponseStatusException(UNAUTHORIZED, "Internal request timestamp expired");
         }
 
-        String method = request.getMethod() == null ? HttpMethod.GET.name() : request.getMethod().name();
+        String method = request.getMethod().name();
         String actualPath = request.getPath().value();
         String signedPath = header(request, "X-Internal-Path");
         if (StringUtils.hasText(signedPath) && !actualPath.equals(signedPath.trim())) {
@@ -64,7 +64,8 @@ public class InternalRequestVerificationService {
         if (!requiresBodyHash(method) && StringUtils.hasText(bodyHash)) {
             throw new ResponseStatusException(UNAUTHORIZED, "Unexpected internal body hash header");
         }
-        String payload = timestampValue.trim() + ":" + method + ":" + actualPath + ":" + (bodyHash == null ? "" : bodyHash.trim());
+        String normalizedBodyHash = bodyHash.trim();
+        String payload = timestampValue.trim() + ":" + method + ":" + actualPath + ":" + normalizedBodyHash;
         String expectedSignature = computeHmac(payload);
         if (!MessageDigest.isEqual(expectedSignature.getBytes(StandardCharsets.UTF_8), signature.trim().getBytes(StandardCharsets.UTF_8))) {
             throw new ResponseStatusException(UNAUTHORIZED, "Invalid internal HMAC signature");

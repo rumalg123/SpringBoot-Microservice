@@ -10,7 +10,6 @@ import org.springframework.core.Ordered;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
@@ -52,8 +51,7 @@ public class IpFilterConfig implements GlobalFilter, Ordered {
     }
 
     @Override
-    @NonNull
-    public Mono<Void> filter(@NonNull ServerWebExchange exchange, @NonNull GatewayFilterChain chain) {
+    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         if (blockedIps.isEmpty() && !allowlistEnabled) {
             return chain.filter(exchange);
         }
@@ -61,12 +59,14 @@ public class IpFilterConfig implements GlobalFilter, Ordered {
         String clientIp = resolveClientIp(exchange);
 
         if (!blockedIps.isEmpty() && blockedIps.contains(clientIp)) {
-            log.warn("Blocked request from IP={} path={}", clientIp, exchange.getRequest().getPath().value());
+            String path = exchange.getRequest().getPath().value();
+            log.warn("Blocked request from IP={} path={}", clientIp, path);
             return writeForbidden(exchange);
         }
 
         if (allowlistEnabled && (allowedIps.isEmpty() || !allowedIps.contains(clientIp))) {
-            log.warn("IP not in allowlist IP={} path={}", clientIp, exchange.getRequest().getPath().value());
+            String path = exchange.getRequest().getPath().value();
+            log.warn("IP not in allowlist IP={} path={}", clientIp, path);
             return writeForbidden(exchange);
         }
 

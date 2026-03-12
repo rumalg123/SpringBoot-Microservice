@@ -100,7 +100,6 @@ public class SessionHandleResolver {
         if (value == null) {
             return "";
         }
-        String converted = value instanceof String ? ((String) value).trim() : String.valueOf(value).trim();
-        return converted;
+        return value instanceof String string ? string.trim() : String.valueOf(value).trim();
     }
 }

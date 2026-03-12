@@ -8,7 +8,6 @@ import org.springframework.core.Ordered;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.server.reactive.ServerHttpRequest;
-import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
@@ -20,6 +19,8 @@ import java.time.Instant;
 public class AccessLoggingFilter implements GlobalFilter, Ordered {
 
     private static final Logger log = LoggerFactory.getLogger(AccessLoggingFilter.class);
+    private static final String ACCESS_LOG_TEMPLATE =
+            "ACCESS method={} path={} query={} status={} durationMs={} routeId={} requestId={} user={} ip={}";
     private final TrustedProxyResolver trustedProxyResolver;
 
     public AccessLoggingFilter(TrustedProxyResolver trustedProxyResolver) {
@@ -27,8 +28,7 @@ public class AccessLoggingFilter implements GlobalFilter, Ordered {
     }
 
     @Override
-    @NonNull
-    public Mono<Void> filter(@NonNull ServerWebExchange exchange, @NonNull GatewayFilterChain chain) {
+    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         Instant start = Instant.now();
         ServerHttpRequest request = exchange.getRequest();
 
@@ -51,13 +51,13 @@ public class AccessLoggingFilter implements GlobalFilter, Ordered {
         String routeId = route != null ? route.getId() : "unknown";
 
         if (statusCode >= 500) {
-            log.error("ACCESS method={} path={} query={} status={} durationMs={} routeId={} requestId={} user={} ip={}",
+            log.error(ACCESS_LOG_TEMPLATE,
                     method, path, query, statusCode, durationMs, routeId, requestId, userSub, clientIp);
         } else if (statusCode >= 400) {
-            log.warn("ACCESS method={} path={} query={} status={} durationMs={} routeId={} requestId={} user={} ip={}",
+            log.warn(ACCESS_LOG_TEMPLATE,
                     method, path, query, statusCode, durationMs, routeId, requestId, userSub, clientIp);
         } else {
-            log.info("ACCESS method={} path={} query={} status={} durationMs={} routeId={} requestId={} user={} ip={}",
+            log.info(ACCESS_LOG_TEMPLATE,
                     method, path, query, statusCode, durationMs, routeId, requestId, userSub, clientIp);
         }
     }

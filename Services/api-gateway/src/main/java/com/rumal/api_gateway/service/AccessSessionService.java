@@ -36,18 +36,28 @@ public class AccessSessionService {
     private final TrustedProxyResolver trustedProxyResolver;
     private final ObjectMapper objectMapper;
     private final String internalSharedSecret;
+    private final String accessSessionsPath;
+    private final String keycloakSessionPathPrefix;
+    private final String keycloakUserPathPrefix;
 
     public AccessSessionService(
             @Qualifier("loadBalancedWebClientBuilder") WebClient.Builder loadBalancedWebClientBuilder,
             TrustedProxyResolver trustedProxyResolver,
             ObjectMapper objectMapper,
+            @Value("${access.service.base-url:http://access-service}") String accessServiceBaseUrl,
+            @Value("${access.service.paths.sessions:/internal/access/sessions}") String accessSessionsPath,
+            @Value("${access.service.paths.by-keycloak-session:/internal/access/sessions/by-keycloak-session}") String keycloakSessionPathPrefix,
+            @Value("${access.service.paths.by-keycloak-user:/internal/access/sessions/by-keycloak-user}") String keycloakUserPathPrefix,
             @Value("${internal.auth.shared-secret:}") String internalSharedSecret
     ) {
         this.accessServiceClient = loadBalancedWebClientBuilder
-                .baseUrl("http://access-service")
+                .baseUrl(accessServiceBaseUrl.trim())
                 .build();
         this.trustedProxyResolver = trustedProxyResolver;
         this.objectMapper = objectMapper;
+        this.accessSessionsPath = normalizePath(accessSessionsPath);
+        this.keycloakSessionPathPrefix = normalizePath(keycloakSessionPathPrefix);
+        this.keycloakUserPathPrefix = normalizePath(keycloakUserPathPrefix);
         this.internalSharedSecret = internalSharedSecret == null ? "" : internalSharedSecret.trim();
     }
 
@@ -57,7 +67,7 @@ public class AccessSessionService {
         }
         requireInternalSecret();
 
-        String path = "/internal/access/sessions";
+        String path = accessSessionsPath;
         SessionRegistrationRequest request = new SessionRegistrationRequest(
                 keycloakId.trim(),
                 keycloakSessionId.trim(),
@@ -87,7 +97,7 @@ public class AccessSessionService {
         }
         requireInternalSecret();
         String encodedSessionId = UriUtils.encodePathSegment(keycloakSessionId.trim(), StandardCharsets.UTF_8);
-        String path = "/internal/access/sessions/by-keycloak-session/" + encodedSessionId;
+        String path = keycloakSessionPathPrefix + "/" + encodedSessionId;
         return delete(path, "Unable to revoke active session");
     }
 
@@ -97,7 +107,7 @@ public class AccessSessionService {
         }
         requireInternalSecret();
         String encodedKeycloakId = UriUtils.encodePathSegment(keycloakId.trim(), StandardCharsets.UTF_8);
-        String path = "/internal/access/sessions/by-keycloak-user/" + encodedKeycloakId;
+        String path = keycloakUserPathPrefix + "/" + encodedKeycloakId;
         return delete(path, "Unable to revoke active sessions");
     }
 
@@ -158,6 +168,17 @@ public class AccessSessionService {
             return trimmed;
         }
         return trimmed.substring(0, maxLength);
+    }
+
+    private String normalizePath(String path) {
+        if (!StringUtils.hasText(path)) {
+            throw new IllegalArgumentException("Access service path must not be blank");
+        }
+        String normalized = path.trim();
+        if (normalized.length() > 1 && normalized.endsWith("/")) {
+            return normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized;
     }
 
     private String computeHmac(String payload) {

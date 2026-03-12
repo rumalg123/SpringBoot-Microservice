@@ -248,17 +248,7 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
      * Critical financial, auth, and registration endpoints always fail CLOSED to prevent abuse.
      */
     private boolean shouldFailOpen(String path) {
-        if (!failOpenOnRateLimiterError) {
-            return false;
-        }
-        if (path.startsWith("/orders") || path.startsWith("/cart/me/checkout")
-                || path.startsWith("/payments") || path.startsWith("/webhooks")
-                || "/customers/register-identity".equals(path)
-                || path.startsWith("/auth") || path.startsWith("/personalization/events")
-                || path.startsWith("/analytics/") || path.startsWith("/admin/orders/export")) {
-            return false;
-        }
-        return true;
+        return failOpenOnRateLimiterError && !isFailClosedPath(path);
     }
 
     private Mono<Void> writeRateLimitServiceUnavailable(ServerWebExchange exchange, String policyId) {
@@ -280,170 +270,51 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
     }
 
     private Policy resolvePolicy(String path, @Nullable HttpMethod method) {
-        if ("/customers/register-identity".equals(path) && method == HttpMethod.POST) {
-            return new Policy("register-identity", registerIdentityRateLimiter, userOrIpKeyResolver);
+        Policy policy = resolveAuthPolicy(path, method);
+        if (policy != null) {
+            return policy;
         }
-        if ("/auth/logout".equals(path) && method == HttpMethod.POST) {
-            return new Policy("auth-logout", authLogoutRateLimiter, userOrIpKeyResolver);
+        policy = resolveCustomerPolicy(path, method);
+        if (policy != null) {
+            return policy;
         }
-        if ("/auth/resend-verification".equals(path) && method == HttpMethod.POST) {
-            return new Policy("auth-resend-verification", authResendVerificationRateLimiter, userOrIpKeyResolver);
+        policy = resolveOrderPolicy(path, method);
+        if (policy != null) {
+            return policy;
         }
-        if ("/auth/session".equals(path) && method == HttpMethod.POST) {
-            return new Policy("auth-session", authSessionRateLimiter, userOrIpKeyResolver);
+        policy = resolveCartAndWishlistPolicy(path, method);
+        if (policy != null) {
+            return policy;
         }
-        if ("/customers/me".equals(path) && (method == HttpMethod.GET || method == HttpMethod.PUT)) {
-            return new Policy("customer-me", customerMeRateLimiter, userOrIpKeyResolver);
+        policy = resolveAnalyticsAndReportPolicy(path, method);
+        if (policy != null) {
+            return policy;
         }
-        if (("/customers/me/addresses".equals(path) || path.startsWith("/customers/me/addresses/"))
-                && (method == HttpMethod.GET || method == HttpMethod.HEAD)) {
-            return new Policy("customer-addresses-read", customerAddressesRateLimiter, userOrIpKeyResolver);
+        policy = resolvePromotionAndCatalogPolicy(path, method);
+        if (policy != null) {
+            return policy;
         }
-        if (("/customers/me/addresses".equals(path) || path.startsWith("/customers/me/addresses/"))
-                && (method == HttpMethod.POST || method == HttpMethod.PUT || method == HttpMethod.DELETE)) {
-            return new Policy("customer-addresses-write", customerAddressesWriteRateLimiter, userOrIpKeyResolver);
+        policy = resolveVendorPolicy(path, method);
+        if (policy != null) {
+            return policy;
         }
-        if ("/orders/me".equals(path) && method == HttpMethod.POST) {
-            return new Policy("orders-me-write", ordersMeWriteRateLimiter, userOrIpKeyResolver);
+        policy = resolveAdminCatalogPolicy(path, method);
+        if (policy != null) {
+            return policy;
         }
-        if (path.startsWith("/orders/me/") && path.endsWith("/cancel") && method == HttpMethod.POST) {
-            return new Policy("orders-me-write", ordersMeWriteRateLimiter, userOrIpKeyResolver);
+        policy = resolveAdminAccessPolicy(path, method);
+        if (policy != null) {
+            return policy;
         }
-        if (("/orders/me".equals(path) || path.startsWith("/orders/me/")) && method == HttpMethod.GET) {
-            return new Policy("orders-me-read", ordersMeRateLimiter, userOrIpKeyResolver);
+        policy = resolveWebhookPaymentAndPersonalizationPolicy(path, method);
+        if (policy != null) {
+            return policy;
         }
-        if ("/cart/me/checkout".equals(path) && method == HttpMethod.POST) {
-            return new Policy("cart-me-checkout", cartMeCheckoutRateLimiter, userOrIpKeyResolver);
+        policy = resolveSearchAndReviewPolicy(path, method);
+        if (policy != null) {
+            return policy;
         }
-        if (("/cart/me".equals(path) || "/cart/me/items".equals(path) || path.startsWith("/cart/me/items/"))
-                && (method == HttpMethod.DELETE || method == HttpMethod.PUT || method == HttpMethod.POST)) {
-            return new Policy("cart-me-write", cartMeWriteRateLimiter, userOrIpKeyResolver);
-        }
-        if (("/cart/me".equals(path) || "/cart/me/items".equals(path) || path.startsWith("/cart/me/items/"))
-                && method == HttpMethod.GET) {
-            return new Policy("cart-me-read", cartMeRateLimiter, userOrIpKeyResolver);
-        }
-        if (("/wishlist/me".equals(path) || "/wishlist/me/items".equals(path) || path.startsWith("/wishlist/me/items/"))
-                && (method == HttpMethod.DELETE || method == HttpMethod.PUT || method == HttpMethod.POST)) {
-            return new Policy("wishlist-me-write", wishlistMeWriteRateLimiter, userOrIpKeyResolver);
-        }
-        if (("/wishlist/me".equals(path) || "/wishlist/me/items".equals(path) || path.startsWith("/wishlist/me/items/"))
-                && method == HttpMethod.GET) {
-            return new Policy("wishlist-me-read", wishlistMeRateLimiter, userOrIpKeyResolver);
-        }
-        if (path.startsWith("/analytics/admin/")) {
-            return new Policy("analytics-admin", analyticsAdminRateLimiter, userOrIpKeyResolver);
-        }
-        if (path.startsWith("/analytics/vendor/")) {
-            return new Policy("analytics-vendor", analyticsVendorRateLimiter, userOrIpKeyResolver);
-        }
-        if ("/admin/orders/export".equals(path) && method == HttpMethod.GET) {
-            return new Policy("report-exports-create", reportExportsCreateRateLimiter, userOrIpKeyResolver);
-        }
-        if ("/admin/orders/exports".equals(path) && method == HttpMethod.POST) {
-            return new Policy("report-exports-create", reportExportsCreateRateLimiter, userOrIpKeyResolver);
-        }
-        if (path.startsWith("/admin/orders/exports/") && (method == HttpMethod.GET || method == HttpMethod.HEAD)) {
-            return new Policy("report-exports-read", reportExportsReadRateLimiter, userOrIpKeyResolver);
-        }
-        if ("/admin/orders".equals(path) || path.startsWith("/admin/orders/")) {
-            return new Policy("admin-orders", adminOrdersRateLimiter, userOrIpKeyResolver);
-        }
-        if ("/admin/vendor-orders".equals(path) || path.startsWith("/admin/vendor-orders/")) {
-            return new Policy("admin-orders", adminOrdersRateLimiter, userOrIpKeyResolver);
-        }
-        if ("/promotions/me".equals(path) || path.startsWith("/promotions/me/")) {
-            return new Policy("promotions-me", publicPromotionsRateLimiter, userOrIpKeyResolver);
-        }
-        if (("/promotions".equals(path) || path.startsWith("/promotions/"))
-                && (method == HttpMethod.GET || method == HttpMethod.HEAD)) {
-            return new Policy("promotions-read", publicPromotionsRateLimiter, ipKeyResolver);
-        }
-        if (("/products".equals(path) || path.startsWith("/products/")
-                || "/categories".equals(path) || path.startsWith("/categories/"))
-                && (method == HttpMethod.GET || method == HttpMethod.HEAD)) {
-            return new Policy("products-read", productsRateLimiter, ipKeyResolver);
-        }
-        if ("/vendors/me".equals(path) || path.startsWith("/vendors/me/")) {
-            if (method == HttpMethod.GET || method == HttpMethod.HEAD) {
-                return new Policy("vendor-me-read", vendorMeRateLimiter, userOrIpKeyResolver);
-            }
-            return new Policy("vendor-me-write", vendorMeWriteRateLimiter, userOrIpKeyResolver);
-        }
-        if (("/posters".equals(path) || path.startsWith("/posters/")
-                || "/vendors".equals(path) || path.startsWith("/vendors/"))
-                && (method == HttpMethod.GET || method == HttpMethod.HEAD)) {
-            return new Policy("catalog-aux-read", publicCatalogAuxRateLimiter, ipKeyResolver);
-        }
-        if ("/admin/products".equals(path) || path.startsWith("/admin/products/")
-                || "/admin/categories".equals(path) || path.startsWith("/admin/categories/")) {
-            if (method == HttpMethod.GET || method == HttpMethod.HEAD) {
-                return new Policy("admin-products-read", adminProductsRateLimiter, userOrIpKeyResolver);
-            }
-            return new Policy("admin-products-write", adminProductsWriteRateLimiter, userOrIpKeyResolver);
-        }
-        if ("/admin/posters".equals(path) || path.startsWith("/admin/posters/")) {
-            if (method == HttpMethod.GET || method == HttpMethod.HEAD) {
-                return new Policy("admin-posters-read", adminPostersRateLimiter, userOrIpKeyResolver);
-            }
-            return new Policy("admin-posters-write", adminPostersWriteRateLimiter, userOrIpKeyResolver);
-        }
-        if ("/admin/vendors".equals(path) || path.startsWith("/admin/vendors/")) {
-            if (method == HttpMethod.GET || method == HttpMethod.HEAD) {
-                return new Policy("admin-vendors-read", adminVendorsRateLimiter, userOrIpKeyResolver);
-            }
-            return new Policy("admin-vendors-write", adminVendorsWriteRateLimiter, userOrIpKeyResolver);
-        }
-        if ("/admin/me".equals(path) || path.startsWith("/admin/me/")) {
-            return new Policy("admin-me-read", adminMeRateLimiter, userOrIpKeyResolver);
-        }
-        if ("/admin/keycloak/users/search".equals(path) && (method == HttpMethod.GET || method == HttpMethod.HEAD)) {
-            return new Policy("admin-keycloak-search", adminKeycloakSearchRateLimiter, userOrIpKeyResolver);
-        }
-        if ("/admin/platform-staff".equals(path) || path.startsWith("/admin/platform-staff/")
-                || "/admin/vendor-staff".equals(path) || path.startsWith("/admin/vendor-staff/")
-                || "/admin/access-audit".equals(path) || path.startsWith("/admin/access-audit/")) {
-            if (method == HttpMethod.GET || method == HttpMethod.HEAD) {
-                return new Policy("admin-access-read", adminAccessRateLimiter, userOrIpKeyResolver);
-            }
-            return new Policy("admin-access-write", adminAccessWriteRateLimiter, userOrIpKeyResolver);
-        }
-        if (path.startsWith("/webhooks/")) {
-            return new Policy("webhooks", webhookRateLimiter, ipKeyResolver);
-        }
-        if (("/payments/me".equals(path) || path.startsWith("/payments/me/"))
-                && (method == HttpMethod.GET || method == HttpMethod.HEAD)) {
-            return new Policy("payment-me-read", paymentMeRateLimiter, userOrIpKeyResolver);
-        }
-        if (("/payments/me".equals(path) || path.startsWith("/payments/me/"))
-                && (method == HttpMethod.POST || method == HttpMethod.PUT || method == HttpMethod.DELETE)) {
-            return new Policy("payment-me-write", paymentMeWriteRateLimiter, userOrIpKeyResolver);
-        }
-        if ("/personalization/events".equals(path) && method == HttpMethod.POST) {
-            return new Policy("personalization-events", personalizationEventsRateLimiter, userOrIpKeyResolver);
-        }
-        if (("/personalization/me".equals(path) || path.startsWith("/personalization/me/")
-                || "/personalization/trending".equals(path) || path.startsWith("/personalization/products/"))
-                && (method == HttpMethod.GET || method == HttpMethod.HEAD)) {
-            return new Policy("personalization-read", personalizationReadRateLimiter, userOrIpKeyResolver);
-        }
-        if ("/personalization/sessions/merge".equals(path) && method == HttpMethod.POST) {
-            return new Policy("personalization-read", personalizationReadRateLimiter, userOrIpKeyResolver);
-        }
-        if ("/payments/vendor/me".equals(path) || path.startsWith("/payments/vendor/me/")) {
-            if (method == HttpMethod.GET || method == HttpMethod.HEAD) {
-                return new Policy("payment-vendor-me-read", paymentMeRateLimiter, userOrIpKeyResolver);
-            }
-            return new Policy("payment-vendor-me-write", paymentMeWriteRateLimiter, userOrIpKeyResolver);
-        }
-        if ("/search".equals(path) || path.startsWith("/search/")) {
-            return new Policy("search-read", productsRateLimiter, ipKeyResolver);
-        }
-        if (("/reviews".equals(path) || path.startsWith("/reviews/"))
-                && (method == HttpMethod.GET || method == HttpMethod.HEAD)) {
-            return new Policy("reviews-read", publicCatalogAuxRateLimiter, ipKeyResolver);
-        }
-        return new Policy("default", gatewayDefaultRateLimiter, userOrIpKeyResolver);
+        return policy("default", gatewayDefaultRateLimiter, userOrIpKeyResolver);
     }
 
     @Override
@@ -460,6 +331,269 @@ public class RateLimitEnforcementFilter implements GlobalFilter, Ordered {
     }
 
     private record Policy(String id, RedisRateLimiter rateLimiter, KeyResolver keyResolver) {
+    }
+
+    private boolean isFailClosedPath(String path) {
+        return path.startsWith("/orders")
+                || path.startsWith("/cart/me/checkout")
+                || path.startsWith("/payments")
+                || path.startsWith("/webhooks")
+                || "/customers/register-identity".equals(path)
+                || path.startsWith("/auth")
+                || path.startsWith("/personalization/events")
+                || path.startsWith("/analytics/")
+                || path.startsWith("/admin/orders/export");
+    }
+
+    private @Nullable Policy resolveAuthPolicy(String path, @Nullable HttpMethod method) {
+        if (matches(method, HttpMethod.POST, "/customers/register-identity", path)) {
+            return policy("register-identity", registerIdentityRateLimiter, userOrIpKeyResolver);
+        }
+        if (matches(method, HttpMethod.POST, "/auth/logout", path)) {
+            return policy("auth-logout", authLogoutRateLimiter, userOrIpKeyResolver);
+        }
+        if (matches(method, HttpMethod.POST, "/auth/resend-verification", path)) {
+            return policy("auth-resend-verification", authResendVerificationRateLimiter, userOrIpKeyResolver);
+        }
+        if (matches(method, HttpMethod.POST, "/auth/session", path)) {
+            return policy("auth-session", authSessionRateLimiter, userOrIpKeyResolver);
+        }
+        return null;
+    }
+
+    private @Nullable Policy resolveCustomerPolicy(String path, @Nullable HttpMethod method) {
+        if ("/customers/me".equals(path) && (isReadMethod(method) || method == HttpMethod.PUT)) {
+            return policy("customer-me", customerMeRateLimiter, userOrIpKeyResolver);
+        }
+        if (matchesAddressPath(path) && isReadMethod(method)) {
+            return policy("customer-addresses-read", customerAddressesRateLimiter, userOrIpKeyResolver);
+        }
+        if (matchesAddressPath(path) && isWriteMethod(method)) {
+            return policy("customer-addresses-write", customerAddressesWriteRateLimiter, userOrIpKeyResolver);
+        }
+        return null;
+    }
+
+    private @Nullable Policy resolveOrderPolicy(String path, @Nullable HttpMethod method) {
+        if (matches(method, HttpMethod.POST, "/orders/me", path)
+                || (method == HttpMethod.POST && path.startsWith("/orders/me/") && path.endsWith("/cancel"))) {
+            return policy("orders-me-write", ordersMeWriteRateLimiter, userOrIpKeyResolver);
+        }
+        if (matchesPrefix(path, "/orders/me") && method == HttpMethod.GET) {
+            return policy("orders-me-read", ordersMeRateLimiter, userOrIpKeyResolver);
+        }
+        return null;
+    }
+
+    private @Nullable Policy resolveCartAndWishlistPolicy(String path, @Nullable HttpMethod method) {
+        if (matches(method, HttpMethod.POST, "/cart/me/checkout", path)) {
+            return policy("cart-me-checkout", cartMeCheckoutRateLimiter, userOrIpKeyResolver);
+        }
+        if (matchesCartPath(path) && isWriteMethod(method)) {
+            return policy("cart-me-write", cartMeWriteRateLimiter, userOrIpKeyResolver);
+        }
+        if (matchesCartPath(path) && method == HttpMethod.GET) {
+            return policy("cart-me-read", cartMeRateLimiter, userOrIpKeyResolver);
+        }
+        if (matchesWishlistPath(path) && isWriteMethod(method)) {
+            return policy("wishlist-me-write", wishlistMeWriteRateLimiter, userOrIpKeyResolver);
+        }
+        if (matchesWishlistPath(path) && method == HttpMethod.GET) {
+            return policy("wishlist-me-read", wishlistMeRateLimiter, userOrIpKeyResolver);
+        }
+        return null;
+    }
+
+    private @Nullable Policy resolveAnalyticsAndReportPolicy(String path, @Nullable HttpMethod method) {
+        if (path.startsWith("/analytics/admin/")) {
+            return policy("analytics-admin", analyticsAdminRateLimiter, userOrIpKeyResolver);
+        }
+        if (path.startsWith("/analytics/vendor/")) {
+            return policy("analytics-vendor", analyticsVendorRateLimiter, userOrIpKeyResolver);
+        }
+        if (matches(method, HttpMethod.GET, "/admin/orders/export", path)
+                || matches(method, HttpMethod.POST, "/admin/orders/exports", path)) {
+            return policy("report-exports-create", reportExportsCreateRateLimiter, userOrIpKeyResolver);
+        }
+        if (path.startsWith("/admin/orders/exports/") && isReadMethod(method)) {
+            return policy("report-exports-read", reportExportsReadRateLimiter, userOrIpKeyResolver);
+        }
+        if (matchesPrefix(path, "/admin/orders") || matchesPrefix(path, "/admin/vendor-orders")) {
+            return policy("admin-orders", adminOrdersRateLimiter, userOrIpKeyResolver);
+        }
+        return null;
+    }
+
+    private @Nullable Policy resolvePromotionAndCatalogPolicy(String path, @Nullable HttpMethod method) {
+        if (matchesPrefix(path, "/promotions/me")) {
+            return policy("promotions-me", publicPromotionsRateLimiter, userOrIpKeyResolver);
+        }
+        if (matchesPrefix(path, "/promotions") && isReadMethod(method)) {
+            return policy("promotions-read", publicPromotionsRateLimiter, ipKeyResolver);
+        }
+        if ((matchesPrefix(path, "/products") || matchesPrefix(path, "/categories")) && isReadMethod(method)) {
+            return policy("products-read", productsRateLimiter, ipKeyResolver);
+        }
+        if ((matchesPrefix(path, "/posters") || matchesPrefix(path, "/vendors")) && isReadMethod(method)) {
+            return policy("catalog-aux-read", publicCatalogAuxRateLimiter, ipKeyResolver);
+        }
+        return null;
+    }
+
+    private @Nullable Policy resolveVendorPolicy(String path, @Nullable HttpMethod method) {
+        if (matchesPrefix(path, "/vendors/me")) {
+            return readWritePolicy(
+                    method,
+                    "vendor-me-read",
+                    vendorMeRateLimiter,
+                    "vendor-me-write",
+                    vendorMeWriteRateLimiter
+            );
+        }
+        return null;
+    }
+
+    private @Nullable Policy resolveAdminCatalogPolicy(String path, @Nullable HttpMethod method) {
+        if (matchesPrefix(path, "/admin/products") || matchesPrefix(path, "/admin/categories")) {
+            return readWritePolicy(
+                    method,
+                    "admin-products-read",
+                    adminProductsRateLimiter,
+                    "admin-products-write",
+                    adminProductsWriteRateLimiter
+            );
+        }
+        if (matchesPrefix(path, "/admin/posters")) {
+            return readWritePolicy(
+                    method,
+                    "admin-posters-read",
+                    adminPostersRateLimiter,
+                    "admin-posters-write",
+                    adminPostersWriteRateLimiter
+            );
+        }
+        if (matchesPrefix(path, "/admin/vendors")) {
+            return readWritePolicy(
+                    method,
+                    "admin-vendors-read",
+                    adminVendorsRateLimiter,
+                    "admin-vendors-write",
+                    adminVendorsWriteRateLimiter
+            );
+        }
+        if (matchesPrefix(path, "/admin/me")) {
+            return policy("admin-me-read", adminMeRateLimiter, userOrIpKeyResolver);
+        }
+        if (matches(method, HttpMethod.GET, "/admin/keycloak/users/search", path)
+                || matches(method, HttpMethod.HEAD, "/admin/keycloak/users/search", path)) {
+            return policy("admin-keycloak-search", adminKeycloakSearchRateLimiter, userOrIpKeyResolver);
+        }
+        return null;
+    }
+
+    private @Nullable Policy resolveAdminAccessPolicy(String path, @Nullable HttpMethod method) {
+        if (matchesPrefix(path, "/admin/platform-staff")
+                || matchesPrefix(path, "/admin/vendor-staff")
+                || matchesPrefix(path, "/admin/access-audit")) {
+            return readWritePolicy(
+                    method,
+                    "admin-access-read",
+                    adminAccessRateLimiter,
+                    "admin-access-write",
+                    adminAccessWriteRateLimiter
+            );
+        }
+        return null;
+    }
+
+    private @Nullable Policy resolveWebhookPaymentAndPersonalizationPolicy(String path, @Nullable HttpMethod method) {
+        if (path.startsWith("/webhooks/")) {
+            return policy("webhooks", webhookRateLimiter, ipKeyResolver);
+        }
+        if (matchesPrefix(path, "/payments/me")) {
+            return readWritePolicy(
+                    method,
+                    "payment-me-read",
+                    paymentMeRateLimiter,
+                    "payment-me-write",
+                    paymentMeWriteRateLimiter
+            );
+        }
+        if (matchesPrefix(path, "/payments/vendor/me")) {
+            return readWritePolicy(
+                    method,
+                    "payment-vendor-me-read",
+                    paymentMeRateLimiter,
+                    "payment-vendor-me-write",
+                    paymentMeWriteRateLimiter
+            );
+        }
+        if (matches(method, HttpMethod.POST, "/personalization/events", path)) {
+            return policy("personalization-events", personalizationEventsRateLimiter, userOrIpKeyResolver);
+        }
+        if ((matchesPrefix(path, "/personalization/me")
+                || matchesPrefix(path, "/personalization/trending")
+                || path.startsWith("/personalization/products/")) && isReadMethod(method)) {
+            return policy("personalization-read", personalizationReadRateLimiter, userOrIpKeyResolver);
+        }
+        if (matches(method, HttpMethod.POST, "/personalization/sessions/merge", path)) {
+            return policy("personalization-read", personalizationReadRateLimiter, userOrIpKeyResolver);
+        }
+        return null;
+    }
+
+    private @Nullable Policy resolveSearchAndReviewPolicy(String path, @Nullable HttpMethod method) {
+        if (matchesPrefix(path, "/search")) {
+            return policy("search-read", productsRateLimiter, ipKeyResolver);
+        }
+        if (matchesPrefix(path, "/reviews") && isReadMethod(method)) {
+            return policy("reviews-read", publicCatalogAuxRateLimiter, ipKeyResolver);
+        }
+        return null;
+    }
+
+    private Policy readWritePolicy(
+            @Nullable HttpMethod method,
+            String readPolicyId,
+            RedisRateLimiter readRateLimiter,
+            String writePolicyId,
+            RedisRateLimiter writeRateLimiter
+    ) {
+        return isReadMethod(method)
+                ? policy(readPolicyId, readRateLimiter, userOrIpKeyResolver)
+                : policy(writePolicyId, writeRateLimiter, userOrIpKeyResolver);
+    }
+
+    private Policy policy(String id, RedisRateLimiter rateLimiter, KeyResolver keyResolver) {
+        return new Policy(id, rateLimiter, keyResolver);
+    }
+
+    private boolean matches(@Nullable HttpMethod actualMethod, HttpMethod expectedMethod, String expectedPath, String actualPath) {
+        return actualMethod == expectedMethod && expectedPath.equals(actualPath);
+    }
+
+    private boolean matchesPrefix(String path, String prefix) {
+        return prefix.equals(path) || path.startsWith(prefix + "/");
+    }
+
+    private boolean matchesAddressPath(String path) {
+        return "/customers/me/addresses".equals(path) || path.startsWith("/customers/me/addresses/");
+    }
+
+    private boolean matchesCartPath(String path) {
+        return "/cart/me".equals(path) || "/cart/me/items".equals(path) || path.startsWith("/cart/me/items/");
+    }
+
+    private boolean matchesWishlistPath(String path) {
+        return "/wishlist/me".equals(path) || "/wishlist/me/items".equals(path) || path.startsWith("/wishlist/me/items/");
+    }
+
+    private boolean isReadMethod(@Nullable HttpMethod method) {
+        return method == HttpMethod.GET || method == HttpMethod.HEAD;
+    }
+
+    private boolean isWriteMethod(@Nullable HttpMethod method) {
+        return method == HttpMethod.POST || method == HttpMethod.PUT || method == HttpMethod.DELETE;
     }
 
     @NullUnmarked

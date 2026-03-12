@@ -47,53 +47,16 @@ public class RevokedTokenFilter implements GlobalFilter, Ordered {
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
-        String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
-        if (!StringUtils.hasText(authHeader) || !authHeader.regionMatches(true, 0, "Bearer ", 0, 7)) {
-            return chain.filter(exchange);
-        }
-
-        String rawToken = authHeader.substring(7).trim();
+        String rawToken = resolveBearerToken(exchange);
         if (!StringUtils.hasText(rawToken)) {
             return chain.filter(exchange);
         }
 
-        Map<String, Object> unverifiedClaims = sessionHandleResolver.parseUnverifiedClaims(rawToken);
-        String subject = sessionHandleResolver.extractSubject(unverifiedClaims);
-        String sessionHandle = sessionHandleResolver.extractSessionHandle(unverifiedClaims);
-        String clientIp = trustedProxyResolver.resolveClientIp(exchange);
-        String userAgent = exchange.getRequest().getHeaders().getFirst(HttpHeaders.USER_AGENT);
+        TokenContext tokenContext = buildTokenContext(exchange, rawToken);
 
         return tokenRevocationService.isTokenRevoked(rawToken)
-                .flatMap(revoked -> {
-                    if (Boolean.TRUE.equals(revoked) && !isLogoutReplay(exchange)) {
-                        return writeUnauthorized(exchange, "Access token has been revoked");
-                    }
-                    if (isLogoutReplay(exchange)) {
-                        return chain.filter(exchange);
-                    }
-                    if (isSessionSync(exchange)) {
-                        return Mono.zip(
-                                        tokenRevocationService.isSubjectRevoked(subject),
-                                        tokenRevocationService.isSessionHandleRevoked(sessionHandle)
-                                )
-                                .flatMap(revocationState -> {
-                                    if (Boolean.TRUE.equals(revocationState.getT1()) || Boolean.TRUE.equals(revocationState.getT2())) {
-                                        return writeUnauthorized(exchange, "Session is no longer valid");
-                                    }
-                                    return chain.filter(exchange);
-                                });
-                    }
-                    return tokenRevocationService.validateActiveSession(sessionHandle, subject, clientIp, userAgent)
-                            .flatMap(result -> {
-                                if (result.isAllowed()) {
-                                    return chain.filter(exchange);
-                                }
-                                return writeUnauthorized(exchange, messageFor(result));
-                            });
-                })
-                .onErrorResume(error -> failOpenOnRedisError
-                        ? chain.filter(exchange)
-                        : writeRedisUnavailable(exchange));
+                .flatMap(revoked -> handleTokenValidation(exchange, chain, tokenContext, Boolean.TRUE.equals(revoked)))
+                .onErrorResume(error -> handleRevocationError(exchange, chain));
     }
 
     private boolean isLogoutReplay(ServerWebExchange exchange) {
@@ -104,6 +67,81 @@ public class RevokedTokenFilter implements GlobalFilter, Ordered {
     private boolean isSessionSync(ServerWebExchange exchange) {
         return exchange.getRequest().getMethod() == HttpMethod.POST
                 && "/auth/session".equals(exchange.getRequest().getPath().value());
+    }
+
+    private String resolveBearerToken(ServerWebExchange exchange) {
+        String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+        if (!StringUtils.hasText(authHeader) || !authHeader.regionMatches(true, 0, "Bearer ", 0, 7)) {
+            return "";
+        }
+        return authHeader.substring(7).trim();
+    }
+
+    private TokenContext buildTokenContext(ServerWebExchange exchange, String rawToken) {
+        Map<String, Object> unverifiedClaims = sessionHandleResolver.parseUnverifiedClaims(rawToken);
+        return new TokenContext(
+                sessionHandleResolver.extractSubject(unverifiedClaims),
+                sessionHandleResolver.extractSessionHandle(unverifiedClaims),
+                trustedProxyResolver.resolveClientIp(exchange),
+                exchange.getRequest().getHeaders().getFirst(HttpHeaders.USER_AGENT)
+        );
+    }
+
+    private Mono<Void> handleTokenValidation(
+            ServerWebExchange exchange,
+            GatewayFilterChain chain,
+            TokenContext tokenContext,
+            boolean tokenRevoked
+    ) {
+        if (tokenRevoked && !isLogoutReplay(exchange)) {
+            return writeUnauthorized(exchange, "Access token has been revoked");
+        }
+        if (isLogoutReplay(exchange)) {
+            return chain.filter(exchange);
+        }
+        if (isSessionSync(exchange)) {
+            return validateSessionSync(exchange, chain, tokenContext);
+        }
+        return validateActiveSession(exchange, chain, tokenContext);
+    }
+
+    private Mono<Void> validateSessionSync(
+            ServerWebExchange exchange,
+            GatewayFilterChain chain,
+            TokenContext tokenContext
+    ) {
+        return Mono.zip(
+                        tokenRevocationService.isSubjectRevoked(tokenContext.subject()),
+                        tokenRevocationService.isSessionHandleRevoked(tokenContext.sessionHandle())
+                )
+                .flatMap(revocationState -> {
+                    boolean subjectRevoked = Boolean.TRUE.equals(revocationState.getT1());
+                    boolean sessionRevoked = Boolean.TRUE.equals(revocationState.getT2());
+                    if (subjectRevoked || sessionRevoked) {
+                        return writeUnauthorized(exchange, "Session is no longer valid");
+                    }
+                    return chain.filter(exchange);
+                });
+    }
+
+    private Mono<Void> validateActiveSession(
+            ServerWebExchange exchange,
+            GatewayFilterChain chain,
+            TokenContext tokenContext
+    ) {
+        return tokenRevocationService.validateActiveSession(
+                        tokenContext.sessionHandle(),
+                        tokenContext.subject(),
+                        tokenContext.clientIp(),
+                        tokenContext.userAgent()
+                )
+                .flatMap(result -> result.isAllowed()
+                        ? chain.filter(exchange)
+                        : writeUnauthorized(exchange, messageFor(result)));
+    }
+
+    private Mono<Void> handleRevocationError(ServerWebExchange exchange, GatewayFilterChain chain) {
+        return failOpenOnRedisError ? chain.filter(exchange) : writeRedisUnavailable(exchange);
     }
 
     private String messageFor(TokenRevocationService.SessionValidationResult result) {
@@ -157,5 +195,13 @@ public class RevokedTokenFilter implements GlobalFilter, Ordered {
     @Override
     public int getOrder() {
         return Ordered.HIGHEST_PRECEDENCE + 4;
+    }
+
+    private record TokenContext(
+            String subject,
+            String sessionHandle,
+            String clientIp,
+            String userAgent
+    ) {
     }
 }
