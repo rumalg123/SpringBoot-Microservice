@@ -31,6 +31,7 @@ public class AccessSessionService {
     private static final int MAX_IP_LENGTH = 45;
     private static final int MAX_USER_AGENT_LENGTH = 500;
     private static final String HMAC_ALGORITHM = "HmacSHA256";
+    private static final String PATH_SEPARATOR = "/";
 
     private final WebClient accessServiceClient;
     private final TrustedProxyResolver trustedProxyResolver;
@@ -97,7 +98,7 @@ public class AccessSessionService {
         }
         requireInternalSecret();
         String encodedSessionId = UriUtils.encodePathSegment(keycloakSessionId.trim(), StandardCharsets.UTF_8);
-        String path = keycloakSessionPathPrefix + "/" + encodedSessionId;
+        String path = joinPath(keycloakSessionPathPrefix, encodedSessionId);
         return delete(path, "Unable to revoke active session");
     }
 
@@ -107,7 +108,7 @@ public class AccessSessionService {
         }
         requireInternalSecret();
         String encodedKeycloakId = UriUtils.encodePathSegment(keycloakId.trim(), StandardCharsets.UTF_8);
-        String path = keycloakUserPathPrefix + "/" + encodedKeycloakId;
+        String path = joinPath(keycloakUserPathPrefix, encodedKeycloakId);
         return delete(path, "Unable to revoke active sessions");
     }
 
@@ -179,6 +180,10 @@ public class AccessSessionService {
             return normalized.substring(0, normalized.length() - 1);
         }
         return normalized;
+    }
+
+    private String joinPath(String pathPrefix, String encodedSegment) {
+        return pathPrefix + PATH_SEPARATOR + encodedSegment;
     }
 
     private String computeHmac(String payload) {

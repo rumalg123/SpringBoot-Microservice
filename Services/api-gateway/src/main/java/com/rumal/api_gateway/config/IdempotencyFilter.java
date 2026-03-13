@@ -317,7 +317,8 @@ public class IdempotencyFilter implements GlobalFilter, Ordered {
     }
 
     private Mono<Void> writeCachedResponse(ServerWebExchange exchange, IdempotencyEntry entry) {
-        int cachedStatusCode = entry.statusCode() != null ? entry.statusCode() : HttpStatus.OK.value();
+        Integer storedStatusCode = entry.statusCode();
+        int cachedStatusCode = storedStatusCode != null ? storedStatusCode : HttpStatus.OK.value();
         HttpStatusCode statusCode = HttpStatusCode.valueOf(cachedStatusCode);
         exchange.getResponse().setStatusCode(statusCode);
         exchange.getResponse().getHeaders().set(IDEMPOTENCY_STATUS_HEADER, "HIT");
