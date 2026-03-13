@@ -34,9 +34,7 @@ public class CartExpiryScheduler {
             int totalDeleted = 0;
             boolean moreExpiredCarts = true;
             while (moreExpiredCarts) {
-                Integer result = transactionTemplate.execute(status ->
-                        cartRepository.deleteExpiredCartsBatch(cutoff, batchSize));
-                int deleted = result != null ? result : 0;
+                int deleted = deleteExpiredCartsBatch(cutoff);
                 totalDeleted += deleted;
                 moreExpiredCarts = deleted >= batchSize;
             }
@@ -46,5 +44,10 @@ public class CartExpiryScheduler {
         } catch (Exception ex) {
             log.error("Failed to purge expired carts", ex);
         }
+    }
+
+    private int deleteExpiredCartsBatch(Instant cutoff) {
+        return transactionTemplate.execute(status ->
+                cartRepository.deleteExpiredCartsBatch(cutoff, batchSize));
     }
 }
