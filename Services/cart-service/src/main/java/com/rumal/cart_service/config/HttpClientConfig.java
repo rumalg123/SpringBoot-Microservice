@@ -93,7 +93,7 @@ public class HttpClientConfig {
         }
 
         String timestamp = String.valueOf(System.currentTimeMillis());
-        String method = request.getMethod() == null ? "GET" : request.getMethod().name();
+        String method = request.getMethod().name();
         String path = request.getURI().getRawPath();
         String bodyHash = computeBodyHash(method, body);
 

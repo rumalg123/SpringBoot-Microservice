@@ -64,7 +64,7 @@ public class ProductClient {
 
     private String resolveErrorMessage(HttpClientErrorException ex, String fallback) {
         String body = ex.getResponseBodyAsString();
-        if (body == null || body.isBlank()) {
+        if (body.isBlank()) {
             return fallback;
         }
         int messageIndex = body.indexOf("\"message\"");

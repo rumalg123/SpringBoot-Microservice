@@ -34,6 +34,7 @@ public class OrderClient {
 
     private static final Logger log = LoggerFactory.getLogger(OrderClient.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final String CREATE_ORDER_URI = "http://order-service/orders/me";
 
     private final RestClient restClient;
     private final String internalSharedSecret;
@@ -56,48 +57,18 @@ public class OrderClient {
             PromotionCheckoutPricingRequest promotionPricing,
             String idempotencyKey
     ) {
-        RestClient rc = restClient;
         CreateMyOrderRequest request = new CreateMyOrderRequest(items, shippingAddressId, billingAddressId, promotionPricing);
-
         try {
-            RestClient.RequestBodySpec spec = rc.post()
-                    .uri("http://order-service/orders/me")
-                    .header("X-User-Sub", keycloakId)
-                    .header("X-User-Email-Verified", "true")
-                    .header("X-Internal-Auth", internalSharedSecret);
-            if (StringUtils.hasText(idempotencyKey)) {
-                spec = spec.header("Idempotency-Key", idempotencyKey.trim());
-            }
-            return spec.body(request)
+            return buildCreateOrderRequest(keycloakId, idempotencyKey)
+                    .body(request)
                     .retrieve()
                     .body(OrderResponse.class);
         } catch (HttpClientErrorException ex) {
-            log.warn("Order service returned HTTP {} during checkout: {}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
-            HttpStatusCode status = ex.getStatusCode();
-            int statusCode = status.value();
-            if (statusCode == 409) {
-                throw new ConflictException(resolveErrorMessage(ex, "Checkout request with this idempotency key is still processing"));
-            }
-            if (statusCode == 400 || statusCode == 422) {
-                throw new ValidationException(resolveErrorMessage(ex, "Checkout validation failed"));
-            }
-            if (statusCode == 404) {
-                throw new ResourceNotFoundException(resolveErrorMessage(ex, "Required checkout resource was not found"));
-            }
-            if (statusCode == 401 || statusCode == 403) {
-                throw new ServiceUnavailableException("Order service rejected internal authentication.", ex);
-            }
-            throw new ServiceUnavailableException("Order service error during checkout.", ex);
+            throw translateOrderServiceError(ex);
         } catch (ResourceAccessException ex) {
-            if (isReadTimeout(ex)) {
-                throw new ConflictException(
-                        "Checkout request timed out while order placement may still be processing. Check My Orders before retrying.",
-                        ex
-                );
-            }
-            throw new ServiceUnavailableException("Service unavailable: " + ex.getMessage(), ex);
+            throw translateOrderServiceAccessError(ex);
         } catch (RestClientException ex) {
-            throw new ServiceUnavailableException("Service unavailable: " + ex.getMessage());
+            throw new ServiceUnavailableException("Order service unavailable during checkout.", ex);
         }
     }
 
@@ -128,7 +99,7 @@ public class OrderClient {
 
     private String resolveErrorMessage(HttpClientErrorException ex, String fallback) {
         String body = ex.getResponseBodyAsString();
-        if (body == null || body.isBlank()) {
+        if (body.isBlank()) {
             return fallback;
         }
         try {
@@ -138,7 +109,13 @@ public class OrderClient {
             JsonNode fieldErrors = tree.get("fieldErrors");
             if (fieldErrors != null && fieldErrors.isObject()) {
                 StringJoiner sj = new StringJoiner("; ");
-                fieldErrors.fields().forEachRemaining(e -> sj.add(e.getValue().asText()));
+                var fieldNames = fieldErrors.fieldNames();
+                while (fieldNames.hasNext()) {
+                    JsonNode fieldError = fieldErrors.get(fieldNames.next());
+                    if (fieldError != null && !fieldError.asText().isBlank()) {
+                        sj.add(fieldError.asText());
+                    }
+                }
                 if (sj.length() > 0) {
                     return sj.toString();
                 }
@@ -173,5 +150,49 @@ public class OrderClient {
             current = current.getCause();
         }
         return false;
+    }
+
+    private RestClient.RequestBodySpec buildCreateOrderRequest(String keycloakId, String idempotencyKey) {
+        RestClient.RequestBodySpec spec = restClient.post()
+                .uri(CREATE_ORDER_URI)
+                .header("X-User-Sub", keycloakId)
+                .header("X-User-Email-Verified", "true")
+                .header("X-Internal-Auth", internalSharedSecret);
+        if (StringUtils.hasText(idempotencyKey)) {
+            return spec.header("Idempotency-Key", idempotencyKey.trim());
+        }
+        return spec;
+    }
+
+    private RuntimeException translateOrderServiceError(HttpClientErrorException ex) {
+        HttpStatusCode status = ex.getStatusCode();
+        int statusCode = status.value();
+        log.warn("Order service returned HTTP {} during checkout: {}", statusCode, ex.getResponseBodyAsString(), ex);
+        if (statusCode == 409) {
+            return new ConflictException(
+                    resolveErrorMessage(ex, "Checkout request with this idempotency key is still processing"),
+                    ex
+            );
+        }
+        if (statusCode == 400 || statusCode == 422) {
+            return new ValidationException(resolveErrorMessage(ex, "Checkout validation failed"), ex);
+        }
+        if (statusCode == 404) {
+            return new ResourceNotFoundException(resolveErrorMessage(ex, "Required checkout resource was not found"), ex);
+        }
+        if (statusCode == 401 || statusCode == 403) {
+            return new ServiceUnavailableException("Order service rejected internal authentication.", ex);
+        }
+        return new ServiceUnavailableException("Order service error during checkout.", ex);
+    }
+
+    private RuntimeException translateOrderServiceAccessError(ResourceAccessException ex) {
+        if (isReadTimeout(ex)) {
+            return new ConflictException(
+                    "Checkout request timed out while order placement may still be processing. Check My Orders before retrying.",
+                    ex
+            );
+        }
+        return new ServiceUnavailableException("Order service unavailable during checkout.", ex);
     }
 }

@@ -32,13 +32,15 @@ public class CartExpiryScheduler {
         try {
             Instant cutoff = Instant.now().minus(expiryTtl);
             int totalDeleted = 0;
-            int deleted;
-            do {
+            while (true) {
                 Integer result = transactionTemplate.execute(status ->
                         cartRepository.deleteExpiredCartsBatch(cutoff, batchSize));
-                deleted = result != null ? result : 0;
+                int deleted = result != null ? result : 0;
                 totalDeleted += deleted;
-            } while (deleted >= batchSize);
+                if (deleted < batchSize) {
+                    break;
+                }
+            }
             if (totalDeleted > 0) {
                 log.info("Purged {} expired carts older than {}", totalDeleted, cutoff);
             }

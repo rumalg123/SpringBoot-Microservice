@@ -36,7 +36,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 
@@ -204,43 +203,11 @@ class CartServicePromotionFlowIntegrationTest {
                 "idem-123"
         );
 
-        assertEquals(orderId, response.orderId());
-        assertEquals(1, response.itemCount());
-        assertEquals(2, response.totalQuantity());
-        assertEquals("SAVE3", response.couponCode());
-        assertEquals(couponReservationId, response.couponReservationId());
-        assertEquals(new BigDecimal("20.00"), response.subtotal());
-        assertEquals(new BigDecimal("6.59"), response.shippingAmount());
-        assertEquals(new BigDecimal("3.00"), response.totalDiscount());
-        assertEquals(new BigDecimal("23.59"), response.grandTotal());
-
-        PromotionQuoteRequest quoteRequest = captureQuoteRequest();
-        assertEquals(customerId, quoteRequest.customerId());
-        assertEquals("SAVE3", quoteRequest.couponCode());
-        assertEquals("US", quoteRequest.countryCode());
-        assertEquals(new BigDecimal("6.59"), quoteRequest.shippingAmount());
-        assertEquals(1, quoteRequest.lines().size());
-        assertEquals(productId, quoteRequest.lines().getFirst().productId());
-        assertEquals(vendorId, quoteRequest.lines().getFirst().vendorId());
-        assertEquals(2, quoteRequest.lines().getFirst().quantity());
-
-        CreateCouponReservationRequest reserveRequest = captureReserveRequest();
-        assertEquals("SAVE3", reserveRequest.couponCode());
-        assertEquals(customerId, reserveRequest.customerId());
-        assertEquals("cart-coupon-reserve_idem-123", reserveRequest.requestKey());
-        assertEquals(new BigDecimal("6.59"), reserveRequest.quoteRequest().shippingAmount());
-
-        PromotionCheckoutPricingRequest pricingRequest = captureOrderPricingRequest(keycloakId, shippingAddressId, billingAddressId);
-        assertEquals(couponReservationId, pricingRequest.couponReservationId());
-        assertEquals("SAVE3", pricingRequest.couponCode());
-        assertEquals(new BigDecimal("20.00"), pricingRequest.subtotal());
-        assertEquals(new BigDecimal("6.59"), pricingRequest.shippingAmount());
-        assertEquals(new BigDecimal("3.00"), pricingRequest.totalDiscount());
-        assertEquals(new BigDecimal("23.59"), pricingRequest.grandTotal());
-
-        ActiveCartState cartAfterCheckout = customerCartStore.get(keycloakId);
-        assertTrue(cartAfterCheckout != null && cartAfterCheckout.items().isEmpty());
-
+        assertCheckoutResponse(response, orderId, couponReservationId);
+        assertQuoteRequest(productId, vendorId, customerId);
+        assertReserveRequest(customerId);
+        assertPricingRequest(keycloakId, shippingAddressId, billingAddressId, couponReservationId);
+        assertCartCleared(keycloakId);
         verify(promotionClient, never()).releaseCouponReservation(any(UUID.class), any(String.class));
     }
 
@@ -330,5 +297,57 @@ class CartServicePromotionFlowIntegrationTest {
                 eq("cart-checkout_idem-123")
         );
         return pricingCaptor.getValue();
+    }
+
+    private void assertCheckoutResponse(CheckoutResponse response, UUID orderId, UUID couponReservationId) {
+        assertEquals(orderId, response.orderId());
+        assertEquals(1, response.itemCount());
+        assertEquals(2, response.totalQuantity());
+        assertEquals("SAVE3", response.couponCode());
+        assertEquals(couponReservationId, response.couponReservationId());
+        assertEquals(new BigDecimal("20.00"), response.subtotal());
+        assertEquals(new BigDecimal("6.59"), response.shippingAmount());
+        assertEquals(new BigDecimal("3.00"), response.totalDiscount());
+        assertEquals(new BigDecimal("23.59"), response.grandTotal());
+    }
+
+    private void assertQuoteRequest(UUID productId, UUID vendorId, UUID customerId) {
+        PromotionQuoteRequest quoteRequest = captureQuoteRequest();
+        assertEquals(customerId, quoteRequest.customerId());
+        assertEquals("SAVE3", quoteRequest.couponCode());
+        assertEquals("US", quoteRequest.countryCode());
+        assertEquals(new BigDecimal("6.59"), quoteRequest.shippingAmount());
+        assertEquals(1, quoteRequest.lines().size());
+        assertEquals(productId, quoteRequest.lines().getFirst().productId());
+        assertEquals(vendorId, quoteRequest.lines().getFirst().vendorId());
+        assertEquals(2, quoteRequest.lines().getFirst().quantity());
+    }
+
+    private void assertReserveRequest(UUID customerId) {
+        CreateCouponReservationRequest reserveRequest = captureReserveRequest();
+        assertEquals("SAVE3", reserveRequest.couponCode());
+        assertEquals(customerId, reserveRequest.customerId());
+        assertEquals("cart-coupon-reserve_idem-123", reserveRequest.requestKey());
+        assertEquals(new BigDecimal("6.59"), reserveRequest.quoteRequest().shippingAmount());
+    }
+
+    private void assertPricingRequest(
+            String keycloakId,
+            UUID shippingAddressId,
+            UUID billingAddressId,
+            UUID couponReservationId
+    ) {
+        PromotionCheckoutPricingRequest pricingRequest = captureOrderPricingRequest(keycloakId, shippingAddressId, billingAddressId);
+        assertEquals(couponReservationId, pricingRequest.couponReservationId());
+        assertEquals("SAVE3", pricingRequest.couponCode());
+        assertEquals(new BigDecimal("20.00"), pricingRequest.subtotal());
+        assertEquals(new BigDecimal("6.59"), pricingRequest.shippingAmount());
+        assertEquals(new BigDecimal("3.00"), pricingRequest.totalDiscount());
+        assertEquals(new BigDecimal("23.59"), pricingRequest.grandTotal());
+    }
+
+    private void assertCartCleared(String keycloakId) {
+        ActiveCartState cartAfterCheckout = customerCartStore.get(keycloakId);
+        assertTrue(cartAfterCheckout != null && cartAfterCheckout.items().isEmpty());
     }
 }

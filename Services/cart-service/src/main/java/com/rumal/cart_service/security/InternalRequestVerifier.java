@@ -90,10 +90,6 @@ public class InternalRequestVerifier {
     }
 
     private String computeBodyHash(HttpServletRequest request) {
-        String method = request.getMethod();
-        if (!"POST".equals(method) && !"PUT".equals(method) && !"PATCH".equals(method)) {
-            return "";
-        }
         try {
             byte[] body;
             if (request instanceof InternalRequestBodyCachingFilter.CachedBodyRequestWrapper cached) {
@@ -101,9 +97,7 @@ public class InternalRequestVerifier {
             } else {
                 body = request.getInputStream().readAllBytes();
             }
-            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(body);
-            return HexFormat.of().formatHex(hash);
+            return computeBodyHash(request.getMethod(), body);
         } catch (Exception e) {
             return "";
         }
@@ -122,14 +116,7 @@ public class InternalRequestVerifier {
 
     public static String sign(String secret, String method, String path, byte[] body) {
         long timestamp = System.currentTimeMillis();
-        String bodyHash = "";
-        if (body != null && body.length > 0
-                && ("POST".equals(method) || "PUT".equals(method) || "PATCH".equals(method))) {
-            try {
-                java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
-                bodyHash = HexFormat.of().formatHex(digest.digest(body));
-            } catch (Exception ignored) {}
-        }
+        String bodyHash = computeBodyHash(method, body);
         String payload = timestamp + ":" + method + ":" + path + ":" + bodyHash;
         try {
             Mac mac = Mac.getInstance(HMAC_ALGO);
@@ -145,7 +132,19 @@ public class InternalRequestVerifier {
     public static String sign(String secret, String method, String path) {
         return sign(secret, method, path, null);
     }
+
+    private static String computeBodyHash(String method, byte[] body) {
+        if (body == null || body.length == 0) {
+            return "";
+        }
+        if (!"POST".equals(method) && !"PUT".equals(method) && !"PATCH".equals(method)) {
+            return "";
+        }
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(body));
+        } catch (java.security.NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 is unavailable for internal request signing", ex);
+        }
+    }
 }
-
-
-

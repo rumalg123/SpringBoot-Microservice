@@ -21,6 +21,8 @@ import java.util.UUID;
 @Component
 public class PromotionClient {
 
+    private static final String INTERNAL_AUTH_HEADER = "X-Internal-Auth";
+
     private final RestClient restClient;
     private final String internalSharedSecret;
 
@@ -39,7 +41,7 @@ public class PromotionClient {
             return restClient
                     .post()
                     .uri("http://promotion-service/internal/promotions/quote")
-                    .header("X-Internal-Auth", internalSharedSecret)
+                    .header(INTERNAL_AUTH_HEADER, internalSharedSecret)
                     .body(request)
                     .retrieve()
                     .body(PromotionQuoteResponse.class);
@@ -63,7 +65,7 @@ public class PromotionClient {
             return restClient
                     .post()
                     .uri("http://promotion-service/internal/promotions/reservations")
-                    .header("X-Internal-Auth", internalSharedSecret)
+                    .header(INTERNAL_AUTH_HEADER, internalSharedSecret)
                     .body(request)
                     .retrieve()
                     .body(CouponReservationResponse.class);
@@ -87,7 +89,7 @@ public class PromotionClient {
             return restClient
                     .post()
                     .uri("http://promotion-service/internal/promotions/reservations/{reservationId}/release", reservationId)
-                    .header("X-Internal-Auth", internalSharedSecret)
+                    .header(INTERNAL_AUTH_HEADER, internalSharedSecret)
                     .body(new ReleaseCouponReservationRequest(reason))
                     .retrieve()
                     .body(CouponReservationResponse.class);
@@ -124,7 +126,7 @@ public class PromotionClient {
 
     private String resolveErrorMessage(HttpClientErrorException ex, String fallback) {
         String body = ex.getResponseBodyAsString();
-        if (body == null || body.isBlank()) {
+        if (body.isBlank()) {
             return fallback;
         }
         int messageIndex = body.indexOf("\"message\"");

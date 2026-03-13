@@ -30,7 +30,6 @@ import com.rumal.cart_service.dto.UpdateCartNoteRequest;
 import com.rumal.cart_service.dto.VendorOperationalStateResponse;
 import com.rumal.cart_service.entity.Cart;
 import com.rumal.cart_service.entity.CartItem;
-import com.rumal.cart_service.exception.ConflictException;
 import com.rumal.cart_service.exception.ResourceNotFoundException;
 import com.rumal.cart_service.exception.ServiceUnavailableException;
 import com.rumal.cart_service.exception.ValidationException;
@@ -63,6 +62,8 @@ import java.util.UUID;
 public class CartService {
     private static final int MAX_DISTINCT_CART_ITEMS = 100;
     private static final int MAX_ITEM_QUANTITY = 100;
+    private static final String ORDER_CREATE_FAILED_PREFIX = "order_create_failed:";
+    private static final BigDecimal ZERO_AMOUNT = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
 
     private final CartRepository cartRepository;
     private final ActiveCartStoreService activeCartStoreService;
@@ -229,155 +230,24 @@ public class CartService {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public CheckoutResponse checkout(String keycloakId, CheckoutCartRequest request, String idempotencyKey) {
         String normalizedKeycloakId = normalizeKeycloakId(keycloakId);
-        Cart previewCart = loadCustomerCart(normalizedKeycloakId);
-
-        List<CartItem> activeItems = activeCartItems(previewCart);
-        if (activeItems.isEmpty()) {
-            throw new ValidationException("Cart is empty");
-        }
-
-        List<CartCheckoutLine> expectedSnapshot = checkoutSnapshot(previewCart);
-        Map<UUID, ProductDetails> latestProductsById = expectedSnapshot.stream()
-                .map(CartCheckoutLine::productId)
-                .distinct()
-                .collect(java.util.stream.Collectors.toMap(
-                        productId -> productId,
-                        this::resolvePurchasableProduct,
-                        (a, b) -> a
-                ));
-
-        PreparedCheckout prepared = activeCartStoreService.withCustomerCartLock(normalizedKeycloakId, () -> {
-            Cart cart = loadCustomerCart(normalizedKeycloakId);
-            if (activeCartItems(cart).isEmpty()) {
-                throw new ValidationException("Cart is empty");
-            }
-            if (!checkoutSnapshot(cart).equals(expectedSnapshot)) {
-                throw new ValidationException("Cart changed during checkout. Retry checkout.");
-            }
-
-            List<CreateMyOrderItemRequest> orderItems = new java.util.ArrayList<>(cart.getItems().size());
-            int totalQuantity = 0;
-            BigDecimal subtotal = BigDecimal.ZERO;
-
-            for (CartItem cartItem : activeCartItems(cart)) {
-                ProductDetails latest = latestProductsById.get(cartItem.getProductId());
-                if (latest == null) {
-                    throw new ValidationException("Product is not available: " + cartItem.getProductId());
-                }
-                orderItems.add(new CreateMyOrderItemRequest(cartItem.getProductId(), cartItem.getQuantity()));
-                totalQuantity += cartItem.getQuantity();
-                subtotal = subtotal.add(calculateLineTotal(normalizeMoney(latest.sellingPrice()), cartItem.getQuantity()));
-            }
-
-            return new PreparedCheckout(orderItems, cart.getItems().size(), totalQuantity, normalizeMoney(subtotal));
-        });
-
-        CustomerSummary customer = customerClient.getCustomerByKeycloakId(normalizedKeycloakId);
-        if (customer == null || customer.id() == null) {
-            throw new ValidationException("Customer not found for checkout");
-        }
-        CustomerAddressSummary shippingAddress = customerClient.getCustomerAddress(customer.id(), request.shippingAddressId());
-        if (shippingAddress == null || shippingAddress.deleted()) {
-            throw new ValidationException("Shipping address is not available");
-        }
-
-        PromotionQuoteRequest quoteRequest = buildPromotionQuoteRequest(
-                previewCart,
-                latestProductsById,
-                customer.id(),
-                calculateShippingForCart(previewCart, latestProductsById, shippingAddress.countryCode()),
-                request == null ? null : request.couponCode(),
-                shippingAddress.countryCode()
+        CheckoutContext checkoutContext = prepareCheckout(normalizedKeycloakId);
+        CheckoutCustomerContext customerContext = resolveCheckoutCustomer(normalizedKeycloakId, request);
+        PromotionPricingContext promotionContext = resolvePromotionPricing(
+                checkoutContext.previewCart(),
+                checkoutContext.latestProductsById(),
+                customerContext,
+                request,
+                idempotencyKey
         );
-        PromotionQuoteResponse quotedPricing = promotionClient.quote(quoteRequest);
-        if (quotedPricing == null) {
-            throw new ValidationException("Promotion quote is unavailable");
-        }
-
-        CouponReservationResponse couponReservation = null;
-        PromotionQuoteResponse authoritativeQuote = quotedPricing;
-        if (StringUtils.hasText(request == null ? null : request.couponCode())) {
-            couponReservation = promotionClient.reserveCoupon(new CreateCouponReservationRequest(
-                    request.couponCode().trim(),
-                    customer.id(),
-                    quoteRequest,
-                    downstreamPromotionReservationKey(idempotencyKey)
-            ));
-            if (couponReservation == null || couponReservation.id() == null) {
-                throw new ValidationException("Coupon reservation failed");
-            }
-            if (couponReservation.quote() != null) {
-                authoritativeQuote = couponReservation.quote();
-            }
-        }
-
-        PromotionCheckoutPricingRequest promotionPricing = toPromotionCheckoutPricingRequest(
-                authoritativeQuote,
-                couponReservation == null ? null : couponReservation.id(),
-                couponReservation != null && StringUtils.hasText(couponReservation.couponCode())
-                        ? couponReservation.couponCode()
-                        : (request == null ? null : trimToNull(request.couponCode()))
+        OrderResponse order = createOrderForCheckout(
+                normalizedKeycloakId,
+                request,
+                checkoutContext.prepared(),
+                promotionContext,
+                idempotencyKey
         );
-
-        OrderResponse order;
-        try {
-            order = orderClient.createMyOrder(
-                    normalizedKeycloakId,
-                    request.shippingAddressId(),
-                    request.billingAddressId(),
-                    prepared.orderItems(),
-                    promotionPricing,
-                    downstreamOrderIdempotencyKey(idempotencyKey)
-            );
-            if (order == null || order.id() == null) {
-                throw new ServiceUnavailableException("Order service returned an invalid checkout response.");
-            }
-        } catch (ConflictException ex) {
-            if (couponReservation != null && couponReservation.id() != null) {
-                releaseCouponReservationQuietly(couponReservation.id(), "order_create_failed:" + ex.getClass().getSimpleName());
-            }
-            throw ex;
-        } catch (ValidationException ex) {
-            if (couponReservation != null && couponReservation.id() != null) {
-                releaseCouponReservationQuietly(couponReservation.id(), "order_create_failed:" + ex.getClass().getSimpleName());
-            }
-            String msg = ex.getMessage();
-            if (msg != null && (msg.contains("does not match") || msg.contains("subtotal") || msg.contains("grandTotal"))) {
-                throw new ValidationException("Prices have changed since your checkout preview. Please review your cart and try again.");
-            }
-            throw ex;
-        } catch (RuntimeException ex) {
-            if (couponReservation != null && couponReservation.id() != null) {
-                releaseCouponReservationQuietly(couponReservation.id(), "order_create_failed:" + ex.getClass().getSimpleName());
-            }
-            throw ex;
-        }
-
-        boolean cartCleared = activeCartStoreService.withCustomerCartLock(normalizedKeycloakId, () -> {
-            Cart cart = loadCustomerCart(normalizedKeycloakId);
-            if (!checkoutSnapshot(cart).equals(expectedSnapshot)) {
-                return false;
-            }
-            cart.getItems().removeIf(item -> !item.isSavedForLater());
-            saveCustomerCart(normalizedKeycloakId, cart);
-            return true;
-        });
-
-        return new CheckoutResponse(
-                order.id(),
-                prepared.itemCount(),
-                prepared.totalQuantity(),
-                promotionPricing == null ? null : promotionPricing.couponCode(),
-                promotionPricing == null ? null : promotionPricing.couponReservationId(),
-                promotionPricing == null ? prepared.subtotal() : normalizeMoney(promotionPricing.subtotal()),
-                promotionPricing == null ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP) : normalizeMoney(promotionPricing.lineDiscountTotal()),
-                promotionPricing == null ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP) : normalizeMoney(promotionPricing.cartDiscountTotal()),
-                promotionPricing == null ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP) : normalizeMoney(promotionPricing.shippingAmount()),
-                promotionPricing == null ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP) : normalizeMoney(promotionPricing.shippingDiscountTotal()),
-                promotionPricing == null ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP) : normalizeMoney(promotionPricing.totalDiscount()),
-                promotionPricing == null ? prepared.subtotal() : normalizeMoney(promotionPricing.grandTotal()),
-                cartCleared
-        );
+        boolean cartCleared = clearCheckedOutItems(normalizedKeycloakId, checkoutContext.expectedSnapshot());
+        return buildCheckoutResponse(order, checkoutContext.prepared(), promotionContext.pricing(), cartCleared);
     }
 
     @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED, timeout = 15)
@@ -460,6 +330,272 @@ public class CartService {
                         ))
                         .toList(),
                 quote.pricedAt()
+        );
+    }
+
+    private CheckoutContext prepareCheckout(String normalizedKeycloakId) {
+        Cart previewCart = loadCustomerCart(normalizedKeycloakId);
+        requireActiveCartItems(previewCart);
+        List<CartCheckoutLine> expectedSnapshot = checkoutSnapshot(previewCart);
+        Map<UUID, ProductDetails> latestProductsById = resolveCheckoutProducts(expectedSnapshot);
+        PreparedCheckout prepared = prepareLockedCheckout(normalizedKeycloakId, expectedSnapshot, latestProductsById);
+        return new CheckoutContext(previewCart, expectedSnapshot, latestProductsById, prepared);
+    }
+
+    private void requireActiveCartItems(Cart cart) {
+        if (activeCartItems(cart).isEmpty()) {
+            throw new ValidationException("Cart is empty");
+        }
+    }
+
+    private Map<UUID, ProductDetails> resolveCheckoutProducts(List<CartCheckoutLine> expectedSnapshot) {
+        return expectedSnapshot.stream()
+                .map(CartCheckoutLine::productId)
+                .distinct()
+                .collect(java.util.stream.Collectors.toMap(
+                        productId -> productId,
+                        this::resolvePurchasableProduct,
+                        (a, b) -> a
+                ));
+    }
+
+    private PreparedCheckout prepareLockedCheckout(
+            String normalizedKeycloakId,
+            List<CartCheckoutLine> expectedSnapshot,
+            Map<UUID, ProductDetails> latestProductsById
+    ) {
+        return activeCartStoreService.withCustomerCartLock(normalizedKeycloakId, () -> {
+            Cart cart = loadCustomerCart(normalizedKeycloakId);
+            requireActiveCartItems(cart);
+            if (!checkoutSnapshot(cart).equals(expectedSnapshot)) {
+                throw new ValidationException("Cart changed during checkout. Retry checkout.");
+            }
+            return buildPreparedCheckout(cart, latestProductsById);
+        });
+    }
+
+    private PreparedCheckout buildPreparedCheckout(Cart cart, Map<UUID, ProductDetails> latestProductsById) {
+        List<CartItem> activeItems = activeCartItems(cart);
+        List<CreateMyOrderItemRequest> orderItems = new ArrayList<>(activeItems.size());
+        int totalQuantity = 0;
+        BigDecimal subtotal = BigDecimal.ZERO;
+
+        for (CartItem cartItem : activeItems) {
+            ProductDetails latest = latestProductsById.get(cartItem.getProductId());
+            if (latest == null) {
+                throw new ValidationException("Product is not available: " + cartItem.getProductId());
+            }
+            orderItems.add(new CreateMyOrderItemRequest(cartItem.getProductId(), cartItem.getQuantity()));
+            totalQuantity += cartItem.getQuantity();
+            subtotal = subtotal.add(calculateLineTotal(normalizeMoney(latest.sellingPrice()), cartItem.getQuantity()));
+        }
+
+        return new PreparedCheckout(orderItems, cart.getItems().size(), totalQuantity, normalizeMoney(subtotal));
+    }
+
+    private CheckoutCustomerContext resolveCheckoutCustomer(String normalizedKeycloakId, CheckoutCartRequest request) {
+        CustomerSummary customer = customerClient.getCustomerByKeycloakId(normalizedKeycloakId);
+        if (customer == null || customer.id() == null) {
+            throw new ValidationException("Customer not found for checkout");
+        }
+        CustomerAddressSummary shippingAddress = customerClient.getCustomerAddress(customer.id(), request.shippingAddressId());
+        if (shippingAddress == null || shippingAddress.deleted()) {
+            throw new ValidationException("Shipping address is not available");
+        }
+        return new CheckoutCustomerContext(customer, shippingAddress);
+    }
+
+    private PromotionPricingContext resolvePromotionPricing(
+            Cart previewCart,
+            Map<UUID, ProductDetails> latestProductsById,
+            CheckoutCustomerContext customerContext,
+            CheckoutCartRequest request,
+            String idempotencyKey
+    ) {
+        String requestedCouponCode = requestedCouponCode(request);
+        PromotionQuoteRequest quoteRequest = buildPromotionQuoteRequest(
+                previewCart,
+                latestProductsById,
+                customerContext.customer().id(),
+                calculateShippingForCart(previewCart, latestProductsById, customerContext.shippingAddress().countryCode()),
+                requestedCouponCode,
+                customerContext.shippingAddress().countryCode()
+        );
+        PromotionQuoteResponse quotedPricing = requirePromotionQuote(quoteRequest);
+        CouponReservationResponse couponReservation = reserveCouponIfNeeded(
+                requestedCouponCode,
+                customerContext.customer().id(),
+                quoteRequest,
+                idempotencyKey
+        );
+        PromotionQuoteResponse authoritativeQuote = resolveAuthoritativeQuote(quotedPricing, couponReservation);
+        PromotionCheckoutPricingRequest pricing = toPromotionCheckoutPricingRequest(
+                authoritativeQuote,
+                reservationId(couponReservation),
+                resolveCheckoutCouponCode(requestedCouponCode, couponReservation)
+        );
+        return new PromotionPricingContext(couponReservation, pricing);
+    }
+
+    private PromotionQuoteResponse requirePromotionQuote(PromotionQuoteRequest quoteRequest) {
+        PromotionQuoteResponse quote = promotionClient.quote(quoteRequest);
+        if (quote == null) {
+            throw new ValidationException("Promotion quote is unavailable");
+        }
+        return quote;
+    }
+
+    private CouponReservationResponse reserveCouponIfNeeded(
+            String requestedCouponCode,
+            UUID customerId,
+            PromotionQuoteRequest quoteRequest,
+            String idempotencyKey
+    ) {
+        if (!StringUtils.hasText(requestedCouponCode)) {
+            return null;
+        }
+        CouponReservationResponse couponReservation = promotionClient.reserveCoupon(new CreateCouponReservationRequest(
+                requestedCouponCode,
+                customerId,
+                quoteRequest,
+                downstreamPromotionReservationKey(idempotencyKey)
+        ));
+        if (couponReservation == null || couponReservation.id() == null) {
+            throw new ValidationException("Coupon reservation failed");
+        }
+        return couponReservation;
+    }
+
+    private PromotionQuoteResponse resolveAuthoritativeQuote(
+            PromotionQuoteResponse quotedPricing,
+            CouponReservationResponse couponReservation
+    ) {
+        if (couponReservation != null && couponReservation.quote() != null) {
+            return couponReservation.quote();
+        }
+        return quotedPricing;
+    }
+
+    private UUID reservationId(CouponReservationResponse couponReservation) {
+        return couponReservation == null ? null : couponReservation.id();
+    }
+
+    private String resolveCheckoutCouponCode(String requestedCouponCode, CouponReservationResponse couponReservation) {
+        if (couponReservation != null && StringUtils.hasText(couponReservation.couponCode())) {
+            return couponReservation.couponCode();
+        }
+        return requestedCouponCode;
+    }
+
+    private String requestedCouponCode(CheckoutCartRequest request) {
+        return request == null ? null : trimToNull(request.couponCode());
+    }
+
+    private OrderResponse createOrderForCheckout(
+            String normalizedKeycloakId,
+            CheckoutCartRequest request,
+            PreparedCheckout prepared,
+            PromotionPricingContext promotionContext,
+            String idempotencyKey
+    ) {
+        try {
+            OrderResponse order = orderClient.createMyOrder(
+                    normalizedKeycloakId,
+                    request.shippingAddressId(),
+                    request.billingAddressId(),
+                    prepared.orderItems(),
+                    promotionContext.pricing(),
+                    downstreamOrderIdempotencyKey(idempotencyKey)
+            );
+            return requireOrderResponse(order);
+        } catch (RuntimeException ex) {
+            releaseFailedOrderReservation(promotionContext.couponReservation(), ex);
+            throw translateCheckoutOrderException(ex);
+        }
+    }
+
+    private OrderResponse requireOrderResponse(OrderResponse order) {
+        if (order == null || order.id() == null) {
+            throw new ServiceUnavailableException("Order service returned an invalid checkout response.");
+        }
+        return order;
+    }
+
+    private void releaseFailedOrderReservation(CouponReservationResponse couponReservation, RuntimeException ex) {
+        if (couponReservation != null && couponReservation.id() != null) {
+            releaseCouponReservationQuietly(
+                    couponReservation.id(),
+                    ORDER_CREATE_FAILED_PREFIX + ex.getClass().getSimpleName()
+            );
+        }
+    }
+
+    private RuntimeException translateCheckoutOrderException(RuntimeException ex) {
+        if (ex instanceof ValidationException validationException && isPricingDrift(validationException.getMessage())) {
+            return new ValidationException(
+                    "Prices have changed since your checkout preview. Please review your cart and try again.",
+                    validationException
+            );
+        }
+        return ex;
+    }
+
+    private boolean isPricingDrift(String message) {
+        return message != null
+                && (message.contains("does not match")
+                || message.contains("subtotal")
+                || message.contains("grandTotal"));
+    }
+
+    private boolean clearCheckedOutItems(String normalizedKeycloakId, List<CartCheckoutLine> expectedSnapshot) {
+        return activeCartStoreService.withCustomerCartLock(normalizedKeycloakId, () -> {
+            Cart cart = loadCustomerCart(normalizedKeycloakId);
+            if (!checkoutSnapshot(cart).equals(expectedSnapshot)) {
+                return false;
+            }
+            cart.getItems().removeIf(item -> !item.isSavedForLater());
+            saveCustomerCart(normalizedKeycloakId, cart);
+            return true;
+        });
+    }
+
+    private CheckoutResponse buildCheckoutResponse(
+            OrderResponse order,
+            PreparedCheckout prepared,
+            PromotionCheckoutPricingRequest promotionPricing,
+            boolean cartCleared
+    ) {
+        if (promotionPricing == null) {
+            return new CheckoutResponse(
+                    order.id(),
+                    prepared.itemCount(),
+                    prepared.totalQuantity(),
+                    null,
+                    null,
+                    prepared.subtotal(),
+                    ZERO_AMOUNT,
+                    ZERO_AMOUNT,
+                    ZERO_AMOUNT,
+                    ZERO_AMOUNT,
+                    ZERO_AMOUNT,
+                    prepared.subtotal(),
+                    cartCleared
+            );
+        }
+        return new CheckoutResponse(
+                order.id(),
+                prepared.itemCount(),
+                prepared.totalQuantity(),
+                promotionPricing.couponCode(),
+                promotionPricing.couponReservationId(),
+                normalizeMoney(promotionPricing.subtotal()),
+                normalizeMoney(promotionPricing.lineDiscountTotal()),
+                normalizeMoney(promotionPricing.cartDiscountTotal()),
+                normalizeMoney(promotionPricing.shippingAmount()),
+                normalizeMoney(promotionPricing.shippingDiscountTotal()),
+                normalizeMoney(promotionPricing.totalDiscount()),
+                normalizeMoney(promotionPricing.grandTotal()),
+                cartCleared
         );
     }
 
@@ -617,22 +753,32 @@ public class CartService {
     }
 
     private ActiveCartState toActiveCartState(Cart cart, String keycloakId) {
-        List<ActiveCartItemState> items = cart.getItems() == null ? List.of() : cart.getItems().stream()
-                .map(item -> new ActiveCartItemState(
-                        item.getId() == null ? UUID.randomUUID() : item.getId(),
-                        item.getProductId(),
-                        item.getQuantity(),
-                        item.isSavedForLater()
-                ))
-                .toList();
+        List<CartItem> cartItems = cart.getItems();
+        List<ActiveCartItemState> items = cartItems == null
+                ? List.of()
+                : cartItems.stream().map(this::toActiveCartItemState).toList();
         return new ActiveCartState(
-                cart.getId() == null ? UUID.randomUUID() : cart.getId(),
+                resolveCartId(cart),
                 keycloakId,
                 trimToNull(cart.getNote()),
                 items,
                 cart.getCreatedAt(),
                 cart.getUpdatedAt(),
                 cart.getLastActivityAt()
+        );
+    }
+
+    private UUID resolveCartId(Cart cart) {
+        return cart.getId() == null ? UUID.randomUUID() : cart.getId();
+    }
+
+    private ActiveCartItemState toActiveCartItemState(CartItem item) {
+        UUID itemId = item.getId() == null ? UUID.randomUUID() : item.getId();
+        return new ActiveCartItemState(
+                itemId,
+                item.getProductId(),
+                item.getQuantity(),
+                item.isSavedForLater()
         );
     }
 
@@ -833,21 +979,6 @@ public class CartService {
                 item.getQuantity(),
                 calculateLineTotal(unitPrice, item.getQuantity()),
                 item.isSavedForLater()
-        );
-    }
-
-    private CartResponse emptyCartResponse(String keycloakId) {
-        return new CartResponse(
-                null,
-                keycloakId,
-                List.of(),
-                List.of(),
-                0,
-                0,
-                BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP),
-                null,
-                null,
-                null
         );
     }
 
@@ -1058,6 +1189,26 @@ public class CartService {
             int itemCount,
             int totalQuantity,
             BigDecimal subtotal
+    ) {
+    }
+
+    private record CheckoutContext(
+            Cart previewCart,
+            List<CartCheckoutLine> expectedSnapshot,
+            Map<UUID, ProductDetails> latestProductsById,
+            PreparedCheckout prepared
+    ) {
+    }
+
+    private record CheckoutCustomerContext(
+            CustomerSummary customer,
+            CustomerAddressSummary shippingAddress
+    ) {
+    }
+
+    private record PromotionPricingContext(
+            CouponReservationResponse couponReservation,
+            PromotionCheckoutPricingRequest pricing
     ) {
     }
 

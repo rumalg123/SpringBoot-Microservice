@@ -20,6 +20,8 @@ import java.util.function.Supplier;
 public class ActiveCartStoreService {
 
     private static final Logger log = LoggerFactory.getLogger(ActiveCartStoreService.class);
+    private static final String CUSTOMER_NAMESPACE = "customer";
+    private static final String GUEST_NAMESPACE = "guest";
     private static final DefaultRedisScript<Long> RELEASE_LOCK_SCRIPT = new DefaultRedisScript<>(
             "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
             Long.class
@@ -43,31 +45,31 @@ public class ActiveCartStoreService {
     }
 
     public Optional<ActiveCartState> loadCustomerCart(String keycloakId) {
-        return load(cartKey("customer", keycloakId));
+        return load(cartKey(CUSTOMER_NAMESPACE, keycloakId));
     }
 
     public Optional<ActiveCartState> loadGuestCart(String guestCartId) {
-        return load(cartKey("guest", guestCartId));
+        return load(cartKey(GUEST_NAMESPACE, guestCartId));
     }
 
     public void saveCustomerCart(String keycloakId, ActiveCartState cart) {
-        save(cartKey("customer", keycloakId), cart);
+        save(cartKey(CUSTOMER_NAMESPACE, keycloakId), cart);
     }
 
     public void saveGuestCart(String guestCartId, ActiveCartState cart) {
-        save(cartKey("guest", guestCartId), cart);
+        save(cartKey(GUEST_NAMESPACE, guestCartId), cart);
     }
 
     public void deleteGuestCart(String guestCartId) {
-        redisTemplate.delete(cartKey("guest", guestCartId));
+        redisTemplate.delete(cartKey(GUEST_NAMESPACE, guestCartId));
     }
 
     public <T> T withCustomerCartLock(String keycloakId, Supplier<T> callback) {
-        return withLock(lockKey("customer", keycloakId), callback);
+        return withLock(lockKey(CUSTOMER_NAMESPACE, keycloakId), callback);
     }
 
     public <T> T withGuestCartLock(String guestCartId, Supplier<T> callback) {
-        return withLock(lockKey("guest", guestCartId), callback);
+        return withLock(lockKey(GUEST_NAMESPACE, guestCartId), callback);
     }
 
     private Optional<ActiveCartState> load(String key) {

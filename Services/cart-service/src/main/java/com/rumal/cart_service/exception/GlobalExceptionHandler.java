@@ -19,37 +19,37 @@ public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<?> notFound(ResourceNotFoundException ex) {
+    public ResponseEntity<ApiError> notFound(ResourceNotFoundException ex) {
         log.warn("Cart resource not found: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error(HttpStatus.NOT_FOUND, ex.getMessage()));
     }
 
     @ExceptionHandler(UnauthorizedException.class)
-    public ResponseEntity<?> unauthorized(UnauthorizedException ex) {
+    public ResponseEntity<ApiError> unauthorized(UnauthorizedException ex) {
         log.warn("Cart unauthorized request: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error(HttpStatus.UNAUTHORIZED, ex.getMessage()));
     }
 
     @ExceptionHandler(ServiceUnavailableException.class)
-    public ResponseEntity<?> serviceUnavailable(ServiceUnavailableException ex) {
+    public ResponseEntity<ApiError> serviceUnavailable(ServiceUnavailableException ex) {
         log.error("Cart downstream service unavailable: {}", ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(error(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage()));
     }
 
     @ExceptionHandler(ValidationException.class)
-    public ResponseEntity<?> badRequest(ValidationException ex) {
+    public ResponseEntity<ApiError> badRequest(ValidationException ex) {
         log.warn("Cart validation error: {}", ex.getMessage());
         return ResponseEntity.badRequest().body(error(HttpStatus.BAD_REQUEST, ex.getMessage()));
     }
 
     @ExceptionHandler(ConflictException.class)
-    public ResponseEntity<?> conflict(ConflictException ex) {
+    public ResponseEntity<ApiError> conflict(ConflictException ex) {
         log.warn("Cart conflict: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.CONFLICT).body(error(HttpStatus.CONFLICT, ex.getMessage()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<?> validation(MethodArgumentNotValidException ex) {
+    public ResponseEntity<ApiError> validation(MethodArgumentNotValidException ex) {
         log.warn("Cart request argument validation failed: {}", ex.getMessage());
         Map<String, String> fieldErrors = new LinkedHashMap<>();
 
@@ -61,7 +61,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<?> handleUnexpected(Exception ex) {
+    public ResponseEntity<ApiError> handleUnexpected(Exception ex) {
         log.error("Unexpected error", ex);
         return ResponseEntity.status(500).body(error(HttpStatus.INTERNAL_SERVER_ERROR, "Unexpected error"));
     }
