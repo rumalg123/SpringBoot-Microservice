@@ -109,6 +109,7 @@ public abstract class AbstractRedisServletIdempotencyFilter extends OncePerReque
             }
             processRequestUnderLock(wrappedRequest, response, filterChain, redisKey, reqHash);
         } catch (IdempotencyStateUnavailableException ex) {
+            log.warn("{} idempotency state unavailable for key {}", logName(), redisKey, ex);
             safeDelete(redisKey);
             writeUnavailable(response);
         }
@@ -267,7 +268,6 @@ public abstract class AbstractRedisServletIdempotencyFilter extends OncePerReque
             Boolean ok = redisTemplate.opsForValue().setIfAbsent(key, PENDING_PREFIX + pendingPayload(reqHash), pendingTtl);
             return Boolean.TRUE.equals(ok);
         } catch (Exception ex) {
-            log.warn("{} Redis acquire failed (fail-closed) for key {}", logName(), key, ex);
             throw new IdempotencyStateUnavailableException("Failed to acquire idempotency state for key " + key, ex);
         }
     }
@@ -276,7 +276,6 @@ public abstract class AbstractRedisServletIdempotencyFilter extends OncePerReque
         try {
             return redisTemplate.opsForValue().get(key);
         } catch (Exception ex) {
-            log.warn("{} Redis lookup failed (fail-closed) for key {}", logName(), key, ex);
             throw new IdempotencyStateUnavailableException("Failed to read idempotency state for key " + key, ex);
         }
     }
@@ -290,7 +289,6 @@ public abstract class AbstractRedisServletIdempotencyFilter extends OncePerReque
             payload.put("bodyBase64", Base64.getEncoder().encodeToString(response.getContentAsByteArray()));
             redisTemplate.opsForValue().set(key, DONE_PREFIX + objectMapper.writeValueAsString(payload), responseTtl);
         } catch (Exception ex) {
-            log.warn("{} Redis completion write failed (fail-closed) for key {}", logName(), key, ex);
             throw new IdempotencyStateUnavailableException("Failed to store idempotent response for key " + key, ex);
         }
     }

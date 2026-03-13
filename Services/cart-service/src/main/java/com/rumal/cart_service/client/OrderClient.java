@@ -1,5 +1,7 @@
 package com.rumal.cart_service.client;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rumal.cart_service.dto.CreateMyOrderItemRequest;
 import com.rumal.cart_service.dto.CreateMyOrderRequest;
 import com.rumal.cart_service.dto.OrderResponse;
@@ -10,8 +12,6 @@ import com.rumal.cart_service.exception.ServiceUnavailableException;
 import com.rumal.cart_service.exception.ValidationException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -104,35 +104,20 @@ public class OrderClient {
         }
         try {
             JsonNode tree = MAPPER.readTree(body);
-
-            // Check fieldErrors first (from bean validation: MethodArgumentNotValidException)
-            JsonNode fieldErrors = tree.get("fieldErrors");
-            if (fieldErrors != null && fieldErrors.isObject()) {
-                StringJoiner sj = new StringJoiner("; ");
-                var fieldNames = fieldErrors.fieldNames();
-                while (fieldNames.hasNext()) {
-                    JsonNode fieldError = fieldErrors.get(fieldNames.next());
-                    if (fieldError != null && !fieldError.asText().isBlank()) {
-                        sj.add(fieldError.asText());
-                    }
-                }
-                if (sj.length() > 0) {
-                    return sj.toString();
-                }
+            String fieldErrorMessage = resolveFieldErrorMessage(tree.get("fieldErrors"));
+            if (fieldErrorMessage != null) {
+                return fieldErrorMessage;
             }
-
-            // Fall back to "message" field (from business ValidationException)
-            JsonNode message = tree.get("message");
-            if (message != null && !message.asText().isBlank()) {
-                return message.asText();
+            String message = textValue(tree, "message");
+            if (message != null) {
+                return message;
             }
-
-            JsonNode error = tree.get("error");
-            if (error != null && !error.asText().isBlank()) {
-                return error.asText();
+            String error = textValue(tree, "error");
+            if (error != null) {
+                return error;
             }
         } catch (Exception ignored) {
-            // Non-JSON response — fall through to fallback
+            // Non-JSON response falls through to the fallback value.
         }
         return fallback;
     }
@@ -194,5 +179,29 @@ public class OrderClient {
             );
         }
         return new ServiceUnavailableException("Order service unavailable during checkout.", ex);
+    }
+
+    private String resolveFieldErrorMessage(JsonNode fieldErrors) {
+        if (fieldErrors == null || !fieldErrors.isObject()) {
+            return null;
+        }
+        StringJoiner joiner = new StringJoiner("; ");
+        var fieldNames = fieldErrors.fieldNames();
+        while (fieldNames.hasNext()) {
+            String fieldError = textValue(fieldErrors, fieldNames.next());
+            if (fieldError != null) {
+                joiner.add(fieldError);
+            }
+        }
+        return joiner.length() == 0 ? null : joiner.toString();
+    }
+
+    private String textValue(JsonNode tree, String fieldName) {
+        JsonNode value = tree.get(fieldName);
+        if (value == null) {
+            return null;
+        }
+        String text = value.asText();
+        return text.isBlank() ? null : text;
     }
 }
